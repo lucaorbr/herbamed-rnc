@@ -214,20 +214,35 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
     if (!to.length) { setErr("Selecione ao menos um destinatário."); return; }
     setSending(true); setErr("");
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 500,
-          mcp_servers: [{ type: "url", url: "https://gmailmcp.googleapis.com/mcp/v1", name: "gmail" }],
-          messages: [{ role: "user", content: `Send this email via Gmail:\nTO: ${to.join(", ")}\nSUBJECT: ${subject}\nBODY:\n${body}\n\nReply only: SENT_OK` }]
-        })
-      });
-      const data = await res.json();
-      const txt = data.content?.map(b => b.text || "").join("") || "";
-      if (txt.includes("SENT_OK") || txt.toLowerCase().includes("sent")) {
-        onSent(`E-mail enviado para ${to.length} destinatário(s)!`);
-      } else setErr("Não foi possível confirmar o envio. Tente novamente.");
+      // Envia um e-mail para cada destinatário via EmailJS
+      const EMAILJS_SERVICE  = "service_gxhicii";
+      const EMAILJS_TEMPLATE = "template_4jl73wq";
+      const EMAILJS_KEY      = "z2VxJ1dYjwrRp8Nh4";
+
+      for (const email of to) {
+        const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            service_id:  EMAILJS_SERVICE,
+            template_id: EMAILJS_TEMPLATE,
+            user_id:     EMAILJS_KEY,
+            template_params: {
+              to_email:    email,
+              to_name:     users.find(u => u.email === email)?.name || email,
+              from_name:   "Herbamed® · Gestão da Qualidade",
+              subject:     subject,
+              message:     body,
+              reply_to:    currentUser.email,
+            }
+          })
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`Erro ao enviar para ${email}: ${txt}`);
+        }
+      }
+      onSent(`E-mail enviado para ${to.length} destinatário(s)!`);
     } catch (e) { setErr("Erro: " + e.message); }
     setSending(false);
   };
