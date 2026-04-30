@@ -122,20 +122,22 @@ function Toast({ msg, color, onDone }) {
   return <div style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", background: bg, color: c, border: `1px solid ${border}`, borderRadius: 14, padding: "12px 20px", fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 8px 32px #0008", fontFamily: "inherit", maxWidth: 340 }}>✓ {msg}</div>;
 }
 
-/* ─── HERBAMED LOGO SVG ─────────────────────────────────────────────────────── */
+/* ─── HERBAMED LOGO ──────────────────────────────────────────────────────────── */
 function HerbamedLogo({ height = 32, white = false }) {
   const color = white ? "#ffffff" : "#1a7a3c";
+  const fontSize = height * 0.75;
   return (
-    <svg width={height * 5.8} height={height} viewBox="0 0 232 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block", overflow: "visible" }}>
-      {/* Folha grande - esquerda, curvada para cima */}
-      <path d="M4 36 C4 36, 2 18, 14 8 C14 8, 10 22, 22 30 C15 33, 8 35, 4 36Z" fill={color} />
-      {/* Folha pequena - direita, inclinada */}
-      <path d="M16 36 C16 36, 24 20, 18 6 C18 6, 28 18, 18 30 C18 30, 17 33, 16 36Z" fill={color} opacity="0.8" />
-      {/* HERBAMED text */}
-      <text x="30" y="31" fontFamily="'Georgia','Times New Roman',serif" fontWeight="700" fontSize="26" fill={color} letterSpacing="1">HERBAMED</text>
-      {/* ® symbol */}
-      <text x="214" y="13" fontFamily="'Georgia',serif" fontSize="11" fill={color}>®</text>
-    </svg>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {/* Ícone de folha simples */}
+      <svg width={height * 0.7} height={height} viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 32 C12 32, 2 22, 4 10 C4 10, 10 18, 20 14 C18 22, 14 28, 12 32Z" fill={color} />
+        <path d="M12 32 C12 32, 20 20, 14 6 C14 6, 22 16, 16 26 C14 29, 13 31, 12 32Z" fill={color} opacity="0.65" />
+      </svg>
+      {/* Texto */}
+      <span style={{ fontFamily: "'Georgia','Times New Roman',serif", fontWeight: 700, fontSize: fontSize, color: color, letterSpacing: "1.5px", lineHeight: 1 }}>
+        HERBAMED<sup style={{ fontSize: fontSize * 0.4, verticalAlign: "super" }}>®</sup>
+      </span>
+    </div>
   );
 }
 
@@ -362,8 +364,12 @@ function Login({ onLogin }) {
     setLoading(false);
   };
   return (
-    <div style={{ ...s.app, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: `radial-gradient(ellipse at 30% 40%, ${T.accentDim} 0%, ${T.bg} 60%)` }}>
-      <div style={{ width: "100%", maxWidth: 420, padding: "0 1rem" }}>
+    <div style={{ ...s.app, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+      {/* Banner background */}
+      <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/banner.webp')", backgroundSize: "cover", backgroundPosition: "center", filter: "brightness(0.35)" }} />
+      {/* Overlay gradient */}
+      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg, rgba(10,17,12,0.7) 0%, rgba(26,122,60,0.3) 100%)` }} />
+      <div style={{ width: "100%", maxWidth: 420, padding: "0 1rem", position: "relative", zIndex: 1 }}>
         {/* Logo area */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 20, padding: "14px 24px", marginBottom: "1.25rem", boxShadow: `0 0 40px ${T.accentGlow}` }}>
