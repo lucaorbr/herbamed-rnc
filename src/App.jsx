@@ -367,8 +367,8 @@ function Login({ onLogin }) {
 
       {/* LADO ESQUERDO — Banner */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "3rem" }}>
-        <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/banner.webp')", backgroundSize: "contain", backgroundPosition: "center center", backgroundRepeat: "no-repeat" }} />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(5,10,6,0.95) 0%, rgba(5,10,6,0.4) 50%, rgba(5,10,6,0.1) 100%)" }} />
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/banner.webp')", backgroundSize: "contain", backgroundPosition: "center center", backgroundRepeat: "no-repeat", filter: "brightness(1.1) saturate(1.2) contrast(1.05)" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(5,10,6,0.88) 0%, rgba(5,10,6,0.15) 40%, rgba(5,10,6,0.05) 100%)" }} />
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "3px", fontWeight: 600, marginBottom: 12 }}>Gestão da Qualidade</div>
           <div style={{ fontSize: 32, fontWeight: 700, color: "#ffffff", lineHeight: 1.2, marginBottom: 12 }}>Sistema de Registro<br />de Não Conformidades</div>
