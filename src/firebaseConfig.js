@@ -5,12 +5,11 @@
 // 4. Copie os dados e substitua abaixo:
 
 const firebaseConfig = {
-  apiKey: "COLE_AQUI_SUA_API_KEY",
-  authDomain: "COLE_AQUI.firebaseapp.com",
-  projectId: "COLE_AQUI_SEU_PROJECT_ID",
-  storageBucket: "COLE_AQUI.appspot.com",
-  messagingSenderId: "COLE_AQUI",
-  appId: "COLE_AQUI_SEU_APP_ID"
+  apiKey: "AIzaSyAyDiFzcOqggJM7L8nIDQv6HvZa9-uI0qQ",
+  authDomain: "herbamed-rnc.firebaseapp.com",
+  projectId: "herbamed-rnc",
+  storageBucket: "herbamed-rnc.firebasestorage.app",
+  messagingSenderId: "239932701320",
+  appId: "1:239932701320:web:ca1ff0485484e9e83cfd3d"
 };
-
 export default firebaseConfig;
