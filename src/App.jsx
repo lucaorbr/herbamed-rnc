@@ -125,19 +125,18 @@ function Toast({ msg, color, onDone }) {
 /* ─── HERBAMED LOGO ──────────────────────────────────────────────────────────── */
 function HerbamedLogo({ height = 32, white = false }) {
   const color = white ? "#ffffff" : "#1a7a3c";
-  const fontSize = height * 0.75;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      {/* Ícone de folha simples */}
-      <svg width={height * 0.7} height={height} viewBox="0 0 24 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 32 C12 32, 2 22, 4 10 C4 10, 10 18, 20 14 C18 22, 14 28, 12 32Z" fill={color} />
-        <path d="M12 32 C12 32, 20 20, 14 6 C14 6, 22 16, 16 26 C14 29, 13 31, 12 32Z" fill={color} opacity="0.65" />
-      </svg>
-      {/* Texto */}
-      <span style={{ fontFamily: "'Georgia','Times New Roman',serif", fontWeight: 700, fontSize: fontSize, color: color, letterSpacing: "1.5px", lineHeight: 1 }}>
-        HERBAMED<sup style={{ fontSize: fontSize * 0.4, verticalAlign: "super" }}>®</sup>
-      </span>
-    </div>
+    <span style={{
+      fontFamily: "'Georgia','Times New Roman',serif",
+      fontWeight: 700,
+      fontSize: height,
+      color: color,
+      letterSpacing: "2px",
+      lineHeight: 1,
+      whiteSpace: "nowrap",
+    }}>
+      HERBAMED<sup style={{ fontSize: height * 0.38, letterSpacing: 0, verticalAlign: "super" }}>®</sup>
+    </span>
   );
 }
 
@@ -364,28 +363,72 @@ function Login({ onLogin }) {
     setLoading(false);
   };
   return (
-    <div style={{ ...s.app, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
-      {/* Banner background */}
-      <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/banner.webp')", backgroundSize: "cover", backgroundPosition: "center", filter: "brightness(0.35)" }} />
-      {/* Overlay gradient */}
-      <div style={{ position: "absolute", inset: 0, background: `linear-gradient(135deg, rgba(10,17,12,0.7) 0%, rgba(26,122,60,0.3) 100%)` }} />
-      <div style={{ width: "100%", maxWidth: 420, padding: "0 1rem", position: "relative", zIndex: 1 }}>
-        {/* Logo area */}
-        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 20, padding: "14px 24px", marginBottom: "1.25rem", boxShadow: `0 0 40px ${T.accentGlow}` }}>
-            <HerbamedLogo height={30} white />
+    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", display: "flex", minHeight: "100vh", background: "#050a06" }}>
+
+      {/* LADO ESQUERDO — Banner */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "3rem" }}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/banner.webp')", backgroundSize: "cover", backgroundPosition: "center top" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(5,10,6,0.95) 0%, rgba(5,10,6,0.4) 50%, rgba(5,10,6,0.1) 100%)" }} />
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "3px", fontWeight: 600, marginBottom: 12 }}>Gestão da Qualidade</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: "#ffffff", lineHeight: 1.2, marginBottom: 12 }}>Sistema de Registro<br />de Não Conformidades</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", fontStyle: "italic" }}>Fornecendo Saúde. Cultivando Qualidade de Vida.</div>
+          <div style={{ marginTop: 24, display: "flex", gap: 20 }}>
+            {[["Ishikawa", "Análise de causa"], ["5W2H", "Plano de ação"], ["Eficácia", "Verificação"]].map(([t, d]) => (
+              <div key={t} style={{ borderLeft: `2px solid ${T.accent}`, paddingLeft: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.accent }}>{t}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{d}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ fontSize: 13, color: "#ffffff", fontStyle: "italic", opacity: 0.9, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>Fornecendo Saúde. Cultivando Qualidade de Vida.</div>
-          <div style={{ fontSize: 12, color: "#ffffff", marginTop: 6, opacity: 0.75, fontWeight: 500, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>Sistema de Registro de Não Conformidades</div>
         </div>
-        <div style={{ ...s.card, background: `linear-gradient(160deg,${T.card},${T.card2})`, boxShadow: `0 0 40px ${T.accentDim}, 0 24px 60px #0008` }}>
-          <SecTitle ch="Acesso ao sistema" />
-          <F lbl="E-mail" ch={<Inp type="email" placeholder="seu@herbamed.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />} />
-          <F lbl="Senha" ch={<Inp type="password" placeholder="••••••••" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />} />
-          {err && <div style={{ background: "#ff4f6a18", border: "1px solid #ff4f6a30", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#ff4f6a", marginBottom: 14 }}>{err}</div>}
-          <button style={{ ...s.btnA, width: "100%", padding: "11px", fontSize: 13, opacity: loading ? .7 : 1 }} onClick={login} disabled={loading}>
-            {loading ? "Entrando..." : "Entrar →"}
-          </button>
+      </div>
+
+      {/* LADO DIREITO — Formulário */}
+      <div style={{ width: 440, background: "#0a110c", display: "flex", flexDirection: "column", justifyContent: "center", padding: "3rem 2.5rem", position: "relative", borderLeft: `1px solid rgba(42,184,74,0.15)` }}>
+        {/* Logo */}
+        <div style={{ marginBottom: "3rem" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 12, padding: "10px 20px", marginBottom: "1.5rem", boxShadow: `0 0 30px ${T.accentGlow}` }}>
+            <HerbamedLogo height={26} white />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#ffffff", marginBottom: 6 }}>Bem-vindo de volta</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Entre com suas credenciais para acessar o sistema</div>
+        </div>
+
+        {/* Form */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 8 }}>E-mail</label>
+          <input
+            type="email" placeholder="seu@herbamed.com.br" value={email}
+            onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && login()}
+            style={{ width: "100%", padding: "12px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", transition: "border-color .2s", boxSizing: "border-box" }}
+          />
+        </div>
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", display: "block", marginBottom: 8 }}>Senha</label>
+          <input
+            type="password" placeholder="••••••••" value={pw}
+            onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && login()}
+            style={{ width: "100%", padding: "12px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#fff", fontFamily: "inherit", fontSize: 14, outline: "none", transition: "border-color .2s", boxSizing: "border-box" }}
+          />
+        </div>
+
+        {err && (
+          <div style={{ background: "#ff4f6a18", border: "1px solid #ff4f6a40", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#ff4f6a", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+            <span>⚠</span> {err}
+          </div>
+        )}
+
+        <button
+          onClick={login} disabled={loading}
+          style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: loading ? .7 : 1, boxShadow: `0 4px 20px ${T.accentGlow}`, letterSpacing: ".5px", transition: "all .2s" }}
+        >
+          {loading ? "Entrando..." : "Entrar no sistema →"}
+        </button>
+
+        {/* Footer */}
+        <div style={{ marginTop: "auto", paddingTop: "3rem", fontSize: 11, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
+          Herbamed® · Sistema de Gestão da Qualidade<br />Acesso restrito a usuários autorizados
         </div>
       </div>
     </div>
