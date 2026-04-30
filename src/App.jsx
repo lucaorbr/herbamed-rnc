@@ -652,15 +652,111 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
   );
 }
 
+/* ─── CLOUDINARY UPLOAD ──────────────────────────────────────────────────────── */
+const CLOUD_NAME = "dswsg9w0w";
+const UPLOAD_PRESET = "herbamed_rnc"; // será criado no Cloudinary
+
+async function uploadToCloudinary(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", UPLOAD_PRESET);
+  formData.append("folder", "herbamed-rnc");
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+    method: "POST", body: formData
+  });
+  const data = await res.json();
+  if (data.secure_url) return { url: data.secure_url, name: file.name, type: file.type, size: file.size };
+  throw new Error(data.error?.message || "Erro no upload");
+}
+
+function AnexosUpload({ anexos, setAnexos }) {
+  const T = useTheme(); const s = useS();
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState("");
+
+  const handleFiles = async (files) => {
+    if (!files.length) return;
+    setUploading(true);
+    const novos = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 10 * 1024 * 1024) { alert(`${file.name} é maior que 10MB.`); continue; }
+      setProgress(`Enviando ${i + 1}/${files.length}: ${file.name}...`);
+      try {
+        const result = await uploadToCloudinary(file);
+        novos.push(result);
+      } catch (e) { alert(`Erro ao enviar ${file.name}: ${e.message}`); }
+    }
+    setAnexos(p => [...p, ...novos]);
+    setUploading(false);
+    setProgress("");
+  };
+
+  const removeAnexo = (i) => setAnexos(p => p.filter((_, j) => j !== i));
+
+  const getIcon = (type) => {
+    if (type?.includes("image")) return "🖼️";
+    if (type?.includes("pdf")) return "📄";
+    if (type?.includes("word") || type?.includes("doc")) return "📝";
+    if (type?.includes("excel") || type?.includes("sheet")) return "📊";
+    return "📎";
+  };
+
+  const fmtSize = (bytes) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  return (
+    <div>
+      {/* Drop zone */}
+      <div
+        onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = T.accent; }}
+        onDragLeave={e => { e.currentTarget.style.borderColor = T.border2; }}
+        onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = T.border2; handleFiles(Array.from(e.dataTransfer.files)); }}
+        style={{ border: `2px dashed ${T.border2}`, borderRadius: 10, padding: "1.5rem", textAlign: "center", cursor: "pointer", transition: "border-color .2s", marginBottom: 12 }}
+        onClick={() => document.getElementById("anexo-input").click()}
+      >
+        <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
+        <div style={{ fontSize: 13, color: T.text2, fontWeight: 500 }}>
+          {uploading ? <span style={{ color: T.accent }}>{progress}</span> : "Clique ou arraste arquivos aqui"}
+        </div>
+        <div style={{ fontSize: 11, color: T.text3, marginTop: 4 }}>Fotos, PDFs, documentos — até 10MB por arquivo</div>
+        <input id="anexo-input" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={e => handleFiles(Array.from(e.target.files))} />
+      </div>
+
+      {/* Lista de anexos */}
+      {anexos.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {anexos.map((a, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px" }}>
+              <span style={{ fontSize: 20 }}>{getIcon(a.type)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                <div style={{ fontSize: 10, color: T.text3 }}>{fmtSize(a.size)}</div>
+              </div>
+              <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, textDecoration: "none", fontWeight: 600, padding: "4px 10px", background: T.accentDim, borderRadius: 6 }}>Ver</a>
+              <button onClick={() => removeAnexo(i)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 16, padding: "0 4px", fontFamily: "inherit" }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── NOVA TAB ───────────────────────────────────────────────────────────────── */
 function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC }) {
   const s = useS();
   const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: user.setor || "", detector: user.name, desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: user.name, prazoCausa: "", prazoAC: "", prazoEfic: "" });
+  const [anexos, setAnexos] = useState([]);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const salvar = async () => {
     if (!f.desc.trim()) { alert("Preencha a descrição."); return; }
     const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, ishikawa: { efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" }, w2h: [], eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now() };
+    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, anexos, ishikawa: { efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" }, w2h: [], eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now() };
     await doSaveRNC(rnc);
     toast_(`${rnc.num} registrada!`, "green");
     openEmail(rnc, "abertura");
@@ -678,7 +774,8 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC }) {
         <SecTitle icon="📝" ch="Descrição" />
         <F lbl="Descrição da não conformidade" ch={<TA rows={4} placeholder="O que foi observado, onde, quando e qual o impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
         <G3 ch={<><F lbl="Nº do lote" ch={<Inp value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" ch={<Inp value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" ch={<Inp value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
-        <F lbl="Evidências" ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} />} />
+        <F lbl="Evidências (descrição)" ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo CQ-047, Foto registro 12..." />} />
+        <F lbl="📎 Anexos (fotos, laudos, documentos)" ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />
       </div>
       <div style={s.card}>
         <SecTitle icon="⚡" ch="Ação de contenção" />
