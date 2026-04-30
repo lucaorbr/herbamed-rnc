@@ -123,16 +123,21 @@ function Toast({ msg, color, onDone }) {
 }
 
 /* ─── HERBAMED LOGO SVG ─────────────────────────────────────────────────────── */
-function HerbamedLogo({ size = 32, white = false }) {
+function HerbamedLogo({ height = 32, white = false }) {
   const color = white ? "#ffffff" : "#1a7a3c";
+  const w = height * 4.2;
+  const h = height;
+  const scale = height / 40;
   return (
-    <svg width={size * 3.2} height={size} viewBox="0 0 160 50" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(2,5)">
-        <path d="M8 28 C4 20, 4 10, 10 6 C10 6, 8 18, 18 22 C14 24, 10 26, 8 28Z" fill={color} />
-        <path d="M18 28 C22 18, 20 8, 14 4 C14 4, 20 14, 12 22 C14 24, 16 26, 18 28Z" fill={color} opacity="0.7" />
-      </g>
-      <text x="36" y="36" fontFamily="Georgia, serif" fontWeight="700" fontSize="22" fill={color} letterSpacing="1">HERBAMED</text>
-      <text x="155" y="20" fontFamily="Georgia, serif" fontSize="10" fill={color}>®</text>
+    <svg width={w} height={h} viewBox="0 0 168 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
+      {/* Leaf left */}
+      <path d="M6 34 C2 24, 3 10, 11 5 C11 5, 7 20, 19 26 C14 29, 9 32, 6 34Z" fill={color} />
+      {/* Leaf right */}
+      <path d="M20 34 C26 22, 23 8, 15 3 C15 3, 22 16, 11 25 C14 28, 17 31, 20 34Z" fill={color} opacity="0.75" />
+      {/* HERBAMED text */}
+      <text x="30" y="30" fontFamily="'Georgia', 'Times New Roman', serif" fontWeight="700" fontSize="24" fill={color} letterSpacing="0.5">HERBAMED</text>
+      {/* ® symbol */}
+      <text x="158" y="14" fontFamily="'Georgia', serif" fontSize="11" fill={color}>®</text>
     </svg>
   );
 }
@@ -364,8 +369,8 @@ function Login({ onLogin }) {
       <div style={{ width: "100%", maxWidth: 420, padding: "0 1rem" }}>
         {/* Logo area */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 20, padding: "16px 28px", marginBottom: "1.25rem", boxShadow: `0 0 40px ${T.accentGlow}` }}>
-            <HerbamedLogo size={28} white />
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 20, padding: "14px 24px", marginBottom: "1.25rem", boxShadow: `0 0 40px ${T.accentGlow}` }}>
+            <HerbamedLogo height={30} white />
           </div>
           <div style={{ fontSize: 13, color: T.text2, fontStyle: "italic" }}>Fornecendo Saúde. Cultivando Qualidade de Vida.</div>
           <div style={{ fontSize: 11, color: T.text3, marginTop: 6 }}>Sistema de Registro de Não Conformidades</div>
@@ -453,8 +458,8 @@ export default function App() {
         {/* HEADER */}
         <div style={{ background: `linear-gradient(135deg, ${T.surf} 0%, ${T.card} 100%)`, borderBottom: `1px solid ${T.border2}`, padding: "0 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)", height: 64 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ background: `linear-gradient(135deg,${T.accent},${T.accent2})`, borderRadius: 10, padding: "6px 12px", boxShadow: `0 0 16px ${T.accentGlow}` }}>
-              <HerbamedLogo size={22} white />
+            <div style={{ background: `linear-gradient(135deg,${T.accent},${T.accent2})`, borderRadius: 10, padding: "7px 14px", boxShadow: `0 0 16px ${T.accentGlow}`, display: "flex", alignItems: "center" }}>
+              <HerbamedLogo height={24} white />
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Registro de Não Conformidades</div>
