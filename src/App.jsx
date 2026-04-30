@@ -126,15 +126,15 @@ function Toast({ msg, color, onDone }) {
 function HerbamedLogo({ height = 32, white = false }) {
   const color = white ? "#ffffff" : "#1a7a3c";
   return (
-    <svg width={height * 5.5} height={height} viewBox="0 0 220 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block", overflow: "visible" }}>
-      {/* Leaf left */}
-      <path d="M6 34 C2 24, 3 10, 11 5 C11 5, 7 20, 19 26 C14 29, 9 32, 6 34Z" fill={color} />
-      {/* Leaf right */}
-      <path d="M20 34 C26 22, 23 8, 15 3 C15 3, 22 16, 11 25 C14 28, 17 31, 20 34Z" fill={color} opacity="0.75" />
+    <svg width={height * 5.8} height={height} viewBox="0 0 232 40" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block", overflow: "visible" }}>
+      {/* Folha grande - esquerda, curvada para cima */}
+      <path d="M4 36 C4 36, 2 18, 14 8 C14 8, 10 22, 22 30 C15 33, 8 35, 4 36Z" fill={color} />
+      {/* Folha pequena - direita, inclinada */}
+      <path d="M16 36 C16 36, 24 20, 18 6 C18 6, 28 18, 18 30 C18 30, 17 33, 16 36Z" fill={color} opacity="0.8" />
       {/* HERBAMED text */}
-      <text x="32" y="31" fontFamily="'Georgia', 'Times New Roman', serif" fontWeight="700" fontSize="26" fill={color}>HERBAMED</text>
+      <text x="30" y="31" fontFamily="'Georgia','Times New Roman',serif" fontWeight="700" fontSize="26" fill={color} letterSpacing="1">HERBAMED</text>
       {/* ® symbol */}
-      <text x="206" y="13" fontFamily="'Georgia', serif" fontSize="12" fill={color}>®</text>
+      <text x="214" y="13" fontFamily="'Georgia',serif" fontSize="11" fill={color}>®</text>
     </svg>
   );
 }
@@ -369,8 +369,8 @@ function Login({ onLogin }) {
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 20, padding: "14px 24px", marginBottom: "1.25rem", boxShadow: `0 0 40px ${T.accentGlow}` }}>
             <HerbamedLogo height={30} white />
           </div>
-          <div style={{ fontSize: 13, color: T.text, fontStyle: "italic", opacity: 0.85 }}>Fornecendo Saúde. Cultivando Qualidade de Vida.</div>
-          <div style={{ fontSize: 11, color: T.text2, marginTop: 6 }}>Sistema de Registro de Não Conformidades</div>
+          <div style={{ fontSize: 13, color: "#ffffff", fontStyle: "italic", opacity: 0.9, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>Fornecendo Saúde. Cultivando Qualidade de Vida.</div>
+          <div style={{ fontSize: 12, color: "#ffffff", marginTop: 6, opacity: 0.75, fontWeight: 500, textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>Sistema de Registro de Não Conformidades</div>
         </div>
         <div style={{ ...s.card, background: `linear-gradient(160deg,${T.card},${T.card2})`, boxShadow: `0 0 40px ${T.accentDim}, 0 24px 60px #0008` }}>
           <SecTitle ch="Acesso ao sistema" />
