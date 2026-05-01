@@ -638,8 +638,8 @@ function Login({ onLogin }) {
       <div style={{ width: 440, background: "#0a110c", display: "flex", flexDirection: "column", justifyContent: "center", padding: "3rem 2.5rem", position: "relative", borderLeft: `1px solid rgba(42,184,74,0.15)` }}>
         {/* Logo */}
         <div style={{ marginBottom: "3rem" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, borderRadius: 12, padding: "10px 20px", marginBottom: "1.5rem", boxShadow: `0 0 30px ${T.accentGlow}` }}>
-            <HerbamedLogo height={26} white />
+          <div style={{ display: "inline-flex", alignItems: "center", background: "#ffffff", borderRadius: 12, padding: "8px 20px", marginBottom: "1.5rem", boxShadow: `0 0 30px ${T.accentGlow}` }}>
+            <HerbamedLogo height={36} white={false} />
           </div>
           <div style={{ fontSize: 22, fontWeight: 700, color: "#ffffff", marginBottom: 6 }}>Bem-vindo de volta</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Entre com suas credenciais para acessar o sistema</div>
@@ -754,8 +754,8 @@ export default function App() {
         {/* HEADER */}
         <div style={{ background: `linear-gradient(135deg, ${T.surf} 0%, ${T.card} 100%)`, borderBottom: `1px solid ${T.border2}`, padding: "0 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)", height: 64 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ background: `linear-gradient(135deg,${T.accent},${T.accent2})`, borderRadius: 10, padding: "7px 14px", boxShadow: `0 0 16px ${T.accentGlow}`, display: "flex", alignItems: "center" }}>
-              <HerbamedLogo height={24} white />
+            <div style={{ background: "#ffffff", borderRadius: 10, padding: "5px 14px", boxShadow: `0 0 16px ${T.accentGlow}`, display: "flex", alignItems: "center" }}>
+              <HerbamedLogo height={28} white={false} />
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Registro de Não Conformidades</div>
