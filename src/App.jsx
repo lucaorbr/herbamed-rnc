@@ -360,19 +360,18 @@ function Toast({ msg, color, onDone }) {
 
 /* ─── HERBAMED LOGO ──────────────────────────────────────────────────────────── */
 function HerbamedLogo({ height = 32, white = false }) {
-  const color = white ? "#ffffff" : "#1a7a3c";
   return (
-    <span style={{
-      fontFamily: "'Georgia','Times New Roman',serif",
-      fontWeight: 700,
-      fontSize: height,
-      color: color,
-      letterSpacing: "2px",
-      lineHeight: 1,
-      whiteSpace: "nowrap",
-    }}>
-      HERBAMED<sup style={{ fontSize: height * 0.38, letterSpacing: 0, verticalAlign: "super" }}>®</sup>
-    </span>
+    <img
+      src="/logo.png"
+      alt="Herbamed"
+      style={{
+        height: height,
+        width: "auto",
+        display: "block",
+        filter: white ? "brightness(0) invert(1)" : "none",
+        objectFit: "contain",
+      }}
+    />
   );
 }
 
@@ -1041,13 +1040,13 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC }) {
         <SecTitle icon="🪪" ch="Identificação" />
         <G3 ch={<><F lbl="Data de abertura" ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<><F lbl="Tipo" ch={<Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Setor" ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} /><F lbl="Detectado por" ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} /></>} />
-        <G2 ch={<><F lbl="Produto / Material" ch={<Inp placeholder="Ex: Psyllium em pó — Lote 2025-047" value={f.produto} onChange={e => set("produto", e.target.value)} />} /><F lbl="Fornecedor" ch={<Inp placeholder="Ex: R&E Importadora" value={f.fornecedor} onChange={e => set("fornecedor", e.target.value)} />} /></>} />
+        <G2 ch={<><F lbl="Produto / Material" ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} /><F lbl="Fornecedor" ch={<Inp placeholder="Ex: Nome do fornecedor" value={f.fornecedor} onChange={e => set("fornecedor", e.target.value)} />} /></>} />
       </div>
       <div style={s.card}>
         <SecTitle icon="📝" ch="Descrição" />
-        <F lbl="Descrição da não conformidade" ch={<TA rows={4} placeholder="O que foi observado, onde, quando e qual o impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
-        <G3 ch={<><F lbl="Nº do lote" ch={<Inp value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" ch={<Inp value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" ch={<Inp value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
-        <F lbl="Evidências (descrição)" ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo CQ-047, Foto registro 12..." />} />
+        <F lbl="Descrição da não conformidade" ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
+        <G3 ch={<><F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOTE-2025-XXX" value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" ch={<Inp placeholder="Ex: 100 kg / 500 unidades" value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" ch={<Inp placeholder="Ex: Farmacopeia Brasileira / Especificação interna" value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
+        <F lbl="Evidências (descrição)" ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo de análise, registro fotográfico, relatório..." />} />
         <F lbl="📎 Anexos (fotos, laudos, documentos)" ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />
       </div>
 
