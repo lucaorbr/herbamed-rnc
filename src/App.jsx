@@ -633,9 +633,9 @@ function Login({ onLogin }) {
       {/* ── ESQUERDA — Banner ── */}
       <div style={{ flex:1, position:"relative", overflow:"hidden", display:"flex", flexDirection:"column" }}>
         {/* Banner com overlay */}
-        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.webp')", backgroundSize:"cover", backgroundPosition:"right center", filter:"brightness(0.55) saturate(1.15)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(5,10,6,0.15) 0%, rgba(5,10,6,0.75) 100%)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, rgba(5,10,6,0.1) 0%, rgba(10,17,12,0.2) 60%, #0a110c 100%)" }} />
+        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.jpg')", backgroundSize:"cover", backgroundPosition:"center center", filter:"brightness(0.85)" }} />
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(5,30,15,0.2) 0%, rgba(5,20,10,0.5) 70%, rgba(5,15,8,0.85) 100%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 60%, #0a110c 100%)" }} />
 
         {/* Content */}
         <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", height:"100%", padding:"2.5rem" }}>
