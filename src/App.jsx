@@ -760,7 +760,7 @@ export default function App() {
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [tab, setTab] = useState("lista");
+  const [tab, setTab] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rncs, setRncs] = useState([]);
   const [users, setUsers] = useState([]);
@@ -815,6 +815,7 @@ export default function App() {
   const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
 
   const MENU = [
+    { id: "home",      icon: "🏠", label: "Home" },
     { id: "lista",     icon: "📋", label: "Registros",        badge: rncs.filter(x => x.status === "Aberta").length },
     ...(!isViewer ? [{ id: "nova", icon: "➕", label: "Nova RNC" }] : []),
     ...(!isViewer ? [{ id: "ishikawa", icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
@@ -826,6 +827,7 @@ export default function App() {
   ];
 
   const PAGE_TITLES = {
+    home: "Home",
     lista: "Registros de Não Conformidades",
     nova: "Nova Não Conformidade",
     ishikawa: "Ishikawa / 5 Porquês",
@@ -974,22 +976,25 @@ export default function App() {
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
-            {/* Page header */}
-            <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>
-              <div>
-                <div style={{ fontSize:18, fontWeight:700, color:T.text }}>{PAGE_TITLES[tab]||tab}</div>
-                <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>
-                  SGQ Herbamed® › {PAGE_TITLES[tab]||tab}
+            {/* Page header — hidden on home */}
+            {tab !== "home" && (
+              <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:700, color:T.text }}>{PAGE_TITLES[tab]||tab}</div>
+                  <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>
+                    SGQ Herbamed® › {PAGE_TITLES[tab]||tab}
+                  </div>
                 </div>
+                {tab==="lista" && !isViewer && (
+                  <button style={{ padding:"8px 16px", border:`1px solid ${T.accent}33`, borderRadius:8, background:T.accentDim, color:T.accent, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600 }} onClick={()=>setTab("nova")}>
+                    + Nova RNC
+                  </button>
+                )}
               </div>
-              {tab==="lista" && !isViewer && (
-                <button style={{ padding:"8px 16px", border:`1px solid ${T.accent}33`, borderRadius:8, background:T.accentDim, color:T.accent, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600 }} onClick={()=>setTab("nova")}>
-                  + Nova RNC
-                </button>
-              )}
-            </div>
+            )}
 
-            <div style={{ padding:"1.5rem" }}>
+            <div style={{ padding: tab==="home" ? "0" : "1.5rem" }}>
+              {tab==="home"       && <HomeTab rncs={rncs} user={user} setTab={setTab} />}
               {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} />}
               {tab==="nova"       && !isViewer && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
@@ -1006,6 +1011,231 @@ export default function App() {
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
       </div>
     </ThemeCtx.Provider>
+  );
+}
+
+/* ─── HOME TAB ───────────────────────────────────────────────────────────────── */
+function HomeTab({ rncs, user, setTab }) {
+  const T = useTheme(); const s = useS();
+  const [slide, setSlide] = useState(0);
+  const STORE_URL = "https://www.lojaherbamed.com.br/";
+
+  const BANNERS = [
+    { src: "/banner1.png", alt: "Novos Lançamentos Herbamed" },
+    { src: "/banner2.png", alt: "FlexiGold — Colágeno Tipo II" },
+    { src: "/banner3.png", alt: "Os Favoritos da Gio" },
+    { src: "/banner4.png", alt: "O Melhor da Suplementação" },
+  ];
+
+  // Auto-slide
+  useEffect(() => {
+    const t = setInterval(() => setSlide(s => (s + 1) % BANNERS.length), 4500);
+    return () => clearInterval(t);
+  }, []);
+
+  // Stats
+  const abertas   = rncs.filter(x => x.status === "Aberta").length;
+  const vencidas  = rncs.filter(x => x.prazoAC && x.prazoAC < tod() && x.status !== "Eficaz" && x.status !== "Ineficaz").length;
+  const eficazes  = rncs.filter(x => x.status === "Eficaz").length;
+  const criticas  = rncs.filter(x => x.sev === "Crítica" && x.status !== "Eficaz").length;
+  const taxaEf    = rncs.length > 0 ? Math.round(eficazes / rncs.length * 100) : 0;
+  const minhas    = rncs.filter(x => x.resp === user.name && x.status !== "Eficaz" && x.status !== "Ineficaz");
+  const recentes  = [...rncs].sort((a, b) => (b.createdAt||0) - (a.createdAt||0)).slice(0, 5);
+
+  // Saudação
+  const hora = new Date().getHours();
+  const saud = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
+
+  return (
+    <div>
+      <style>{`
+        @keyframes slideLeft{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes fadeUp2{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        .banner-dot:hover{transform:scale(1.3);}
+        .action-card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,.3)!important;}
+        .rnc-item-home:hover{background:${T.card2}!important;}
+      `}</style>
+
+      {/* ── HERO — Boas vindas + KPIs ── */}
+      <div style={{ background:`linear-gradient(135deg,${T.surf} 0%,${T.card} 100%)`, padding:"2rem 2rem 1.5rem", borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16, marginBottom:"1.5rem" }}>
+          <div style={{ animation:"fadeUp2 .4s ease" }}>
+            <div style={{ fontSize:11, color:T.text3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:6 }}>{saud},</div>
+            <div style={{ fontSize:26, fontWeight:800, color:T.text, lineHeight:1.2, marginBottom:6 }}>
+              {user.name.split(" ")[0]} 👋
+            </div>
+            <div style={{ fontSize:13, color:T.text2, lineHeight:1.5 }}>
+              {abertas > 0
+                ? <>Você tem <span style={{ color:"#ff4f6a", fontWeight:700 }}>{abertas} RNC{abertas > 1 ? "s" : ""} aberta{abertas > 1 ? "s" : ""}</span> aguardando ação.</>
+                : vencidas > 0
+                ? <>⚠️ <span style={{ color:T.yellow, fontWeight:700 }}>{vencidas} prazo{vencidas > 1 ? "s" : ""} vencido{vencidas > 1 ? "s" : ""}</span> — ação urgente necessária.</>
+                : <span style={{ color:T.accent, fontWeight:500 }}>✓ Tudo em dia! Nenhuma pendência crítica.</span>
+              }
+            </div>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ background:"#fff", borderRadius:10, padding:"6px 16px", boxShadow:`0 0 16px ${T.accentGlow}` }}>
+              <HerbamedLogo height={28} white={false} />
+            </div>
+          </div>
+        </div>
+
+        {/* KPI pills */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+          {[
+            { l:"Total RNCs",    n:rncs.length,  c:T.accent,  icon:"📋", action:()=>setTab("lista") },
+            { l:"Abertas",       n:abertas,       c:"#ff4f6a", icon:"🔴", action:()=>setTab("lista") },
+            { l:"Críticas",      n:criticas,      c:"#ff8c42", icon:"⚡", action:()=>setTab("lista") },
+            { l:"Taxa Eficácia", n:`${taxaEf}%`,  c:taxaEf>=70?T.accent:"#ff8c42", icon:"✅", action:()=>setTab("dashboard") },
+            { l:"Prazos Vencidos",n:vencidas,     c:vencidas>0?"#ffd166":T.text3, icon:"⏰", action:()=>setTab("lista") },
+          ].map(({ l, n, c, icon, action }) => (
+            <div key={l} onClick={action} className="action-card" style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", cursor:"pointer", transition:"all .2s", boxShadow:`0 2px 12px rgba(0,0,0,.2)` }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <span style={{ fontSize:18 }}>{icon}</span>
+                <span style={{ fontSize:22, fontWeight:800, color:c }}>{n}</span>
+              </div>
+              <div style={{ fontSize:11, color:T.text2, fontWeight:500 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── BODY ── */}
+      <div style={{ padding:"1.5rem", display:"grid", gridTemplateColumns:"1fr 340px", gap:"1.5rem" }}>
+
+        {/* LEFT */}
+        <div>
+          {/* Ações rápidas */}
+          <div style={{ marginBottom:"1.5rem" }}>
+            <div style={{ fontSize:12, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:10 }}>Ações rápidas</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+              {[
+                { icon:"➕", label:"Nova RNC",    color:"#2ab84a", action:()=>setTab("nova") },
+                { icon:"📊", label:"Dashboard",   color:"#4fc3f7", action:()=>setTab("dashboard") },
+                { icon:"📑", label:"Relatórios",  color:"#a78bfa", action:()=>setTab("relatorios") },
+                { icon:"📋", label:"Ver Registros",color:"#ff8c42",action:()=>setTab("lista") },
+              ].map(({ icon, label, color, action }) => (
+                <button key={label} onClick={action} className="action-card" style={{ background:T.card, border:`1px solid ${color}22`, borderRadius:12, padding:"1rem", cursor:"pointer", fontFamily:"inherit", textAlign:"center", transition:"all .2s", boxShadow:`0 0 20px ${color}10` }}>
+                  <div style={{ fontSize:28, marginBottom:6 }}>{icon}</div>
+                  <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Minha fila */}
+          <div style={{ ...s.card, marginBottom:"1.5rem" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>👤 Minha fila de trabalho</div>
+              <span style={{ fontSize:11, color:T.text3 }}>{minhas.length} pendente(s)</span>
+            </div>
+            {minhas.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:13 }}>
+                <div style={{ fontSize:32, marginBottom:8, opacity:.4 }}>✅</div>
+                Nenhuma RNC pendente atribuída a você!
+              </div>
+            ) : minhas.slice(0, 4).map(r => (
+              <div key={r.id} className="rnc-item-home" onClick={() => setTab("lista")} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", borderRadius:10, marginBottom:6, background:T.surf, border:`1px solid ${T.border}`, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, cursor:"pointer", transition:"all .15s" }}>
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{r.num}</span>
+                    <SevB s={r.sev} />
+                    <Badge s={r.status} />
+                  </div>
+                  <div style={{ fontSize:12, color:T.text2 }}>{r.desc?.substring(0, 55)}...</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
+                  {r.prazoAC && <div style={{ fontSize:10, color:past(r.prazoAC)?"#ff4f6a":T.text3, fontWeight:past(r.prazoAC)?700:400 }}>{past(r.prazoAC)?"⚠ VENCIDO":fmt(r.prazoAC)}</div>}
+                </div>
+              </div>
+            ))}
+            {minhas.length > 4 && <div style={{ fontSize:11, color:T.accent, textAlign:"center", cursor:"pointer", marginTop:4 }} onClick={() => setTab("lista")}>Ver todas ({minhas.length}) →</div>}
+          </div>
+
+          {/* Atividade recente */}
+          <div style={s.card}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>🕐 Atividade recente</div>
+            {recentes.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:13 }}>Nenhuma RNC registrada ainda.</div>
+            ) : recentes.map(r => (
+              <div key={r.id} className="rnc-item-home" onClick={() => setTab("lista")} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"9px 12px", borderRadius:8, marginBottom:5, cursor:"pointer", transition:"background .15s" }}>
+                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                  <span style={{ width:6, height:6, borderRadius:"50%", background:SMETA[r.status]?.dot||T.accent, display:"inline-block", flexShrink:0 }} />
+                  <div>
+                    <span style={{ fontSize:11, fontWeight:700, color:T.accent, marginRight:8 }}>{r.num}</span>
+                    <span style={{ fontSize:12, color:T.text }}>{r.desc?.substring(0, 45)}...</span>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+                  <Badge s={r.status} />
+                  <span style={{ fontSize:10, color:T.text3 }}>{fmt(r.data)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT — sidebar */}
+        <div>
+          {/* Saúde do sistema */}
+          <div style={{ ...s.card, marginBottom:"1rem" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>🩺 Saúde do sistema</div>
+            {[
+              { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
+              { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
+              { l:"Taxa de eficácia",ok:taxaEf>=70,    val:`${taxaEf}%${taxaEf>=70?" ✓":""}`},
+              { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0, val:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length} sem responsável` },
+            ].map(({ l, ok, val }) => (
+              <div key={l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${T.border}` }}>
+                <span style={{ fontSize:12, color:T.text2 }}>{l}</span>
+                <span style={{ fontSize:12, fontWeight:600, color:ok?T.accent:"#ff4f6a" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Status rápido */}
+          <div style={{ ...s.card, marginBottom:"1rem" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>📊 Por status</div>
+            {Object.entries(SMETA).map(([st, m]) => {
+              const n = rncs.filter(x => x.status === st).length;
+              if (!n) return null;
+              return <div key={st} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                <Badge s={st} />
+                <span style={{ fontSize:14, fontWeight:700, color:m.c }}>{n}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── CARROSSEL DE BANNERS ── */}
+      <div style={{ margin:"0 1.5rem 1.5rem", borderRadius:16, overflow:"hidden", position:"relative", boxShadow:`0 8px 40px rgba(0,0,0,.4)` }}>
+        {/* Slides */}
+        <div style={{ position:"relative", height:0, paddingBottom:"28%", overflow:"hidden", background:"#000" }}>
+          {BANNERS.map((b, i) => (
+            <a key={i} href={STORE_URL} target="_blank" rel="noopener noreferrer" style={{ position:"absolute", inset:0, display:"block", opacity: i === slide ? 1 : 0, transition:"opacity .7s ease", cursor:"pointer" }}>
+              <img src={b.src} alt={b.alt} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center", display:"block" }} />
+            </a>
+          ))}
+        </div>
+
+        {/* Controls */}
+        <button onClick={() => setSlide(s => (s - 1 + BANNERS.length) % BANNERS.length)} style={{ position:"absolute", left:16, top:"50%", transform:"translateY(-50%)", background:"rgba(0,0,0,.5)", border:"none", color:"#fff", borderRadius:"50%", width:36, height:36, cursor:"pointer", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>‹</button>
+        <button onClick={() => setSlide(s => (s + 1) % BANNERS.length)} style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", background:"rgba(0,0,0,.5)", border:"none", color:"#fff", borderRadius:"50%", width:36, height:36, cursor:"pointer", fontSize:16, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(4px)" }}>›</button>
+
+        {/* Dots */}
+        <div style={{ position:"absolute", bottom:12, left:"50%", transform:"translateX(-50%)", display:"flex", gap:6 }}>
+          {BANNERS.map((_, i) => (
+            <button key={i} className="banner-dot" onClick={() => setSlide(i)} style={{ width: i === slide ? 24 : 8, height:8, borderRadius:4, border:"none", background: i === slide ? "#fff" : "rgba(255,255,255,.4)", cursor:"pointer", padding:0, transition:"all .3s" }} />
+          ))}
+        </div>
+
+        {/* Label */}
+        <div style={{ position:"absolute", bottom:12, right:16, background:"rgba(0,0,0,.5)", color:"rgba(255,255,255,.7)", fontSize:10, padding:"3px 10px", borderRadius:20, backdropFilter:"blur(4px)" }}>
+          Clique para visitar a loja →
+        </div>
+      </div>
+    </div>
   );
 }
 
