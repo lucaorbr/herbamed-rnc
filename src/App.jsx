@@ -694,10 +694,13 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("lista");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rncs, setRncs] = useState([]);
   const [users, setUsers] = useState([]);
   const [toast, setToast] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async fbUser => {
@@ -720,7 +723,6 @@ export default function App() {
 
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
   const openEmail = useCallback((rnc, evento) => setEmailCtx({ rnc, evento }), []);
-
   const doSaveRNC = useCallback(async (rnc) => { await saveRNC(rnc.id, rnc); }, []);
   const doUpdateRNC = useCallback(async (id, data) => { await updateRNC(id, data); }, []);
   const doDeleteRNC = useCallback(async (id) => { await fbDeleteRNC(id); }, []);
@@ -730,7 +732,7 @@ export default function App() {
       <div style={{ background: T.bg, color: T.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ width: 48, height: 48, border: `3px solid ${T.accent}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
-          <div style={{ color: T.text2, fontSize: 13 }}>Carregando sistema...</div>
+          <div style={{ color: T.text2, fontSize: 13 }}>Carregando SGQ Herbamed...</div>
         </div>
         <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
       </div>
@@ -742,66 +744,195 @@ export default function App() {
   const isViewer = user.role === "viewer";
   const isAdmin = user.role === "admin";
 
-  const TABS = [
-    ["lista", "📋 Registros"],
-    ...(!isViewer ? [["nova", "+ Nova RNC"]] : []),
-    ...(!isViewer ? [["ishikawa", "🐟 Ishikawa / 5 Porquês"]] : []),
-    ...(!isViewer ? [["5w2h", "📌 5W2H"]] : []),
-    ...(!isViewer ? [["eficacia", "✅ Eficácia"]] : []),
-    ["dashboard", "📊 Dashboard"],
-    ["relatorios", "📑 Relatórios"],
-    ...(isAdmin ? [["admin", "⚙️ Admin"]] : []),
+  // Notificações — RNCs com prazo vencido
+  const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
+
+  const MENU = [
+    { id: "lista",     icon: "📋", label: "Registros",        badge: rncs.filter(x => x.status === "Aberta").length },
+    ...(!isViewer ? [{ id: "nova", icon: "➕", label: "Nova RNC" }] : []),
+    ...(!isViewer ? [{ id: "ishikawa", icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
+    ...(!isViewer ? [{ id: "5w2h", icon: "📌", label: "5W2H" }] : []),
+    ...(!isViewer ? [{ id: "eficacia", icon: "✅", label: "Eficácia" }] : []),
+    { id: "dashboard", icon: "📊", label: "Dashboard" },
+    { id: "relatorios",icon: "📑", label: "Relatórios" },
+    ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
+
+  const PAGE_TITLES = {
+    lista: "Registros de Não Conformidades",
+    nova: "Nova Não Conformidade",
+    ishikawa: "Ishikawa / 5 Porquês",
+    "5w2h": "Plano de Ação 5W2H",
+    eficacia: "Verificação de Eficácia",
+    dashboard: "Dashboard",
+    relatorios: "Relatórios",
+    admin: "Administração",
+  };
 
   return (
     <ThemeCtx.Provider value={T}>
-      <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14 }}>
+      <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <style>{`
+          @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+          @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+          @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+          .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
+          .rnc-row:hover{background:${T.card2}!important;}
+          .th-sort:hover{color:${T.accent}!important;cursor:pointer;}
+        `}</style>
 
-        {/* HEADER */}
-        <div style={{ background: `linear-gradient(135deg, ${T.surf} 0%, ${T.card} 100%)`, borderBottom: `1px solid ${T.border2}`, padding: "0 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 100, backdropFilter: "blur(12px)", height: 64 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ background: "#ffffff", borderRadius: 10, padding: "5px 14px", boxShadow: `0 0 16px ${T.accentGlow}`, display: "flex", alignItems: "center" }}>
-              <HerbamedLogo height={28} white={false} />
+        {/* ── TOP HEADER ── */}
+        <div style={{ background: `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom:`1px solid ${T.border2}`, height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter:"blur(12px)", flexShrink:0 }}>
+
+          {/* Left: toggle + logo */}
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+              {sidebarOpen ? "◀" : "▶"}
+            </button>
+            <div style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center" }}>
+              <HerbamedLogo height={24} white={false} />
             </div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>SGQ Herbamed®</div>
-              <div style={{ fontSize: 10, color: T.text3 }}>Sistema de Gestão da Qualidade</div>
+            <div style={{ display:"flex", flexDirection:"column" }}>
+              <span style={{ fontSize:13, fontWeight:700, color:T.text, lineHeight:1.2 }}>SGQ Herbamed®</span>
+              <span style={{ fontSize:10, color:T.text3 }}>Sistema de Gestão da Qualidade</span>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-            {[["Total", rncs.length, T.accent], ["Abertas", rncs.filter(x => x.status === "Aberta").length, "#ff4f6a"], ["Eficazes", rncs.filter(x => x.status === "Eficaz").length, T.accent]].map(([l, n, c]) => (
-              <div key={l} style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: c, lineHeight: 1 }}>{n}</div>
-                <div style={{ fontSize: 9, color: T.text3, textTransform: "uppercase", letterSpacing: ".06em" }}>{l}</div>
+
+          {/* Center: KPI pills */}
+          <div style={{ display:"flex", gap:8 }}>
+            {[
+              ["Total RNCs", rncs.length, T.accent],
+              ["Abertas", rncs.filter(x=>x.status==="Aberta").length, T.red],
+              ["Eficazes", rncs.filter(x=>x.status==="Eficaz").length, T.accent],
+              ["Vencidas", notifs.length, notifs.length>0?T.yellow:T.text3],
+            ].map(([l,n,c])=>(
+              <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:20, padding:"4px 14px", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:16, fontWeight:700, color:c }}>{n}</span>
+                <span style={{ fontSize:10, color:T.text3, textTransform:"uppercase", letterSpacing:".04em" }}>{l}</span>
               </div>
             ))}
-            <div style={{ width: 1, height: 28, background: T.border }} />
+          </div>
+
+          {/* Right: theme + notif + avatar */}
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <ThemePicker current={themeKey} onChange={changeTheme} />
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{user.name}</div>
-              <div style={{ fontSize: 10, color: T.text3 }}>{user.setor} · {user.role === "admin" ? <span style={{ color: T.accent }}>Admin</span> : user.role === "viewer" ? <span style={{ color: T.blue }}>Visualizador</span> : "Usuário"}</div>
+
+            {/* Notifications bell */}
+            <div style={{ position:"relative" }}>
+              <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:notifs.length>0?"#ffd16618":"none", border:`1px solid ${notifs.length>0?"#ffd16633":T.border}`, borderRadius:8, color:notifs.length>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
+                🔔
+                {notifs.length>0 && <span style={{ position:"absolute", top:2, right:2, width:14, height:14, borderRadius:"50%", background:T.red, color:"#fff", fontSize:8, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${T.bg}` }}>{notifs.length}</span>}
+              </button>
+              {notifOpen && (
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:320, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:14, boxShadow:"0 16px 48px #0008", zIndex:500, animation:"fadeIn .15s ease" }}>
+                  <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, display:"flex", justifyContent:"space-between" }}>
+                    🔔 Notificações <span style={{ color:T.text3, fontWeight:400 }}>{notifs.length} alerta(s)</span>
+                  </div>
+                  {notifs.length===0 ? (
+                    <div style={{ padding:"1.5rem", textAlign:"center", color:T.text3, fontSize:13 }}>Nenhum alerta no momento ✓</div>
+                  ) : notifs.map(r=>(
+                    <div key={r.id} onClick={()=>{setTab("lista");setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num} — Prazo vencido</div>
+                      <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,50)}...</div>
+                      <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>Prazo AC: {fmt(r.prazoAC)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <button style={{ background: "#ff4f6a18", border: "1px solid #ff4f6a22", borderRadius: 8, color: "#ff4f6a", cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: "6px 12px" }} onClick={() => { logoutUser(); setUser(null); }}>Sair</button>
+
+            {/* Avatar dropdown */}
+            <div style={{ position:"relative" }}>
+              <button onClick={()=>{setAvatarOpen(o=>!o);setNotifOpen(false);}} style={{ display:"flex", alignItems:"center", gap:8, background:T.surf, border:`1px solid ${T.border2}`, borderRadius:10, padding:"5px 10px 5px 5px", cursor:"pointer", fontFamily:"inherit" }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#fff", flexShrink:0 }}>
+                  {user.name?.[0]||"?"}
+                </div>
+                <div style={{ textAlign:"left" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:T.text, lineHeight:1.2 }}>{user.name}</div>
+                  <div style={{ fontSize:10, color:T.text3 }}>{user.role==="admin"?"Admin":user.role==="viewer"?"Visualizador":"Usuário"}</div>
+                </div>
+                <span style={{ color:T.text3, fontSize:10 }}>▾</span>
+              </button>
+              {avatarOpen && (
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:220, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflow:"hidden", animation:"fadeIn .15s ease" }}>
+                  <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}` }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{user.name}</div>
+                    <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{user.email}</div>
+                    <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{user.setor}</div>
+                  </div>
+                  {isAdmin && (
+                    <button onClick={()=>{setTab("admin");setAvatarOpen(false);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>
+                      ⚙️ Administração
+                    </button>
+                  )}
+                  <button onClick={()=>{logoutUser();setUser(null);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.red, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8, borderTop:`1px solid ${T.border}` }}>
+                    🚪 Sair do sistema
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div style={{ maxWidth: 980, margin: "0 auto", padding: "1.5rem" }}>
-          {/* TABS */}
-          <div style={{ display: "flex", gap: 2, background: T.surf, border: `1px solid ${T.border}`, borderRadius: 14, padding: 4, marginBottom: "1.5rem", flexWrap: "wrap" }}>
-            {TABS.map(([t, l]) => (
-              <button key={t} onClick={() => setTab(t)} style={{ padding: "8px 16px", border: "none", background: tab === t ? T.accentDim : "transparent", color: tab === t ? T.accent : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: tab === t ? 600 : 400, borderRadius: 10, boxShadow: tab === t ? `0 0 12px ${T.accentGlow}` : "none", transition: "all .2s", border: tab === t ? `1px solid ${T.accent}33` : "1px solid transparent" }}>{l}</button>
-            ))}
+        {/* ── BODY: sidebar + content ── */}
+        <div style={{ display:"flex", flex:1, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
+
+          {/* SIDEBAR */}
+          <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
+            <div style={{ padding:"8px 6px", flex:1, overflowY:"auto" }}>
+              {MENU.map(item=>(
+                <button key={item.id} className="menu-item" onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 10px", border:"none", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: tab===item.id?600:400, borderRadius:10, marginBottom:2, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 10px ${T.accentGlow}`:"none", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", position:"relative", overflow:"hidden", whiteSpace:"nowrap" }}>
+                  <span style={{ fontSize:16, flexShrink:0, width:20, textAlign:"center" }}>{item.icon}</span>
+                  {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis" }}>{item.label}</span>}
+                  {sidebarOpen && item.badge > 0 && (
+                    <span style={{ background:T.red, color:"#fff", fontSize:9, fontWeight:700, borderRadius:10, padding:"1px 6px", flexShrink:0 }}>{item.badge}</span>
+                  )}
+                  {!sidebarOpen && item.badge > 0 && (
+                    <span style={{ position:"absolute", top:4, right:4, width:8, height:8, borderRadius:"50%", background:T.red }} />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Sidebar footer */}
+            {sidebarOpen && (
+              <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3, lineHeight:1.6 }}>
+                <div style={{ fontWeight:600, color:T.text2, marginBottom:2 }}>SGQ Herbamed®</div>
+                <div>Sistema de Gestão da Qualidade</div>
+                <div>v2.0 · {new Date().getFullYear()}</div>
+              </div>
+            )}
           </div>
 
-          {tab === "lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} />}
-          {tab === "nova"       && !isViewer && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} />}
-          {tab === "ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
-          {tab === "5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
-          {tab === "eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
-          {tab === "dashboard"  && <DashTab rncs={rncs} />}
-          {tab === "relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
-          {tab === "admin" && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+          {/* MAIN CONTENT */}
+          <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
+            {/* Page header */}
+            <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>
+              <div>
+                <div style={{ fontSize:18, fontWeight:700, color:T.text }}>{PAGE_TITLES[tab]||tab}</div>
+                <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>
+                  SGQ Herbamed® › {PAGE_TITLES[tab]||tab}
+                </div>
+              </div>
+              {tab==="lista" && !isViewer && (
+                <button style={{ padding:"8px 16px", border:`1px solid ${T.accent}33`, borderRadius:8, background:T.accentDim, color:T.accent, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600 }} onClick={()=>setTab("nova")}>
+                  + Nova RNC
+                </button>
+              )}
+            </div>
+
+            <div style={{ padding:"1.5rem" }}>
+              {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} />}
+              {tab==="nova"       && !isViewer && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} />}
+              {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
+              {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="dashboard"  && <DashTab rncs={rncs} />}
+              {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
+              {tab==="admin"      && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+            </div>
+          </div>
         </div>
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
@@ -888,38 +1019,109 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
     await doDeleteRNC(id); setSel(null); toast_("RNC excluída.", "red");
   };
 
+  const [sortCol, setSortCol] = useState("data");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const sorted = [...list].sort((a, b) => {
+    const va = a[sortCol] || ""; const vb = b[sortCol] || "";
+    return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  // Steps de progresso da RNC
+  const getRNCStep = (r) => {
+    if (r.status === "Eficaz" || r.status === "Ineficaz") return 4;
+    if (r.eficacia?.resultado) return 4;
+    if (r.w2h?.length > 0) return 3;
+    if (r.ishikawa?.root) return 2;
+    return 1;
+  };
+
+  const STEPS = ["Abertura", "Análise", "5W2H", "Eficácia"];
+
+  const thStyle = (col) => ({
+    padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color: sortCol===col?T.accent:T.text3,
+    textTransform:"uppercase", letterSpacing:".06em", cursor:"pointer", userSelect:"none",
+    borderBottom:`1px solid ${T.border}`, background:T.surf, whiteSpace:"nowrap",
+  });
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: "1.25rem", flexWrap: "wrap" }}>
-        <Inp placeholder="🔍 Buscar descrição, produto, lote..." value={q} onChange={e => setQ(e.target.value)} sx={{ flex: 1, minWidth: 220 }} />
-        <Sel value={fSt} onChange={e => setFSt(e.target.value)} sx={{ width: "auto", minWidth: 165 }}>
-          <option value="">Todos os status</option>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:10, marginBottom:"1rem", flexWrap:"wrap" }}>
+        <Inp placeholder="🔍 Buscar por número, produto, descrição..." value={q} onChange={e=>setQ(e.target.value)} sx={{ flex:1, minWidth:220 }} />
+        <Sel value={fSt} onChange={e=>setFSt(e.target.value)} sx={{ width:"auto", minWidth:165 }}>
+          <option value="">Todos os status</option>{Object.keys(SMETA).map(x=><option key={x}>{x}</option>)}
         </Sel>
-        <Sel value={fTp} onChange={e => setFTp(e.target.value)} sx={{ width: "auto", minWidth: 155 }}>
-          <option value="">Todos os tipos</option>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}
+        <Sel value={fTp} onChange={e=>setFTp(e.target.value)} sx={{ width:"auto", minWidth:155 }}>
+          <option value="">Todos os tipos</option>{Object.keys(TIPOC).map(x=><option key={x}>{x}</option>)}
         </Sel>
-        {!isViewer && <button style={s.btnA} onClick={() => setTab("nova")}>+ Nova RNC</button>}
       </div>
 
-      {list.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "4rem 2rem", color: T.text3 }}>
-          <div style={{ fontSize: 48, marginBottom: "1rem", opacity: .3 }}>📋</div>
-          <div style={{ fontSize: 14, color: T.text2, marginBottom: 6 }}>Nenhuma RNC encontrada</div>
-          <div style={{ fontSize: 12 }}>{isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}</div>
+      {/* Tabela enterprise */}
+      {sorted.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"4rem 2rem", color:T.text3, background:T.card, borderRadius:14, border:`1px solid ${T.border}` }}>
+          <div style={{ fontSize:48, marginBottom:"1rem", opacity:.3 }}>📋</div>
+          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhuma RNC encontrada</div>
+          <div style={{ fontSize:12 }}>{isViewer?"Nenhuma não conformidade registrada.":"Clique em \"+ Nova RNC\" para começar."}</div>
         </div>
-      ) : list.map(r => (
-        <div key={r.id} onClick={() => { setSel(r); setEditing(false); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${SMETA[r.status]?.dot || T.accent}`, borderRadius: 14, padding: "1rem 1.25rem", marginBottom: ".75rem", cursor: "pointer", transition: "all .2s" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: ".06em" }}>{r.num}</span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {canEdit(r) && <span style={{ fontSize: 10, color: T.text3 }}>✏️ editável</span>}
-              <SevB s={r.sev} /><Badge s={r.status} />
-            </div>
+      ) : (
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr>
+                <th className="th-sort" style={thStyle("num")} onClick={()=>toggleSort("num")}>Nº {sortCol==="num"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
+                <th style={{...thStyle("status"),cursor:"default"}}>Status / Progresso</th>
+                <th className="th-sort" style={thStyle("desc")} onClick={()=>toggleSort("desc")}>Descrição</th>
+                <th className="th-sort" style={thStyle("tipo")} onClick={()=>toggleSort("tipo")}>Tipo</th>
+                <th className="th-sort" style={thStyle("sev")} onClick={()=>toggleSort("sev")}>Sev.</th>
+                <th className="th-sort" style={thStyle("resp")} onClick={()=>toggleSort("resp")}>Responsável</th>
+                <th className="th-sort" style={thStyle("data")} onClick={()=>toggleSort("data")}>Data {sortCol==="data"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
+                <th className="th-sort" style={thStyle("prazoAC")} onClick={()=>toggleSort("prazoAC")}>Prazo AC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((r, idx) => {
+                const step = getRNCStep(r);
+                const vencido = past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz";
+                return (
+                  <tr key={r.id} className="rnc-row" onClick={()=>{setSel(r);setEditing(false);}} style={{ background: idx%2===0?T.card:T.surf, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, cursor:"pointer", transition:"background .15s" }}>
+                    <td style={{ padding:"10px 14px", fontSize:11, fontWeight:700, color:T.accent, whiteSpace:"nowrap" }}>{r.num}</td>
+                    <td style={{ padding:"10px 14px", minWidth:180 }}>
+                      <Badge s={r.status} />
+                      {/* Mini steps */}
+                      <div style={{ display:"flex", gap:2, marginTop:5 }}>
+                        {STEPS.map((st,i)=>(
+                          <div key={st} title={st} style={{ flex:1, height:3, borderRadius:2, background: i<step?T.accent:T.border, transition:"background .3s" }} />
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ padding:"10px 14px", fontSize:13, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.desc}</td>
+                    <td style={{ padding:"10px 14px", fontSize:11, color:T.text2, whiteSpace:"nowrap" }}>
+                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:TIPOC[r.tipo]||T.accent, marginRight:4 }} />
+                      {r.tipo}
+                    </td>
+                    <td style={{ padding:"10px 14px" }}><SevB s={r.sev} /></td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{r.resp||"—"}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{fmt(r.data)}</td>
+                    <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color: vencido?T.red:T.text2, fontWeight: vencido?600:400 }}>
+                      {vencido?"⚠ ":""}{r.prazoAC?fmt(r.prazoAC):"—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:11, color:T.text3, display:"flex", justifyContent:"space-between" }}>
+            <span>{sorted.length} registro(s) encontrado(s)</span>
+            <span>Clique em uma linha para ver detalhes</span>
           </div>
-          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{r.desc?.substring(0, 95)}{r.desc?.length > 95 ? "..." : ""}</div>
-          <div style={{ fontSize: 11, color: T.text2 }}>{r.tipo} · {r.produto || "—"} · {fmt(r.data)} · {r.resp || "—"}{past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz" ? <span style={{ color: "#ff4f6a", fontWeight: 600 }}> ⚠ PRAZO VENCIDO</span> : ""}</div>
         </div>
-      ))}
+      )}
 
       {/* MODAL */}
       {sel && (
@@ -941,7 +1143,23 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
               </div>
             </div>
 
-            {/* MODO EDIÇÃO */}
+            {/* Steps de progresso */}
+            <div style={{ display:"flex", gap:0, marginBottom:"1.25rem", background:T.surf, borderRadius:10, padding:"12px 16px", border:`1px solid ${T.border}` }}>
+              {["Abertura","Análise de Causa","Plano de Ação","Verificação"].map((st,i)=>{
+                const step = getRNCStep(sel);
+                const done = i < step;
+                const active = i === step - 1;
+                return (
+                  <div key={st} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", position:"relative" }}>
+                    {i > 0 && <div style={{ position:"absolute", left:"-50%", top:13, width:"100%", height:2, background: done?T.accent:T.border, zIndex:0 }} />}
+                    <div style={{ width:28, height:28, borderRadius:"50%", background: done?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, color: done?"#fff":T.text3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, zIndex:1, border: active?`2px solid ${T.accent}`:"none", boxShadow: active?`0 0 10px ${T.accentGlow}`:"none" }}>
+                      {done && i < step-1 ? "✓" : i+1}
+                    </div>
+                    <div style={{ fontSize:10, color: done?T.accent:T.text3, marginTop:4, fontWeight: active?600:400, textAlign:"center" }}>{st}</div>
+                  </div>
+                );
+              })}
+            </div>
             {editing ? (
               <div>
                 <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: T.accent, display: "flex", alignItems: "center", gap: 8 }}>
