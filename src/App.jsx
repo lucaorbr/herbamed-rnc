@@ -1682,54 +1682,327 @@ function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
 /* ─── DASHBOARD ──────────────────────────────────────────────────────────────── */
 function DashTab({ rncs }) {
   const T = useTheme(); const s = useS();
-  const bS = {}, bT = {}, bV = {};
-  rncs.forEach(r => { bS[r.status] = (bS[r.status] || 0) + 1; bT[r.tipo] = (bT[r.tipo] || 0) + 1; bV[r.sev] = (bV[r.sev] || 0) + 1; });
-  const venc = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
-  const tot = rncs.length, ef = rncs.filter(x => x.status === "Eficaz").length;
-  const sCols = Object.fromEntries(Object.keys(SMETA).map(k => [k, SMETA[k].dot]));
-  function Bar({ data, cm, title, insight }) {
-    const max = Math.max(...Object.values(data), 1);
-    return <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "1.25rem", marginBottom: "1rem" }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{title}</div>
-      <div style={{ fontSize: 11, color: T.text2, marginBottom: "1rem", paddingBottom: ".75rem", borderBottom: `1px solid ${T.border}`, marginTop: 4 }}>{insight}</div>
-      {Object.keys(data).length === 0 ? <div style={{ color: T.text3, fontSize: 13 }}>Sem dados.</div> :
-        Object.entries(data).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
-          <div key={k} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ minWidth: 150, fontSize: 12, color: T.text2, fontWeight: 500 }}>{k}</div>
-            <div style={{ flex: 1, height: 8, background: T.surf, borderRadius: 4, overflow: "hidden" }}><div style={{ height: "100%", width: `${Math.round(n / max * 100)}%`, background: cm[k] || T.accent, borderRadius: 4, transition: "width .6s ease", boxShadow: `0 0 8px ${cm[k] || T.accent}60` }} /></div>
-            <div style={{ minWidth: 24, fontSize: 12, color: T.text2, fontWeight: 700, textAlign: "right" }}>{n}</div>
-          </div>
-        ))}
-    </div>;
-  }
-  const ts = Object.entries(bS).sort((a, b) => b[1] - a[1])[0];
-  const tt = Object.entries(bT).sort((a, b) => b[1] - a[1])[0];
+  const [dashTab, setDashTab] = useState("kpis");
+
+  const tot = rncs.length;
+  const ef = rncs.filter(x=>x.status==="Eficaz").length;
+  const ab = rncs.filter(x=>x.status==="Aberta").length;
+  const venc = rncs.filter(r=>r.prazoAC&&r.prazoAC<tod()&&r.status!=="Eficaz"&&r.status!=="Ineficaz");
+  const critica = rncs.filter(x=>x.sev==="Crítica").length;
+  const taxaEf = tot>0?Math.round(ef/tot*100):0;
+
+  // Tempo médio resolução
+  const resolvidas = rncs.filter(x=>x.status==="Eficaz"&&x.data&&x.eficacia?.data);
+  const tempoMedio = resolvidas.length>0?Math.round(resolvidas.reduce((a,r)=>{
+    const d1=new Date(r.data);const d2=new Date(r.eficacia.data);
+    return a+(d2-d1)/(1000*60*60*24);
+  },0)/resolvidas.length):null;
+
+  // Reincidência (mesma causa raiz)
+  const causas = {};
+  rncs.filter(x=>x.ishikawa?.root).forEach(r=>{ causas[r.ishikawa.root]=(causas[r.ishikawa.root]||0)+1; });
+  const reincidentes = Object.values(causas).filter(v=>v>1).length;
+
+  // Por tipo (Pareto)
+  const bT={},bS={},bF={};
+  rncs.forEach(r=>{
+    bT[r.tipo]=(bT[r.tipo]||0)+1;
+    bS[r.status]=(bS[r.status]||0)+1;
+    if(r.fornecedor)bF[r.fornecedor]=(bF[r.fornecedor]||0)+1;
+  });
+
+  // PDCA — agrupar RNCs por fase
+  const pdcaFases = {
+    P: rncs.filter(x=>x.status==="Aberta"||x.status==="Em andamento").filter(x=>!x.ishikawa?.root),
+    D: rncs.filter(x=>x.ishikawa?.root&&(!x.w2h||x.w2h.length===0)),
+    C: rncs.filter(x=>x.w2h?.length>0&&x.status==="Pendente verificação"),
+    A: rncs.filter(x=>x.status==="Eficaz"),
+  };
+
+  // Pareto acumulado
+  const paretoData = Object.entries(bT).sort((a,b)=>b[1]-a[1]);
+  const paretoTotal = paretoData.reduce((s,[,n])=>s+n,0);
+  let acum=0;
+  const paretoAcum = paretoData.map(([k,n])=>{ acum+=n; return [k,n,Math.round(acum/paretoTotal*100)]; });
+
+  // Matriz GUT das RNCs abertas
+  const gutRncs = rncs.filter(x=>x.status==="Aberta"||x.status==="Em andamento").map(r=>({
+    ...r,
+    G: r.sev==="Crítica"?5:r.sev==="Maior"?3:1,
+    U: past(r.prazoAC)?5:r.prazoAC?3:2,
+    T: r.sev==="Crítica"?5:r.sev==="Maior"?3:2,
+    gut: (r.sev==="Crítica"?5:r.sev==="Maior"?3:1)*(past(r.prazoAC)?5:r.prazoAC?3:2)*(r.sev==="Crítica"?5:r.sev==="Maior"?3:2)
+  })).sort((a,b)=>b.gut-a.gut);
+
+  const DASH_TABS=[
+    {id:"kpis",icon:"📈",label:"KPIs"},
+    {id:"pareto",icon:"📊",label:"Pareto"},
+    {id:"gut",icon:"🎯",label:"Matriz GUT"},
+    {id:"pdca",icon:"🔄",label:"PDCA"},
+  ];
+
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14, marginBottom: "1.25rem" }}>
-        {[["Total", tot, T.accent, "Todos os registros"], ["Abertas", rncs.filter(x => x.status === "Aberta").length, "#ff4f6a", "Requerem ação"], ["Eficazes", ef, T.accent, `${tot > 0 ? Math.round(ef / tot * 100) : 0}% resolução`], ["Vencidas", venc.length, T.orange, "Prazo AC expirado"]].map(([l, n, c, sub]) => (
-          <div key={l} style={{ background: T.card, border: `1px solid ${c}22`, borderRadius: 14, padding: "1.25rem", boxShadow: `0 0 20px ${c}15`, position: "relative", overflow: "hidden" }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: c, lineHeight: 1, marginBottom: 4 }}>{n}</div>
-            <div style={{ fontSize: 11, color: T.text2, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>{l}</div>
-            <div style={{ fontSize: 10, color: T.text3, marginTop: 2 }}>{sub}</div>
-            <div style={{ position: "absolute", bottom: -16, right: -16, width: 70, height: 70, borderRadius: "50%", background: c, opacity: .06 }} />
-          </div>
+      {/* Sub-navegação */}
+      <div style={{ display:"flex", gap:4, marginBottom:"1rem", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:4 }}>
+        {DASH_TABS.map(dt=>(
+          <button key={dt.id} onClick={()=>setDashTab(dt.id)} style={{ flex:1, padding:"7px 10px", border:dashTab===dt.id?`1px solid ${T.accent}33`:"1px solid transparent", background:dashTab===dt.id?T.accentDim:"transparent", color:dashTab===dt.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:dashTab===dt.id?600:400, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
+            {dt.icon} {dt.label}
+          </button>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <Bar data={bS} cm={sCols} title="Por status" insight={ts ? `"${ts[0]}" lidera com ${ts[1]} RNC${ts[1] > 1 ? "s" : ""}.` : "Sem dados."} />
-        <Bar data={bT} cm={TIPOC} title="Por tipo" insight={tt ? `"${tt[0]}" — ${tt[1]} ocorrência${tt[1] > 1 ? "s" : ""}.` : "Sem dados."} />
-      </div>
-      <Bar data={bV} cm={{ Crítica: "#ff4f6a", Maior: T.orange, Menor: T.purple }} title="Por severidade" insight={(bV.Crítica || 0) > 0 ? `⚠ ${bV.Crítica} RNC crítica(s) — prioridade máxima.` : "Nenhuma RNC crítica registrada."} />
-      <div style={s.card}>
-        <SecTitle icon="⚠️" ch="Prazos de ação corretiva vencidos" />
-        {venc.length === 0 ? <div style={{ color: T.text3, fontSize: 13 }}>Nenhum prazo vencido.</div> : venc.map(r => (
-          <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "#ff4f6a12", border: "1px solid #ff4f6a30", borderRadius: 10, marginBottom: 8 }}>
-            <div><div style={{ fontSize: 13, fontWeight: 600, color: "#ff4f6a" }}>{r.num}</div><div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.desc?.substring(0, 55)}...</div></div>
-            <div style={{ textAlign: "right" }}><div style={{ fontSize: 11, color: "#ff4f6a", fontWeight: 700 }}>VENCIDO</div><div style={{ fontSize: 11, color: T.text3 }}>{fmt(r.prazoAC)}</div></div>
+
+      {/* ── KPIs ── */}
+      {dashTab==="kpis"&&(
+        <>
+          {/* Cards principais */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
+            {[
+              {l:"Taxa de Eficácia",n:`${taxaEf}%`,c:taxaEf>=70?T.accent:"#ff8c42",sub:`${ef}/${tot} RNCs resolvidas`,icon:"✅",trend:taxaEf>=70?"↑ Bom":"↓ Atenção"},
+              {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Requerem ação",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
+              {l:"Tempo Médio Resolução",n:tempoMedio?`${tempoMedio}d`:"N/D",c:T.blue,sub:"Da abertura à eficácia",icon:"⏱️",trend:tempoMedio&&tempoMedio<=30?"↑ Eficiente":tempoMedio?"↓ Avaliar":"—"},
+              {l:"Causa Raiz Reincidente",n:reincidentes,c:reincidentes>0?"#ff8c42":T.accent,sub:"Mesma causa em +1 RNC",icon:"🔄",trend:reincidentes===0?"✓ Sem reincidência":"⚠ Atenção"},
+            ].map(({l,n,c,sub,icon,trend})=>(
+              <div key={l} style={{ background:T.card, border:`1px solid ${c}22`, borderRadius:14, padding:"1.1rem", position:"relative", overflow:"hidden", boxShadow:`0 0 20px ${c}10` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                  <span style={{ fontSize:22, opacity:.5 }}>{icon}</span>
+                  <span style={{ fontSize:10, fontWeight:600, color:c, background:`${c}18`, padding:"2px 8px", borderRadius:20 }}>{trend}</span>
+                </div>
+                <div style={{ fontSize:30, fontWeight:800, color:c, lineHeight:1, marginBottom:4 }}>{n}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:2 }}>{l}</div>
+                <div style={{ fontSize:10, color:T.text3 }}>{sub}</div>
+                <div style={{ position:"absolute", bottom:-12, right:-12, width:60, height:60, borderRadius:"50%", background:c, opacity:.05 }}/>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+
+          {/* KPIs secundários */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
+            {[
+              ["Total RNCs",tot,T.accent],
+              ["Críticas",critica,"#ff4f6a"],
+              ["Vencidas",venc.length,"#ffd166"],
+              ["Eficazes",ef,T.accent],
+              ["Ineficazes",rncs.filter(x=>x.status==="Ineficaz").length,"#ff8c42"],
+            ].map(([l,n,c])=>(
+              <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:700, color:c }}>{n}</div>
+                <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", letterSpacing:".04em", marginTop:2 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Barras por status e tipo */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,TIPOC]].map(([title,data,cm])=>(
+              <div key={title} style={{ ...s.card }}>
+                <SecTitle ch={title}/>
+                {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,n])=>{
+                  const max=Math.max(...Object.values(data),1);
+                  return <div key={k} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                    <div style={{ minWidth:130, fontSize:12, color:T.text2 }}>{k}</div>
+                    <div style={{ flex:1, height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${Math.round(n/max*100)}%`, background:cm[k]||T.accent, borderRadius:4, transition:"width .6s" }}/>
+                    </div>
+                    <div style={{ minWidth:20, fontSize:12, fontWeight:700, color:T.text2, textAlign:"right" }}>{n}</div>
+                  </div>;
+                })}
+              </div>
+            ))}
+          </div>
+
+          {/* Vencidas */}
+          {venc.length>0&&<div style={{ ...s.card, marginTop:14 }}>
+            <SecTitle icon="⚠️" ch="Prazos de ação corretiva vencidos"/>
+            {venc.map(r=>(
+              <div key={r.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:"#ff4f6a12", border:"1px solid #ff4f6a30", borderRadius:10, marginBottom:8 }}>
+                <div><div style={{ fontSize:13, fontWeight:600, color:"#ff4f6a" }}>{r.num}</div><div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,55)}...</div></div>
+                <div style={{ textAlign:"right" }}><div style={{ fontSize:11, color:"#ff4f6a", fontWeight:700 }}>VENCIDO</div><div style={{ fontSize:11, color:T.text3 }}>{fmt(r.prazoAC)}</div></div>
+              </div>
+            ))}
+          </div>}
+        </>
+      )}
+
+      {/* ── PARETO ── */}
+      {dashTab==="pareto"&&(
+        <div>
+          <div style={{ ...s.card, marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Gráfico de Pareto — Tipos de Não Conformidade</div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
+              Identifica quais tipos de NC representam 80% dos problemas. Foque nos primeiros itens da lista.
+            </div>
+            {paretoAcum.length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Sem dados.</div>:
+            paretoAcum.map(([k,n,acPct],i)=>{
+              const maxN=paretoAcum[0][1];
+              const is80=acPct<=80;
+              return <div key={k} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ width:20, height:20, borderRadius:"50%", background:is80?T.accent:T.border, color:is80?"#fff":T.text3, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i+1}</span>
+                    <span style={{ fontSize:13, color:T.text, fontWeight:is80?600:400 }}>{k}</span>
+                    {is80&&<span style={{ fontSize:9, background:T.accentDim, color:T.accent, padding:"1px 6px", borderRadius:20, fontWeight:700 }}>80%</span>}
+                  </div>
+                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                    <span style={{ fontSize:11, color:T.text3 }}>Acum: {acPct}%</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:is80?T.accent:T.text2 }}>{n}</span>
+                  </div>
+                </div>
+                <div style={{ height:10, background:T.surf, borderRadius:5, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${Math.round(n/maxN*100)}%`, background:is80?`linear-gradient(to right,${T.accent},${T.accent2})`:T.border, borderRadius:5, transition:"width .6s", boxShadow:is80?`0 0 8px ${T.accentGlow}`:""  }}/>
+                </div>
+              </div>;
+            })}
+            <div style={{ marginTop:"1rem", padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
+              💡 <b style={{ color:T.accent }}>Regra 80/20:</b> Os tipos destacados em verde representam ~80% das não conformidades. Priorize ações preventivas nessas categorias para o maior impacto.
+            </div>
+          </div>
+
+          {/* Pareto por Fornecedor */}
+          <div style={s.card}>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Pareto — Fornecedores com maior incidência</div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
+              Fornecedores que mais geram não conformidades.
+            </div>
+            {Object.keys(bF).length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhum fornecedor identificado nas RNCs.</div>:
+            Object.entries(bF).sort((a,b)=>b[1]-a[1]).map(([f,n],i)=>{
+              const maxN=Math.max(...Object.values(bF));
+              return <div key={f} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+                <span style={{ width:22, height:22, borderRadius:"50%", background:i===0?"#ff4f6a22":T.border, color:i===0?"#ff4f6a":T.text3, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i+1}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:T.text, fontWeight:500, marginBottom:4 }}>{f}{i===0&&<span style={{ marginLeft:6, fontSize:9, color:"#ff4f6a", background:"#ff4f6a18", padding:"1px 6px", borderRadius:20, fontWeight:700 }}>MAIOR INCIDÊNCIA</span>}</div>
+                  <div style={{ height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${Math.round(n/maxN*100)}%`, background:i===0?"#ff4f6a":T.accent, borderRadius:4 }}/>
+                  </div>
+                </div>
+                <span style={{ fontSize:15, fontWeight:700, color:i===0?"#ff4f6a":T.accent, minWidth:24 }}>{n}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── MATRIZ GUT ── */}
+      {dashTab==="gut"&&(
+        <div>
+          <div style={{ ...s.card, marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Matriz GUT — Priorização de RNCs</div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
+              Classifica automaticamente as RNCs abertas por Gravidade × Urgência × Tendência. Maior pontuação = maior prioridade.
+            </div>
+            <div style={{ display:"flex", gap:10, marginBottom:"1rem" }}>
+              {[["G","Gravidade","Impacto no processo/produto"],["U","Urgência","Necessidade de ação imediata"],["T","Tendência","Propensão a piorar"]].map(([l,t,d])=>(
+                <div key={l} style={{ flex:1, background:T.surf, borderRadius:10, padding:"10px 14px", border:`1px solid ${T.border}` }}>
+                  <div style={{ fontSize:20, fontWeight:800, color:T.accent, lineHeight:1 }}>{l}</div>
+                  <div style={{ fontSize:12, fontWeight:600, color:T.text, marginTop:2 }}>{t}</div>
+                  <div style={{ fontSize:10, color:T.text3 }}>{d}</div>
+                </div>
+              ))}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, color:T.text3, padding:"0 8px" }}>×</div>
+              <div style={{ flex:1, background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:10, padding:"10px 14px" }}>
+                <div style={{ fontSize:20, fontWeight:800, color:T.accent, lineHeight:1 }}>GUT</div>
+                <div style={{ fontSize:12, fontWeight:600, color:T.text, marginTop:2 }}>Pontuação</div>
+                <div style={{ fontSize:10, color:T.text2 }}>G×U×T (1-125)</div>
+              </div>
+            </div>
+
+            {gutRncs.length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC aberta ou em andamento.</div>:
+            gutRncs.map((r,i)=>{
+              const gutColor=r.gut>=75?"#ff4f6a":r.gut>=27?"#ff8c42":"#ffd166";
+              const prioridade=r.gut>=75?"🔴 ALTA":r.gut>=27?"🟠 MÉDIA":"🟡 BAIXA";
+              return <div key={r.id} style={{ background:T.surf, border:`1px solid ${r.gut>=75?"#ff4f6a33":T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:14 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:`${gutColor}22`, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", flexShrink:0 }}>
+                  <div style={{ fontSize:16, fontWeight:800, color:gutColor, lineHeight:1 }}>{r.gut}</div>
+                  <div style={{ fontSize:8, color:T.text3 }}>GUT</div>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{r.num}</span>
+                    <SevB s={r.sev}/>
+                    <span style={{ fontSize:10, fontWeight:600, color:gutColor }}>{prioridade}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:T.text, marginBottom:4 }}>{r.desc?.substring(0,70)}...</div>
+                  <div style={{ fontSize:10, color:T.text2 }}>
+                    G={r.G} · U={r.U} · T={r.T} · Resp: {r.resp||"—"}{past(r.prazoAC)?" · ⚠ VENCIDO":""}
+                  </div>
+                </div>
+                <div style={{ textAlign:"center", flexShrink:0 }}>
+                  <div style={{ fontSize:10, color:T.text3 }}>Prioridade</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:gutColor }}>#{i+1}</div>
+                </div>
+              </div>;
+            })}
+            <div style={{ marginTop:"1rem", padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
+              💡 <b style={{ color:T.accent }}>Como usar:</b> Resolva as RNCs na ordem do ranking GUT. As pontuações são calculadas automaticamente com base na severidade e prazo de cada RNC.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PDCA ── */}
+      {dashTab==="pdca"&&(
+        <div>
+          <div style={{ ...s.card, marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Ciclo PDCA — Visão do Ciclo de Melhoria</div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
+              Mostra em qual fase do ciclo PDCA cada RNC se encontra atualmente.
+            </div>
+
+            {/* PDCA wheel visual */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:"1.5rem" }}>
+              {[
+                {l:"P — Plan",sub:"Planejar",desc:"Abertas sem análise de causa",color:"#4fc3f7",rncs_:pdcaFases.P,icon:"📋"},
+                {l:"D — Do",sub:"Executar",desc:"Causa identificada, aguardando 5W2H",color:"#ffd166",rncs_:pdcaFases.D,icon:"⚙️"},
+                {l:"C — Check",sub:"Verificar",desc:"Plano executado, em verificação",color:"#ff8c42",rncs_:pdcaFases.C,icon:"🔍"},
+                {l:"A — Act",sub:"Agir",desc:"Ação eficaz — padronizar",color:"#2ab84a",rncs_:pdcaFases.A,icon:"✅"},
+              ].map(({l,sub,desc,color,rncs_,icon})=>(
+                <div key={l} style={{ background:T.surf, border:`1px solid ${color}33`, borderRadius:12, padding:"1rem", position:"relative", overflow:"hidden" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                    <div>
+                      <div style={{ fontSize:16, fontWeight:800, color, lineHeight:1 }}>{l}</div>
+                      <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{sub} — {desc}</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:28, fontWeight:800, color }}>{rncs_.length}</div>
+                      <div style={{ fontSize:9, color:T.text3 }}>RNC(s)</div>
+                    </div>
+                  </div>
+                  {rncs_.length>0&&(
+                    <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                      {rncs_.slice(0,3).map(r=>(
+                        <div key={r.id} style={{ fontSize:11, color:T.text2, background:T.card, borderRadius:6, padding:"4px 8px", display:"flex", justifyContent:"space-between" }}>
+                          <span style={{ fontWeight:600, color }}>{r.num}</span>
+                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:160 }}>{r.desc?.substring(0,35)}...</span>
+                        </div>
+                      ))}
+                      {rncs_.length>3&&<div style={{ fontSize:10, color:T.text3, textAlign:"center" }}>+{rncs_.length-3} mais</div>}
+                    </div>
+                  )}
+                  <div style={{ position:"absolute", bottom:-16, right:-16, width:60, height:60, borderRadius:"50%", background:color, opacity:.08 }}/>
+                </div>
+              ))}
+            </div>
+
+            {/* Fluxo visual */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 0", borderTop:`1px solid ${T.border}` }}>
+              {[["P","📋","#4fc3f7"],["D","⚙️","#ffd166"],["C","🔍","#ff8c42"],["A","✅","#2ab84a"]].map(([l,icon,c],i)=>(
+                <React.Fragment key={l}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                    <div style={{ width:44, height:44, borderRadius:"50%", background:`${c}22`, border:`2px solid ${c}55`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{icon}</div>
+                    <span style={{ fontSize:12, fontWeight:700, color:c }}>{l}</span>
+                  </div>
+                  {i<3&&<div style={{ fontSize:20, color:T.text3, fontWeight:300 }}>→</div>}
+                </React.Fragment>
+              ))}
+              <div style={{ fontSize:16, color:T.text3 }}>↻</div>
+            </div>
+
+            <div style={{ marginTop:"1rem", padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
+              💡 <b style={{ color:T.accent }}>Ciclo PDCA:</b> RNCs sem análise de causa estão em P. Após Ishikawa/5 Porquês vão para D. Após 5W2H executado vão para C. Quando eficaz, chegam em A — padronize a solução.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1739,15 +2012,412 @@ function RelatoriosTab({ rncs, users, user, toast_ }) {
   const T = useTheme(); const s = useS();
   const [periodo, setPeriodo] = useState("mensal");
   const [respFiltro, setRespFiltro] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState("");
-  const [dataInicio, setDataInicio] = useState(() => {
-    const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0];
-  });
+  const [dataInicio, setDataInicio] = useState(() => { const d=new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
   const [dataFim, setDataFim] = useState(() => new Date().toISOString().split("T")[0]);
   const [enviando, setEnviando] = useState(false);
   const [emailDest, setEmailDest] = useState(user.email);
   const [aiResumo, setAiResumo] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
+  const [activeSection, setActiveSection] = useState("resumo");
+
+  const aplicarPeriodo = (p) => {
+    setPeriodo(p);
+    const hoje = new Date(); let inicio = new Date();
+    if (p==="semanal") inicio.setDate(hoje.getDate()-7);
+    else if (p==="quinzenal") inicio.setDate(hoje.getDate()-15);
+    else if (p==="mensal") inicio.setDate(1);
+    else if (p==="trimestral") { inicio.setMonth(hoje.getMonth()-3); inicio.setDate(1); }
+    setDataInicio(inicio.toISOString().split("T")[0]);
+    setDataFim(hoje.toISOString().split("T")[0]);
+  };
+
+  const filtered = rncs.filter(r => r.data >= dataInicio && r.data <= dataFim && (!respFiltro || r.resp === respFiltro));
+  const resps = [...new Set(rncs.map(r=>r.resp).filter(Boolean))].sort();
+
+  const total = filtered.length;
+  const abertas = filtered.filter(x=>x.status==="Aberta").length;
+  const emAndamento = filtered.filter(x=>x.status==="Em andamento").length;
+  const eficaz = filtered.filter(x=>x.status==="Eficaz").length;
+  const ineficaz = filtered.filter(x=>x.status==="Ineficaz").length;
+  const pendente = filtered.filter(x=>x.status==="Pendente verificação").length;
+  const critica = filtered.filter(x=>x.sev==="Crítica").length;
+  const maior = filtered.filter(x=>x.sev==="Maior").length;
+  const menor = filtered.filter(x=>x.sev==="Menor").length;
+  const vencidas = filtered.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz"&&x.status!=="Ineficaz").length;
+  const taxaEficacia = total>0?Math.round(eficaz/total*100):0;
+  const taxaAberto = total>0?Math.round((abertas+emAndamento)/total*100):0;
+
+  // Por responsável
+  const porResp = {};
+  filtered.forEach(r=>{ const k=r.resp||"Não atribuído"; if(!porResp[k])porResp[k]=[]; porResp[k].push(r); });
+
+  // Por tipo
+  const porTipo = {};
+  filtered.forEach(r=>{ porTipo[r.tipo]=(porTipo[r.tipo]||0)+1; });
+
+  // Por fornecedor
+  const porForn = {};
+  filtered.forEach(r=>{ if(r.fornecedor){porForn[r.fornecedor]=(porForn[r.fornecedor]||0)+1;} });
+
+  // Tempo médio resolução (dias)
+  const resolvidas = filtered.filter(x=>x.status==="Eficaz"&&x.data&&x.eficacia?.data);
+  const tempoMedio = resolvidas.length>0 ? Math.round(resolvidas.reduce((acc,r)=>{
+    const d1=new Date(r.data); const d2=new Date(r.eficacia.data);
+    return acc+(d2-d1)/(1000*60*60*24);
+  },0)/resolvidas.length) : null;
+
+  const gerarResumoIA = async () => {
+    setLoadingAI(true); setAiResumo("");
+    try {
+      const txt = await askClaude(`Você é especialista em gestão da qualidade. Gere um resumo executivo conciso e profissional em português.
+
+PERÍODO: ${fmt(dataInicio)} a ${fmt(dataFim)}
+FILTRO: ${respFiltro||"Todos os responsáveis"}
+TOTAL: ${total} | ABERTAS: ${abertas} | EFICAZES: ${eficaz} | CRÍTICAS: ${critica} | VENCIDAS: ${vencidas}
+TAXA DE EFICÁCIA: ${taxaEficacia}%
+TEMPO MÉDIO RESOLUÇÃO: ${tempoMedio?`${tempoMedio} dias`:"N/D"}
+TIPOS MAIS FREQUENTES: ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(", ")}
+FORNECEDORES COM MAIS NCs: ${Object.entries(porForn).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(", ")||"N/D"}
+
+Gere 2 parágrafos: 1) análise dos números, 2) recomendações práticas. Seja direto e objetivo.`);
+      setAiResumo(txt);
+    } catch { setAiResumo("Erro ao gerar análise."); }
+    setLoadingAI(false);
+  };
+
+  const enviarEmail = async () => {
+    if(!emailDest){alert("Informe o e-mail.");return;}
+    setEnviando(true);
+    const corpo = `SGQ HERBAMED® — RELATÓRIO DE NÃO CONFORMIDADES
+${"═".repeat(50)}
+Período: ${fmt(dataInicio)} a ${fmt(dataFim)}
+Filtro: ${respFiltro||"Todos os responsáveis"}
+Gerado em: ${new Date().toLocaleString("pt-BR")} por ${user.name}
+
+${"─".repeat(50)}
+INDICADORES GERAIS
+${"─".repeat(50)}
+Total de RNCs:        ${total}
+Abertas:              ${abertas}
+Em andamento:         ${emAndamento}
+Eficazes:             ${eficaz} (${taxaEficacia}%)
+Ineficazes:           ${ineficaz}
+Críticas:             ${critica}
+Prazos vencidos:      ${vencidas}
+Tempo médio resolução:${tempoMedio?`${tempoMedio} dias`:"N/D"}
+
+${"─".repeat(50)}
+POR RESPONSÁVEL
+${"─".repeat(50)}
+${Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([r,list])=>{
+  const ab=list.filter(x=>x.status==="Aberta").length;
+  const ef=list.filter(x=>x.status==="Eficaz").length;
+  const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz").length;
+  return `${r}\n  Total: ${list.length} | Abertas: ${ab} | Eficazes: ${ef}${vc>0?` | ⚠ ${vc} vencida(s)`:""}`;
+}).join("\n\n")}
+
+${"─".repeat(50)}
+TIPOS MAIS FREQUENTES
+${"─".repeat(50)}
+${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`${t}: ${n}`).join("\n")}
+
+${aiResumo?`${"─".repeat(50)}\nANÁLISE EXECUTIVA — IA\n${"─".repeat(50)}\n${aiResumo}\n`:""}
+${"─".repeat(50)}
+DETALHAMENTO DAS RNCs
+${"─".repeat(50)}
+${filtered.map(r=>`${r.num} | ${r.status} | ${r.sev} | ${r.resp||"—"}
+  Produto: ${r.produto||"—"} | Fornecedor: ${r.fornecedor||"—"}
+  ${r.desc?.substring(0,100)}...`).join("\n\n")}
+
+${"═".repeat(50)}
+Herbamed® · Sistema de Gestão da Qualidade`;
+
+    try {
+      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send",{
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ service_id:"service_gxhicii", template_id:"template_4jl73wq", user_id:"z2VxJ1dYjwrRp8Nh4",
+          template_params:{ to_email:emailDest, to_name:emailDest, from_name:`${user.name} · Herbamed® SGQ`,
+            subject:`📊 Relatório SGQ — ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
+            message:corpo, reply_to:user.email }})
+      });
+      if(res.ok) toast_("Relatório enviado!","green"); else toast_("Erro ao enviar.","red");
+    } catch { toast_("Erro ao enviar.","red"); }
+    setEnviando(false);
+  };
+
+  const SECTIONS = [
+    { id:"resumo", icon:"📊", label:"Resumo" },
+    { id:"responsavel", icon:"👤", label:"Por Responsável" },
+    { id:"tipos", icon:"📦", label:"Por Tipo" },
+    { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
+    { id:"detalhe", icon:"📋", label:"Detalhamento" },
+  ];
+
+  return (
+    <div>
+      {/* HEADER DO RELATÓRIO */}
+      <div style={{ background:`linear-gradient(135deg,${T.card},${T.card2})`, border:`1px solid ${T.border}`, borderRadius:14, padding:"1.25rem", marginBottom:"1rem" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:700, color:T.text, marginBottom:4 }}>Relatório de Não Conformidades</div>
+            <div style={{ fontSize:12, color:T.text2 }}>Herbamed® · Sistema de Gestão da Qualidade</div>
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <button onClick={()=>window.print()} style={{ ...s.btn, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>🖨️ Imprimir / PDF</button>
+            <button onClick={enviarEmail} disabled={enviando} style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:enviando?.6:1 }}>
+              {enviando?"Enviando...":"✉️ Enviar por e-mail"}
+            </button>
+          </div>
+        </div>
+
+        {/* Filtros inline */}
+        <div style={{ display:"flex", gap:8, marginTop:"1rem", flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ display:"flex", gap:4 }}>
+            {["semanal","quinzenal","mensal","trimestral"].map(p=>(
+              <button key={p} onClick={()=>aplicarPeriodo(p)} style={{ padding:"5px 12px", borderRadius:20, border:`1px solid ${periodo===p?T.accent+"55":T.border}`, background:periodo===p?T.accentDim:T.surf, color:periodo===p?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:periodo===p?600:400, textTransform:"capitalize" }}>{p}</button>
+            ))}
+          </div>
+          <Inp type="date" value={dataInicio} onChange={e=>{setDataInicio(e.target.value);setPeriodo("personalizado");}} sx={{ width:140, fontSize:12 }}/>
+          <span style={{ color:T.text3, fontSize:12 }}>até</span>
+          <Inp type="date" value={dataFim} onChange={e=>{setDataFim(e.target.value);setPeriodo("personalizado");}} sx={{ width:140, fontSize:12 }}/>
+          <Sel value={respFiltro} onChange={e=>setRespFiltro(e.target.value)} sx={{ width:"auto", minWidth:180, fontSize:12 }}>
+            <option value="">Todos os responsáveis</option>
+            {resps.map(r=><option key={r}>{r}</option>)}
+          </Sel>
+          <Inp placeholder="E-mail para envio" value={emailDest} onChange={e=>setEmailDest(e.target.value)} sx={{ width:220, fontSize:12 }}/>
+        </div>
+      </div>
+
+      {/* KPI CARDS */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
+        {[
+          { l:"Total no período", n:total, c:T.accent, sub:"RNCs registradas", icon:"📋" },
+          { l:"Taxa de eficácia", n:`${taxaEficacia}%`, c:taxaEficacia>=70?T.accent:"#ff8c42", sub:`${eficaz} de ${total} resolvidas`, icon:"✅" },
+          { l:"Pendentes", n:abertas+emAndamento, c:"#ffd166", sub:`${taxaAberto}% ainda abertas`, icon:"⏳" },
+          { l:"Prazo vencido", n:vencidas, c:vencidas>0?"#ff4f6a":T.text3, sub:vencidas>0?"Ação urgente necessária":"Todos em dia", icon:vencidas>0?"⚠️":"✓" },
+        ].map(({l,n,c,sub,icon})=>(
+          <div key={l} style={{ background:T.card, border:`1px solid ${c}22`, borderRadius:14, padding:"1.1rem", position:"relative", overflow:"hidden", boxShadow:`0 0 20px ${c}10` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontSize:28, fontWeight:800, color:c, lineHeight:1, marginBottom:4 }}>{n}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:2 }}>{l}</div>
+                <div style={{ fontSize:10, color:T.text3 }}>{sub}</div>
+              </div>
+              <span style={{ fontSize:24, opacity:.4 }}>{icon}</span>
+            </div>
+            <div style={{ position:"absolute", bottom:-12, right:-12, width:60, height:60, borderRadius:"50%", background:c, opacity:.06 }}/>
+          </div>
+        ))}
+      </div>
+
+      {/* BARRA EXTRA — tempo médio + severidade */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12, marginBottom:"1rem" }}>
+        {[
+          { l:"Críticas", n:critica, c:"#ff4f6a" },
+          { l:"Maiores", n:maior, c:"#ff8c42" },
+          { l:"Menores", n:menor, c:"#a78bfa" },
+          { l:"Tempo médio resolução", n:tempoMedio?`${tempoMedio}d`:"N/D", c:T.blue },
+        ].map(({l,n,c})=>(
+          <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:12, color:T.text2, fontWeight:500 }}>{l}</div>
+            <div style={{ fontSize:18, fontWeight:700, color:c }}>{n}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ANÁLISE IA */}
+      <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2})`, border:`1px solid ${T.accent}33`, borderRadius:14, padding:"1.1rem", marginBottom:"1rem" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ width:32, height:32, borderRadius:8, background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Análise Executiva — Claude IA</div>
+              <div style={{ fontSize:11, color:T.text2 }}>Resumo inteligente baseado nos dados do período</div>
+            </div>
+          </div>
+          <button style={{ ...s.btnA, fontSize:11, display:"flex", alignItems:"center", gap:6, opacity:loadingAI?.6:1 }} onClick={gerarResumoIA} disabled={loadingAI}>
+            {loadingAI?<><span style={{ animation:"spin 1s linear infinite", display:"inline-block" }}>⟳</span> Analisando...</>:"✨ Gerar análise"}
+          </button>
+        </div>
+        {aiResumo&&<div style={{ marginTop:"1rem", background:T.surf, borderRadius:10, padding:"1rem", fontSize:13, color:T.text, lineHeight:1.75, borderLeft:`3px solid ${T.accent}` }}>{aiResumo}</div>}
+      </div>
+
+      {/* NAVEGAÇÃO DE SEÇÕES */}
+      <div style={{ display:"flex", gap:4, marginBottom:"1rem", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:4 }}>
+        {SECTIONS.map(sec=>(
+          <button key={sec.id} onClick={()=>setActiveSection(sec.id)} style={{ flex:1, padding:"7px 10px", border:"none", background:activeSection===sec.id?T.accentDim:"transparent", color:activeSection===sec.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:activeSection===sec.id?600:400, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", gap:5, border:activeSection===sec.id?`1px solid ${T.accent}33`:"1px solid transparent" }}>
+            {sec.icon} {sec.label}
+          </button>
+        ))}
+      </div>
+
+      {/* SEÇÃO: RESUMO VISUAL */}
+      {activeSection==="resumo"&&(
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+          {/* Status */}
+          <div style={{ ...s.card }}>
+            <SecTitle icon="🎯" ch="Distribuição por status" />
+            {Object.entries(SMETA).map(([st,m])=>{
+              const n=filtered.filter(x=>x.status===st).length;
+              if(!n) return null;
+              const pct=Math.round(n/total*100);
+              return <div key={st} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:8, height:8, borderRadius:"50%", background:m.dot, display:"inline-block" }}/><span style={{ fontSize:12, color:T.text2 }}>{st}</span></div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:11, color:T.text3 }}>{pct}%</span><span style={{ fontSize:13, fontWeight:700, color:m.c }}>{n}</span></div>
+                </div>
+                <div style={{ height:6, background:T.surf, borderRadius:3, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:m.dot, borderRadius:3, transition:"width .6s ease" }}/>
+                </div>
+              </div>;
+            })}
+          </div>
+          {/* Severidade */}
+          <div style={{ ...s.card }}>
+            <SecTitle icon="⚡" ch="Distribuição por severidade" />
+            {[["Crítica","#ff4f6a",critica],["Maior","#ff8c42",maior],["Menor","#a78bfa",menor]].map(([l,c,n])=>{
+              const pct=total>0?Math.round(n/total*100):0;
+              return <div key={l} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                  <span style={{ fontSize:12, color:T.text2, fontWeight:500 }}>{l}</span>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{ fontSize:11, color:T.text3 }}>{pct}%</span><span style={{ fontSize:13, fontWeight:700, color:c }}>{n}</span></div>
+                </div>
+                <div style={{ height:8, background:T.surf, borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:c, borderRadius:4, transition:"width .6s ease", boxShadow:`0 0 8px ${c}50` }}/>
+                </div>
+              </div>;
+            })}
+            <div style={{ marginTop:"1rem", padding:"10px 14px", background:T.surf, borderRadius:10, display:"flex", justifyContent:"space-between" }}>
+              <span style={{ fontSize:12, color:T.text2 }}>Eficácia geral do período</span>
+              <span style={{ fontSize:16, fontWeight:700, color:taxaEficacia>=70?T.accent:"#ff8c42" }}>{taxaEficacia}%</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEÇÃO: POR RESPONSÁVEL */}
+      {activeSection==="responsavel"&&(
+        <div style={s.card}>
+          <SecTitle icon="👤" ch={`Desempenho por responsável — ${Object.keys(porResp).length} pessoa(s)`} />
+          {Object.keys(porResp).length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC no período.</div>:
+          Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([resp,list])=>{
+            const ab=list.filter(x=>x.status==="Aberta").length;
+            const ef=list.filter(x=>x.status==="Eficaz").length;
+            const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz").length;
+            const taxa=list.length>0?Math.round(ef/list.length*100):0;
+            const max=Math.max(...Object.values(porResp).map(l=>l.length),1);
+            return <div key={resp} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:12, padding:"1rem", marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:40, height:40, borderRadius:"50%", background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:"#fff" }}>{resp[0]}</div>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{resp}</div>
+                    <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>
+                      {list.length} RNC(s) · {ab} aberta(s) · {ef} eficaz(es) · Taxa: <span style={{ color:taxa>=70?T.accent:"#ff8c42", fontWeight:600 }}>{taxa}%</span>
+                      {vc>0&&<span style={{ color:"#ff4f6a", fontWeight:600 }}> · ⚠ {vc} vencida(s)</span>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize:28, fontWeight:800, color:T.accent }}>{list.length}</div>
+              </div>
+              {/* Mini status pills */}
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                {Object.entries(SMETA).map(([st,m])=>{
+                  const n=list.filter(x=>x.status===st).length;
+                  if(!n) return null;
+                  return <span key={st} style={{ padding:"2px 8px", borderRadius:20, fontSize:10, fontWeight:600, background:m.bg, color:m.c }}>{st}: {n}</span>;
+                })}
+              </div>
+              <div style={{ height:5, background:T.card, borderRadius:3, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${Math.round(list.length/max*100)}%`, background:`linear-gradient(to right,${T.accent},${T.accent2})`, borderRadius:3 }}/>
+              </div>
+            </div>;
+          })}
+        </div>
+      )}
+
+      {/* SEÇÃO: POR TIPO */}
+      {activeSection==="tipos"&&(
+        <div style={s.card}>
+          <SecTitle icon="📦" ch="Distribuição por tipo de não conformidade" />
+          {Object.keys(porTipo).length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC no período.</div>:
+          Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,n],idx)=>{
+            const max=Math.max(...Object.values(porTipo),1);
+            const pct=Math.round(n/total*100);
+            const color=TIPOC[tipo]||T.accent;
+            return <div key={tipo} style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12 }}>
+              <div style={{ minWidth:24, width:24, height:24, borderRadius:"50%", background:`${color}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color, flexShrink:0 }}>{idx+1}</div>
+              <div style={{ minWidth:180, fontSize:13, color:T.text, fontWeight:500 }}>{tipo}</div>
+              <div style={{ flex:1, height:10, background:T.surf, borderRadius:5, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${Math.round(n/max*100)}%`, background:color, borderRadius:5, transition:"width .6s ease", boxShadow:`0 0 8px ${color}40` }}/>
+              </div>
+              <div style={{ minWidth:40, display:"flex", flexDirection:"column", alignItems:"flex-end" }}>
+                <span style={{ fontSize:14, fontWeight:700, color }}>{n}</span>
+                <span style={{ fontSize:10, color:T.text3 }}>{pct}%</span>
+              </div>
+            </div>;
+          })}
+        </div>
+      )}
+
+      {/* SEÇÃO: FORNECEDORES */}
+      {activeSection==="fornecedores"&&(
+        <div style={s.card}>
+          <SecTitle icon="🏭" ch="Não conformidades por fornecedor" />
+          {Object.keys(porForn).length===0?
+            <div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC com fornecedor identificado no período.</div>:
+          Object.entries(porForn).sort((a,b)=>b[1]-a[1]).map(([forn,n],idx)=>{
+            const max=Math.max(...Object.values(porForn),1);
+            const pct=Math.round(n/total*100);
+            const isTop=idx===0;
+            return <div key={forn} style={{ background:isTop?"#ff4f6a0a":T.surf, border:`1px solid ${isTop?"#ff4f6a22":T.border}`, borderRadius:10, padding:"10px 14px", marginBottom:8, display:"flex", alignItems:"center", gap:14 }}>
+              <div style={{ minWidth:28, width:28, height:28, borderRadius:"50%", background:isTop?"#ff4f6a22":T.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:isTop?"#ff4f6a":T.text2, flexShrink:0 }}>{idx+1}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>{forn}{isTop&&<span style={{ marginLeft:8, fontSize:10, color:"#ff4f6a", fontWeight:700 }}>⚠ MAIOR INCIDÊNCIA</span>}</div>
+                <div style={{ height:6, background:T.card, borderRadius:3, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${Math.round(n/max*100)}%`, background:isTop?"#ff4f6a":T.accent, borderRadius:3 }}/>
+                </div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                <div style={{ fontSize:18, fontWeight:700, color:isTop?"#ff4f6a":T.accent }}>{n}</div>
+                <div style={{ fontSize:10, color:T.text3 }}>{pct}% do total</div>
+              </div>
+            </div>;
+          })}
+        </div>
+      )}
+
+      {/* SEÇÃO: DETALHAMENTO */}
+      {activeSection==="detalhe"&&(
+        <div style={s.card}>
+          <SecTitle icon="📋" ch={`Detalhamento completo — ${filtered.length} RNC(s)`} />
+          {filtered.length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC no período.</div>:
+          filtered.map(r=>(
+            <div key={r.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, borderRadius:10, padding:"12px 16px", marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{r.num}</span>
+                  <SevB s={r.sev}/>
+                  <Badge s={r.status}/>
+                  {past(r.prazoAC)&&r.status!=="Eficaz"&&<span style={{ fontSize:10, color:"#ff4f6a", fontWeight:700, background:"#ff4f6a18", padding:"2px 8px", borderRadius:20 }}>⚠ VENCIDO</span>}
+                </div>
+                <span style={{ fontSize:11, color:T.text3 }}>{fmt(r.data)}</span>
+              </div>
+              <div style={{ fontSize:13, color:T.text, marginBottom:6, lineHeight:1.5 }}>{r.desc?.substring(0,120)}{r.desc?.length>120?"...":""}</div>
+              <div style={{ display:"flex", gap:16, fontSize:11, color:T.text2 }}>
+                {r.produto&&<span>📦 {r.produto}</span>}
+                {r.fornecedor&&<span>🏭 {r.fornecedor}</span>}
+                {r.resp&&<span>👤 {r.resp}</span>}
+                {r.prazoAC&&<span>📅 Prazo: {fmt(r.prazoAC)}</span>}
+                {r.ishikawa?.root&&<span style={{ color:T.accent }}>🎯 C.R.: {r.ishikawa.root.substring(0,40)}...</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
   // Calcular período automaticamente
   const aplicarPeriodo = (p) => {
