@@ -739,12 +739,18 @@ export default function App() {
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
 
+  const isViewer = user.role === "viewer";
+  const isAdmin = user.role === "admin";
+
   const TABS = [
-    ["lista", "📋 Registros"], ["nova", "+ Nova RNC"],
-    ["ishikawa", "🐟 Ishikawa / 5 Porquês"], ["5w2h", "📌 5W2H"],
-    ["eficacia", "✅ Eficácia"], ["dashboard", "📊 Dashboard"],
+    ["lista", "📋 Registros"],
+    ...(!isViewer ? [["nova", "+ Nova RNC"]] : []),
+    ...(!isViewer ? [["ishikawa", "🐟 Ishikawa / 5 Porquês"]] : []),
+    ...(!isViewer ? [["5w2h", "📌 5W2H"]] : []),
+    ...(!isViewer ? [["eficacia", "✅ Eficácia"]] : []),
+    ["dashboard", "📊 Dashboard"],
     ["relatorios", "📑 Relatórios"],
-    ...(user.role === "admin" ? [["admin", "⚙️ Admin"]] : []),
+    ...(isAdmin ? [["admin", "⚙️ Admin"]] : []),
   ];
 
   return (
@@ -759,8 +765,8 @@ export default function App() {
               <HerbamedLogo height={28} white={false} />
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>Registro de Não Conformidades</div>
-              <div style={{ fontSize: 10, color: T.text3 }}>Gestão da Qualidade · Herbamed®</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>SGQ Herbamed®</div>
+              <div style={{ fontSize: 10, color: T.text3 }}>Sistema de Gestão da Qualidade</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -774,7 +780,7 @@ export default function App() {
             <ThemePicker current={themeKey} onChange={changeTheme} />
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{user.name}</div>
-              <div style={{ fontSize: 10, color: T.text3 }}>{user.setor} · {user.role === "admin" ? <span style={{ color: T.accent }}>Admin</span> : "Usuário"}</div>
+              <div style={{ fontSize: 10, color: T.text3 }}>{user.setor} · {user.role === "admin" ? <span style={{ color: T.accent }}>Admin</span> : user.role === "viewer" ? <span style={{ color: T.blue }}>Visualizador</span> : "Usuário"}</div>
             </div>
             <button style={{ background: "#ff4f6a18", border: "1px solid #ff4f6a22", borderRadius: 8, color: "#ff4f6a", cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: "6px 12px" }} onClick={() => { logoutUser(); setUser(null); }}>Sair</button>
           </div>
@@ -788,14 +794,14 @@ export default function App() {
             ))}
           </div>
 
-          {tab === "lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} />}
-          {tab === "nova"       && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} />}
-          {tab === "ishikawa"   && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} />}
-          {tab === "5w2h"       && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} />}
-          {tab === "eficacia"   && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} />}
+          {tab === "lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} />}
+          {tab === "nova"       && !isViewer && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} />}
+          {tab === "ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+          {tab === "5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
+          {tab === "eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
           {tab === "dashboard"  && <DashTab rncs={rncs} />}
           {tab === "relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
-          {tab === "admin" && user.role === "admin" && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+          {tab === "admin" && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
         </div>
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
@@ -806,22 +812,82 @@ export default function App() {
 }
 
 /* ─── LISTA TAB ──────────────────────────────────────────────────────────────── */
-function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC }) {
+function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin }) {
   const T = useTheme(); const s = useS();
-  const [q, setQ] = useState(""); const [fSt, setFSt] = useState(""); const [fTp, setFTp] = useState(""); const [sel, setSel] = useState(null);
-  const list = rncs.filter(r => (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) && (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp));
+  const [q, setQ] = useState("");
+  const [fSt, setFSt] = useState("");
+  const [fTp, setFTp] = useState("");
+  const [sel, setSel] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState({});
+
+  const list = rncs.filter(r =>
+    (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) &&
+    (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp)
+  );
+
+  // Verificar se usuário pode editar esta RNC
+  const canEdit = (r) => {
+    if (isViewer) return false;
+    if (isAdmin) return true;
+    return r.criadoPor === user.name || r.detector === user.name;
+  };
+
   const updStatus = async (id, status) => {
-    const h = { data: tod(), acao: `Status → ${status}`, resp: user.name };
-    await doUpdateRNC(id, { status, historico: [...(sel?.historico || []), h] });
+    const r = rncs.find(x => x.id === id);
+    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado → ${status}`, resp: user.name, tipo: "status" };
+    await doUpdateRNC(id, { status, historico: [...(r?.historico || []), h] });
     setSel(p => p ? { ...p, status, historico: [...(p.historico || []), h] } : null);
     toast_("Status atualizado!", "green");
-    const updated = { ...rncs.find(r => r.id === id), status, historico: [...(rncs.find(r => r.id === id)?.historico || []), h] };
+    const updated = { ...r, status, historico: [...(r?.historico || []), h] };
     openEmail(updated, "status");
   };
+
+  const startEdit = (r) => {
+    setEditData({
+      desc: r.desc || "", produto: r.produto || "", fornecedor: r.fornecedor || "",
+      lote: r.lote || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
+      tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
+      resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
+      prazoEfic: r.prazoEfic || "", contencao: r.contencao || "", respCont: r.respCont || "",
+    });
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editData.desc?.trim()) { alert("Descrição é obrigatória."); return; }
+    const r = rncs.find(x => x.id === sel.id);
+
+    // Detectar campos alterados para o histórico
+    const alterados = [];
+    const campos = { desc: "Descrição", produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", qtd: "Quantidade", ref: "Referência", sev: "Severidade", tipo: "Tipo", resp: "Responsável", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", contencao: "Ação de Contenção" };
+    Object.entries(campos).forEach(([k, label]) => {
+      if ((r[k] || "") !== (editData[k] || "")) {
+        alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
+      }
+    });
+
+    const h = {
+      data: tod(),
+      hora: new Date().toLocaleTimeString("pt-BR"),
+      acao: `RNC editada — ${alterados.length} campo(s) alterado(s)`,
+      detalhes: alterados,
+      resp: user.name,
+      tipo: "edicao"
+    };
+
+    const updated = { ...editData, historico: [...(r?.historico || []), h] };
+    await doUpdateRNC(sel.id, updated);
+    setSel(p => ({ ...p, ...editData, historico: [...(p.historico || []), h] }));
+    setEditing(false);
+    toast_("RNC atualizada com sucesso!", "green");
+  };
+
   const del = async id => {
     if (!confirm("Excluir esta RNC permanentemente?")) return;
     await doDeleteRNC(id); setSel(null); toast_("RNC excluída.", "red");
   };
+
   return (
     <div>
       <div style={{ display: "flex", gap: 10, marginBottom: "1.25rem", flexWrap: "wrap" }}>
@@ -832,71 +898,171 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
         <Sel value={fTp} onChange={e => setFTp(e.target.value)} sx={{ width: "auto", minWidth: 155 }}>
           <option value="">Todos os tipos</option>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}
         </Sel>
-        <button style={s.btnA} onClick={() => setTab("nova")}>+ Nova RNC</button>
+        {!isViewer && <button style={s.btnA} onClick={() => setTab("nova")}>+ Nova RNC</button>}
       </div>
+
       {list.length === 0 ? (
         <div style={{ textAlign: "center", padding: "4rem 2rem", color: T.text3 }}>
           <div style={{ fontSize: 48, marginBottom: "1rem", opacity: .3 }}>📋</div>
           <div style={{ fontSize: 14, color: T.text2, marginBottom: 6 }}>Nenhuma RNC encontrada</div>
-          <div style={{ fontSize: 12 }}>Clique em "+ Nova RNC" para começar.</div>
+          <div style={{ fontSize: 12 }}>{isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}</div>
         </div>
       ) : list.map(r => (
-        <div key={r.id} onClick={() => setSel(r)} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${SMETA[r.status]?.dot || T.accent}`, borderRadius: 14, padding: "1rem 1.25rem", marginBottom: ".75rem", cursor: "pointer", transition: "all .2s" }}>
+        <div key={r.id} onClick={() => { setSel(r); setEditing(false); }} style={{ background: T.card, border: `1px solid ${T.border}`, borderLeft: `3px solid ${SMETA[r.status]?.dot || T.accent}`, borderRadius: 14, padding: "1rem 1.25rem", marginBottom: ".75rem", cursor: "pointer", transition: "all .2s" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, letterSpacing: ".06em" }}>{r.num}</span>
-            <div style={{ display: "flex", gap: 8 }}><SevB s={r.sev} /><Badge s={r.status} /></div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {canEdit(r) && <span style={{ fontSize: 10, color: T.text3 }}>✏️ editável</span>}
+              <SevB s={r.sev} /><Badge s={r.status} />
+            </div>
           </div>
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{r.desc?.substring(0, 95)}{r.desc?.length > 95 ? "..." : ""}</div>
           <div style={{ fontSize: 11, color: T.text2 }}>{r.tipo} · {r.produto || "—"} · {fmt(r.data)} · {r.resp || "—"}{past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz" ? <span style={{ color: "#ff4f6a", fontWeight: 600 }}> ⚠ PRAZO VENCIDO</span> : ""}</div>
         </div>
       ))}
 
+      {/* MODAL */}
       {sel && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(6px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={e => e.target === e.currentTarget && setSel(null)}>
-          <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "1.75rem", maxWidth: 720, width: "100%", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
+          <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "1.75rem", maxWidth: 760, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
+
+            {/* Header do modal */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div><div style={{ fontSize: 22, fontWeight: 700 }}>{sel.num}</div><div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{sel.tipo} · {fmt(sel.data)} · {sel.detector || "—"}</div></div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}><SevB s={sel.sev} /><Badge s={sel.status} /><button onClick={() => setSel(null)} style={{ background: T.border, border: "none", color: T.text2, cursor: "pointer", borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: "inherit" }}>✕</button></div>
-            </div>
-            <div style={{ background: T.surf, borderRadius: 10, padding: 14, marginBottom: 14 }}>
-              <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Descrição</div>
-              <div style={{ fontSize: 14, lineHeight: 1.6 }}>{sel.desc}</div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              {[["Produto", sel.produto], ["Fornecedor", sel.fornecedor], ["Lote", sel.lote], ["Qtd.", sel.qtd], ["Responsável", sel.resp], ["Prazo AC", fmt(sel.prazoAC)], ["Prazo Eficácia", fmt(sel.prazoEfic)], ["Evidências", sel.evidencia]].filter(([, v]) => v).map(([k, v]) => (
-                <div key={k} style={{ background: T.surf, borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>{k}</div>
-                  <div style={{ fontSize: 13 }}>{v}</div>
-                </div>
-              ))}
-            </div>
-            {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><div style={{ fontSize: 13 }}>{sel.contencao}</div></div>}
-            {sel.ishikawa?.root && <div style={{ background: T.accentDim, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: T.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>🎯 Causa raiz</div><div style={{ fontSize: 13, fontWeight: 500 }}>{sel.ishikawa.root}</div></div>}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Alterar status</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.keys(SMETA).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{sel.num}</div>
+                <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{sel.tipo} · {fmt(sel.data)} · {sel.detector || "—"}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <SevB s={sel.sev} /><Badge s={sel.status} />
+                {canEdit(sel) && !editing && (
+                  <button onClick={() => startEdit(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}>✏️ Editar</button>
+                )}
+                <button onClick={() => setSel(null)} style={{ background: T.border, border: "none", color: T.text2, cursor: "pointer", borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: "inherit" }}>✕</button>
               </div>
             </div>
-            {sel.historico?.length > 0 && (
+
+            {/* MODO EDIÇÃO */}
+            {editing ? (
               <div>
-                <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Histórico</div>
-                <div style={{ borderLeft: `2px solid ${T.border2}`, paddingLeft: "1.25rem", marginLeft: ".5rem" }}>
-                  {[...sel.historico].reverse().map((h, i) => (
-                    <div key={i} style={{ position: "relative", marginBottom: 10, padding: "8px 12px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8 }}>
-                      <div style={{ position: "absolute", left: "-1.6rem", top: "1rem", width: 8, height: 8, borderRadius: "50%", background: T.accent, border: `2px solid ${T.bg}` }} />
-                      <div style={{ fontSize: 10, color: T.text3, marginBottom: 2 }}>{fmt(h.data)} · {h.resp}</div>
-                      <div style={{ fontSize: 13 }}>{h.acao}</div>
+                <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: T.accent, display: "flex", alignItems: "center", gap: 8 }}>
+                  ✏️ <span>Modo edição ativo — todas as alterações serão registradas no histórico</span>
+                </div>
+                <div style={{ ...s.card, marginBottom: "1rem" }}>
+                  <SecTitle icon="📝" ch="Identificação" />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <F lbl="Tipo" ch={<Sel value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} />
+                    <F lbl="Severidade" ch={<Sel value={editData.sev} onChange={e => setEditData(p => ({ ...p, sev: e.target.value }))}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
+                    <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))} />} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <F lbl="Produto / Material" ch={<Inp value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
+                    <F lbl="Fornecedor" ch={<Inp value={editData.fornecedor} onChange={e => setEditData(p => ({ ...p, fornecedor: e.target.value }))} />} />
+                    <F lbl="Nº do lote" ch={<Inp value={editData.lote} onChange={e => setEditData(p => ({ ...p, lote: e.target.value }))} />} />
+                    <F lbl="Quantidade afetada" ch={<Inp value={editData.qtd} onChange={e => setEditData(p => ({ ...p, qtd: e.target.value }))} />} />
+                  </div>
+                  <F lbl="Referência normativa" ch={<Inp value={editData.ref} onChange={e => setEditData(p => ({ ...p, ref: e.target.value }))} />} />
+                  <F lbl="Evidências" ch={<Inp value={editData.evidencia} onChange={e => setEditData(p => ({ ...p, evidencia: e.target.value }))} />} />
+                </div>
+                <div style={{ ...s.card, marginBottom: "1rem" }}>
+                  <SecTitle icon="📋" ch="Descrição" />
+                  <F lbl="Descrição da não conformidade" ch={<TA rows={4} value={editData.desc} onChange={e => setEditData(p => ({ ...p, desc: e.target.value }))} />} />
+                </div>
+                <div style={{ ...s.card, marginBottom: "1rem" }}>
+                  <SecTitle icon="⚡" ch="Ação de contenção" />
+                  <F lbl="Ação realizada" ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <F lbl="Responsável" ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
+                  </div>
+                </div>
+                <div style={{ ...s.card, marginBottom: "1rem" }}>
+                  <SecTitle icon="🗓️" ch="Prazos" />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <F lbl="Responsável análise" ch={<Inp value={editData.resp} onChange={e => setEditData(p => ({ ...p, resp: e.target.value }))} />} />
+                    <F lbl="Prazo ação corretiva" ch={<Inp type="date" value={editData.prazoAC} onChange={e => setEditData(p => ({ ...p, prazoAC: e.target.value }))} />} />
+                    <F lbl="Prazo eficácia" ch={<Inp type="date" value={editData.prazoEfic} onChange={e => setEditData(p => ({ ...p, prazoEfic: e.target.value }))} />} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button style={s.btn} onClick={() => setEditing(false)}>Cancelar edição</button>
+                  <button style={s.btnA} onClick={saveEdit}>💾 Salvar alterações</button>
+                </div>
+              </div>
+            ) : (
+              /* MODO VISUALIZAÇÃO */
+              <div>
+                <div style={{ background: T.surf, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Descrição</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.6 }}>{sel.desc}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                  {[["Produto", sel.produto], ["Fornecedor", sel.fornecedor], ["Lote", sel.lote], ["Qtd.", sel.qtd], ["Responsável", sel.resp], ["Setor", sel.setor], ["Prazo AC", fmt(sel.prazoAC)], ["Prazo Eficácia", fmt(sel.prazoEfic)], ["Referência", sel.ref], ["Evidências", sel.evidencia]].filter(([, v]) => v).map(([k, v]) => (
+                    <div key={k} style={{ background: T.surf, borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>{k}</div>
+                      <div style={{ fontSize: 13 }}>{v}</div>
                     </div>
                   ))}
                 </div>
+                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><div style={{ fontSize: 13 }}>{sel.contencao}</div></div>}
+                {sel.ishikawa?.root && <div style={{ background: T.accentDim, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: T.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>🎯 Causa raiz</div><div style={{ fontSize: 13, fontWeight: 500 }}>{sel.ishikawa.root}</div></div>}
+
+                {/* Anexos */}
+                {sel.anexos?.length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {sel.anexos.map((a, i) => (
+                        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surf, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.accent, textDecoration: "none", fontSize: 12 }}>
+                          {a.type?.includes("image") ? "🖼️" : a.type?.includes("pdf") ? "📄" : "📎"} {a.name}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alterar status — só para não visualizadores */}
+                {!isViewer && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Alterar status</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {Object.keys(SMETA).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Histórico de versões */}
+                {sel.historico?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📜 Histórico de versões</div>
+                    <div style={{ borderLeft: `2px solid ${T.border2}`, paddingLeft: "1.25rem", marginLeft: ".5rem" }}>
+                      {[...sel.historico].reverse().map((h, i) => (
+                        <div key={i} style={{ position: "relative", marginBottom: 10, padding: "10px 14px", background: T.surf, border: `1px solid ${h.tipo === "edicao" ? T.accent + "33" : T.border}`, borderRadius: 8 }}>
+                          <div style={{ position: "absolute", left: "-1.6rem", top: "1rem", width: 8, height: 8, borderRadius: "50%", background: h.tipo === "edicao" ? T.accent : h.tipo === "status" ? "#ffd166" : T.text3, border: `2px solid ${T.bg}`, boxShadow: h.tipo === "edicao" ? `0 0 6px ${T.accentGlow}` : "none" }} />
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: h.detalhes?.length ? 6 : 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{h.acao}</div>
+                            <div style={{ fontSize: 10, color: T.text3, whiteSpace: "nowrap", marginLeft: 8 }}>{fmt(h.data)}{h.hora ? ` · ${h.hora}` : ""}</div>
+                          </div>
+                          <div style={{ fontSize: 11, color: T.text2, marginBottom: h.detalhes?.length ? 6 : 0 }}>por {h.resp}</div>
+                          {h.detalhes?.length > 0 && (
+                            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6, marginTop: 4 }}>
+                              {h.detalhes.map((d, j) => (
+                                <div key={j} style={{ fontSize: 11, color: T.text3, marginBottom: 2 }}>• {d}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
+                  {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}>🗑️ Excluir</button>}
+                  {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
+                  {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}>✏️ Editar</button>}
+                  <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
+                </div>
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
-              {user?.role === "admin" && <button style={s.btnD} onClick={() => del(sel.id)}>Excluir</button>}
-              <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>
-              <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
-            </div>
           </div>
         </div>
       )}
@@ -1599,7 +1765,11 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                 <G3 ch={<>
                   <F lbl="Nome" ch={<Inp value={editData.name} onChange={e => setEditData(p => ({ ...p, name: e.target.value }))} />} />
                   <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))} />} />
-                  <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e => setEditData(p => ({ ...p, role: e.target.value }))}><option value="user">Usuário</option><option value="admin">Admin</option></Sel>} />
+                  <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e => setEditData(p => ({ ...p, role: e.target.value }))}>
+                    <option value="admin">Admin — acesso total</option>
+                    <option value="user">Usuário — cria e edita suas RNCs</option>
+                    <option value="viewer">Visualizador — apenas leitura</option>
+                  </Sel>} />
                 </>} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <button style={s.btn} onClick={() => setEditing(null)}>Cancelar</button>
@@ -1616,7 +1786,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: u.role === "admin" ? T.accentDim : T.border, color: u.role === "admin" ? T.accent : T.text2 }}>{u.role === "admin" ? "Admin" : "Usuário"}</span>
+                  <span style={{ display: "inline-flex", padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: u.role === "admin" ? T.accentDim : u.role === "viewer" ? "#4fc3f718" : T.border, color: u.role === "admin" ? T.accent : u.role === "viewer" ? "#4fc3f7" : T.text2 }}>{u.role === "admin" ? "Admin" : u.role === "viewer" ? "👁️ Visualizador" : "Usuário"}</span>
                   <button style={{ ...s.btn, padding: "6px 12px", fontSize: 11 }} onClick={() => startEdit(u)}>✏️ Editar</button>
                   {u.id !== currentUser.uid && <button style={{ ...s.btnD, padding: "6px 12px", fontSize: 11 }} onClick={() => delUser(u.id)}>🗑️ Remover</button>}
                 </div>
@@ -1636,7 +1806,11 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
           <F lbl="E-mail" ch={<Inp type="email" placeholder="ana@herbamed.com" value={nu.email} onChange={e => set("email", e.target.value)} />} />
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e => set("pw", e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e => set("setor", e.target.value)} />} />
-          <F lbl="Perfil de acesso" ch={<Sel value={nu.role} onChange={e => set("role", e.target.value)}><option value="user">Usuário</option><option value="admin">Admin</option></Sel>} />
+          <F lbl="Perfil de acesso" ch={<Sel value={nu.role} onChange={e => set("role", e.target.value)}>
+            <option value="user">Usuário — cria e edita suas RNCs</option>
+            <option value="admin">Admin — acesso total</option>
+            <option value="viewer">Visualizador — apenas leitura</option>
+          </Sel>} />
         </>} />
         <div style={{ textAlign: "right", marginTop: 6 }}><button style={s.btnA} onClick={addUser}>Criar usuário ✓</button></div>
       </div>
