@@ -71,9 +71,15 @@ const SEVMETA = {
   "Menor":   { c: "#a78bfa", bg: "#a78bfa18" },
 };
 const TIPOC = {
-  "Matéria-prima": "#4fc3f7", "Produto acabado": "#2ab84a",
-  "Processo": "#ffd166", "Equipamento": "#ff8c42",
-  "Documentação": "#a78bfa", "Ambiental": "#5dd4b0",
+  "Matéria-prima":       "#4fc3f7",
+  "Material de embalagem":"#22d3ee",
+  "Insumo":              "#818cf8",
+  "Produto acabado":     "#2ab84a",
+  "Processo":            "#ffd166",
+  "Equipamento":         "#ff8c42",
+  "Documentação":        "#a78bfa",
+  "Ambiental":           "#5dd4b0",
+  "Outros":              "#94a3b8",
 };
 
 /* ─── CLAUDE AI HELPER ───────────────────────────────────────────────────────── */
@@ -615,14 +621,6 @@ function Login({ onLogin }) {
     setLoading(false);
   };
 
-  const FEATURES = [
-    { icon: "🐟", title: "Ishikawa + 5 Porquês", desc: "Análise de causa raiz assistida por IA" },
-    { icon: "📌", title: "5W2H", desc: "Plano de ação estruturado e rastreável" },
-    { icon: "✅", title: "Verificação de Eficácia", desc: "Ciclo completo de melhoria contínua" },
-    { icon: "📊", title: "Dashboard & Relatórios", desc: "Indicadores em tempo real" },
-    { icon: "🤖", title: "IA Integrada", desc: "Claude analisa e sugere automaticamente" },
-  ];
-
   return (
     <div style={{ fontFamily:"'DM Sans',system-ui,sans-serif", display:"flex", minHeight:"100vh", background:"#050a06" }}>
       <style>{`
@@ -630,15 +628,14 @@ function Login({ onLogin }) {
         @keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
         .login-inp:focus{border-color:#2ab84a!important;box-shadow:0 0 0 3px rgba(42,184,74,0.15)!important;}
         .login-btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(42,184,74,0.45)!important;}
-        .feat-item:hover{background:rgba(42,184,74,0.1)!important;border-color:rgba(42,184,74,0.3)!important;}
       `}</style>
 
-      {/* ── ESQUERDA — Banner + Features ── */}
+      {/* ── ESQUERDA — Banner ── */}
       <div style={{ flex:1, position:"relative", overflow:"hidden", display:"flex", flexDirection:"column" }}>
         {/* Banner com overlay */}
-        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.webp')", backgroundSize:"cover", backgroundPosition:"center", filter:"brightness(0.45) saturate(1.1)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg, rgba(5,10,6,0.5) 0%, rgba(10,17,12,0.3) 50%, rgba(5,10,6,0.7) 100%)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 60%, #050a06 100%)" }} />
+        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.webp')", backgroundSize:"cover", backgroundPosition:"center 30%", filter:"brightness(0.5) saturate(1.1)" }} />
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(5,10,6,0.2) 0%, rgba(5,10,6,0.6) 70%, rgba(5,10,6,0.92) 100%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 50%, #0a110c 100%)" }} />
 
         {/* Content */}
         <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", height:"100%", padding:"2.5rem" }}>
@@ -648,33 +645,18 @@ function Login({ onLogin }) {
             <span style={{ fontSize:11, fontWeight:600, color:"#2ab84a", textTransform:"uppercase", letterSpacing:".1em" }}>Sistema Online</span>
           </div>
 
-          {/* Main text */}
-          <div style={{ marginBottom:"2rem" }}>
+          {/* Main text — bottom */}
+          <div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"4px", fontWeight:600, marginBottom:12 }}>Herbamed® · Qualidade</div>
-            <div style={{ fontSize:38, fontWeight:800, color:"#ffffff", lineHeight:1.15, marginBottom:14, letterSpacing:"-.02em" }}>
+            <div style={{ fontSize:42, fontWeight:800, color:"#ffffff", lineHeight:1.1, marginBottom:16, letterSpacing:"-.02em" }}>
               SGQ<br /><span style={{ color:"#2ab84a" }}>Herbamed</span>
             </div>
-            <div style={{ fontSize:15, color:"rgba(255,255,255,0.55)", lineHeight:1.6, maxWidth:380 }}>
+            <div style={{ fontSize:15, color:"rgba(255,255,255,0.55)", lineHeight:1.6, maxWidth:400, marginBottom:28 }}>
               Sistema de Gestão da Qualidade integrado com inteligência artificial para análise e resolução de não conformidades.
             </div>
-          </div>
-
-          {/* Feature list */}
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {FEATURES.map((f,i)=>(
-              <div key={i} className="feat-item" style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:10, transition:"all .2s", animation:`fadeUp .4s ease ${i*.08}s both` }}>
-                <span style={{ fontSize:18, flexShrink:0 }}>{f.icon}</span>
-                <div>
-                  <div style={{ fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.85)" }}>{f.title}</div>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:1 }}>{f.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Bottom tagline */}
-          <div style={{ marginTop:"2rem", fontSize:12, color:"rgba(255,255,255,0.25)", fontStyle:"italic" }}>
-            "Fornecendo Saúde. Cultivando Qualidade de Vida."
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", fontStyle:"italic" }}>
+              "Fornecendo Saúde. Cultivando Qualidade de Vida."
+            </div>
           </div>
         </div>
       </div>
@@ -1510,7 +1492,25 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC }) {
       <div style={{ ...s.card }}>
         <SecTitle icon="🪪" ch="Identificação" />
         <G3 ch={<><F lbl="Data de abertura" ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
-        <G3 ch={<><F lbl="Tipo" ch={<Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Setor" ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} /><F lbl="Detectado por" ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} /></>} />
+        <G3 ch={<>
+          <F lbl="Tipo de não conformidade" ch={
+            <div>
+              <Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>
+                {Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}
+              </Sel>
+              {f.tipo === "Outros" && (
+                <Inp
+                  placeholder="Descreva o tipo..."
+                  value={f.tipoOutros || ""}
+                  onChange={e => set("tipoOutros", e.target.value)}
+                  sx={{ marginTop: 8 }}
+                />
+              )}
+            </div>
+          } />
+          <F lbl="Setor" ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} />
+          <F lbl="Detectado por" ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} />
+        </>} />
         <G2 ch={<><F lbl="Produto / Material" ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} /><F lbl="Fornecedor" ch={<Inp placeholder="Ex: Nome do fornecedor" value={f.fornecedor} onChange={e => set("fornecedor", e.target.value)} />} /></>} />
       </div>
       <div style={s.card}>
