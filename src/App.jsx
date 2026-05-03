@@ -816,25 +816,25 @@ export default function App() {
 
   const MENU = [
     { id: "home",      icon: "🏠", label: "Home" },
-    { id: "lista",     icon: "📋", label: "Registros",        badge: rncs.filter(x => x.status === "Aberta").length },
-    ...(!isViewer ? [{ id: "nova", icon: "➕", label: "Nova RNC" }] : []),
-    ...(!isViewer ? [{ id: "ishikawa", icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
-    ...(!isViewer ? [{ id: "5w2h", icon: "📌", label: "5W2H" }] : []),
-    ...(!isViewer ? [{ id: "eficacia", icon: "✅", label: "Eficácia" }] : []),
+    { id: "lista",     icon: "📋", label: "Registros", badge: rncs.filter(x => x.status === "Aberta").length },
+    ...(!isViewer ? [{ id: "nova",      icon: "➕", label: "Nova RNC" }] : []),
+    ...(!isViewer ? [{ id: "ishikawa",  icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
+    ...(!isViewer ? [{ id: "5w2h",      icon: "📌", label: "5W2H" }] : []),
+    ...(!isViewer ? [{ id: "eficacia",  icon: "✅", label: "Eficácia" }] : []),
+    ...(!isViewer ? [{ id: "fmea",      icon: "⚠️", label: "FMEA" }] : []),
     { id: "dashboard", icon: "📊", label: "Dashboard" },
     { id: "relatorios",icon: "📑", label: "Relatórios" },
-    ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
+    { id: "cep",       icon: "📉", label: "CEP" },
+    ...(isAdmin ? [{ id: "admin",     icon: "⚙️", label: "Administração" }] : []),
   ];
 
   const PAGE_TITLES = {
-    home: "Home",
-    lista: "Registros de Não Conformidades",
-    nova: "Nova Não Conformidade",
-    ishikawa: "Ishikawa / 5 Porquês",
-    "5w2h": "Plano de Ação 5W2H",
-    eficacia: "Verificação de Eficácia",
-    dashboard: "Dashboard",
-    relatorios: "Relatórios",
+    home: "Home", lista: "Registros de Não Conformidades",
+    nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
+    "5w2h": "Plano de Ação 5W2H", eficacia: "Verificação de Eficácia",
+    fmea: "FMEA — Análise de Modo e Efeito de Falha",
+    dashboard: "Dashboard", relatorios: "Relatórios",
+    cep: "CEP — Controle Estatístico de Processo",
     admin: "Administração",
   };
 
@@ -1000,8 +1000,10 @@ export default function App() {
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
+              {tab==="cep"        && <CEPTab rncs={rncs} />}
               {tab==="admin"      && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
           </div>
@@ -1572,6 +1574,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
 
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}>🗑️ Excluir</button>}
+                  <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => exportRNCPDF(sel)}>📄 Exportar PDF</button>
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
                   {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}>✏️ Editar</button>}
                   <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
@@ -2645,6 +2648,546 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── PDF EXPORT ─────────────────────────────────────────────────────────────── */
+function exportRNCPDF(rnc) {
+  const win = window.open("", "_blank");
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<title>RNC ${rnc.num} — Herbamed®</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:0;}
+  .page{width:210mm;min-height:297mm;padding:16mm 14mm;margin:0 auto;}
+  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:3px solid #1a7a3c;margin-bottom:20px;}
+  .logo-area{display:flex;align-items:center;gap:12px;}
+  .logo-text{font-family:Georgia,serif;font-size:22px;font-weight:700;color:#1a7a3c;letter-spacing:1px;}
+  .logo-sub{font-size:10px;color:#666;margin-top:2px;}
+  .rnc-num{font-size:20px;font-weight:700;color:#1a7a3c;text-align:right;}
+  .rnc-date{font-size:11px;color:#666;text-align:right;margin-top:2px;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+  .badge-aberta{background:#ff4f6a18;color:#cc2244;border:1px solid #ff4f6a40;}
+  .badge-eficaz{background:#22c97a18;color:#1a7a3c;border:1px solid #22c97a40;}
+  .badge-andamento{background:#ffd16618;color:#8a6000;border:1px solid #ffd16640;}
+  .badge-pendente{background:#4f9eff18;color:#1a4a8a;border:1px solid #4f9eff40;}
+  .badge-ineficaz{background:#ff4f6a18;color:#cc2244;border:1px solid #ff4f6a40;}
+  .sev-critica{background:#ff4f6a18;color:#cc2244;border:1px solid #ff4f6a40;}
+  .sev-maior{background:#ff8c4218;color:#7a3c00;border:1px solid #ff8c4240;}
+  .sev-menor{background:#a78bfa18;color:#4a2a8a;border:1px solid #a78bfa40;}
+  .section{margin-bottom:18px;}
+  .section-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:6px;}
+  .section-title::before{content:'';display:inline-block;width:3px;height:12px;background:#1a7a3c;border-radius:2px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:8px 10px;}
+  .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+  .field-value{font-size:12px;color:#1a1a1a;font-weight:500;}
+  .desc-box{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#1a1a1a;}
+  .contencao-box{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;}
+  .causa-box{background:#e8f5e9;border:2px solid #1a7a3c;border-radius:8px;padding:12px;font-size:13px;font-weight:600;color:#1a4a1a;}
+  .step{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .step-num{width:24px;height:24px;border-radius:50%;background:#1a7a3c;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+  .step-text{font-size:12px;color:#333;}
+  .hist-item{padding:8px 10px;border-left:3px solid #1a7a3c;background:#f8f9fa;margin-bottom:6px;border-radius:0 6px 6px 0;}
+  .hist-date{font-size:10px;color:#888;margin-bottom:2px;}
+  .hist-acao{font-size:12px;color:#1a1a1a;}
+  .footer{margin-top:24px;padding-top:12px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;align-items:center;}
+  .footer-left{font-size:10px;color:#666;}
+  .footer-right{font-size:10px;color:#666;text-align:right;}
+  .progress-bar{display:flex;gap:4px;margin-top:8px;}
+  .progress-step{flex:1;height:6px;border-radius:3px;}
+  .w2h-item{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:10px;margin-bottom:8px;}
+  .w2h-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+  @media print{body{background:#fff!important;}.page{padding:10mm 12mm;}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo-area">
+      <div>
+        <div class="logo-text">🌿 HERBAMED®</div>
+        <div class="logo-sub">Sistema de Gestão da Qualidade — SGQ</div>
+      </div>
+    </div>
+    <div>
+      <div class="rnc-num">${rnc.num}</div>
+      <div class="rnc-date">Aberta em ${fmt(rnc.data)} por ${rnc.detector||"—"}</div>
+      <div style="text-align:right;margin-top:4px;">
+        <span class="badge badge-${rnc.status==="Eficaz"?"eficaz":rnc.status==="Em andamento"?"andamento":rnc.status==="Pendente verificação"?"pendente":rnc.status==="Ineficaz"?"ineficaz":"aberta"}">${rnc.status}</span>
+        &nbsp;
+        <span class="badge sev-${rnc.sev==="Crítica"?"critica":rnc.sev==="Maior"?"maior":"menor"}">${rnc.sev}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESSO -->
+  <div class="section">
+    <div class="section-title">Progresso da RNC</div>
+    <div class="progress-bar">
+      ${["Abertura","Análise de Causa","Plano de Ação","Verificação de Eficácia"].map((st,i)=>{
+        const step = rnc.status==="Eficaz"||rnc.eficacia?.resultado?4:rnc.w2h?.length>0?3:rnc.ishikawa?.root?2:1;
+        return `<div class="progress-step" style="background:${i<step?"#1a7a3c":"#e0e0e0"};"></div>`;
+      }).join("")}
+    </div>
+    <div style="display:flex;gap:4px;margin-top:4px;">
+      ${["Abertura","Análise","5W2H","Eficácia"].map((st,i)=>{
+        const step = rnc.status==="Eficaz"?4:rnc.w2h?.length>0?3:rnc.ishikawa?.root?2:1;
+        return `<div style="flex:1;font-size:9px;color:${i<step?"#1a7a3c":"#aaa"};text-align:center;font-weight:${i<step?700:400};">${st}</div>`;
+      }).join("")}
+    </div>
+  </div>
+
+  <!-- IDENTIFICAÇÃO -->
+  <div class="section">
+    <div class="section-title">Identificação</div>
+    <div class="grid3">
+      <div class="field"><div class="field-label">Tipo</div><div class="field-value">${rnc.tipo||"—"}</div></div>
+      <div class="field"><div class="field-label">Setor</div><div class="field-value">${rnc.setor||"—"}</div></div>
+      <div class="field"><div class="field-label">Detectado por</div><div class="field-value">${rnc.detector||"—"}</div></div>
+    </div>
+    <div class="grid3" style="margin-top:8px;">
+      <div class="field"><div class="field-label">Produto / Material</div><div class="field-value">${rnc.produto||"—"}</div></div>
+      <div class="field"><div class="field-label">Fornecedor</div><div class="field-value">${rnc.fornecedor||"—"}</div></div>
+      <div class="field"><div class="field-label">Nº do Lote</div><div class="field-value">${rnc.lote||"—"}</div></div>
+    </div>
+    <div class="grid3" style="margin-top:8px;">
+      <div class="field"><div class="field-label">Qtd. Afetada</div><div class="field-value">${rnc.qtd||"—"}</div></div>
+      <div class="field"><div class="field-label">Referência Normativa</div><div class="field-value">${rnc.ref||"—"}</div></div>
+      <div class="field"><div class="field-label">Responsável pela Análise</div><div class="field-value">${rnc.resp||"—"}</div></div>
+    </div>
+  </div>
+
+  <!-- DESCRIÇÃO -->
+  <div class="section">
+    <div class="section-title">Descrição da Não Conformidade</div>
+    <div class="desc-box">${rnc.desc||"—"}</div>
+    ${rnc.evidencia?`<div style="margin-top:8px;font-size:11px;color:#666;"><strong>Evidências:</strong> ${rnc.evidencia}</div>`:""}
+  </div>
+
+  <!-- CONTENÇÃO -->
+  ${rnc.contencao?`
+  <div class="section">
+    <div class="section-title">⚡ Ação de Contenção</div>
+    <div class="contencao-box">${rnc.contencao}</div>
+    <div style="margin-top:6px;font-size:11px;color:#666;">
+      Responsável: <strong>${rnc.respCont||"—"}</strong> &nbsp;|&nbsp; Data: <strong>${fmt(rnc.dataContencao)}</strong>
+    </div>
+  </div>`:""}
+
+  <!-- PRAZOS -->
+  <div class="section">
+    <div class="section-title">Prazos</div>
+    <div class="grid3">
+      <div class="field"><div class="field-label">Análise de Causa</div><div class="field-value">${fmt(rnc.prazoCausa)}</div></div>
+      <div class="field"><div class="field-label">Ação Corretiva</div><div class="field-value" style="color:${past(rnc.prazoAC)&&rnc.status!=="Eficaz"?"#cc2244":"inherit"}">${fmt(rnc.prazoAC)}${past(rnc.prazoAC)&&rnc.status!=="Eficaz"?" ⚠":""}  </div></div>
+      <div class="field"><div class="field-label">Verificação Eficácia</div><div class="field-value">${fmt(rnc.prazoEfic)}</div></div>
+    </div>
+  </div>
+
+  <!-- ISHIKAWA / 5 PORQUÊS -->
+  ${rnc.ishikawa?.root?`
+  <div class="section">
+    <div class="section-title">🐟 Análise de Causa — Ishikawa / 5 Porquês</div>
+    ${rnc.ishikawa.whys?.filter(w=>w).length>0?`
+    <div style="margin-bottom:10px;">
+      ${rnc.ishikawa.whys.filter(w=>w).map((w,i)=>`
+        <div class="step">
+          <div class="step-num">${i+1}</div>
+          <div class="step-text">${w}</div>
+        </div>`).join("")}
+    </div>`:""}
+    <div class="causa-box">🎯 Causa Raiz: ${rnc.ishikawa.root}</div>
+  </div>`:""}
+
+  <!-- 5W2H -->
+  ${rnc.w2h?.length>0?`
+  <div class="section">
+    <div class="section-title">📌 Plano de Ação 5W2H</div>
+    ${rnc.w2h.map((a,i)=>`
+      <div class="w2h-item">
+        <div style="font-size:12px;font-weight:700;color:#1a7a3c;margin-bottom:6px;">Ação #${i+1}: ${a.what||"—"}</div>
+        <div class="w2h-grid">
+          <div><span style="font-size:9px;color:#888;font-weight:700;">POR QUÊ</span><br/><span style="font-size:11px;">${a.why||"—"}</span></div>
+          <div><span style="font-size:9px;color:#888;font-weight:700;">QUEM</span><br/><span style="font-size:11px;">${a.who||"—"}</span></div>
+          <div><span style="font-size:9px;color:#888;font-weight:700;">ONDE</span><br/><span style="font-size:11px;">${a.where||"—"}</span></div>
+          <div><span style="font-size:9px;color:#888;font-weight:700;">QUANDO</span><br/><span style="font-size:11px;">${fmt(a.when)}</span></div>
+          <div style="grid-column:span 2;"><span style="font-size:9px;color:#888;font-weight:700;">COMO</span><br/><span style="font-size:11px;">${a.how||"—"}</span></div>
+        </div>
+        <div style="margin-top:6px;"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${a.status==="Concluída"?"#22c97a18":a.status==="Em andamento"?"#ffd16618":"#f0f0f0"};color:${a.status==="Concluída"?"#1a7a3c":a.status==="Em andamento"?"#8a6000":"#666"};">${a.status||"Pendente"}</span></div>
+      </div>`).join("")}
+  </div>`:""}
+
+  <!-- EFICÁCIA -->
+  ${rnc.eficacia?.resultado?`
+  <div class="section">
+    <div class="section-title">✅ Verificação de Eficácia</div>
+    <div class="grid2">
+      <div class="field"><div class="field-label">Resultado</div><div class="field-value" style="color:${rnc.eficacia.resultado==="Eficaz"?"#1a7a3c":"#cc2244"};font-weight:700;">${rnc.eficacia.resultado}</div></div>
+      <div class="field"><div class="field-label">Data da Verificação</div><div class="field-value">${fmt(rnc.eficacia.data)}</div></div>
+    </div>
+    ${rnc.eficacia.criterio?`<div style="margin-top:8px;font-size:12px;color:#333;"><strong>Critério:</strong> ${rnc.eficacia.criterio}</div>`:""}
+    ${rnc.eficacia.obs?`<div style="margin-top:6px;font-size:12px;color:#333;"><strong>Lições aprendidas:</strong> ${rnc.eficacia.obs}</div>`:""}
+  </div>`:""}
+
+  <!-- HISTÓRICO -->
+  ${rnc.historico?.length>0?`
+  <div class="section">
+    <div class="section-title">📜 Histórico de Versões</div>
+    ${[...rnc.historico].reverse().slice(0,6).map(h=>`
+      <div class="hist-item">
+        <div class="hist-date">${fmt(h.data)}${h.hora?" · "+h.hora:""} · ${h.resp||"—"}</div>
+        <div class="hist-acao">${h.acao}</div>
+        ${h.detalhes?.length>0?`<div style="margin-top:4px;">${h.detalhes.map(d=>`<div style="font-size:10px;color:#888;">• ${d}</div>`).join("")}</div>`:""}
+      </div>`).join("")}
+  </div>`:""}
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-left">
+      <strong>Herbamed® · Sistema de Gestão da Qualidade</strong><br/>
+      "Fornecendo Saúde. Cultivando Qualidade de Vida."
+    </div>
+    <div class="footer-right">
+      Documento gerado em ${new Date().toLocaleString("pt-BR")}<br/>
+      ${rnc.num} · Confidencial
+    </div>
+  </div>
+
+</div>
+<script>window.onload=()=>window.print();</script>
+</body></html>`;
+  win.document.write(html);
+  win.document.close();
+}
+
+/* ─── FMEA TAB ───────────────────────────────────────────────────────────────── */
+function FMEATab({ user, toast_ }) {
+  const T = useTheme(); const s = useS();
+  const FMEA_KEY = "herbamed_fmea_v1";
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [processo, setProcesso] = useState("");
+
+  useEffect(() => {
+    window.storage?.get(FMEA_KEY, true).then(r => {
+      if (r) setItems(JSON.parse(r.value));
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const save = async (newItems) => {
+    setItems(newItems);
+    try { await window.storage?.set(FMEA_KEY, JSON.stringify(newItems), true); } catch {}
+  };
+
+  const addItem = () => {
+    const novo = { id: Date.now(), processo: "", modoFalha: "", efeito: "", causa: "", S: 1, O: 1, D: 1, acao: "", resp: user.name, prazo: "", status: "Pendente" };
+    save([...items, novo]);
+  };
+
+  const upd = (id, k, v) => save(items.map(x => x.id === id ? { ...x, [k]: v } : x));
+  const del = (id) => { if (confirm("Remover este item?")) save(items.filter(x => x.id !== id)); };
+
+  const rpn = (item) => item.S * item.O * item.D;
+  const rpnColor = (r) => r >= 100 ? "#ff4f6a" : r >= 50 ? "#ff8c42" : r >= 25 ? "#ffd166" : T.accent;
+  const rpnLabel = (r) => r >= 100 ? "🔴 CRÍTICO" : r >= 50 ? "🟠 ALTO" : r >= 25 ? "🟡 MÉDIO" : "🟢 BAIXO";
+
+  const gerarIA = async () => {
+    if (!processo.trim()) { alert("Descreva o processo primeiro."); return; }
+    setAiLoading(true);
+    try {
+      const txt = await askClaude(`Você é especialista em FMEA para indústria farmacêutica/suplementos. Gere uma análise FMEA para o processo abaixo.
+
+PROCESSO: ${processo}
+EMPRESA: Herbamed® (fabricante de suplementos alimentares)
+
+Gere exatamente 5 modos de falha relevantes. Responda APENAS em JSON válido:
+[
+  {
+    "processo": "${processo}",
+    "modoFalha": "modo de falha específico",
+    "efeito": "efeito no produto/cliente",
+    "causa": "causa raiz provável",
+    "S": 7,
+    "O": 4,
+    "D": 3,
+    "acao": "ação preventiva recomendada"
+  }
+]
+S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
+      const clean = txt.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      const novos = parsed.map(p => ({ id: Date.now() + Math.random(), resp: user.name, prazo: "", status: "Pendente", ...p, S: Number(p.S)||5, O: Number(p.O)||3, D: Number(p.D)||3 }));
+      save([...items, ...novos]);
+      toast_("FMEA gerado pela IA!", "green");
+    } catch { toast_("Erro ao gerar. Tente novamente.", "red"); }
+    setAiLoading(false);
+  };
+
+  const sorted = [...items].sort((a, b) => rpn(b) - rpn(a));
+
+  return (
+    <div>
+      {/* Intro */}
+      <div style={{ ...s.card, background:`linear-gradient(135deg,${T.card},${T.card2})`, marginBottom:"1rem" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>⚠️ FMEA — Análise de Modo e Efeito de Falha</div>
+            <div style={{ fontSize:12, color:T.text2, lineHeight:1.6, maxWidth:560 }}>
+              Identifica e prioriza riscos <strong>antes</strong> que os problemas ocorram. O RPN (Risk Priority Number) = Severidade × Ocorrência × Detecção.
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button style={s.btnA} onClick={addItem}>+ Adicionar item</button>
+          </div>
+        </div>
+
+        {/* Gerador IA */}
+        <div style={{ marginTop:"1rem", padding:"1rem", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:10 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:T.accent, marginBottom:8 }}>🤖 Gerar FMEA com IA</div>
+          <div style={{ display:"flex", gap:8 }}>
+            <Inp placeholder="Descreva o processo (ex: Encapsulação de Psyllium em pó)" value={processo} onChange={e => setProcesso(e.target.value)} sx={{ flex: 1 }} />
+            <button style={{ ...s.btnA, whiteSpace:"nowrap", opacity:aiLoading?.6:1, display:"flex", alignItems:"center", gap:6 }} onClick={gerarIA} disabled={aiLoading}>
+              {aiLoading ? <><span style={{ animation:"spin 1s linear infinite", display:"inline-block" }}>⟳</span> Gerando...</> : "✨ Gerar"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* RPN Legend */}
+      <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap" }}>
+        {[["🟢 BAIXO","RPN < 25","#2ab84a"],["🟡 MÉDIO","RPN 25-49","#ffd166"],["🟠 ALTO","RPN 50-99","#ff8c42"],["🔴 CRÍTICO","RPN ≥ 100","#ff4f6a"]].map(([l,sub,c])=>(
+          <div key={l} style={{ background:T.surf, border:`1px solid ${c}33`, borderRadius:8, padding:"6px 12px", fontSize:11 }}>
+            <span style={{ fontWeight:600, color:c }}>{l}</span>
+            <span style={{ color:T.text3, marginLeft:6 }}>{sub}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      {loading ? <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div> :
+       sorted.length === 0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
+          <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>⚠️</div>
+          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhum item FMEA cadastrado</div>
+          <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Adicionar item" ou use o gerador de IA</div>
+        </div>
+      ) : (
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden", marginBottom:"1rem" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:T.surf }}>
+                {["Processo","Modo de Falha","Efeito","Causa","S","O","D","RPN","Prioridade","Ação","Resp.","Status",""].map(h=>(
+                  <th key={h} style={{ padding:"10px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((item, idx) => {
+                const r = rpn(item);
+                const c = rpnColor(r);
+                return (
+                  <tr key={item.id} style={{ background: idx%2===0?T.card:T.surf, borderLeft:`3px solid ${c}` }}>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.processo} onChange={e=>upd(item.id,"processo",e.target.value)} sx={{ fontSize:11, padding:"4px 6px" }}/></td>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.modoFalha} onChange={e=>upd(item.id,"modoFalha",e.target.value)} sx={{ fontSize:11, padding:"4px 6px" }}/></td>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.efeito} onChange={e=>upd(item.id,"efeito",e.target.value)} sx={{ fontSize:11, padding:"4px 6px" }}/></td>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.causa} onChange={e=>upd(item.id,"causa",e.target.value)} sx={{ fontSize:11, padding:"4px 6px" }}/></td>
+                    {["S","O","D"].map(k=>(
+                      <td key={k} style={{ padding:"8px 6px" }}>
+                        <select value={item[k]} onChange={e=>upd(item.id,k,Number(e.target.value))} style={{ ...s.inp, width:48, padding:"4px 6px", fontSize:12, textAlign:"center", fontWeight:700 }}>
+                          {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n}>{n}</option>)}
+                        </select>
+                      </td>
+                    ))}
+                    <td style={{ padding:"8px 10px", textAlign:"center" }}>
+                      <div style={{ fontSize:18, fontWeight:800, color:c, lineHeight:1 }}>{r}</div>
+                    </td>
+                    <td style={{ padding:"8px 6px", whiteSpace:"nowrap" }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:c, background:`${c}18`, padding:"3px 8px", borderRadius:20 }}>{rpnLabel(r)}</span>
+                    </td>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.acao} onChange={e=>upd(item.id,"acao",e.target.value)} sx={{ fontSize:11, padding:"4px 6px" }}/></td>
+                    <td style={{ padding:"8px 10px" }}><Inp value={item.resp} onChange={e=>upd(item.id,"resp",e.target.value)} sx={{ fontSize:11, padding:"4px 6px", width:100 }}/></td>
+                    <td style={{ padding:"8px 6px" }}>
+                      <select value={item.status} onChange={e=>upd(item.id,"status",e.target.value)} style={{ ...s.inp, width:"auto", fontSize:11, padding:"4px 6px", color:item.status==="Concluída"?T.accent:item.status==="Em andamento"?T.yellow:T.text2 }}>
+                        {["Pendente","Em andamento","Concluída"].map(x=><option key={x}>{x}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ padding:"8px 6px" }}>
+                      <button style={s.btnD} onClick={()=>del(item.id)} title="Remover">✕</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:11, color:T.text3, display:"flex", justifyContent:"space-between" }}>
+            <span>{sorted.length} item(s) · {sorted.filter(x=>rpn(x)>=100).length} crítico(s) · {sorted.filter(x=>rpn(x)>=50&&rpn(x)<100).length} alto(s)</span>
+            <span>S=Severidade · O=Ocorrência · D=Detecção · RPN=S×O×D</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── CEP TAB ────────────────────────────────────────────────────────────────── */
+function CEPTab({ rncs }) {
+  const T = useTheme(); const s = useS();
+  const [metric, setMetric] = useState("rncs_mes");
+  const [customData, setCustomData] = useState([{ label:"", value:"" },{ label:"", value:"" },{ label:"", value:"" }]);
+
+  // Calcular dados de RNCs por mês (últimos 12 meses)
+  const meses = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const label = d.toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+    meses.push({ key, label });
+  }
+
+  const dadosMes = meses.map(m => ({
+    label: m.label,
+    value: rncs.filter(r => r.data?.startsWith(m.key)).length,
+  }));
+
+  const dadosEficacia = meses.map(m => ({
+    label: m.label,
+    value: rncs.filter(r => r.data?.startsWith(m.key) && r.status === "Eficaz").length,
+  }));
+
+  const activeData = metric === "custom" ? customData.map(x=>({...x,value:Number(x.value)||0})) : metric === "eficacia" ? dadosEficacia : dadosMes;
+  const values = activeData.map(x => Number(x.value) || 0);
+  const n = values.length;
+  const mean = n > 0 ? values.reduce((a,b)=>a+b,0)/n : 0;
+  const stdDev = n > 1 ? Math.sqrt(values.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)) : 0;
+  const UCL = mean + 3 * stdDev;
+  const LCL = Math.max(0, mean - 3 * stdDev);
+  const maxVal = Math.max(...values, UCL, 1);
+  const outOfControl = values.filter(v => v > UCL || v < LCL).length;
+
+  const barH = 200;
+  const barW = Math.max(40, Math.floor(560 / Math.max(values.length, 1)));
+
+  return (
+    <div>
+      <div style={{ ...s.card, marginBottom:"1rem" }}>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📉 CEP — Controle Estatístico de Processo</div>
+        <div style={{ fontSize:12, color:T.text2, lineHeight:1.6 }}>
+          Monitora a variação do processo ao longo do tempo. Pontos fora dos limites UCL/LCL indicam causas especiais que requerem investigação.
+        </div>
+      </div>
+
+      {/* Seletor de métrica */}
+      <div style={{ display:"flex", gap:8, marginBottom:"1rem", flexWrap:"wrap" }}>
+        {[["rncs_mes","📋 RNCs por Mês"],["eficacia","✅ Eficazes por Mês"],["custom","✏️ Dados Customizados"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setMetric(id)} style={{ padding:"7px 16px", borderRadius:20, border:`1px solid ${metric===id?T.accent+"55":T.border}`, background:metric===id?T.accentDim:T.surf, color:metric===id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:metric===id?600:400 }}>{label}</button>
+        ))}
+      </div>
+
+      {/* Entrada de dados customizados */}
+      {metric === "custom" && (
+        <div style={{ ...s.card, marginBottom:"1rem" }}>
+          <SecTitle ch="Inserir dados customizados" />
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+            {customData.map((d,i)=>(
+              <div key={i} style={{ display:"flex", gap:4, alignItems:"center" }}>
+                <Inp placeholder={`Label ${i+1}`} value={d.label} onChange={e=>setCustomData(p=>p.map((x,j)=>j===i?{...x,label:e.target.value}:x))} sx={{ width:80, fontSize:12 }}/>
+                <Inp placeholder="Valor" type="number" value={d.value} onChange={e=>setCustomData(p=>p.map((x,j)=>j===i?{...x,value:e.target.value}:x))} sx={{ width:60, fontSize:12 }}/>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button style={s.btn} onClick={()=>setCustomData(p=>[...p,{label:"",value:""}])}>+ Adicionar ponto</button>
+            {customData.length>3&&<button style={s.btnD} onClick={()=>setCustomData(p=>p.slice(0,-1))}>− Remover</button>}
+          </div>
+        </div>
+      )}
+
+      {/* Indicadores */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
+        {[
+          ["Média (X̄)", mean.toFixed(2), T.accent],
+          ["Desvio Padrão (σ)", stdDev.toFixed(2), T.blue],
+          ["UCL (+3σ)", UCL.toFixed(2), "#ff8c42"],
+          ["LCL (-3σ)", LCL.toFixed(2), "#a78bfa"],
+          ["Fora de Controle", outOfControl, outOfControl>0?"#ff4f6a":T.accent],
+        ].map(([l,v,c])=>(
+          <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
+            <div style={{ fontSize:18, fontWeight:700, color:c }}>{v}</div>
+            <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráfico de controle */}
+      <div style={{ ...s.card }}>
+        <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>
+          Carta de Controle — {metric==="rncs_mes"?"RNCs por Mês":metric==="eficacia"?"Eficazes por Mês":"Dados Customizados"}
+        </div>
+        <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
+          {outOfControl>0?<span style={{ color:"#ff4f6a", fontWeight:600 }}>⚠ {outOfControl} ponto(s) fora dos limites de controle — investigar causas especiais.</span>:<span style={{ color:T.accent }}>✓ Processo sob controle estatístico.</span>}
+        </div>
+
+        <div style={{ overflowX:"auto" }}>
+          <svg width={Math.max(600, values.length*barW+80)} height={barH+80} style={{ display:"block" }}>
+            {/* Grid lines */}
+            {[0,.25,.5,.75,1].map((p,i)=>(
+              <g key={i}>
+                <line x1={50} y1={20+barH*(1-p)} x2={50+values.length*barW} y2={20+barH*(1-p)} stroke={T.border} strokeWidth={1} strokeDasharray="4,4"/>
+                <text x={44} y={24+barH*(1-p)} textAnchor="end" fontSize={9} fill={T.text3}>{(maxVal*p).toFixed(1)}</text>
+              </g>
+            ))}
+
+            {/* UCL line */}
+            <line x1={50} y1={20+barH*(1-UCL/maxVal)} x2={50+values.length*barW} y2={20+barH*(1-UCL/maxVal)} stroke="#ff8c42" strokeWidth={1.5} strokeDasharray="6,3"/>
+            <text x={55+values.length*barW} y={24+barH*(1-UCL/maxVal)} fontSize={9} fill="#ff8c42" fontWeight="700">UCL</text>
+
+            {/* Mean line */}
+            <line x1={50} y1={20+barH*(1-mean/maxVal)} x2={50+values.length*barW} y2={20+barH*(1-mean/maxVal)} stroke={T.accent} strokeWidth={2}/>
+            <text x={55+values.length*barW} y={24+barH*(1-mean/maxVal)} fontSize={9} fill={T.accent} fontWeight="700">X̄</text>
+
+            {/* LCL line */}
+            {LCL > 0 && <>
+              <line x1={50} y1={20+barH*(1-LCL/maxVal)} x2={50+values.length*barW} y2={20+barH*(1-LCL/maxVal)} stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="6,3"/>
+              <text x={55+values.length*barW} y={24+barH*(1-LCL/maxVal)} fontSize={9} fill="#a78bfa" fontWeight="700">LCL</text>
+            </>}
+
+            {/* Data bars + line */}
+            {values.map((v,i)=>{
+              const x = 50 + i*barW + barW/2;
+              const y = 20 + barH*(1 - v/maxVal);
+              const outCtrl = v > UCL || (LCL > 0 && v < LCL);
+              return (
+                <g key={i}>
+                  <rect x={50+i*barW+4} y={y} width={barW-8} height={barH*(v/maxVal)} fill={outCtrl?`#ff4f6a22`:`${T.accent}22`} rx={3}/>
+                  {i > 0 && <line x1={50+(i-1)*barW+barW/2} y1={20+barH*(1-values[i-1]/maxVal)} x2={x} y2={y} stroke={outCtrl?"#ff4f6a":T.accent} strokeWidth={1.5}/>}
+                  <circle cx={x} cy={y} r={5} fill={outCtrl?"#ff4f6a":T.accent} stroke={T.bg} strokeWidth={2}/>
+                  <text x={x} y={barH+30} textAnchor="middle" fontSize={9} fill={T.text3}>{activeData[i]?.label||i+1}</text>
+                  <text x={x} y={y-8} textAnchor="middle" fontSize={9} fill={outCtrl?"#ff4f6a":T.text2} fontWeight={outCtrl?"700":"400"}>{v}</text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Legenda */}
+        <div style={{ display:"flex", gap:16, marginTop:"1rem", flexWrap:"wrap" }}>
+          {[["─","#ff8c42","UCL — Limite Superior de Controle"],["─",T.accent,"X̄ — Média"],["─","#a78bfa","LCL — Limite Inferior de Controle"],["●","#ff4f6a","Fora de controle"]].map(([sym,c,l])=>(
+            <div key={l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:T.text2 }}>
+              <span style={{ color:c, fontWeight:700 }}>{sym}</span>{l}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
