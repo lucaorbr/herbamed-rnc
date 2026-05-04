@@ -48,6 +48,15 @@ const THEMES = {
     border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.15)",
     red: "#ff7b72", yellow: "#e3b341", blue: "#58a6ff", orange: "#ffa657", purple: "#d2a8ff",
   },
+  win2k: {
+    name: "🖥️ Windows 2000",
+    bg: "#008080", surf: "#d4d0c8", card: "#d4d0c8", card2: "#c8c4bc",
+    accent: "#000080", accent2: "#000060", accentDim: "#00008018",
+    accentGlow: "#00008040", text: "#000000", text2: "#444444", text3: "#888888",
+    border: "rgba(0,0,0,0.4)", border2: "rgba(0,0,0,0.6)",
+    red: "#cc0000", yellow: "#cc8800", blue: "#000080", orange: "#cc4400", purple: "#660066",
+    win2k: true,
+  },
 };
 
 const ThemeCtx = createContext(null);
@@ -1029,6 +1038,14 @@ export default function App() {
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           .rnc-row:hover{background:${T.card2}!important;}
           .th-sort:hover{color:${T.accent}!important;cursor:pointer;}
+          ${T.win2k ? `
+            * { font-family: 'Tahoma', 'MS Sans Serif', Arial, sans-serif !important; font-size: 11px !important; }
+            button { border-top: 2px solid #ffffff !important; border-left: 2px solid #ffffff !important; border-bottom: 2px solid #808080 !important; border-right: 2px solid #808080 !important; border-radius: 0 !important; background: #d4d0c8 !important; color: #000000 !important; padding: 3px 8px !important; cursor: pointer; }
+            button:active { border-top: 2px solid #808080 !important; border-left: 2px solid #808080 !important; border-bottom: 2px solid #ffffff !important; border-right: 2px solid #ffffff !important; }
+            input, select, textarea { border-top: 1px solid #808080 !important; border-left: 1px solid #808080 !important; border-bottom: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; border-radius: 0 !important; background: #ffffff !important; color: #000000 !important; font-family: 'Tahoma' !important; font-size: 11px !important; }
+            .menu-item:hover { background: #000080 !important; color: #ffffff !important; }
+            .rnc-row:hover { background: #000080 !important; color: #ffffff !important; }
+          ` : ""}
           @media(max-width:768px){
             .header-kpis{display:none!important;}
             .sidebar-desktop{display:none!important;}
@@ -1045,7 +1062,7 @@ export default function App() {
         `}</style>
 
         {/* ── TOP HEADER ── */}
-        <div className="top-header" style={{ background: `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom:`1px solid ${T.border2}`, height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter:"blur(12px)", flexShrink:0 }}>
+        <div className="top-header" style={{ background: T.win2k ? "linear-gradient(to right, #000080, #1084d0)" : `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom: T.win2k ? "2px solid #808080" : `1px solid ${T.border2}`, height: T.win2k ? 28 : 60, display:"flex", alignItems:"center", justifyContent:"space-between", padding: T.win2k ? "0 4px" : "0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter: T.win2k ? "none" : "blur(12px)", flexShrink:0 }}>
 
           {/* Left: toggle + logo */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -1151,7 +1168,7 @@ export default function App() {
           )}
 
           {/* SIDEBAR */}
-          <div className="sidebar-nav" style={{ width: mobileMenuOpen ? 260 : sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position: mobileMenuOpen ? "fixed" : "sticky", top: mobileMenuOpen ? 0 : 60, left:0, bottom:0, height: mobileMenuOpen ? "100vh" : "calc(100vh - 60px)", zIndex: mobileMenuOpen ? 295 : "auto", boxShadow: mobileMenuOpen ? "4px 0 24px rgba(0,0,0,.4)" : "none" }}>
+          <div className="sidebar-nav" style={{ width: mobileMenuOpen ? 260 : sidebarOpen ? 220 : 60, flexShrink:0, background:T.win2k?"#d4d0c8":T.surf, borderRight: T.win2k ? "2px solid #808080" : `1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position: mobileMenuOpen ? "fixed" : "sticky", top: mobileMenuOpen ? 0 : T.win2k ? 28 : 60, left:0, bottom:0, height: mobileMenuOpen ? "100vh" : T.win2k ? "calc(100vh - 28px)" : "calc(100vh - 60px)", zIndex: mobileMenuOpen ? 295 : "auto", boxShadow: mobileMenuOpen ? "4px 0 24px rgba(0,0,0,.4)" : "none" }}>
             <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={sidebarOpen || mobileMenuOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
           </div>
 
@@ -1199,6 +1216,25 @@ export default function App() {
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+
+        {/* ── WINDOWS 2000 TASKBAR ── */}
+        {T.win2k && (
+          <div style={{ position:"fixed", bottom:0, left:0, right:0, height:28, background:"#d4d0c8", borderTop:"2px solid #ffffff", zIndex:500, display:"flex", alignItems:"center", gap:2, padding:"0 2px", boxShadow:"0 -1px 0 #808080" }}>
+            {/* Start button */}
+            <button onClick={()=>setTab("home")} style={{ height:22, padding:"0 8px", background:"#d4d0c8", border:"1px solid #808080", borderTop:"1px solid #ffffff", borderLeft:"1px solid #ffffff", display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:700, fontFamily:"Tahoma" }}>
+              <span style={{ fontSize:14 }}>⊞</span> Iniciar
+            </button>
+            <div style={{ width:1, height:20, background:"#808080", margin:"0 2px" }} />
+            {/* Active window */}
+            <div style={{ height:22, padding:"0 8px", background:"#000080", color:"#fff", border:"1px solid #808080", display:"flex", alignItems:"center", fontSize:11, fontFamily:"Tahoma", gap:4 }}>
+              📋 SGQ Herbamed® — {PAGE_TITLES[tab]||"Home"}
+            </div>
+            {/* Clock */}
+            <div style={{ marginLeft:"auto", padding:"0 8px", fontSize:11, fontFamily:"Tahoma", borderLeft:"1px solid #808080", height:"100%", display:"flex", alignItems:"center" }}>
+              {new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
+            </div>
+          </div>
+        )}
 
         {/* ── AVISO DE SESSÃO EXPIRANDO ── */}
         {sessionWarning && (
