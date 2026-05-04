@@ -4347,13 +4347,37 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
   const salvar = async () => {
     if(!form.nome.trim()) { alert("Nome é obrigatório."); return; }
     if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
-    const id = sel ? String(sel.id) : String(Date.now());
-    const material = { id, ...form, ensaios, criadoPor:user.name, criadoEm:tod(), atualizadoEm:tod() };
-    await saveCollection("cq_materiais", id, material);
-    toast_(sel?"Material atualizado!":"Material cadastrado!", "green");
-    setView("lista"); setSel(null);
-    setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
-    setEnsaios([]);
+    try {
+      const id = sel ? String(sel.id) : String(Date.now());
+      // Limpar ensaios para garantir compatibilidade com Firestore
+      const ensaiosLimpos = ensaios.map((e,i) => ({
+        id: i+1,
+        nome: e.nome||"",
+        espec: e.espec||"",
+        unidade: e.unidade||"",
+        ref: e.ref||"",
+      }));
+      const material = {
+        id,
+        nome: form.nome,
+        tipo: form.tipo,
+        fornecedorPadrao: form.fornecedorPadrao||"",
+        ref: form.ref||"",
+        obs: form.obs||"",
+        ensaios: ensaiosLimpos,
+        criadoPor: user.name,
+        criadoEm: tod(),
+        atualizadoEm: tod(),
+      };
+      await saveCollection("cq_materiais", id, material);
+      toast_(sel?"Material atualizado!":"Material cadastrado!", "green");
+      setView("lista"); setSel(null);
+      setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
+      setEnsaios([]);
+    } catch(e) {
+      alert("Erro ao salvar: " + e.message);
+      console.error(e);
+    }
   };
 
   const editarMaterial = (m) => {
