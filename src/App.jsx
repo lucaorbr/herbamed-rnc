@@ -1827,11 +1827,28 @@ async function uploadToCloudinary(file) {
     method: "POST", body: formData
   });
   const data = await res.json();
-  if (data.secure_url) return { url: data.secure_url, name: file.name, type: file.type, size: file.size };
+  if (data.secure_url) {
+    // Para PDFs, usar URL de visualização inline do Cloudinary
+    let url = data.secure_url;
+    if (file.type === "application/pdf") {
+      // Substituir /upload/ por /upload/fl_inline/ para abrir no browser
+      url = url.replace("/upload/", "/upload/fl_inline/");
+    }
+    return { url, name: file.name, type: file.type, size: file.size };
+  }
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-function AnexosUpload({ anexos, setAnexos }) {
+// Helper para abrir COA — corrige URL do Cloudinary para PDFs
+function openCOA(coa) {
+  if (!coa?.url) return;
+  let url = coa.url;
+  // Garantir fl_inline para PDFs do Cloudinary
+  if ((coa.type === "application/pdf" || url.includes(".pdf")) && url.includes("cloudinary.com")) {
+    url = url.replace("/upload/fl_inline/", "/upload/").replace("/upload/", "/upload/fl_inline/");
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
   const T = useTheme(); const s = useS();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
@@ -4344,7 +4361,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                 <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{coa.name}</div>
                 <div style={{ fontSize:11, color:T.text3 }}>{coa.size ? (coa.size/1024).toFixed(1)+" KB" : ""}</div>
               </div>
-              <a href={coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver</a>
+              <button onClick={()=>openCOA(coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
               <button style={s.btnD} onClick={()=>setCoa(null)}>✕</button>
             </div>
           ) : (
@@ -4456,7 +4473,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
             {selFicha.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", alignItems:"center", gap:10 }}>
               <span style={{ fontSize:20 }}>📄</span>
               <span style={{ fontSize:13, color:T.text }}>COA: {selFicha.coa.name}</span>
-              <a href={selFicha.coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver COA</a>
+              <button onClick={()=>openCOA(selFicha.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
             </div>}
             <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
               {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
@@ -5019,7 +5036,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
               <span style={{ fontSize:24 }}>📄</span>
               <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600 }}>{coa.name}</div></div>
-              <a href={coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver</a>
+              <button onClick={()=>openCOA(coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
               <button style={s.btnD} onClick={()=>setCoa(null)}>✕</button>
             </div>
           ) : (
@@ -5131,7 +5148,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             {selAnalise.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", gap:10, alignItems:"center" }}>
               <span style={{ fontSize:20 }}>📄</span>
               <span style={{ fontSize:13 }}>COA: {selAnalise.coa.name}</span>
-              <a href={selAnalise.coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver COA</a>
+              <button onClick={()=>openCOA(selAnalise.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
             </div>}
             {selAnalise.obs && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2 }}><b>Obs:</b> {selAnalise.obs}</div>}
             <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
