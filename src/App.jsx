@@ -1846,10 +1846,8 @@ async function uploadToCloudinary(file) {
 // Helper para abrir COA — corrige URL do Cloudinary para PDFs
 function openCOA(coa) {
   if (!coa?.url) return;
-  let url = coa.url;
-  if ((coa.type === "application/pdf" || url.includes(".pdf")) && url.includes("cloudinary.com")) {
-    url = url.replace("/upload/fl_inline/", "/upload/").replace("/upload/", "/upload/fl_inline/");
-  }
+  // Remove fl_inline se existir (causava erro 400 no Cloudinary plano gratuito)
+  const url = coa.url.replace("/upload/fl_inline/", "/upload/");
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
