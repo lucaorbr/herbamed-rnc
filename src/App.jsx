@@ -753,6 +753,91 @@ function Login({ onLogin }) {
   );
 }
 
+/* ─── SIDEBAR NAV ────────────────────────────────────────────────────────────── */
+function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const grupoAtivo = grupo.items.some(i => i.id === tab);
+  const grupoBadge = grupo.items.reduce((s,i) => s + (i.badge||0), 0);
+
+  return (
+    <div style={{ marginBottom:2 }}>
+      {sidebarOpen ? (
+        <button onClick={()=>setOpen(o=>!o)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"6px 8px", border:"none", background: grupoAtivo?`${T.accent}12`:"transparent", color: grupoAtivo?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:9, fontWeight:700, borderRadius:8, textAlign:"left", textTransform:"uppercase", letterSpacing:".07em", transition:"all .15s", marginTop:4 }}>
+          <span style={{ fontSize:12, flexShrink:0 }}>{grupo.icon}</span>
+          <span style={{ flex:1 }}>{grupo.label}</span>
+          {grupoBadge>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px" }}>{grupoBadge}</span>}
+          <span style={{ fontSize:8, opacity:.4, transition:"transform .2s", display:"inline-block", transform:open?"rotate(180deg)":"rotate(0)" }}>▼</span>
+        </button>
+      ) : (
+        <div style={{ height:1, background:T.border, margin:"4px 6px" }} />
+      )}
+      {(open || !sidebarOpen) && grupo.items.map(item=>(
+        <button key={item.id} onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding: sidebarOpen?"6px 10px 6px 20px":"8px 10px", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight: tab===item.id?600:400, borderRadius:8, marginBottom:1, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 8px ${T.accentGlow}`:"none", whiteSpace:"nowrap", overflow:"hidden", position:"relative" }}>
+          <span style={{ fontSize:14, flexShrink:0, width:18, textAlign:"center" }}>{item.icon}</span>
+          {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", fontSize:11 }}>{item.label}</span>}
+          {sidebarOpen && (item.badge||0)>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px", flexShrink:0 }}>{item.badge}</span>}
+          {!sidebarOpen && (item.badge||0)>0 && <span style={{ position:"absolute", top:3, right:3, width:6, height:6, borderRadius:"50%", background:T.red }} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
+  const GRUPOS = [
+    { id:"principal", icon:"🏠", label:"Principal", items:[
+      { id:"home",  icon:"🏠", label:"Home" },
+      { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
+      ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
+    ]},
+    ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Qualidade", items:[
+      { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
+      { id:"5w2h",     icon:"📌", label:"5W2H" },
+      { id:"eficacia", icon:"✅", label:"Eficácia" },
+      { id:"fmea",     icon:"⚠️", label:"FMEA" },
+    ]}]:[]),
+    { id:"analise", icon:"📊", label:"Análise & Dados", items:[
+      { id:"dashboard",  icon:"📊", label:"Dashboard" },
+      { id:"cep",        icon:"📉", label:"CEP" },
+      { id:"relatorios", icon:"📑", label:"Relatórios" },
+    ]},
+    { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
+      { id:"cq-materiais", icon:"🧪", label:"CQ — Materiais" },
+      { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
+      { id:"nqa",          icon:"📐", label:"NQA / AQL" },
+    ]},
+    { id:"gestao", icon:"🏭", label:"Gestão", items:[
+      { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
+      { id:"auditorias",   icon:"🔍", label:"Auditorias" },
+      ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
+    ]},
+  ];
+
+  return (
+    <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
+      <div style={{ padding:"6px 6px", flex:1, overflowY:"auto" }}>
+        {GRUPOS.map(grupo=>(
+          <SidebarGrupo
+            key={grupo.id}
+            grupo={grupo}
+            tab={tab}
+            setTab={setTab}
+            sidebarOpen={sidebarOpen}
+            T={T}
+            defaultOpen={grupo.id==="principal" || grupo.items.some(i=>i.id===tab)}
+          />
+        ))}
+      </div>
+      {sidebarOpen && (
+        <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3 }}>
+          <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
+          <div>v2.0 · {new Date().getFullYear()}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── MAIN APP ───────────────────────────────────────────────────────────────── */
 export default function App() {
   const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
@@ -994,94 +1079,7 @@ export default function App() {
         <div style={{ display:"flex", flex:1, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
           {/* SIDEBAR com grupos colapsáveis */}
-          {(() => {
-            const GRUPOS = [
-              {
-                id:"principal", icon:"🏠", label:"Principal", items:[
-                  { id:"home",    icon:"🏠", label:"Home" },
-                  { id:"lista",   icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
-                  ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
-                ]
-              },
-              {
-                id:"qualidade", icon:"🔬", label:"Qualidade", items:[
-                  ...(!isViewer?[
-                    { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
-                    { id:"5w2h",    icon:"📌", label:"5W2H" },
-                    { id:"eficacia",icon:"✅", label:"Eficácia" },
-                    { id:"fmea",    icon:"⚠️", label:"FMEA" },
-                  ]:[]),
-                ]
-              },
-              {
-                id:"analise", icon:"📊", label:"Análise & Dados", items:[
-                  { id:"dashboard",  icon:"📊", label:"Dashboard" },
-                  { id:"cep",        icon:"📉", label:"CEP" },
-                  { id:"relatorios", icon:"📑", label:"Relatórios" },
-                ]
-              },
-              {
-                id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
-                  { id:"cq-materiais", icon:"🧪", label:"CQ — Materiais" },
-                  { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
-                  { id:"nqa",          icon:"📐", label:"NQA / AQL" },
-                ]
-              },
-              {
-                id:"gestao", icon:"🏭", label:"Gestão", items:[
-                  { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
-                  { id:"auditorias",   icon:"🔍", label:"Auditorias" },
-                  ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
-                ]
-              },
-            ].filter(g => g.items.length > 0);
-
-            return (
-              <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
-                <div style={{ padding:"6px 6px", flex:1, overflowY:"auto" }}>
-                  {GRUPOS.map(grupo => {
-                    const grupoAtivo = grupo.items.some(i=>i.id===tab);
-                    const [open, setOpen] = React.useState(grupoAtivo || grupo.id==="principal");
-                    const grupoBadge = grupo.items.reduce((s,i)=>s+(i.badge||0),0);
-
-                    return (
-                      <div key={grupo.id} style={{ marginBottom:2 }}>
-                        {/* Grupo header */}
-                        {sidebarOpen ? (
-                          <button onClick={()=>setOpen(o=>!o)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"7px 10px", border:"none", background: grupoAtivo?`${T.accent}12`:"transparent", color: grupoAtivo?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700, borderRadius:8, textAlign:"left", textTransform:"uppercase", letterSpacing:".06em", transition:"all .15s" }}>
-                            <span style={{ fontSize:13, flexShrink:0 }}>{grupo.icon}</span>
-                            <span style={{ flex:1 }}>{grupo.label}</span>
-                            {grupoBadge>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px" }}>{grupoBadge}</span>}
-                            <span style={{ fontSize:9, opacity:.5, transition:"transform .2s", transform:open?"rotate(180deg)":"rotate(0deg)" }}>▼</span>
-                          </button>
-                        ) : (
-                          <div style={{ height:1, background:T.border, margin:"4px 6px" }} />
-                        )}
-
-                        {/* Items do grupo */}
-                        {(open || !sidebarOpen) && grupo.items.map(item=>(
-                          <button key={item.id} className="menu-item" onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding: sidebarOpen?"7px 10px 7px 22px":"8px 10px", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight: tab===item.id?600:400, borderRadius:8, marginBottom:1, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 8px ${T.accentGlow}`:"none", whiteSpace:"nowrap", overflow:"hidden" }}>
-                            <span style={{ fontSize:14, flexShrink:0, width:18, textAlign:"center" }}>{item.icon}</span>
-                            {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", fontSize:11 }}>{item.label}</span>}
-                            {sidebarOpen && (item.badge||0)>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px", flexShrink:0 }}>{item.badge}</span>}
-                            {!sidebarOpen && (item.badge||0)>0 && <span style={{ position:"absolute", top:4, right:4, width:6, height:6, borderRadius:"50%", background:T.red }} />}
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Sidebar footer */}
-                {sidebarOpen && (
-                  <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3, lineHeight:1.6 }}>
-                    <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
-                    <div>v2.0 · {new Date().getFullYear()}</div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          <SidebarNav T={T} tab={tab} setTab={setTab} sidebarOpen={sidebarOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
