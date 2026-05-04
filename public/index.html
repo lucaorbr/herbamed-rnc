@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="theme-color" content="#1a7a3c" />
     <title>SGQ Herbamed® · Sistema de Gestão da Qualidade</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +11,32 @@
       *, *::before, *::after { box-sizing: border-box; }
       body { margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
       select option { background: #1a1a2a; }
-      @media print { .no-print { display: none !important; } }
+
+      /* ── PRINT STYLES ── */
+      @media print {
+        .no-print, .sidebar-nav, .top-header, .session-warning { display: none !important; }
+        .print-content { margin: 0 !important; padding: 0 !important; }
+        body { background: #fff !important; color: #000 !important; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+
+      /* ── MOBILE STYLES ── */
+      @media (max-width: 768px) {
+        .sidebar-nav { display: none !important; }
+        .sidebar-nav.mobile-open { display: flex !important; position: fixed !important; top: 0 !important; left: 0 !important; bottom: 0 !important; z-index: 300 !important; width: 260px !important; }
+        .mobile-overlay { display: block !important; }
+        .top-header { padding: 0 1rem !important; }
+        .header-kpis { display: none !important; }
+        .main-content { padding: 1rem !important; }
+        .grid-3 { grid-template-columns: 1fr !important; }
+        .grid-2 { grid-template-columns: 1fr !important; }
+        table { display: block !important; overflow-x: auto !important; }
+      }
+
+      @media (max-width: 480px) {
+        .header-right-full { display: none !important; }
+        .header-right-mobile { display: flex !important; }
+      }
     </style>
   </head>
   <body>

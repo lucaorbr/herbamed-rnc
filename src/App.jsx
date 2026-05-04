@@ -639,14 +639,14 @@ function Login({ onLogin }) {
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 60%, #0a110c 100%)" }} />
 
         {/* Content */}
-        <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", height:"100%", padding:"2.5rem" }}>
+        <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", justifyContent:"center", height:"100%", padding:"2.5rem" }}>
           {/* Top tag */}
-          <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(42,184,74,0.15)", border:"1px solid rgba(42,184,74,0.3)", borderRadius:20, padding:"5px 14px", width:"fit-content", marginBottom:"auto" }}>
+          <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(42,184,74,0.15)", border:"1px solid rgba(42,184,74,0.3)", borderRadius:20, padding:"5px 14px", width:"fit-content", marginBottom:"2rem" }}>
             <span style={{ width:6, height:6, borderRadius:"50%", background:"#2ab84a", animation:"pulse 2s infinite", display:"inline-block" }} />
             <span style={{ fontSize:11, fontWeight:600, color:"#2ab84a", textTransform:"uppercase", letterSpacing:".1em" }}>Sistema Online</span>
           </div>
 
-          {/* Main text — bottom */}
+          {/* Main text */}
           <div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"4px", fontWeight:600, marginBottom:12 }}>Herbamed® · Qualidade</div>
             <div style={{ fontSize:42, fontWeight:800, color:"#ffffff", lineHeight:1.1, marginBottom:16, letterSpacing:"-.02em" }}>
@@ -1017,6 +1017,8 @@ export default function App() {
     admin: "Administração",
   };
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <ThemeCtx.Provider value={T}>
       <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
@@ -1028,14 +1030,32 @@ export default function App() {
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           .rnc-row:hover{background:${T.card2}!important;}
           .th-sort:hover{color:${T.accent}!important;cursor:pointer;}
+          @media(max-width:768px){
+            .header-kpis{display:none!important;}
+            .sidebar-desktop{display:none!important;}
+            .header-theme{display:none!important;}
+          }
+          @media(min-width:769px){
+            .mobile-only{display:none!important;}
+          }
+          @media print{
+            .top-header,.sidebar-nav,.session-warning,.no-print{display:none!important;}
+            body{background:#fff!important;}
+            *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+          }
         `}</style>
 
         {/* ── TOP HEADER ── */}
-        <div style={{ background: `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom:`1px solid ${T.border2}`, height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter:"blur(12px)", flexShrink:0 }}>
+        <div className="top-header" style={{ background: `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom:`1px solid ${T.border2}`, height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter:"blur(12px)", flexShrink:0 }}>
 
           {/* Left: toggle + logo */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <button onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+            {/* Mobile hamburger */}
+            <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+              ☰
+            </button>
+            {/* Desktop toggle */}
+            <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
               {sidebarOpen ? "◀" : "▶"}
             </button>
             <div style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center" }}>
@@ -1048,7 +1068,7 @@ export default function App() {
           </div>
 
           {/* Center: KPI pills */}
-          <div style={{ display:"flex", gap:8 }}>
+          <div className="header-kpis" style={{ display:"flex", gap:8 }}>
             {[
               ["Total RNCs", rncs.length, T.accent],
               ["Abertas", rncs.filter(x=>x.status==="Aberta").length, T.red],
@@ -1064,7 +1084,7 @@ export default function App() {
 
           {/* Right: theme + notif + avatar */}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <ThemePicker current={themeKey} onChange={changeTheme} />
+            <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} /></div>
 
             {/* Notifications bell */}
             <div style={{ position:"relative" }}>
@@ -1126,8 +1146,15 @@ export default function App() {
         {/* ── BODY: sidebar + content ── */}
         <div style={{ display:"flex", flex:1, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
-          {/* SIDEBAR com grupos colapsáveis */}
-          <SidebarNav T={T} tab={tab} setTab={setTab} sidebarOpen={sidebarOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
+          {/* Mobile overlay */}
+          {mobileMenuOpen && (
+            <div onClick={()=>setMobileMenuOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:290, backdropFilter:"blur(2px)" }} />
+          )}
+
+          {/* SIDEBAR */}
+          <div className="sidebar-nav" style={{ width: mobileMenuOpen ? 260 : sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position: mobileMenuOpen ? "fixed" : "sticky", top: mobileMenuOpen ? 0 : 60, left:0, bottom:0, height: mobileMenuOpen ? "100vh" : "calc(100vh - 60px)", zIndex: mobileMenuOpen ? 295 : "auto", boxShadow: mobileMenuOpen ? "4px 0 24px rgba(0,0,0,.4)" : "none" }}>
+            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={sidebarOpen || mobileMenuOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
+          </div>
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
@@ -2864,6 +2891,44 @@ Herbamed® · Sistema de Gestão da Qualidade`;
   );
 }
 
+/* ─── PDF SHARED STYLES ──────────────────────────────────────────────────────── */
+const PDF_CSS = `
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;}
+  .page{width:210mm;min-height:297mm;padding:14mm;margin:0 auto;}
+  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:18px;}
+  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;letter-spacing:1px;}
+  .logo-sub{font-size:10px;color:#666;margin-top:2px;}
+  .doc-num{font-size:18px;font-weight:700;color:#1a7a3c;text-align:right;}
+  .doc-date{font-size:11px;color:#666;text-align:right;margin-top:2px;}
+  .section{margin-bottom:16px;}
+  .stitle{font-size:10px;font-weight:700;color:#1a7a3c;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #1a7a3c;padding-bottom:4px;margin-bottom:10px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 10px;}
+  .flabel{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
+  .fval{font-size:12px;color:#1a1a1a;font-weight:500;}
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;}
+  .box-green{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:7px;padding:10px 12px;}
+  .box-orange{background:#fff8f0;border:1px solid #ffe0b2;border-radius:7px;padding:10px 12px;}
+  .box-red{background:#fff0f0;border:1px solid #ffcdd2;border-radius:7px;padding:10px 12px;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#1a7a3c;color:#fff;font-weight:700;padding:7px 8px;text-align:left;}
+  td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:middle;}
+  tr:nth-child(even)td{background:#f8faf8;}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
+  .sign-row{display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;}
+  .sign-box{flex:1;text-align:center;}
+  .sign-line{border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;}
+  @media print{body{background:#fff!important;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}
+`;
+
+function openPDFWindow(title, html) {
+  const win = window.open("","_blank");
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>${title}</title><style>${PDF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
+  win.document.close();
+}
+
 /* ─── PDF EXPORT ─────────────────────────────────────────────────────────────── */
 function exportRNCPDF(rnc) {
   const win = window.open("", "_blank");
@@ -3080,6 +3145,52 @@ function exportRNCPDF(rnc) {
   win.document.close();
 }
 
+/* ─── FMEA PDF EXPORT ────────────────────────────────────────────────────────── */
+function exportFMEAPDF(items) {
+  const rpnColor = (r) => r>=100?"#cc2244":r>=50?"#8a4000":r>=25?"#8a6000":"#1a7a3c";
+  const rpnLabel = (r) => r>=100?"CRÍTICO":r>=50?"ALTO":r>=25?"MÉDIO":"BAIXO";
+  const sorted = [...items].sort((a,b)=>(b.S*b.O*b.D)-(a.S*a.O*a.D));
+  openPDFWindow("FMEA — Herbamed®", `
+<div class="page">
+  <div class="header">
+    <div><div class="logo">🌿 HERBAMED®</div><div class="logo-sub">FMEA — Análise de Modo e Efeito de Falha</div></div>
+    <div><div class="doc-date">Gerado em ${new Date().toLocaleDateString("pt-BR")}</div></div>
+  </div>
+  <div class="section">
+    <div class="stitle">Análise de Riscos — ${sorted.length} item(s)</div>
+    <table>
+      <thead><tr><th>Processo</th><th>Modo de Falha</th><th>Efeito</th><th>Causa</th><th>S</th><th>O</th><th>D</th><th>RPN</th><th>Prioridade</th><th>Ação</th><th>Resp.</th><th>Status</th></tr></thead>
+      <tbody>
+        ${sorted.map(item=>{
+          const rpn=item.S*item.O*item.D;
+          return `<tr>
+            <td>${item.processo||"—"}</td><td><strong>${item.modoFalha||"—"}</strong></td>
+            <td>${item.efeito||"—"}</td><td>${item.causa||"—"}</td>
+            <td style="text-align:center;font-weight:700">${item.S}</td>
+            <td style="text-align:center;font-weight:700">${item.O}</td>
+            <td style="text-align:center;font-weight:700">${item.D}</td>
+            <td style="text-align:center;font-weight:800;color:${rpnColor(rpn)}">${rpn}</td>
+            <td><span style="font-weight:700;color:${rpnColor(rpn)}">${rpnLabel(rpn)}</span></td>
+            <td>${item.acao||"—"}</td><td>${item.resp||"—"}</td><td>${item.status||"—"}</td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <div class="grid3">
+      <div class="field"><div class="flabel">Total de itens</div><div class="fval">${sorted.length}</div></div>
+      <div class="field"><div class="flabel">Itens críticos (RPN≥100)</div><div class="fval" style="color:#cc2244">${sorted.filter(x=>x.S*x.O*x.D>=100).length}</div></div>
+      <div class="field"><div class="flabel">Itens altos (RPN 50-99)</div><div class="fval" style="color:#8a4000">${sorted.filter(x=>x.S*x.O*x.D>=50&&x.S*x.O*x.D<100).length}</div></div>
+    </div>
+  </div>
+  <div class="footer">
+    <div>Herbamed® · Sistema de Gestão da Qualidade · FMEA</div>
+    <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
+  </div>
+</div>`);
+}
+
 /* ─── FMEA TAB ───────────────────────────────────────────────────────────────── */
 function FMEATab({ user, toast_ }) {
   const T = useTheme(); const s = useS();
@@ -3163,6 +3274,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
             </div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
+            {items.length>0 && <button style={{ ...s.btn, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportFMEAPDF(items)}>📄 Exportar PDF</button>}
             <button style={s.btnA} onClick={addItem}>+ Adicionar item</button>
           </div>
         </div>
@@ -5014,6 +5126,58 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   );
 }
 
+/* ─── AUDITORIA PDF EXPORT ───────────────────────────────────────────────────── */
+function exportAuditoriaPDF(a) {
+  const statusColor = { "Não conformidade":"#cc2244", "Observação":"#8a6000", "Oportunidade de melhoria":"#1a7a3c", "Ponto positivo":"#1a7a3c" };
+  openPDFWindow(`${a.titulo} — Herbamed®`, `
+<div class="page">
+  <div class="header">
+    <div><div class="logo">🌿 HERBAMED®</div><div class="logo-sub">Relatório de Auditoria ${a.tipo}</div></div>
+    <div><div class="doc-date">Planejado em ${fmt(a.dataPlano)}</div>${a.dataPrev?`<div class="doc-date">Execução: ${fmt(a.dataPrev)}</div>`:""}</div>
+  </div>
+  <div class="section">
+    <div class="stitle">Identificação</div>
+    <div class="grid2">
+      <div class="field"><div class="flabel">Título</div><div class="fval">${a.titulo}</div></div>
+      <div class="field"><div class="flabel">Tipo</div><div class="fval">${a.tipo}</div></div>
+      <div class="field"><div class="flabel">Área auditada</div><div class="fval">${a.area||"—"}</div></div>
+      <div class="field"><div class="flabel">Auditor(es)</div><div class="fval">${a.auditores||"—"}</div></div>
+      <div class="field"><div class="flabel">Status</div><div class="fval">${a.status}</div></div>
+    </div>
+  </div>
+  ${a.objetivo?`<div class="section"><div class="stitle">Objetivo</div><div class="box-green">${a.objetivo}</div></div>`:""}
+  ${a.escopo?`<div class="section"><div class="stitle">Escopo</div><div class="box-green">${a.escopo}</div></div>`:""}
+  ${a.achados?.length>0?`
+  <div class="section">
+    <div class="stitle">Achados (${a.achados.length})</div>
+    <table>
+      <thead><tr><th>#</th><th>Tipo</th><th>Descrição</th><th>Referência</th><th>Ação Corretiva</th><th>Responsável</th><th>Prazo</th><th>Status</th></tr></thead>
+      <tbody>
+        ${a.achados.map((ach,i)=>`<tr>
+          <td style="text-align:center">${i+1}</td>
+          <td><span style="font-weight:700;color:${statusColor[ach.tipo]||"#333"}">${ach.tipo}</span></td>
+          <td>${ach.desc||"—"}</td>
+          <td>${ach.ref||"—"}</td>
+          <td>${ach.acao||"—"}</td>
+          <td>${ach.resp||"—"}</td>
+          <td>${fmt(ach.prazo)}</td>
+          <td>${ach.status||"—"}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`:""}
+  <div class="sign-row">
+    <div class="sign-box"><div class="sign-line">${a.auditores||"Auditor"}<br/>Auditor</div></div>
+    <div class="sign-box"><div class="sign-line">______________________<br/>Responsável da Área</div></div>
+    <div class="sign-box"><div class="sign-line">______________________<br/>Gerente de Qualidade</div></div>
+  </div>
+  <div class="footer">
+    <div>Herbamed® · Sistema de Gestão da Qualidade · Auditoria</div>
+    <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
+  </div>
+</div>`);
+}
+
 /* ─── AUDITORIAS TAB ─────────────────────────────────────────────────────────── */
 function AuditoriasTab({ user, toast_, users, rncs }) {
   const T = useTheme(); const s = useS();
@@ -5170,6 +5334,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
               <span style={{ fontSize:11, fontWeight:600, color:STATUS_AUD[a.status], background:`${STATUS_AUD[a.status]}18`, padding:"3px 10px", borderRadius:20 }}>{a.status}</span>
+              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportAuditoriaPDF(a)}>📄 PDF</button>
               <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}>✏️ Editar</button>
               <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={()=>del(a.id)}>🗑️</button>
             </div>
