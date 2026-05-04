@@ -862,6 +862,8 @@ export default function App() {
     { id: "relatorios",  icon: "📑", label: "Relatórios" },
     { id: "cep",         icon: "📉", label: "CEP" },
     { id: "fornecedores",icon: "🏭", label: "Fornecedores" },
+    { id: "nqa",         icon: "📐", label: "NQA / AQL" },
+    { id: "cq",          icon: "🧪", label: "Controle de Qualidade" },
     ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
 
@@ -873,6 +875,8 @@ export default function App() {
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
+    nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
+    cq: "Controle de Qualidade — Fichas de Análise",
     admin: "Administração",
   };
 
@@ -1043,7 +1047,9 @@ export default function App() {
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
               {tab==="fornecedores" && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} />}
-              {tab==="admin"      && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+              {tab==="nqa"         && <NQATab user={user} toast_={toast_} />}
+              {tab==="cq"          && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
+              {tab==="admin"       && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
           </div>
         </div>
@@ -1725,7 +1731,7 @@ function AnexosUpload({ anexos, setAnexos }) {
 /* ─── NOVA TAB ───────────────────────────────────────────────────────────────── */
 function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = [] }) {
   const s = useS(); const T = useTheme();
-  const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: user.setor || "", detector: user.name, desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: user.name, prazoCausa: "", prazoAC: "", prazoEfic: "" });
+  const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "" });
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
@@ -3517,6 +3523,662 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── NQA / AQL TAB ─────────────────────────────────────────────────────────── */
+// Tabelas ISO 2859-1
+const NQA_LETRAS = {
+  // [tamLote]: letra do código
+  2:    { I:"A", II:"A", III:"B" },
+  8:    { I:"A", II:"B", III:"C" },
+  15:   { I:"B", II:"C", III:"D" },
+  25:   { I:"C", II:"D", III:"E" },
+  50:   { I:"C", II:"E", III:"F" },
+  90:   { I:"C", II:"F", III:"G" },
+  150:  { I:"D", II:"G", III:"H" },
+  280:  { I:"E", II:"H", III:"J" },
+  500:  { I:"F", II:"J", III:"K" },
+  1200: { I:"G", II:"K", III:"L" },
+  3200: { I:"H", II:"L", III:"M" },
+  10000:{ I:"J", II:"M", III:"N" },
+  35000:{ I:"K", II:"N", III:"P" },
+  150000:{ I:"L", II:"P", III:"Q" },
+  500000:{ I:"M", II:"Q", III:"R" },
+  999999:{ I:"N", II:"R", III:"S" },
+};
+
+// Tabela de amostragem simples normal (ISO 2859-1 Tabela II-A)
+const NQA_AMOSTRAS = {
+  A:  { n:2,   ac:{ "0.065":0,"0.1":0,"0.15":0,"0.25":0,"0.4":0,"0.65":0,"1.0":0,"1.5":0,"2.5":0,"4.0":0,"6.5":0,"10":0 }, re:{ "0.065":1,"0.1":1,"0.15":1,"0.25":1,"0.4":1,"0.65":1,"1.0":1,"1.5":1,"2.5":1,"4.0":1,"6.5":1,"10":1 } },
+  B:  { n:3,   ac:{ "0.25":0,"0.4":0,"0.65":0,"1.0":0,"1.5":0,"2.5":0,"4.0":0,"6.5":0,"10":1 }, re:{ "0.25":1,"0.4":1,"0.65":1,"1.0":1,"1.5":1,"2.5":1,"4.0":1,"6.5":1,"10":2 } },
+  C:  { n:5,   ac:{ "0.4":0,"0.65":0,"1.0":0,"1.5":0,"2.5":0,"4.0":0,"6.5":1,"10":1 }, re:{ "0.4":1,"0.65":1,"1.0":1,"1.5":1,"2.5":1,"4.0":1,"6.5":2,"10":2 } },
+  D:  { n:8,   ac:{ "0.65":0,"1.0":0,"1.5":0,"2.5":0,"4.0":1,"6.5":1,"10":2 }, re:{ "0.65":1,"1.0":1,"1.5":1,"2.5":1,"4.0":2,"6.5":2,"10":3 } },
+  E:  { n:13,  ac:{ "1.0":0,"1.5":0,"2.5":1,"4.0":1,"6.5":2,"10":3 }, re:{ "1.0":1,"1.5":1,"2.5":2,"4.0":2,"6.5":3,"10":4 } },
+  F:  { n:20,  ac:{ "1.0":0,"1.5":1,"2.5":1,"4.0":2,"6.5":3,"10":5 }, re:{ "1.0":1,"1.5":2,"2.5":2,"4.0":3,"6.5":4,"10":6 } },
+  G:  { n:32,  ac:{ "1.0":1,"1.5":1,"2.5":2,"4.0":3,"6.5":5,"10":7 }, re:{ "1.0":2,"1.5":2,"2.5":3,"4.0":4,"6.5":6,"10":8 } },
+  H:  { n:50,  ac:{ "1.0":1,"1.5":2,"2.5":3,"4.0":5,"6.5":7,"10":10}, re:{ "1.0":2,"1.5":3,"2.5":4,"4.0":6,"6.5":8,"10":11} },
+  J:  { n:80,  ac:{ "1.0":2,"1.5":3,"2.5":5,"4.0":7,"6.5":10,"10":14}, re:{ "1.0":3,"1.5":4,"2.5":6,"4.0":8,"6.5":11,"10":15} },
+  K:  { n:125, ac:{ "1.0":3,"1.5":5,"2.5":7,"4.0":10,"6.5":14,"10":21}, re:{ "1.0":4,"1.5":6,"2.5":8,"4.0":11,"6.5":15,"10":22} },
+  L:  { n:200, ac:{ "1.0":5,"1.5":7,"2.5":10,"4.0":14,"6.5":21}, re:{ "1.0":6,"1.5":8,"2.5":11,"4.0":15,"6.5":22} },
+  M:  { n:315, ac:{ "1.0":7,"1.5":10,"2.5":14,"4.0":21}, re:{ "1.0":8,"1.5":11,"2.5":15,"4.0":22} },
+  N:  { n:500, ac:{ "1.0":10,"1.5":14,"2.5":21}, re:{ "1.0":11,"1.5":15,"2.5":22} },
+  P:  { n:800, ac:{ "1.0":14,"1.5":21}, re:{ "1.0":15,"1.5":22} },
+  Q:  { n:1250,ac:{ "1.0":21}, re:{ "1.0":22} },
+};
+
+function getLetra(tam, nivel) {
+  const limites = Object.keys(NQA_LETRAS).map(Number).sort((a,b)=>a-b);
+  for (const l of limites) { if (tam <= l) return NQA_LETRAS[l][nivel]; }
+  return "S";
+}
+
+function NQATab({ user, toast_ }) {
+  const T = useTheme(); const s = useS();
+  const [tam, setTam] = useState("");
+  const [nivel, setNivel] = useState("II");
+  const [nqa, setNqa] = useState("1.0");
+  const [resultado, setResultado] = useState(null);
+  const [historico, setHistorico] = useState([]);
+
+  const calcular = () => {
+    const n = parseInt(tam);
+    if (!n || n < 2) { alert("Informe o tamanho do lote (mínimo 2)."); return; }
+    const letra = getLetra(n, nivel);
+    const tabela = NQA_AMOSTRAS[letra];
+    if (!tabela) { alert("Letra fora da tabela. Verifique os parâmetros."); return; }
+    const ac = tabela.ac[nqa];
+    const re = tabela.re[nqa];
+    if (ac === undefined) {
+      setResultado({ letra, n: tabela.n, ac: "↑", re: "↑", obs: "Use plano de amostragem com letra maior ou reduza o NQA." });
+    } else {
+      const res = { letra, n: tabela.n, ac, re, lote: n, nivel, nqa, data: tod(), resp: user.name };
+      setResultado(res);
+      setHistorico(p => [res, ...p.slice(0, 9)]);
+      toast_("Amostragem calculada!", "green");
+    }
+  };
+
+  const NIVEIS = [
+    { id:"I",   label:"Nível I",   desc:"Inspecão reduzida" },
+    { id:"II",  label:"Nível II",  desc:"Normal (padrão)" },
+    { id:"III", label:"Nível III", desc:"Inspeção reforçada" },
+  ];
+
+  const NQAS = ["0.065","0.1","0.15","0.25","0.4","0.65","1.0","1.5","2.5","4.0","6.5","10"];
+
+  const MATERIAL_NQA = [
+    { tipo:"Matéria-prima crítica (princípio ativo)", nqa:"0.65", nivel:"II" },
+    { tipo:"Matéria-prima geral (excipiente/pó)",     nqa:"1.0",  nivel:"II" },
+    { tipo:"Embalagem primária (frasco, blister)",    nqa:"1.5",  nivel:"II" },
+    { tipo:"Embalagem secundária (caixa, rótulo)",    nqa:"2.5",  nivel:"II" },
+    { tipo:"Insumos gerais",                          nqa:"4.0",  nivel:"II" },
+  ];
+
+  return (
+    <div>
+      {/* Info card */}
+      <div style={{ ...s.card, background:`linear-gradient(135deg,${T.card},${T.card2})`, marginBottom:"1rem" }}>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📐 NQA / AQL — Cálculo de Amostragem ISO 2859-1</div>
+        <div style={{ fontSize:12, color:T.text2, lineHeight:1.7, maxWidth:700 }}>
+          O <strong>Nível de Qualidade Aceitável (NQA)</strong> define quantas unidades inspecionar em um lote recebido e quantos defeitos são toleráveis antes de reprovar o lote. Baseado na norma <strong>ISO 2859-1</strong> (equivalente ANSI/ASQ Z1.4).
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.5rem" }}>
+        {/* Calculadora */}
+        <div>
+          <div style={s.card}>
+            <SecTitle icon="🔢" ch="Calculadora de amostragem" />
+
+            <F lbl="Tamanho do lote (unidades)" ch={
+              <Inp type="number" placeholder="Ex: 5000" value={tam} onChange={e=>setTam(e.target.value)} onKeyDown={e=>e.key==="Enter"&&calcular()} />
+            }/>
+
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Nível de inspeção</div>
+              <div style={{ display:"flex", gap:8 }}>
+                {NIVEIS.map(n=>(
+                  <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"8px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>
+                    <div style={{ fontWeight:700 }}>{n.label}</div>
+                    <div style={{ fontSize:10, marginTop:2, opacity:.7 }}>{n.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <F lbl="NQA desejado (%)" ch={
+              <Sel value={nqa} onChange={e=>setNqa(e.target.value)}>
+                {NQAS.map(n=><option key={n} value={n}>{n}%{n==="1.0"?" (padrão farmacêutico)":""}</option>)}
+              </Sel>
+            }/>
+
+            <button style={{ ...s.btnA, width:"100%", marginTop:8, fontSize:14, padding:"12px" }} onClick={calcular}>
+              Calcular amostragem →
+            </button>
+
+            {/* Resultado */}
+            {resultado && (
+              <div style={{ marginTop:"1.25rem", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"1.25rem" }}>
+                <div style={{ fontSize:12, color:T.accent, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", marginBottom:"1rem" }}>✅ Resultado</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                  {[
+                    ["Letra do código", resultado.letra, T.accent],
+                    ["Tamanho da amostra", resultado.n, T.accent],
+                    ["Nº de aceitação (Ac)", resultado.ac === "↑" ? "—" : resultado.ac, "#2ab84a"],
+                    ["Nº de rejeição (Re)", resultado.re === "↑" ? "—" : resultado.re, "#ff4f6a"],
+                  ].map(([l,v,c])=>(
+                    <div key={l} style={{ background:T.surf, borderRadius:8, padding:"10px 12px" }}>
+                      <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", marginBottom:4 }}>{l}</div>
+                      <div style={{ fontSize:24, fontWeight:800, color:c }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                {resultado.obs && <div style={{ fontSize:12, color:"#ff8c42", marginBottom:8 }}>⚠ {resultado.obs}</div>}
+                <div style={{ fontSize:12, color:T.text2, lineHeight:1.7, background:T.surf, borderRadius:8, padding:"10px 12px" }}>
+                  <strong>Como usar:</strong> Colete <strong style={{ color:T.accent }}>{resultado.n} amostras</strong> aleatórias do lote.<br/>
+                  Se encontrar até <strong style={{ color:"#2ab84a" }}>{resultado.ac}</strong> defeito(s) → <span style={{ color:"#2ab84a", fontWeight:700 }}>APROVAR</span> o lote.<br/>
+                  Se encontrar <strong style={{ color:"#ff4f6a" }}>{resultado.re}</strong> ou mais defeito(s) → <span style={{ color:"#ff4f6a", fontWeight:700 }}>REPROVAR</span> o lote.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tabela de referência + histórico */}
+        <div>
+          <div style={{ ...s.card, marginBottom:"1rem" }}>
+            <SecTitle icon="📋" ch="NQA recomendado por tipo de material" />
+            {MATERIAL_NQA.map((m,i)=>(
+              <div key={i} onClick={()=>{setNqa(m.nqa);setNivel(m.nivel);}} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:6, cursor:"pointer", transition:"all .15s" }}>
+                <div style={{ fontSize:12, color:T.text }}>{m.tipo}</div>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, padding:"2px 8px", borderRadius:20 }}>NQA {m.nqa}%</span>
+                  <span style={{ fontSize:10, color:T.text3 }}>Nível {m.nivel}</span>
+                </div>
+              </div>
+            ))}
+            <div style={{ marginTop:10, fontSize:11, color:T.text3, fontStyle:"italic" }}>
+              💡 Clique em um tipo para aplicar os valores automaticamente
+            </div>
+          </div>
+
+          {historico.length > 0 && (
+            <div style={s.card}>
+              <SecTitle icon="🕐" ch="Histórico de cálculos" />
+              {historico.map((h,i)=>(
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:6, fontSize:12 }}>
+                  <div>
+                    <span style={{ fontWeight:600, color:T.text }}>Lote: {h.lote} un.</span>
+                    <span style={{ color:T.text3, marginLeft:8 }}>NQA {h.nqa}% · Nível {h.nivel}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <span style={{ color:T.accent, fontWeight:700 }}>n={h.n}</span>
+                    <span style={{ color:"#2ab84a" }}>Ac≤{h.ac}</span>
+                    <span style={{ color:"#ff4f6a" }}>Re≥{h.re}</span>
+                    <span style={{ color:T.text3, fontSize:10 }}>{fmt(h.data)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── CQ TAB — Fichas de Análise ─────────────────────────────────────────────── */
+const ENSAIOS_PADRAO = {
+  "Matéria-prima (pó)": [
+    { nome:"Aspecto",              metodo:"Visual",          unidade:"—",   tipo:"texto",    espec:"Conforme padrão" },
+    { nome:"Cor",                  metodo:"Visual",          unidade:"—",   tipo:"texto",    espec:"Conforme padrão" },
+    { nome:"Odor",                 metodo:"Organoléptico",   unidade:"—",   tipo:"texto",    espec:"Característico" },
+    { nome:"pH (solução 1%)",      metodo:"pHmetro",         unidade:"pH",  tipo:"numero",   espec:"5,0 – 7,0",  min:5.0, max:7.0 },
+    { nome:"Umidade",              metodo:"Karl Fischer / IV",unidade:"%",  tipo:"numero",   espec:"≤ 5,0%",     min:0,   max:5.0 },
+    { nome:"Densidade aparente",   metodo:"Proveta graduada",unidade:"g/mL",tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Densidade compactada", metodo:"Proveta graduada",unidade:"g/mL",tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Granulometria",        metodo:"Tamises",         unidade:"%",   tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Identificação (CCD)",  metodo:"CCD / FTIR",      unidade:"—",   tipo:"conforme", espec:"Positivo" },
+    { nome:"Metais pesados",       metodo:"ICP-MS",          unidade:"ppm", tipo:"numero",   espec:"≤ 10 ppm",   min:0,   max:10 },
+  ],
+  "Embalagem primária": [
+    { nome:"Aspecto visual",       metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Sem defeitos" },
+    { nome:"Dimensões (altura)",   metodo:"Paquímetro",      unidade:"mm",  tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Dimensões (diâmetro)", metodo:"Paquímetro",      unidade:"mm",  tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Vedação / fechamento", metodo:"Teste de torque", unidade:"N.m", tipo:"conforme", espec:"Sem vazamento" },
+    { nome:"Impressão / gravação", metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Legível e correto" },
+  ],
+  "Embalagem secundária": [
+    { nome:"Aspecto visual",       metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Sem defeitos" },
+    { nome:"Impressão / texto",    metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Conforme aprovado" },
+    { nome:"Dimensões",            metodo:"Paquímetro",      unidade:"mm",  tipo:"conforme", espec:"Conforme EI" },
+    { nome:"Código de barras",     metodo:"Leitor",          unidade:"—",   tipo:"conforme", espec:"Leitura correta" },
+  ],
+  "Cápsula vazia": [
+    { nome:"Aspecto visual",       metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Sem defeitos" },
+    { nome:"Peso médio",           metodo:"Balança analítica",unidade:"mg", tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Umidade",              metodo:"Karl Fischer",    unidade:"%",   tipo:"numero",   espec:"12,0 – 16,0", min:12.0,max:16.0 },
+    { nome:"Dimensões",            metodo:"Paquímetro",      unidade:"mm",  tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Desintegração",        metodo:"Desintegrador",   unidade:"min", tipo:"numero",   espec:"≤ 15 min",    min:0,   max:15 },
+  ],
+  "Produto acabado": [
+    { nome:"Aspecto",              metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Conforme padrão" },
+    { nome:"Peso médio",           metodo:"Balança analítica",unidade:"mg", tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Variação de peso",     metodo:"Balança analítica",unidade:"%",  tipo:"numero",   espec:"≤ 5,0%",      min:0,   max:5.0 },
+    { nome:"Desintegração",        metodo:"Desintegrador",   unidade:"min", tipo:"numero",   espec:"≤ 30 min",    min:0,   max:30 },
+    { nome:"Dureza",               metodo:"Durômetro",       unidade:"N",   tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Friabilidade",         metodo:"Friabilômetro",   unidade:"%",   tipo:"numero",   espec:"≤ 1,0%",      min:0,   max:1.0 },
+    { nome:"Identificação (HPLC)", metodo:"HPLC",            unidade:"—",   tipo:"conforme", espec:"Positivo" },
+    { nome:"Doseamento (HPLC)",    metodo:"HPLC",            unidade:"%",   tipo:"numero",   espec:"90,0 – 110,0",min:90,  max:110 },
+  ],
+};
+
+function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
+  const T = useTheme(); const s = useS();
+  const CQ_KEY = "herbamed_cq_fichas_v1";
+  const [fichas, setFichas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("lista"); // lista | nova | detalhe
+  const [selFicha, setSelFicha] = useState(null);
+
+  // Form nova ficha
+  const [form, setForm] = useState({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
+  const [ensaios, setEnsaios] = useState([]);
+  const [coa, setCoa] = useState(null);
+  const [coaUploading, setCoaUploading] = useState(false);
+  const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{
+    window.storage?.get(CQ_KEY, true).then(r=>{
+      if(r) setFichas(JSON.parse(r.value));
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const saveFichas = async (list) => {
+    setFichas(list);
+    try{ await window.storage?.set(CQ_KEY, JSON.stringify(list), true); }catch{}
+  };
+
+  const aplicarEnsaiosPadrao = (tipo) => {
+    const lista = ENSAIOS_PADRAO[tipo] || [];
+    setEnsaios(lista.map((e,i)=>({ ...e, id:i, resultado:"", conforme:null, obs:"" })));
+  };
+
+  const updEnsaio = (id, k, v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
+
+  // Verificar conformidade automática para numérico
+  const checkConf = (ensaio) => {
+    if(ensaio.tipo==="conforme") return ensaio.conforme;
+    if(ensaio.tipo==="numero") {
+      const v = parseFloat(ensaio.resultado);
+      if(isNaN(v)) return null;
+      if(ensaio.min!==null && v < ensaio.min) return false;
+      if(ensaio.max!==null && v > ensaio.max) return false;
+      return true;
+    }
+    return ensaio.conforme;
+  };
+
+  const uploadCOA = async (file) => {
+    if(!file) return;
+    setCoaUploading(true);
+    try {
+      const result = await uploadToCloudinary(file);
+      setCoa(result);
+      toast_("COA anexado com sucesso!", "green");
+    } catch { toast_("Erro ao enviar COA.", "red"); }
+    setCoaUploading(false);
+  };
+
+  const conclusao = () => {
+    if(ensaios.length===0) return null;
+    const confs = ensaios.map(checkConf);
+    if(confs.some(c=>c===false)) return "Reprovado";
+    if(confs.some(c=>c===null)) return "Pendente";
+    return "Aprovado";
+  };
+
+  const salvarFicha = async () => {
+    if(!form.material.trim()) { alert("Informe o material."); return; }
+    const conc = conclusao();
+    const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
+    const ficha = { id:Date.now(), num, ...form, ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    await saveFichas([ficha, ...fichas]);
+    toast_(`${num} salva com sucesso!`, "green");
+    // Se reprovado, oferecer abrir RNC
+    if(conc==="Reprovado") {
+      if(confirm(`Material REPROVADO! Deseja abrir uma RNC automaticamente?`)) {
+        setTab("nova");
+      }
+    }
+    setView("lista");
+    setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
+    setEnsaios([]); setCoa(null);
+  };
+
+  const delFicha = async (id) => {
+    if(!confirm("Excluir esta ficha?")) return;
+    await saveFichas(fichas.filter(x=>x.id!==id));
+    setSelFicha(null); setView("lista");
+    toast_("Ficha excluída.", "red");
+  };
+
+  const exportRA = (ficha) => {
+    const conc = ficha.conclusao;
+    const concColor = conc==="Aprovado"?"#1a7a3c":conc==="Reprovado"?"#cc2244":"#8a6000";
+    const win = window.open("","_blank");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/>
+<title>${ficha.num} — Herbamed®</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;padding:0;}
+  .page{width:210mm;padding:14mm;margin:0 auto;}
+  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:16px;}
+  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;}
+  .ra-num{font-size:18px;font-weight:700;color:#1a7a3c;text-align:right;}
+  .section{margin-bottom:16px;}
+  .section-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:6px;}
+  .section-title::before{content:'';display:inline-block;width:3px;height:11px;background:#1a7a3c;border-radius:2px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 9px;}
+  .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:2px;}
+  .field-value{font-size:12px;color:#1a1a1a;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f0f4f0;color:#333;font-weight:700;padding:7px 8px;text-align:left;border:1px solid #ddd;}
+  td{padding:6px 8px;border:1px solid #eee;vertical-align:middle;}
+  tr:nth-child(even)td{background:#f9fafb;}
+  .conf{color:#1a7a3c;font-weight:700;}
+  .nconf{color:#cc2244;font-weight:700;}
+  .pend{color:#8a6000;font-weight:700;}
+  .conclusao{padding:14px;border-radius:8px;text-align:center;font-size:16px;font-weight:800;background:${concColor}15;border:2px solid ${concColor};color:${concColor};margin:16px 0;}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
+  @media print{body{background:#fff!important;}}
+</style></head><body><div class="page">
+<div class="header">
+  <div><div class="logo">🌿 HERBAMED®</div><div style="font-size:10px;color:#666;">Relatório de Análise — Controle de Qualidade</div></div>
+  <div><div class="ra-num">${ficha.num}</div><div style="font-size:11px;color:#666;text-align:right;">Data: ${fmt(ficha.dataAnalise)}</div></div>
+</div>
+<div class="section">
+  <div class="section-title">Identificação do Material</div>
+  <div class="grid3">
+    <div class="field"><div class="field-label">Material</div><div class="field-value">${ficha.material}</div></div>
+    <div class="field"><div class="field-label">Tipo</div><div class="field-value">${ficha.tipoPadrao}</div></div>
+    <div class="field"><div class="field-label">Fornecedor</div><div class="field-value">${ficha.fornecedor||"—"}</div></div>
+    <div class="field"><div class="field-label">Nº do Lote</div><div class="field-value">${ficha.lote||"—"}</div></div>
+    <div class="field"><div class="field-label">Qtd. Recebida</div><div class="field-value">${ficha.qtdRecebida||"—"}</div></div>
+    <div class="field"><div class="field-label">Nota Fiscal</div><div class="field-value">${ficha.nf||"—"}</div></div>
+    <div class="field"><div class="field-label">Data Recebimento</div><div class="field-value">${fmt(ficha.dataRecebimento)}</div></div>
+    <div class="field"><div class="field-label">Data Análise</div><div class="field-value">${fmt(ficha.dataAnalise)}</div></div>
+    <div class="field"><div class="field-label">Analista</div><div class="field-value">${ficha.resp}</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="section-title">Resultados das Análises</div>
+  <table>
+    <thead><tr><th>Ensaio</th><th>Método</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Situação</th><th>Obs.</th></tr></thead>
+    <tbody>
+      ${ficha.ensaios.map(e=>{
+        const c = e.tipo==="numero"?(parseFloat(e.resultado)>=(e.min??-Infinity)&&parseFloat(e.resultado)<=(e.max??Infinity)?true:false):e.conforme;
+        const sit = c===true?'<span class="conf">✓ Conforme</span>':c===false?'<span class="nconf">✗ Não conforme</span>':'<span class="pend">— Pendente</span>';
+        return `<tr><td><strong>${e.nome}</strong></td><td>${e.metodo}</td><td>${e.espec}</td><td>${e.resultado||"—"}</td><td>${e.unidade}</td><td>${sit}</td><td>${e.obs||""}</td></tr>`;
+      }).join("")}
+    </tbody>
+  </table>
+</div>
+<div class="conclusao">
+  ${conc==="Aprovado"?"✅ APROVADO":conc==="Reprovado"?"❌ REPROVADO":"⏳ ANÁLISE PENDENTE"}
+</div>
+${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor disponível em: <a href="${ficha.coa.url}" target="_blank">${ficha.coa.name}</a></p></div>`:""}
+<div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
+  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">${ficha.resp}<br/>Analista de Controle de Qualidade</div></div>
+  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
+</div>
+<div class="footer">
+  <div>Herbamed® · Controle de Qualidade · ${ficha.num}</div>
+  <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
+</div>
+</div><script>window.onload=()=>window.print();</script></body></html>`;
+    win.document.write(html);
+    win.document.close();
+  };
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+
+  // ── NOVA FICHA ──
+  if(view==="nova") {
+    const conc = conclusao();
+    return (
+      <div>
+        <div style={{ display:"flex", gap:10, marginBottom:"1rem", alignItems:"center" }}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Nova Ficha de Análise</div>
+        </div>
+
+        {/* Dados do recebimento */}
+        <div style={s.card}>
+          <SecTitle icon="📦" ch="Dados do recebimento" />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+            <F lbl="Material / Produto *" ch={<Inp placeholder="Ex: Psyllium em pó" value={form.material} onChange={e=>setF("material",e.target.value)} />} />
+            <F lbl="Tipo de material" ch={
+              <Sel value={form.tipoPadrao} onChange={e=>{ setF("tipoPadrao",e.target.value); aplicarEnsaiosPadrao(e.target.value); }}>
+                {Object.keys(ENSAIOS_PADRAO).map(t=><option key={t}>{t}</option>)}
+              </Sel>
+            }/>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <F lbl="Fornecedor" ch={
+              <Sel value={form.fornecedor} onChange={e=>setF("fornecedor",e.target.value)}>
+                <option value="">Selecionar...</option>
+                {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
+                <option value="__outro">Outro (digitar)</option>
+              </Sel>
+            }/>
+            {form.fornecedor==="__outro" && <F lbl="Nome do fornecedor" ch={<Inp value={form.fornecedorManual||""} onChange={e=>setF("fornecedorManual",e.target.value)} />} />}
+            <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
+            <F lbl="Qtd. recebida" ch={<Inp placeholder="Ex: 25 kg" value={form.qtdRecebida} onChange={e=>setF("qtdRecebida",e.target.value)} />} />
+            <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
+            <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
+            <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
+            <F lbl="Analista responsável" ch={<Inp value={form.resp} onChange={e=>setF("resp",e.target.value)} />} />
+          </div>
+        </div>
+
+        {/* Ensaios */}
+        <div style={s.card}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+            <SecTitle icon="🔬" ch="Ensaios / Resultados" />
+            <button style={s.btn} onClick={()=>aplicarEnsaiosPadrao(form.tipoPadrao)}>↺ Recarregar padrão</button>
+          </div>
+
+          {ensaios.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"2rem", color:T.text3, fontSize:13 }}>
+              Selecione o tipo de material acima para carregar os ensaios padrão
+            </div>
+          ) : (
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead>
+                  <tr style={{ background:T.surf }}>
+                    {["Ensaio","Método","Especificação","Resultado","Un.","Situação","Obs."].map(h=>(
+                      <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ensaios.map((e,i)=>{
+                    const c = checkConf(e);
+                    return (
+                      <tr key={e.id} style={{ background:i%2===0?T.card:T.surf }}>
+                        <td style={{ padding:"8px 10px", fontSize:12, fontWeight:600, color:T.text, whiteSpace:"nowrap" }}>{e.nome}</td>
+                        <td style={{ padding:"8px 10px", fontSize:11, color:T.text2 }}>{e.metodo}</td>
+                        <td style={{ padding:"8px 10px", fontSize:11, color:T.text2 }}>{e.espec}</td>
+                        <td style={{ padding:"8px 8px" }}>
+                          {e.tipo==="conforme" ? (
+                            <div style={{ display:"flex", gap:4 }}>
+                              <button onClick={()=>updEnsaio(e.id,"conforme",true)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${e.conforme===true?"#2ab84a55":T.border}`, background:e.conforme===true?"#2ab84a22":"transparent", color:e.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓ Conf.</button>
+                              <button onClick={()=>updEnsaio(e.id,"conforme",false)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${e.conforme===false?"#ff4f6a55":T.border}`, background:e.conforme===false?"#ff4f6a22":"transparent", color:e.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗ N.C.</button>
+                            </div>
+                          ) : (
+                            <Inp type="number" placeholder="0.0" value={e.resultado} onChange={ev=>updEnsaio(e.id,"resultado",ev.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:90 }}/>
+                          )}
+                        </td>
+                        <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{e.unidade}</td>
+                        <td style={{ padding:"8px 8px" }}>
+                          {c===true?<span style={{ color:"#2ab84a", fontWeight:700, fontSize:11 }}>✓ Conf.</span>:c===false?<span style={{ color:"#ff4f6a", fontWeight:700, fontSize:11 }}>✗ N.C.</span>:<span style={{ color:T.text3, fontSize:11 }}>—</span>}
+                        </td>
+                        <td style={{ padding:"8px 8px" }}>
+                          <Inp placeholder="obs..." value={e.obs||""} onChange={ev=>updEnsaio(e.id,"obs",ev.target.value)} sx={{ padding:"4px 6px", fontSize:11, width:100 }}/>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Conclusão em tempo real */}
+          {ensaios.length > 0 && conc && (
+            <div style={{ marginTop:"1rem", padding:"12px 16px", borderRadius:10, background:conc==="Aprovado"?"#2ab84a18":conc==="Reprovado"?"#ff4f6a18":"#ffd16618", border:`1px solid ${conc==="Aprovado"?"#2ab84a33":conc==="Reprovado"?"#ff4f6a33":"#ffd16633"}`, fontSize:14, fontWeight:700, color:conc==="Aprovado"?"#2ab84a":conc==="Reprovado"?"#ff4f6a":"#8a6000", textAlign:"center" }}>
+              {conc==="Aprovado"?"✅ APROVADO — Todos os ensaios dentro da especificação":conc==="Reprovado"?"❌ REPROVADO — Um ou mais ensaios fora da especificação":"⏳ ANÁLISE PENDENTE — Preencha todos os resultados"}
+            </div>
+          )}
+        </div>
+
+        {/* COA do fornecedor */}
+        <div style={s.card}>
+          <SecTitle icon="📄" ch="COA do fornecedor (Laudo / Certificado de Análise)" />
+          {coa ? (
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+              <span style={{ fontSize:24 }}>📄</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{coa.name}</div>
+                <div style={{ fontSize:11, color:T.text3 }}>{coa.size ? (coa.size/1024).toFixed(1)+" KB" : ""}</div>
+              </div>
+              <a href={coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver</a>
+              <button style={s.btnD} onClick={()=>setCoa(null)}>✕</button>
+            </div>
+          ) : (
+            <div style={{ border:`2px dashed ${T.border2}`, borderRadius:10, padding:"1.5rem", textAlign:"center", cursor:"pointer" }} onClick={()=>document.getElementById("coa-input").click()}>
+              <div style={{ fontSize:28, marginBottom:6 }}>📎</div>
+              <div style={{ fontSize:13, color:T.text2 }}>{coaUploading?"Enviando...":"Clique para anexar o COA do fornecedor"}</div>
+              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>PDF, imagem — até 10MB</div>
+              <input id="coa-input" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e=>uploadCOA(e.target.files[0])} />
+            </div>
+          )}
+        </div>
+
+        {/* Botões */}
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem" }}>
+          <button style={s.btn} onClick={()=>setView("lista")}>Cancelar</button>
+          <button style={s.btnA} onClick={salvarFicha}>💾 Salvar ficha de análise →</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── LISTA ──
+  return (
+    <div>
+      <div style={{ display:"flex", gap:10, marginBottom:"1rem", alignItems:"center" }}>
+        <div style={{ fontSize:13, color:T.text2, flex:1 }}>{fichas.length} ficha(s) de análise registrada(s)</div>
+        <button style={s.btnA} onClick={()=>{ setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name }); aplicarEnsaiosPadrao("Matéria-prima (pó)"); setView("nova"); }}>+ Nova Ficha de Análise</button>
+      </div>
+
+      {fichas.length === 0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
+          <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🧪</div>
+          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhuma ficha de análise registrada</div>
+          <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Nova Ficha de Análise" para começar</div>
+        </div>
+      ) : (
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:T.surf }}>
+                {["Nº RA","Material","Fornecedor","Lote","Data Análise","Analista","Conclusão",""].map(h=>(
+                  <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fichas.map((f,idx)=>{
+                const cc = f.conclusao;
+                const cColor = cc==="Aprovado"?"#2ab84a":cc==="Reprovado"?"#ff4f6a":"#ffd166";
+                return (
+                  <tr key={f.id} style={{ background:idx%2===0?T.card:T.surf, cursor:"pointer" }} onClick={()=>setSelFicha(f)}>
+                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:T.accent }}>{f.num}</td>
+                    <td style={{ padding:"10px 12px", fontSize:13, color:T.text }}>{f.material}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{f.fornecedor||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{f.lote||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{fmt(f.dataAnalise)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{f.resp}</td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:cColor, background:`${cColor}18`, padding:"3px 10px", borderRadius:20 }}>
+                        {cc==="Aprovado"?"✅ Aprovado":cc==="Reprovado"?"❌ Reprovado":"⏳ Pendente"}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 8px", display:"flex", gap:4 }}>
+                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11 }} onClick={e=>{e.stopPropagation();exportRA(f);}}>📄 PDF</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal detalhe */}
+      {selFicha && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.82)", backdropFilter:"blur(6px)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }} onClick={e=>e.target===e.currentTarget&&setSelFicha(null)}>
+          <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"1.75rem", maxWidth:760, width:"100%", maxHeight:"90vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
+              <div>
+                <div style={{ fontSize:20, fontWeight:700 }}>{selFicha.num}</div>
+                <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selFicha.material} · {selFicha.fornecedor||"—"} · {fmt(selFicha.dataAnalise)}</div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selFicha)}>📄 Exportar PDF</button>
+                <button style={s.btnD} onClick={()=>delFicha(selFicha.id)}>🗑️</button>
+                <button onClick={()=>setSelFicha(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
+              </div>
+            </div>
+            {/* Ensaios */}
+            <div style={{ overflowX:"auto", marginBottom:"1rem" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:T.surf }}>
+                  {["Ensaio","Especificação","Resultado","Un.","Situação"].map(h=><th key={h} style={{ padding:"7px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}` }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {selFicha.ensaios.map((e,i)=>{
+                    const c=e.tipo==="numero"?(parseFloat(e.resultado)>=(e.min??-Infinity)&&parseFloat(e.resultado)<=(e.max??Infinity)?true:false):e.conforme;
+                    return <tr key={i} style={{ background:i%2===0?T.card:T.surf }}>
+                      <td style={{ padding:"7px 10px", fontSize:12, fontWeight:600 }}>{e.nome}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:T.text2 }}>{e.espec}</td>
+                      <td style={{ padding:"7px 10px", fontSize:12 }}>{e.resultado||"—"}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:T.text3 }}>{e.unidade}</td>
+                      <td style={{ padding:"7px 10px" }}>{c===true?<span style={{ color:"#2ab84a", fontWeight:700 }}>✓ Conforme</span>:c===false?<span style={{ color:"#ff4f6a", fontWeight:700 }}>✗ N.C.</span>:<span style={{ color:T.text3 }}>—</span>}</td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {selFicha.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:20 }}>📄</span>
+              <span style={{ fontSize:13, color:T.text }}>COA: {selFicha.coa.name}</span>
+              <a href={selFicha.coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver COA</a>
+            </div>}
+            <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
+              {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
+            </div>
           </div>
         </div>
       )}
