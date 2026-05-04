@@ -755,8 +755,8 @@ function Login({ onLogin }) {
 
 /* ─── SIDEBAR NAV ────────────────────────────────────────────────────────────── */
 function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
-  const [open, setOpen] = useState(defaultOpen);
   const grupoAtivo = grupo.items.some(i => i.id === tab);
+  const [open, setOpen] = useState(() => defaultOpen);
   const grupoBadge = grupo.items.reduce((s,i) => s + (i.badge||0), 0);
 
   return (
@@ -849,6 +849,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -1016,8 +1017,6 @@ export default function App() {
     auditorias: "Auditorias Internas",
     admin: "Administração",
   };
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <ThemeCtx.Provider value={T}>
