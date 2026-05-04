@@ -1846,9 +1846,14 @@ async function uploadToCloudinary(file) {
 // Helper para abrir COA — corrige URL do Cloudinary para PDFs
 function openCOA(coa) {
   if (!coa?.url) return;
-  // Remove fl_inline se existir (causava erro 400 no Cloudinary plano gratuito)
+  // Remove fl_inline se existir em URLs antigas
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
-  window.open(url, "_blank", "noopener,noreferrer");
+  // PDFs — usar Google Docs Viewer para garantir abertura no navegador
+  if (coa.type === "application/pdf" || url.toLowerCase().includes(".pdf")) {
+    window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`, "_blank", "noopener,noreferrer");
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }
 
 function AnexosUpload({ anexos, setAnexos }) {
