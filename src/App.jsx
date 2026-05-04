@@ -863,7 +863,9 @@ export default function App() {
     { id: "cep",         icon: "📉", label: "CEP" },
     { id: "fornecedores",icon: "🏭", label: "Fornecedores" },
     { id: "nqa",         icon: "📐", label: "NQA / AQL" },
-    { id: "cq",          icon: "🧪", label: "Controle de Qualidade" },
+    { id: "cq-materiais",icon: "🧪", label: "CQ — Materiais" },
+    { id: "cq-analises", icon: "📋", label: "CQ — Análises" },
+    { id: "auditorias",  icon: "🔍", label: "Auditorias" },
     ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
 
@@ -876,7 +878,9 @@ export default function App() {
     cep: "CEP — Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
     nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
-    cq: "Controle de Qualidade — Fichas de Análise",
+    "cq-materiais": "CQ — Cadastro de Materiais",
+    "cq-analises": "CQ — Fichas de Análise",
+    auditorias: "Auditorias Internas",
     admin: "Administração",
   };
 
@@ -1046,10 +1050,13 @@ export default function App() {
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
-              {tab==="fornecedores" && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} />}
-              {tab==="nqa"         && <NQATab user={user} toast_={toast_} />}
-              {tab==="cq"          && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
-              {tab==="admin"       && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} />}
+              {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
+              {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
+              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} />}
+              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} />}
+              {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
           </div>
         </div>
@@ -4198,6 +4205,824 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── CQ — ENSAIOS SUGERIDOS POR TIPO ───────────────────────────────────────── */
+const ENSAIOS_SUGERIDOS = {
+  "Matéria-prima (pó/granulado)": [
+    { nome:"Aspecto",               espec:"Conforme padrão",      unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",      unidade:"—" },
+    { nome:"Odor",                  espec:"Característico",       unidade:"—" },
+    { nome:"pH (solução 1%)",       espec:"",                     unidade:"pH" },
+    { nome:"Umidade",               espec:"",                     unidade:"%" },
+    { nome:"Densidade aparente",    espec:"",                     unidade:"g/mL" },
+    { nome:"Densidade compactada",  espec:"",                     unidade:"g/mL" },
+    { nome:"Granulometria",         espec:"",                     unidade:"%" },
+    { nome:"Identificação",         espec:"Positivo",             unidade:"—" },
+    { nome:"Contagem microbiana",   espec:"",                     unidade:"UFC/g" },
+  ],
+  "Matéria-prima (óleo/líquido)": [
+    { nome:"Aspecto",               espec:"Límpido, sem partículas", unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",         unidade:"—" },
+    { nome:"Odor",                  espec:"Característico",          unidade:"—" },
+    { nome:"Densidade",             espec:"",                        unidade:"g/mL" },
+    { nome:"Viscosidade",           espec:"",                        unidade:"cP" },
+    { nome:"pH",                    espec:"",                        unidade:"pH" },
+    { nome:"Índice de acidez",      espec:"",                        unidade:"mg KOH/g" },
+    { nome:"Índice de refração",    espec:"",                        unidade:"—" },
+    { nome:"Identificação",         espec:"Positivo",                unidade:"—" },
+    { nome:"Contagem microbiana",   espec:"",                        unidade:"UFC/mL" },
+  ],
+  "Cápsula vazia": [
+    { nome:"Aspecto visual",        espec:"Sem defeitos, sem deformações", unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",               unidade:"—" },
+    { nome:"Comprimento",           espec:"",                              unidade:"mm" },
+    { nome:"Diâmetro",              espec:"",                              unidade:"mm" },
+    { nome:"Peso médio",            espec:"",                              unidade:"mg" },
+    { nome:"Umidade",               espec:"12,0 – 16,0",                  unidade:"%" },
+    { nome:"Desintegração",         espec:"≤ 15 min",                     unidade:"min" },
+  ],
+  "Embalagem — Pote (plástico/vidro)": [
+    { nome:"Aspecto visual",        espec:"Sem trincas, deformações ou manchas", unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",                     unidade:"—" },
+    { nome:"Altura",                espec:"",                                    unidade:"mm" },
+    { nome:"Diâmetro externo",      espec:"",                                    unidade:"mm" },
+    { nome:"Diâmetro da boca",      espec:"",                                    unidade:"mm" },
+    { nome:"Peso",                  espec:"",                                    unidade:"g" },
+    { nome:"Capacidade volumétrica",espec:"",                                    unidade:"mL" },
+    { nome:"Vedação / Torque",      espec:"Sem vazamento",                       unidade:"N.m" },
+    { nome:"Impressão / Gravação",  espec:"Legível e conforme",                  unidade:"—" },
+  ],
+  "Embalagem — Tampa": [
+    { nome:"Aspecto visual",        espec:"Sem defeitos",          unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",       unidade:"—" },
+    { nome:"Diâmetro interno",      espec:"",                      unidade:"mm" },
+    { nome:"Altura",                espec:"",                      unidade:"mm" },
+    { nome:"Torque de fechamento",  espec:"",                      unidade:"N.m" },
+    { nome:"Vedação",               espec:"Sem vazamento",         unidade:"—" },
+  ],
+  "Embalagem — Caixa de papelão / Cartucho": [
+    { nome:"Aspecto visual",        espec:"Sem manchas, rasgos ou defeitos", unidade:"—" },
+    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",          unidade:"—" },
+    { nome:"Código de barras",      espec:"Leitura correta",                 unidade:"—" },
+    { nome:"Altura",                espec:"",                                unidade:"mm" },
+    { nome:"Largura",               espec:"",                                unidade:"mm" },
+    { nome:"Profundidade",          espec:"",                                unidade:"mm" },
+    { nome:"Gramatura",             espec:"",                                unidade:"g/m²" },
+    { nome:"Espessura",             espec:"",                                unidade:"mm" },
+    { nome:"Resistência",           espec:"Conforme especificação",          unidade:"—" },
+  ],
+  "Embalagem — Rótulo": [
+    { nome:"Aspecto visual",        espec:"Sem defeitos de impressão",  unidade:"—" },
+    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",     unidade:"—" },
+    { nome:"Código de barras",      espec:"Leitura correta",            unidade:"—" },
+    { nome:"Altura",                espec:"",                           unidade:"mm" },
+    { nome:"Largura",               espec:"",                           unidade:"mm" },
+    { nome:"Gramatura",             espec:"",                           unidade:"g/m²" },
+    { nome:"Aderência",             espec:"Sem descolamento",           unidade:"—" },
+    { nome:"Cor (CMYK)",            espec:"Conforme aprovado",          unidade:"—" },
+  ],
+  "Embalagem — Filme de sachê": [
+    { nome:"Aspecto visual",        espec:"Sem furos, rasgos ou contaminação", unidade:"—" },
+    { nome:"Impressão",             espec:"Conforme arte aprovada",            unidade:"—" },
+    { nome:"Largura",               espec:"",                                  unidade:"mm" },
+    { nome:"Espessura",             espec:"",                                  unidade:"µm" },
+    { nome:"Gramatura",             espec:"",                                  unidade:"g/m²" },
+    { nome:"Resistência ao calor",  espec:"Selagem íntegra",                   unidade:"—" },
+    { nome:"Resistência ao rasgo",  espec:"",                                  unidade:"N" },
+  ],
+  "Produto acabado (cápsula/comprimido)": [
+    { nome:"Aspecto",               espec:"Conforme padrão", unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão", unidade:"—" },
+    { nome:"Peso médio",            espec:"",                unidade:"mg" },
+    { nome:"Variação de peso",      espec:"≤ 5,0%",         unidade:"%" },
+    { nome:"Desintegração",         espec:"≤ 30 min",        unidade:"min" },
+    { nome:"Dureza",                espec:"",                unidade:"N" },
+    { nome:"Friabilidade",          espec:"≤ 1,0%",         unidade:"%" },
+    { nome:"Doseamento",            espec:"",                unidade:"%" },
+  ],
+  "Produto acabado (sachê/pó)": [
+    { nome:"Aspecto",               espec:"Conforme padrão",    unidade:"—" },
+    { nome:"Cor",                   espec:"Conforme padrão",    unidade:"—" },
+    { nome:"Odor",                  espec:"Característico",     unidade:"—" },
+    { nome:"Peso médio",            espec:"",                   unidade:"g" },
+    { nome:"Variação de peso",      espec:"≤ 5,0%",            unidade:"%" },
+    { nome:"pH",                    espec:"",                   unidade:"pH" },
+    { nome:"Umidade",               espec:"",                   unidade:"%" },
+    { nome:"Vedação da embalagem",  espec:"Sem vazamento",      unidade:"—" },
+  ],
+};
+
+/* ─── CQ MATERIAIS TAB ───────────────────────────────────────────────────────── */
+function CQMateriaisTab({ user, toast_, fornecedores }) {
+  const T = useTheme(); const s = useS();
+  const [materiais, setMateriais] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("lista"); // lista | novo | editar
+  const [sel, setSel] = useState(null);
+  const [form, setForm] = useState({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
+  const [ensaios, setEnsaios] = useState([]);
+  const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{
+    const unsub = subscribeCollection("cq_materiais", list=>{
+      setMateriais(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
+      setLoading(false);
+    });
+    const t = setTimeout(()=>setLoading(false), 3000);
+    return ()=>{ unsub(); clearTimeout(t); };
+  },[]);
+
+  const aplicarSugestoes = (tipo) => {
+    const sugs = ENSAIOS_SUGERIDOS[tipo] || [];
+    setEnsaios(sugs.map((e,i)=>({ id:i+1, ...e, ref:"" })));
+  };
+
+  const addEnsaio = () => setEnsaios(p=>[...p, { id:Date.now(), nome:"", espec:"", unidade:"", ref:"" }]);
+  const updEnsaio = (id,k,v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
+  const delEnsaio = (id) => setEnsaios(p=>p.filter(e=>e.id!==id));
+
+  const salvar = async () => {
+    if(!form.nome.trim()) { alert("Nome é obrigatório."); return; }
+    if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
+    const id = sel ? String(sel.id) : String(Date.now());
+    const material = { id, ...form, ensaios, criadoPor:user.name, criadoEm:tod(), atualizadoEm:tod() };
+    await saveCollection("cq_materiais", id, material);
+    toast_(sel?"Material atualizado!":"Material cadastrado!", "green");
+    setView("lista"); setSel(null);
+    setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
+    setEnsaios([]);
+  };
+
+  const editarMaterial = (m) => {
+    setSel(m);
+    setForm({ nome:m.nome, tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
+    setEnsaios(m.ensaios||[]);
+    setView("editar");
+  };
+
+  const delMaterial = async (id) => {
+    if(!confirm("Excluir este material e todos os seus ensaios?")) return;
+    await deleteFromCollection("cq_materiais", String(id));
+    toast_("Material excluído.", "red");
+  };
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+
+  if(view==="lista") return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+        <div style={{ fontSize:13, color:T.text2 }}>{materiais.length} material(is) cadastrado(s)</div>
+        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setSel(null); setView("novo"); }}>+ Novo Material</button>
+      </div>
+
+      {materiais.length===0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
+          <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🧪</div>
+          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhum material cadastrado</div>
+          <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Novo Material" para começar</div>
+        </div>
+      ) : (
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:T.surf }}>
+              {["Material","Tipo","Fornecedor padrão","Ensaios","Referência",""].map(h=>(
+                <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {materiais.map((m,i)=>(
+                <tr key={m.id} style={{ background:i%2===0?T.card:T.surf }}>
+                  <td style={{ padding:"10px 12px", fontSize:13, fontWeight:600, color:T.text }}>{m.nome}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.tipo}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.fornecedorPadrao||"—"}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:T.accent, fontWeight:700 }}>{m.ensaios?.length||0}</td>
+                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.ref||"—"}</td>
+                  <td style={{ padding:"10px 8px", display:"flex", gap:6 }}>
+                    <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}>✏️ Editar</button>
+                    <button style={{ ...s.btnD, padding:"4px 10px", fontSize:11 }} onClick={()=>delMaterial(m.id)}>🗑️</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  // Formulário novo/editar
+  return (
+    <div>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>← Voltar</button>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text }}>{sel?"Editar material":"Novo material"}</div>
+      </div>
+
+      {/* Dados gerais */}
+      <div style={s.card}>
+        <SecTitle icon="📦" ch="Dados do material" />
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <F lbl="Nome do material *" ch={<Inp placeholder="Ex: Psyllium em pó" value={form.nome} onChange={e=>setF("nome",e.target.value)} />} />
+          <F lbl="Tipo de material" ch={
+            <Sel value={form.tipo} onChange={e=>{ setF("tipo",e.target.value); if(!sel) aplicarSugestoes(e.target.value); }}>
+              {Object.keys(ENSAIOS_SUGERIDOS).map(t=><option key={t}>{t}</option>)}
+            </Sel>
+          }/>
+          <F lbl="Fornecedor padrão" ch={
+            <Sel value={form.fornecedorPadrao} onChange={e=>setF("fornecedorPadrao",e.target.value)}>
+              <option value="">Selecionar...</option>
+              {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
+              <option value="Vários">Vários fornecedores</option>
+            </Sel>
+          }/>
+          <F lbl="Referência / Especificação interna" ch={<Inp placeholder="Ex: EI-MP-001, Farmacopeia Brasileira" value={form.ref} onChange={e=>setF("ref",e.target.value)} />} />
+        </div>
+        <F lbl="Observações" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Informações adicionais sobre o material..." />} />
+      </div>
+
+      {/* Ensaios */}
+      <div style={s.card}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <SecTitle icon="🔬" ch={`Ensaios (${ensaios.length})`} />
+          <div style={{ display:"flex", gap:8 }}>
+            <button style={s.btn} onClick={()=>aplicarSugestoes(form.tipo)}>↺ Recarregar sugestões</button>
+            <button style={s.btnA} onClick={addEnsaio}>+ Adicionar ensaio</button>
+          </div>
+        </div>
+
+        {ensaios.length===0 ? (
+          <div style={{ textAlign:"center", padding:"2rem", color:T.text3, fontSize:13 }}>
+            Selecione o tipo acima para carregar sugestões ou adicione manualmente
+          </div>
+        ) : (
+          <div>
+            {/* Header */}
+            <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 40px", gap:8, padding:"6px 8px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>
+              <span>Ensaio *</span><span>Especificação</span><span>Unidade</span><span>Referência</span><span></span>
+            </div>
+            {ensaios.map((e,i)=>(
+              <div key={e.id} style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 40px", gap:8, marginBottom:8, alignItems:"center", padding:"8px", background:T.surf, borderRadius:8, border:`1px solid ${T.border}` }}>
+                <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev=>updEnsaio(e.id,"nome",ev.target.value)} sx={{ fontSize:12 }}/>
+                <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
+                <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev=>updEnsaio(e.id,"unidade",ev.target.value)} sx={{ fontSize:12 }}/>
+                <Inp placeholder="Ex: EI-001" value={e.ref||""} onChange={ev=>updEnsaio(e.id,"ref",ev.target.value)} sx={{ fontSize:12 }}/>
+                <button onClick={()=>delEnsaio(e.id)} style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontFamily:"inherit" }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem" }}>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>Cancelar</button>
+        <button style={s.btnA} onClick={salvar}>💾 Salvar material →</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── CQ ANALISES TAB ────────────────────────────────────────────────────────── */
+function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
+  const T = useTheme(); const s = useS();
+  const [materiais, setMateriais] = useState([]);
+  const [analises, setAnalises] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("lista");
+  const [selAnalise, setSelAnalise] = useState(null);
+
+  // Form
+  const [matSel, setMatSel] = useState(null);
+  const [form, setForm] = useState({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
+  const [resultados, setResultados] = useState([]);
+  const [coa, setCoa] = useState(null);
+  const [coaUploading, setCoaUploading] = useState(false);
+  const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{
+    const u1 = subscribeCollection("cq_materiais", list=>{ setMateriais(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||""))); });
+    const u2 = subscribeCollection("cq_analises", list=>{ setAnalises(list.sort((a,b)=>(b.criadoTs||0)-(a.criadoTs||0))); setLoading(false); });
+    const t = setTimeout(()=>setLoading(false), 3000);
+    return ()=>{ u1(); u2(); clearTimeout(t); };
+  },[]);
+
+  const selecionarMaterial = (mat) => {
+    setMatSel(mat);
+    setResultados((mat.ensaios||[]).map(e=>({ ...e, resultado:"", conforme:null, obs:"" })));
+    if(mat.fornecedorPadrao && mat.fornecedorPadrao!=="Vários") setF("fornecedor", mat.fornecedorPadrao);
+  };
+
+  const updRes = (id,k,v) => setResultados(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+
+  const uploadCOA = async (file) => {
+    if(!file) return;
+    setCoaUploading(true);
+    try { const r = await uploadToCloudinary(file); setCoa(r); toast_("COA anexado!", "green"); }
+    catch { toast_("Erro ao enviar COA.", "red"); }
+    setCoaUploading(false);
+  };
+
+  const getNCs = () => resultados.filter(r => r.conforme === false);
+
+  const salvar = async () => {
+    if(!matSel) { alert("Selecione o material."); return; }
+    const ncs = getNCs();
+    if(ncs.length > 0) {
+      const confirma = window.confirm(
+        `⚠️ ATENÇÃO!\n\n${ncs.length} ensaio(s) estão NÃO CONFORMES:\n${ncs.map(n=>`• ${n.nome}: ${n.resultado}`).join("\n")}\n\nDeseja salvar mesmo assim?`
+      );
+      if(!confirma) return;
+    }
+    const reprovado = ncs.length > 0;
+    const num = `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
+    const analise = {
+      id: Date.now(), num,
+      materialId: matSel.id, materialNome: matSel.nome, materialTipo: matSel.tipo,
+      ...form, resultados, coa,
+      conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
+      criadoPor: user.name, criadoEm: tod(), criadoTs: Date.now()
+    };
+    await saveCollection("cq_analises", String(analise.id), analise);
+    toast_(`${num} salva!`, "green");
+    if(reprovado && window.confirm("Material REPROVADO! Deseja abrir uma RNC automaticamente?")) {
+      setTab("nova");
+    }
+    setView("lista");
+    setMatSel(null);
+    setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
+    setResultados([]); setCoa(null);
+  };
+
+  const delAnalise = async (id) => {
+    if(!confirm("Excluir esta análise?")) return;
+    await deleteFromCollection("cq_analises", String(id));
+    setSelAnalise(null); toast_("Análise excluída.", "red");
+  };
+
+  const exportRA = (a) => {
+    const concColor = a.conclusao==="Aprovado"?"#1a7a3c":a.conclusao==="Reprovado"?"#cc2244":"#8a6000";
+    const win = window.open("","_blank");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/>
+<title>${a.num} — Herbamed®</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;}
+  .page{width:210mm;padding:14mm;margin:0 auto;}
+  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:16px;}
+  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;}
+  .section{margin-bottom:16px;}
+  .stitle{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #e0e0e0;padding-bottom:4px;margin-bottom:8px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 9px;}
+  .flabel{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:2px;}
+  table{width:100%;border-collapse:collapse;font-size:11px;}
+  th{background:#f0f4f0;color:#333;font-weight:700;padding:7px 8px;text-align:left;border:1px solid #ddd;}
+  td{padding:6px 8px;border:1px solid #eee;vertical-align:middle;}
+  .conf{color:#1a7a3c;font-weight:700;} .nconf{color:#cc2244;font-weight:700;} .pend{color:#888;}
+  .conclusao{padding:14px;border-radius:8px;text-align:center;font-size:16px;font-weight:800;background:${concColor}15;border:2px solid ${concColor};color:${concColor};margin:16px 0;}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
+  @media print{body{background:#fff!important;}}
+</style></head><body><div class="page">
+<div class="header">
+  <div><div class="logo">🌿 HERBAMED®</div><div style="font-size:10px;color:#666;">Relatório de Análise — Controle de Qualidade</div></div>
+  <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#1a7a3c;">${a.num}</div><div style="font-size:11px;color:#666;">${fmt(a.dataAnalise)}</div></div>
+</div>
+<div class="section">
+  <div class="stitle">Identificação</div>
+  <div class="grid3">
+    <div class="field"><div class="flabel">Material</div><div>${a.materialNome}</div></div>
+    <div class="field"><div class="flabel">Tipo</div><div>${a.materialTipo}</div></div>
+    <div class="field"><div class="flabel">Fornecedor</div><div>${a.fornecedor||"—"}</div></div>
+    <div class="field"><div class="flabel">Lote</div><div>${a.lote||"—"}</div></div>
+    <div class="field"><div class="flabel">Qtd. Recebida</div><div>${a.qtdRecebida||"—"}</div></div>
+    <div class="field"><div class="flabel">Nota Fiscal</div><div>${a.nf||"—"}</div></div>
+    <div class="field"><div class="flabel">Data Recebimento</div><div>${fmt(a.dataRecebimento)}</div></div>
+    <div class="field"><div class="flabel">Data Análise</div><div>${fmt(a.dataAnalise)}</div></div>
+    <div class="field"><div class="flabel">Analista</div><div>${a.resp}</div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="stitle">Resultados das Análises</div>
+  <table>
+    <thead><tr><th>Ensaio</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Referência</th><th>Situação</th></tr></thead>
+    <tbody>
+      ${(a.resultados||[]).map(r=>`<tr>
+        <td><strong>${r.nome}</strong></td>
+        <td>${r.espec||"—"}</td>
+        <td>${r.resultado||"—"}</td>
+        <td>${r.unidade||"—"}</td>
+        <td>${r.ref||"—"}</td>
+        <td>${r.conforme===true?'<span class="conf">✓ Conforme</span>':r.conforme===false?'<span class="nconf">✗ N.C.</span>':'<span class="pend">—</span>'}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table>
+</div>
+${a.obs?`<div class="section"><div class="stitle">Observações</div><p>${a.obs}</p></div>`:""}
+<div class="conclusao">${a.conclusao==="Aprovado"?"✅ APROVADO":a.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE"}</div>
+${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laudo: <a href="${a.coa.url}" target="_blank">${a.coa.name}</a></p></div>`:""}
+<div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
+  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">${a.resp}<br/>Analista de CQ</div></div>
+  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
+</div>
+<div class="footer">
+  <div>Herbamed® · Controle de Qualidade · ${a.num}</div>
+  <div>Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+</div>
+</div><script>window.onload=()=>window.print();</script></body></html>`;
+    win.document.write(html); win.document.close();
+  };
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+
+  // ── NOVA ANÁLISE ──
+  if(view==="nova") return (
+    <div>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
+        <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Nova Ficha de Análise</div>
+      </div>
+
+      {/* Seleção do material */}
+      <div style={s.card}>
+        <SecTitle icon="📦" ch="Selecionar material" />
+        {materiais.length===0 ? (
+          <div style={{ color:T.text3, fontSize:13, padding:"1rem", textAlign:"center" }}>
+            Nenhum material cadastrado. Cadastre um material em <strong>CQ — Materiais</strong> primeiro.
+          </div>
+        ) : (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+            {materiais.map(m=>(
+              <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
+                <div style={{ fontSize:13, fontWeight:600, color:matSel?.id===m.id?T.accent:T.text }}>{m.nome}</div>
+                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{m.tipo}</div>
+                <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{m.ensaios?.length||0} ensaios</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {matSel && <>
+        {/* Dados do recebimento */}
+        <div style={s.card}>
+          <SecTitle icon="🚚" ch="Dados do recebimento" />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <F lbl="Fornecedor" ch={
+              <Sel value={form.fornecedor} onChange={e=>setF("fornecedor",e.target.value)}>
+                <option value="">Selecionar...</option>
+                {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
+                <option value="Outro">Outro</option>
+              </Sel>
+            }/>
+            <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
+            <F lbl="Qtd. recebida" ch={<Inp placeholder="Ex: 25 kg" value={form.qtdRecebida} onChange={e=>setF("qtdRecebida",e.target.value)} />} />
+            <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
+            <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
+            <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
+            <F lbl="Analista" ch={<Inp value={form.resp} onChange={e=>setF("resp",e.target.value)} />} />
+          </div>
+        </div>
+
+        {/* Resultados */}
+        <div style={s.card}>
+          <SecTitle icon="🔬" ch={`Resultados — ${matSel.nome}`} />
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:T.surf }}>
+                {["Ensaio","Especificação","Resultado (livre)","Un.","Referência","Conforme?","Obs."].map(h=>(
+                  <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {resultados.map((r,i)=>(
+                  <tr key={r.id} style={{ background:i%2===0?T.card:T.surf, borderLeft: r.conforme===false?"3px solid #ff4f6a":r.conforme===true?"3px solid #2ab84a":"3px solid transparent" }}>
+                    <td style={{ padding:"8px 10px", fontSize:12, fontWeight:600, color:T.text, whiteSpace:"nowrap" }}>{r.nome}</td>
+                    <td style={{ padding:"8px 10px", fontSize:11, color:T.text2 }}>{r.espec||"—"}</td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <Inp placeholder="Digite o resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ fontSize:12, padding:"5px 8px" }}/>
+                    </td>
+                    <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.unidade||"—"}</td>
+                    <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.ref||"—"}</td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <div style={{ display:"flex", gap:4 }}>
+                        <button onClick={()=>updRes(r.id,"conforme",true)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===true?"#2ab84a55":T.border}`, background:r.conforme===true?"#2ab84a22":"transparent", color:r.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓</button>
+                        <button onClick={()=>updRes(r.id,"conforme",false)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===false?"#ff4f6a55":T.border}`, background:r.conforme===false?"#ff4f6a22":"transparent", color:r.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗</button>
+                        <button onClick={()=>updRes(r.id,"conforme",null)} style={{ padding:"4px 6px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>—</button>
+                      </div>
+                    </td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <Inp placeholder="obs..." value={r.obs||""} onChange={e=>updRes(r.id,"obs",e.target.value)} sx={{ fontSize:11, padding:"4px 6px", width:90 }}/>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Indicador de NCs */}
+          {getNCs().length > 0 && (
+            <div style={{ marginTop:"1rem", padding:"10px 14px", background:"#ff4f6a18", border:"1px solid #ff4f6a33", borderRadius:8, fontSize:12, color:"#ff4f6a", fontWeight:600 }}>
+              ⚠️ {getNCs().length} ensaio(s) marcado(s) como NÃO CONFORME — será solicitada confirmação ao salvar
+            </div>
+          )}
+        </div>
+
+        {/* COA */}
+        <div style={s.card}>
+          <SecTitle icon="📄" ch="COA do fornecedor" />
+          {coa ? (
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+              <span style={{ fontSize:24 }}>📄</span>
+              <div style={{ flex:1 }}><div style={{ fontSize:13, fontWeight:600 }}>{coa.name}</div></div>
+              <a href={coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver</a>
+              <button style={s.btnD} onClick={()=>setCoa(null)}>✕</button>
+            </div>
+          ) : (
+            <div style={{ border:`2px dashed ${T.border2}`, borderRadius:10, padding:"1.5rem", textAlign:"center", cursor:"pointer" }} onClick={()=>document.getElementById("coa-up").click()}>
+              <div style={{ fontSize:28, marginBottom:6 }}>📎</div>
+              <div style={{ fontSize:13, color:T.text2 }}>{coaUploading?"Enviando...":"Clique para anexar o COA (PDF ou imagem)"}</div>
+              <input id="coa-up" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e=>uploadCOA(e.target.files[0])} />
+            </div>
+          )}
+        </div>
+
+        <F lbl="Observações gerais" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Observações sobre o recebimento ou análise..." />} />
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem", marginTop:"1rem" }}>
+          <button style={s.btn} onClick={()=>setView("lista")}>Cancelar</button>
+          <button style={s.btnA} onClick={salvar}>💾 Salvar análise →</button>
+        </div>
+      </>}
+    </div>
+  );
+
+  // ── LISTA ──
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+        <div style={{ fontSize:13, color:T.text2 }}>{analises.length} análise(s) registrada(s)</div>
+        <button style={s.btnA} onClick={()=>{ setMatSel(null); setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+      </div>
+
+      {analises.length===0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
+          <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>📋</div>
+          <div style={{ fontSize:14, color:T.text2 }}>Nenhuma análise registrada</div>
+        </div>
+      ) : (
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr style={{ background:T.surf }}>
+              {["Nº RA","Material","Fornecedor","Lote","Data","Analista","Conclusão",""].map(h=>(
+                <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {analises.map((a,i)=>{
+                const cc = a.conclusao;
+                const c = cc==="Aprovado"?"#2ab84a":cc==="Reprovado"?"#ff4f6a":"#ffd166";
+                return (
+                  <tr key={a.id} style={{ background:i%2===0?T.card:T.surf, cursor:"pointer" }} onClick={()=>setSelAnalise(a)}>
+                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:T.accent }}>{a.num}</td>
+                    <td style={{ padding:"10px 12px", fontSize:13, color:T.text }}>{a.materialNome}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.fornecedor||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.lote||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{fmt(a.dataAnalise)}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.resp}</td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:c, background:`${c}18`, padding:"3px 10px", borderRadius:20 }}>
+                        {cc==="Aprovado"?"✅ Aprovado":cc==="Reprovado"?"❌ Reprovado":"⏳ Pendente"}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 8px" }}>
+                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={e=>{e.stopPropagation();exportRA(a);}}>📄 PDF</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal detalhe */}
+      {selAnalise && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.82)", backdropFilter:"blur(6px)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }} onClick={e=>e.target===e.currentTarget&&setSelAnalise(null)}>
+          <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"1.75rem", maxWidth:760, width:"100%", maxHeight:"90vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
+              <div>
+                <div style={{ fontSize:20, fontWeight:700 }}>{selAnalise.num} — {selAnalise.materialNome}</div>
+                <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}>📄 PDF</button>
+                <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
+                <button onClick={()=>setSelAnalise(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
+              </div>
+            </div>
+            <div style={{ overflowX:"auto", marginBottom:"1rem" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:T.surf }}>
+                  {["Ensaio","Especificação","Resultado","Un.","Situação","Obs."].map(h=>(
+                    <th key={h} style={{ padding:"7px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {(selAnalise.resultados||[]).map((r,i)=>(
+                    <tr key={i} style={{ background:i%2===0?T.card:T.surf, borderLeft:r.conforme===false?"3px solid #ff4f6a":r.conforme===true?"3px solid #2ab84a":"3px solid transparent" }}>
+                      <td style={{ padding:"7px 10px", fontSize:12, fontWeight:600 }}>{r.nome}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:T.text2 }}>{r.espec||"—"}</td>
+                      <td style={{ padding:"7px 10px", fontSize:12, fontWeight:500 }}>{r.resultado||"—"}</td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:T.text3 }}>{r.unidade||"—"}</td>
+                      <td style={{ padding:"7px 10px" }}>
+                        {r.conforme===true?<span style={{ color:"#2ab84a", fontWeight:700 }}>✓ Conf.</span>:r.conforme===false?<span style={{ color:"#ff4f6a", fontWeight:700 }}>✗ N.C.</span>:<span style={{ color:T.text3 }}>—</span>}
+                      </td>
+                      <td style={{ padding:"7px 10px", fontSize:11, color:T.text2 }}>{r.obs||"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {selAnalise.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", gap:10, alignItems:"center" }}>
+              <span style={{ fontSize:20 }}>📄</span>
+              <span style={{ fontSize:13 }}>COA: {selAnalise.coa.name}</span>
+              <a href={selAnalise.coa.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>Ver COA</a>
+            </div>}
+            {selAnalise.obs && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2 }}><b>Obs:</b> {selAnalise.obs}</div>}
+            <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
+              {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── AUDITORIAS TAB ─────────────────────────────────────────────────────────── */
+function AuditoriasTab({ user, toast_, users, rncs }) {
+  const T = useTheme(); const s = useS();
+  const [auditorias, setAuditorias] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("lista");
+  const [sel, setSel] = useState(null);
+  const [form, setForm] = useState({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" });
+  const [achados, setAchados] = useState([]);
+  const setF = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  useEffect(()=>{
+    const unsub = subscribeCollection("auditorias", list=>{
+      setAuditorias(list.sort((a,b)=>(b.criadoTs||0)-(a.criadoTs||0)));
+      setLoading(false);
+    });
+    const t = setTimeout(()=>setLoading(false), 3000);
+    return ()=>{ unsub(); clearTimeout(t); };
+  },[]);
+
+  const addAchado = () => setAchados(p=>[...p, { id:Date.now(), tipo:"Não conformidade", desc:"", ref:"", acao:"", resp:"", prazo:"", status:"Aberto" }]);
+  const updAchado = (id,k,v) => setAchados(p=>p.map(a=>a.id===id?{...a,[k]:v}:a));
+  const delAchado = (id) => setAchados(p=>p.filter(a=>a.id!==id));
+
+  const salvar = async () => {
+    if(!form.titulo.trim()) { alert("Informe o título da auditoria."); return; }
+    const id = sel ? String(sel.id) : String(Date.now());
+    const aud = { id, ...form, achados, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    await saveCollection("auditorias", id, aud);
+    toast_(sel?"Auditoria atualizada!":"Auditoria criada!", "green");
+    setView("lista"); setSel(null);
+    setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" });
+    setAchados([]);
+  };
+
+  const del = async (id) => {
+    if(!confirm("Excluir esta auditoria?")) return;
+    await deleteFromCollection("auditorias", String(id));
+    setSel(null); toast_("Auditoria excluída.", "red");
+  };
+
+  const editAuditoria = (a) => {
+    setSel(a);
+    setForm({ titulo:a.titulo, tipo:a.tipo, area:a.area||"", auditores:a.auditores||"", dataPlano:a.dataPlano||tod(), dataPrev:a.dataPrev||"", status:a.status, objetivo:a.objetivo||"", escopo:a.escopo||"" });
+    setAchados(a.achados||[]);
+    setView("nova");
+  };
+
+  const STATUS_AUD = { Planejada:"#4fc3f7", "Em andamento":"#ffd166", Concluída:"#2ab84a", Cancelada:"#ff4f6a" };
+  const TIPOS_ACHADO = ["Não conformidade","Observação","Oportunidade de melhoria","Ponto positivo"];
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+
+  if(view==="nova") return (
+    <div>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>← Voltar</button>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text }}>{sel?"Editar auditoria":"Nova auditoria"}</div>
+      </div>
+
+      <div style={s.card}>
+        <SecTitle icon="🔍" ch="Planejamento da auditoria" />
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <F lbl="Título *" ch={<Inp placeholder="Ex: Auditoria CQ — Processo de Encapsulação" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
+          <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}><option>Interna</option><option>Externa</option><option>Fornecedor</option></Sel>} />
+          <F lbl="Área / Setor auditado" ch={<Inp placeholder="Ex: Controle de Qualidade, Produção" value={form.area} onChange={e=>setF("area",e.target.value)} />} />
+          <F lbl="Auditor(es)" ch={<Inp placeholder="Ex: Lucas Ribeiro, Maria Silva" value={form.auditores} onChange={e=>setF("auditores",e.target.value)} />} />
+          <F lbl="Data do planejamento" ch={<Inp type="date" value={form.dataPlano} onChange={e=>setF("dataPlano",e.target.value)} />} />
+          <F lbl="Data prevista de execução" ch={<Inp type="date" value={form.dataPrev} onChange={e=>setF("dataPrev",e.target.value)} />} />
+          <F lbl="Status" ch={<Sel value={form.status} onChange={e=>setF("status",e.target.value)}>{Object.keys(STATUS_AUD).map(x=><option key={x}>{x}</option>)}</Sel>} />
+        </div>
+        <F lbl="Objetivo" ch={<TA rows={2} placeholder="Descreva o objetivo da auditoria..." value={form.objetivo} onChange={e=>setF("objetivo",e.target.value)} />} />
+        <F lbl="Escopo" ch={<TA rows={2} placeholder="O que será auditado, processos, documentos..." value={form.escopo} onChange={e=>setF("escopo",e.target.value)} />} />
+      </div>
+
+      <div style={s.card}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <SecTitle icon="📝" ch={`Achados (${achados.length})`} />
+          <button style={s.btnA} onClick={addAchado}>+ Adicionar achado</button>
+        </div>
+        {achados.length===0 ? (
+          <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:13 }}>Nenhum achado registrado ainda</div>
+        ) : achados.map((a,i)=>(
+          <div key={a.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginBottom:10 }}>
+            <div style={{ display:"flex", gap:10, marginBottom:10, alignItems:"center" }}>
+              <div style={{ fontSize:12, fontWeight:700, color:T.text3 }}>#{i+1}</div>
+              <Sel value={a.tipo} onChange={e=>updAchado(a.id,"tipo",e.target.value)} sx={{ width:"auto", fontSize:12 }}>
+                {TIPOS_ACHADO.map(t=><option key={t}>{t}</option>)}
+              </Sel>
+              <Sel value={a.status} onChange={e=>updAchado(a.id,"status",e.target.value)} sx={{ width:"auto", fontSize:12 }}>
+                {["Aberto","Em tratamento","Fechado"].map(t=><option key={t}>{t}</option>)}
+              </Sel>
+              <button onClick={()=>delAchado(a.id)} style={{ marginLeft:"auto", background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", padding:"4px 8px", fontSize:12, fontFamily:"inherit" }}>✕</button>
+            </div>
+            <F lbl="Descrição do achado" ch={<TA rows={2} placeholder="Descreva o que foi encontrado..." value={a.desc} onChange={e=>updAchado(a.id,"desc",e.target.value)} />} />
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:8 }}>
+              <F lbl="Referência normativa" ch={<Inp placeholder="Ex: BPF item 5.2, ISO 9001 cl. 8.2" value={a.ref} onChange={e=>updAchado(a.id,"ref",e.target.value)} />} />
+              <F lbl="Ação corretiva" ch={<Inp placeholder="Ação a ser tomada..." value={a.acao} onChange={e=>updAchado(a.id,"acao",e.target.value)} />} />
+              <F lbl="Responsável" ch={<Inp value={a.resp} onChange={e=>updAchado(a.id,"resp",e.target.value)} />} />
+              <F lbl="Prazo" ch={<Inp type="date" value={a.prazo} onChange={e=>updAchado(a.id,"prazo",e.target.value)} />} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem" }}>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>Cancelar</button>
+        <button style={s.btnA} onClick={salvar}>💾 Salvar auditoria →</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+        <div style={{ fontSize:13, color:T.text2 }}>{auditorias.length} auditoria(s) registrada(s)</div>
+        <button style={s.btnA} onClick={()=>{ setSel(null); setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" }); setAchados([]); setView("nova"); }}>+ Nova Auditoria</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
+        {Object.entries(STATUS_AUD).map(([st,c])=>(
+          <div key={st} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
+            <div style={{ fontSize:22, fontWeight:700, color:c }}>{auditorias.filter(a=>a.status===st).length}</div>
+            <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>{st}</div>
+          </div>
+        ))}
+      </div>
+
+      {auditorias.length===0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
+          <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🔍</div>
+          <div style={{ fontSize:14, color:T.text2 }}>Nenhuma auditoria registrada</div>
+        </div>
+      ) : auditorias.map(a=>(
+        <div key={a.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${STATUS_AUD[a.status]||T.accent}`, borderRadius:12, padding:"1rem 1.25rem", marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:4 }}>{a.titulo}</div>
+              <div style={{ fontSize:12, color:T.text2 }}>
+                {a.tipo} · {a.area||"—"} · Auditor: {a.auditores||"—"}
+                {a.dataPrev&&` · Prevista: ${fmt(a.dataPrev)}`}
+              </div>
+              {a.achados?.length>0 && (
+                <div style={{ marginTop:6, display:"flex", gap:6 }}>
+                  {TIPOS_ACHADO.slice(0,3).map(tp=>{
+                    const n = a.achados.filter(x=>x.tipo===tp).length;
+                    if(!n) return null;
+                    const c = tp==="Não conformidade"?"#ff4f6a":tp==="Observação"?"#ffd166":"#2ab84a";
+                    return <span key={tp} style={{ fontSize:10, fontWeight:600, color:c, background:`${c}18`, padding:"2px 8px", borderRadius:20 }}>{tp}: {n}</span>;
+                  })}
+                </div>
+              )}
+            </div>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+              <span style={{ fontSize:11, fontWeight:600, color:STATUS_AUD[a.status], background:`${STATUS_AUD[a.status]}18`, padding:"3px 10px", borderRadius:20 }}>{a.status}</span>
+              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}>✏️ Editar</button>
+              <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={()=>del(a.id)}>🗑️</button>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
