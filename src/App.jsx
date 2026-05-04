@@ -2957,7 +2957,9 @@ function FMEATab({ user, toast_ }) {
       setItems(list.sort((a,b) => (b.id||0) - (a.id||0)));
       setLoading(false);
     });
-    return unsub;
+    // Safety timeout — show empty if Firestore takes too long
+    const t = setTimeout(() => setLoading(false), 3000);
+    return () => { unsub(); clearTimeout(t); };
   }, []);
 
   const addItem = async () => {
@@ -3004,10 +3006,8 @@ Gere exatamente 5 modos de falha relevantes. Responda APENAS em JSON válido:
 S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
       const clean = txt.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(clean);
-      const novos = parsed.map(p => ({ id: Date.now() + Math.random(), resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name, ...p, S: Number(p.S)||5, O: Number(p.O)||3, D: Number(p.D)||3 }));
-      for (const item of novos) {
-        await saveCollection("fmea", String(Math.round(item.id)), item);
-      }
+      const novos = parsed.map(p => ({ id: Date.now() + Math.round(Math.random()*1000), resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name, ...p, S: Number(p.S)||5, O: Number(p.O)||3, D: Number(p.D)||3 }));
+      for (const item of novos) await saveCollection("fmea", String(item.id), item);
       toast_("FMEA gerado pela IA!", "green");
     } catch { toast_("Erro ao gerar. Tente novamente.", "red"); }
     setAiLoading(false);
@@ -3532,23 +3532,22 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
 /* ─── NQA / AQL TAB ─────────────────────────────────────────────────────────── */
 // Tabelas ISO 2859-1
 const NQA_LETRAS = {
-  // [tamLote]: letra do código
-  2:    { I:"A", II:"A", III:"B" },
-  8:    { I:"A", II:"B", III:"C" },
-  15:   { I:"B", II:"C", III:"D" },
-  25:   { I:"C", II:"D", III:"E" },
-  50:   { I:"C", II:"E", III:"F" },
-  90:   { I:"C", II:"F", III:"G" },
-  150:  { I:"D", II:"G", III:"H" },
-  280:  { I:"E", II:"H", III:"J" },
-  500:  { I:"F", II:"J", III:"K" },
-  1200: { I:"G", II:"K", III:"L" },
-  3200: { I:"H", II:"L", III:"M" },
-  10000:{ I:"J", II:"M", III:"N" },
-  35000:{ I:"K", II:"N", III:"P" },
-  150000:{ I:"L", II:"P", III:"Q" },
-  500000:{ I:"M", II:"Q", III:"R" },
-  999999:{ I:"N", II:"R", III:"S" },
+  2:     { I:"A", II:"A", III:"B", "S-1":"A", "S-2":"A", "S-3":"A", "S-4":"A" },
+  8:     { I:"A", II:"B", III:"C", "S-1":"A", "S-2":"A", "S-3":"A", "S-4":"A" },
+  15:    { I:"B", II:"C", III:"D", "S-1":"A", "S-2":"A", "S-3":"B", "S-4":"B" },
+  25:    { I:"C", II:"D", III:"E", "S-1":"A", "S-2":"B", "S-3":"B", "S-4":"C" },
+  50:    { I:"C", II:"E", III:"F", "S-1":"B", "S-2":"B", "S-3":"C", "S-4":"C" },
+  90:    { I:"C", II:"F", III:"G", "S-1":"B", "S-2":"B", "S-3":"C", "S-4":"D" },
+  150:   { I:"D", II:"G", III:"H", "S-1":"B", "S-2":"C", "S-3":"D", "S-4":"E" },
+  280:   { I:"E", II:"H", III:"J", "S-1":"B", "S-2":"C", "S-3":"D", "S-4":"E" },
+  500:   { I:"F", II:"J", III:"K", "S-1":"C", "S-2":"C", "S-3":"E", "S-4":"F" },
+  1200:  { I:"G", II:"K", III:"L", "S-1":"C", "S-2":"D", "S-3":"E", "S-4":"G" },
+  3200:  { I:"H", II:"L", III:"M", "S-1":"C", "S-2":"D", "S-3":"F", "S-4":"G" },
+  10000: { I:"J", II:"M", III:"N", "S-1":"C", "S-2":"E", "S-3":"F", "S-4":"H" },
+  35000: { I:"K", II:"N", III:"P", "S-1":"C", "S-2":"E", "S-3":"G", "S-4":"H" },
+  150000:{ I:"L", II:"P", III:"Q", "S-1":"D", "S-2":"F", "S-3":"G", "S-4":"J" },
+  500000:{ I:"M", II:"Q", III:"R", "S-1":"D", "S-2":"F", "S-3":"H", "S-4":"J" },
+  999999:{ I:"N", II:"R", III:"S", "S-1":"D", "S-2":"G", "S-3":"H", "S-4":"K" },
 };
 
 // Tabela de amostragem simples normal (ISO 2859-1 Tabela II-A)
@@ -3602,20 +3601,27 @@ function NQATab({ user, toast_ }) {
     }
   };
 
-  const NIVEIS = [
-    { id:"I",   label:"Nível I",   desc:"Inspecão reduzida" },
-    { id:"II",  label:"Nível II",  desc:"Normal (padrão)" },
-    { id:"III", label:"Nível III", desc:"Inspeção reforçada" },
+  const NIVEIS_GERAIS = [
+    { id:"I",   label:"Nível I",   desc:"Visual reduzido" },
+    { id:"II",  label:"Nível II",  desc:"Visual normal (padrão)" },
+    { id:"III", label:"Nível III", desc:"Visual reforçado" },
   ];
-
+  const NIVEIS_ESPECIAIS = [
+    { id:"S-1", label:"S-1", desc:"Amostra mínima" },
+    { id:"S-2", label:"S-2", desc:"Amostra reduzida" },
+    { id:"S-3", label:"S-3", desc:"Amostra normal" },
+    { id:"S-4", label:"S-4", desc:"Amostra maior" },
+  ];
   const NQAS = ["0.065","0.1","0.15","0.25","0.4","0.65","1.0","1.5","2.5","4.0","6.5","10"];
-
   const MATERIAL_NQA = [
-    { tipo:"Matéria-prima crítica (princípio ativo)", nqa:"0.65", nivel:"II" },
-    { tipo:"Matéria-prima geral (excipiente/pó)",     nqa:"1.0",  nivel:"II" },
-    { tipo:"Embalagem primária (frasco, blister)",    nqa:"1.5",  nivel:"II" },
-    { tipo:"Embalagem secundária (caixa, rótulo)",    nqa:"2.5",  nivel:"II" },
-    { tipo:"Insumos gerais",                          nqa:"4.0",  nivel:"II" },
+    { tipo:"Inspeção visual geral",                    nivel:"II",  nqa:"1.0",  grupo:"Nível Geral (Visual)" },
+    { tipo:"Inspeção visual rigorosa",                 nivel:"III", nqa:"0.65", grupo:"Nível Geral (Visual)" },
+    { tipo:"Dimensional — embalagem primária",         nivel:"S-3", nqa:"1.5",  grupo:"Nível Especial" },
+    { tipo:"Dimensional — embalagem secundária",       nivel:"S-2", nqa:"2.5",  grupo:"Nível Especial" },
+    { tipo:"Físico-químico — MP crítica",              nivel:"S-2", nqa:"0.65", grupo:"Nível Especial" },
+    { tipo:"Físico-químico — MP geral / excipiente",   nivel:"S-2", nqa:"1.0",  grupo:"Nível Especial" },
+    { tipo:"Microbiológico — matéria-prima",           nivel:"S-1", nqa:"0.65", grupo:"Nível Especial" },
+    { tipo:"Microbiológico — produto acabado",         nivel:"S-1", nqa:"1.0",  grupo:"Nível Especial" },
   ];
 
   return (
@@ -3639,12 +3645,21 @@ function NQATab({ user, toast_ }) {
             }/>
 
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Nível de inspeção</div>
-              <div style={{ display:"flex", gap:8 }}>
-                {NIVEIS.map(n=>(
-                  <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"8px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>
+              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível Geral — Inspeção Visual</div>
+              <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                {NIVEIS_GERAIS.map(n=>(
+                  <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"7px 6px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>
                     <div style={{ fontWeight:700 }}>{n.label}</div>
-                    <div style={{ fontSize:10, marginTop:2, opacity:.7 }}>{n.desc}</div>
+                    <div style={{ fontSize:9, marginTop:1, opacity:.7 }}>{n.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível Especial — Dimensional / Físico-químico / Microbiológico</div>
+              <div style={{ display:"flex", gap:6 }}>
+                {NIVEIS_ESPECIAIS.map(n=>(
+                  <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"7px 6px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>
+                    <div style={{ fontWeight:700 }}>{n.label}</div>
+                    <div style={{ fontSize:9, marginTop:1, opacity:.7 }}>{n.desc}</div>
                   </button>
                 ))}
               </div>
@@ -3691,19 +3706,22 @@ function NQATab({ user, toast_ }) {
         {/* Tabela de referência + histórico */}
         <div>
           <div style={{ ...s.card, marginBottom:"1rem" }}>
-            <SecTitle icon="📋" ch="NQA recomendado por tipo de material" />
-            {MATERIAL_NQA.map((m,i)=>(
-              <div key={i} onClick={()=>{setNqa(m.nqa);setNivel(m.nivel);}} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:6, cursor:"pointer", transition:"all .15s" }}>
-                <div style={{ fontSize:12, color:T.text }}>{m.tipo}</div>
-                <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
-                  <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, padding:"2px 8px", borderRadius:20 }}>NQA {m.nqa}%</span>
-                  <span style={{ fontSize:10, color:T.text3 }}>Nível {m.nivel}</span>
-                </div>
+            <SecTitle icon="📋" ch="Referência por tipo de análise" />
+            {["Nível Geral (Visual)","Nível Especial"].map(grupo=>(
+              <div key={grupo} style={{ marginBottom:12 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${T.border}` }}>{grupo}</div>
+                {MATERIAL_NQA.filter(m=>m.grupo===grupo).map((m,i)=>(
+                  <div key={i} onClick={()=>{setNqa(m.nqa);setNivel(m.nivel);}} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:5, cursor:"pointer", transition:"all .15s" }}>
+                    <div style={{ fontSize:12, color:T.text }}>{m.tipo}</div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
+                      <span style={{ fontSize:10, color:T.text3 }}>Nível {m.nivel}</span>
+                      <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, padding:"2px 8px", borderRadius:20 }}>NQA {m.nqa}%</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
-            <div style={{ marginTop:10, fontSize:11, color:T.text3, fontStyle:"italic" }}>
-              💡 Clique em um tipo para aplicar os valores automaticamente
-            </div>
+            <div style={{ fontSize:11, color:T.text3, fontStyle:"italic" }}>💡 Clique para aplicar automaticamente</div>
           </div>
 
           {historico.length > 0 && (
@@ -3796,11 +3814,19 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
       setFichas(list.sort((a,b) => (b.criadoTs||0) - (a.criadoTs||0)));
       setLoading(false);
     });
-    return unsub;
+    const t = setTimeout(() => setLoading(false), 3000);
+    return () => { unsub(); clearTimeout(t); };
   },[]);
 
   const salvarFichaDB = async (ficha) => {
     await saveCollection(CQ_KEY, String(ficha.id), ficha);
+  };
+
+  const delFicha = async (id) => {
+    if(!confirm("Excluir esta ficha?")) return;
+    await deleteFromCollection(CQ_KEY, String(id));
+    setSelFicha(null); setView("lista");
+    toast_("Ficha excluída.", "red");
   };
 
   const aplicarEnsaiosPadrao = (tipo) => {
@@ -3849,7 +3875,6 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     const ficha = { id:Date.now(), num, ...form, ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     await salvarFichaDB(ficha);
     toast_(`${num} salva com sucesso!`, "green");
-    // Se reprovado, oferecer abrir RNC
     if(conc==="Reprovado") {
       if(confirm(`Material REPROVADO! Deseja abrir uma RNC automaticamente?`)) {
         setTab("nova");
@@ -3858,13 +3883,6 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     setView("lista");
     setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
     setEnsaios([]); setCoa(null);
-  };
-
-  const delFicha = async (id) => {
-    if(!confirm("Excluir esta ficha?")) return;
-    await deleteFromCollection(CQ_KEY, String(id));
-    setSelFicha(null); setView("lista");
-    toast_("Ficha excluída.", "red");
   };
 
   const exportRA = (ficha) => {
