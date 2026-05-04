@@ -1843,12 +1843,13 @@ async function uploadToCloudinary(file) {
 function openCOA(coa) {
   if (!coa?.url) return;
   let url = coa.url;
-  // Garantir fl_inline para PDFs do Cloudinary
   if ((coa.type === "application/pdf" || url.includes(".pdf")) && url.includes("cloudinary.com")) {
     url = url.replace("/upload/fl_inline/", "/upload/").replace("/upload/", "/upload/fl_inline/");
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+function AnexosUpload({ anexos, setAnexos }) {
   const T = useTheme(); const s = useS();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
