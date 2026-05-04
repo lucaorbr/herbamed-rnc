@@ -55,3 +55,20 @@ export const incrementCounter = async () => {
   await setDoc(doc(db, "meta", "counter"), { value: next });
   return next;
 };
+
+// ─── GENERIC COLLECTIONS ──────────────────────────────────────────────────────
+export const saveCollection = (colName, id, data) =>
+  setDoc(doc(db, colName, String(id)), { ...data, updatedAt: serverTimestamp() });
+
+export const deleteFromCollection = (colName, id) =>
+  deleteDoc(doc(db, colName, String(id)));
+
+export const subscribeCollection = (colName, cb) =>
+  onSnapshot(collection(db, colName), snap => {
+    cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  });
+
+export const getCollection = async (colName) => {
+  const snap = await getDocs(collection(db, colName));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
