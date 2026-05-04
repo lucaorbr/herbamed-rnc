@@ -993,32 +993,95 @@ export default function App() {
         {/* ── BODY: sidebar + content ── */}
         <div style={{ display:"flex", flex:1, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
-          {/* SIDEBAR */}
-          <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
-            <div style={{ padding:"8px 6px", flex:1, overflowY:"auto" }}>
-              {MENU.map(item=>(
-                <button key={item.id} className="menu-item" onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 10px", border:"none", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: tab===item.id?600:400, borderRadius:10, marginBottom:2, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 10px ${T.accentGlow}`:"none", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", position:"relative", overflow:"hidden", whiteSpace:"nowrap" }}>
-                  <span style={{ fontSize:16, flexShrink:0, width:20, textAlign:"center" }}>{item.icon}</span>
-                  {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis" }}>{item.label}</span>}
-                  {sidebarOpen && item.badge > 0 && (
-                    <span style={{ background:T.red, color:"#fff", fontSize:9, fontWeight:700, borderRadius:10, padding:"1px 6px", flexShrink:0 }}>{item.badge}</span>
-                  )}
-                  {!sidebarOpen && item.badge > 0 && (
-                    <span style={{ position:"absolute", top:4, right:4, width:8, height:8, borderRadius:"50%", background:T.red }} />
-                  )}
-                </button>
-              ))}
-            </div>
+          {/* SIDEBAR com grupos colapsáveis */}
+          {(() => {
+            const GRUPOS = [
+              {
+                id:"principal", icon:"🏠", label:"Principal", items:[
+                  { id:"home",    icon:"🏠", label:"Home" },
+                  { id:"lista",   icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
+                  ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
+                ]
+              },
+              {
+                id:"qualidade", icon:"🔬", label:"Qualidade", items:[
+                  ...(!isViewer?[
+                    { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
+                    { id:"5w2h",    icon:"📌", label:"5W2H" },
+                    { id:"eficacia",icon:"✅", label:"Eficácia" },
+                    { id:"fmea",    icon:"⚠️", label:"FMEA" },
+                  ]:[]),
+                ]
+              },
+              {
+                id:"analise", icon:"📊", label:"Análise & Dados", items:[
+                  { id:"dashboard",  icon:"📊", label:"Dashboard" },
+                  { id:"cep",        icon:"📉", label:"CEP" },
+                  { id:"relatorios", icon:"📑", label:"Relatórios" },
+                ]
+              },
+              {
+                id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
+                  { id:"cq-materiais", icon:"🧪", label:"CQ — Materiais" },
+                  { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
+                  { id:"nqa",          icon:"📐", label:"NQA / AQL" },
+                ]
+              },
+              {
+                id:"gestao", icon:"🏭", label:"Gestão", items:[
+                  { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
+                  { id:"auditorias",   icon:"🔍", label:"Auditorias" },
+                  ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
+                ]
+              },
+            ].filter(g => g.items.length > 0);
 
-            {/* Sidebar footer */}
-            {sidebarOpen && (
-              <div style={{ padding:"12px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3, lineHeight:1.6 }}>
-                <div style={{ fontWeight:600, color:T.text2, marginBottom:2 }}>SGQ Herbamed®</div>
-                <div>Sistema de Gestão da Qualidade</div>
-                <div>v2.0 · {new Date().getFullYear()}</div>
+            return (
+              <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
+                <div style={{ padding:"6px 6px", flex:1, overflowY:"auto" }}>
+                  {GRUPOS.map(grupo => {
+                    const grupoAtivo = grupo.items.some(i=>i.id===tab);
+                    const [open, setOpen] = React.useState(grupoAtivo || grupo.id==="principal");
+                    const grupoBadge = grupo.items.reduce((s,i)=>s+(i.badge||0),0);
+
+                    return (
+                      <div key={grupo.id} style={{ marginBottom:2 }}>
+                        {/* Grupo header */}
+                        {sidebarOpen ? (
+                          <button onClick={()=>setOpen(o=>!o)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"7px 10px", border:"none", background: grupoAtivo?`${T.accent}12`:"transparent", color: grupoAtivo?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10, fontWeight:700, borderRadius:8, textAlign:"left", textTransform:"uppercase", letterSpacing:".06em", transition:"all .15s" }}>
+                            <span style={{ fontSize:13, flexShrink:0 }}>{grupo.icon}</span>
+                            <span style={{ flex:1 }}>{grupo.label}</span>
+                            {grupoBadge>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px" }}>{grupoBadge}</span>}
+                            <span style={{ fontSize:9, opacity:.5, transition:"transform .2s", transform:open?"rotate(180deg)":"rotate(0deg)" }}>▼</span>
+                          </button>
+                        ) : (
+                          <div style={{ height:1, background:T.border, margin:"4px 6px" }} />
+                        )}
+
+                        {/* Items do grupo */}
+                        {(open || !sidebarOpen) && grupo.items.map(item=>(
+                          <button key={item.id} className="menu-item" onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding: sidebarOpen?"7px 10px 7px 22px":"8px 10px", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight: tab===item.id?600:400, borderRadius:8, marginBottom:1, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 8px ${T.accentGlow}`:"none", whiteSpace:"nowrap", overflow:"hidden" }}>
+                            <span style={{ fontSize:14, flexShrink:0, width:18, textAlign:"center" }}>{item.icon}</span>
+                            {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", fontSize:11 }}>{item.label}</span>}
+                            {sidebarOpen && (item.badge||0)>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px", flexShrink:0 }}>{item.badge}</span>}
+                            {!sidebarOpen && (item.badge||0)>0 && <span style={{ position:"absolute", top:4, right:4, width:6, height:6, borderRadius:"50%", background:T.red }} />}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Sidebar footer */}
+                {sidebarOpen && (
+                  <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3, lineHeight:1.6 }}>
+                    <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
+                    <div>v2.0 · {new Date().getFullYear()}</div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })()}
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
@@ -1112,7 +1175,7 @@ function HomeTab({ rncs, user, setTab }) {
 
       {/* ── HERO — Boas vindas + KPIs ── */}
       <div style={{ background:`linear-gradient(135deg,${T.surf} 0%,${T.card} 100%)`, padding:"2rem 2rem 1.5rem", borderBottom:`1px solid ${T.border}` }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16, marginBottom:"1.5rem" }}>
+        <div style={{ marginBottom:"1.5rem" }}>
           <div style={{ animation:"fadeUp2 .4s ease" }}>
             <div style={{ fontSize:11, color:T.text3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:6 }}>{saud},</div>
             <div style={{ fontSize:26, fontWeight:800, color:T.text, lineHeight:1.2, marginBottom:6 }}>
@@ -1125,11 +1188,6 @@ function HomeTab({ rncs, user, setTab }) {
                 ? <>⚠️ <span style={{ color:T.yellow, fontWeight:700 }}>{vencidas} prazo{vencidas > 1 ? "s" : ""} vencido{vencidas > 1 ? "s" : ""}</span> — ação urgente necessária.</>
                 : <span style={{ color:T.accent, fontWeight:500 }}>✓ Tudo em dia! Nenhuma pendência crítica.</span>
               }
-            </div>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ background:"#fff", borderRadius:10, padding:"6px 16px", boxShadow:`0 0 16px ${T.accentGlow}` }}>
-              <HerbamedLogo height={28} white={false} />
             </div>
           </div>
         </div>
