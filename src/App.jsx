@@ -804,6 +804,7 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
     { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
       { id:"cq-materiais", icon:"🧪", label:"CQ — Materiais" },
       { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
+      { id:"cq-dashboard", icon:"📈", label:"CQ — Dashboard" },
       { id:"nqa",          icon:"📐", label:"NQA / AQL" },
     ]},
     { id:"gestao", icon:"🏭", label:"Gestão", items:[
@@ -855,6 +856,52 @@ export default function App() {
   const [emailCtx, setEmailCtx] = useState(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [sessionWarning, setSessionWarning] = useState(false);
+  const [sessionCountdown, setSessionCountdown] = useState(120);
+
+  // ── AUTO-LOGOUT POR INATIVIDADE (15 minutos) ──
+  useEffect(() => {
+    if (!user) return;
+    const TIMEOUT = 15 * 60 * 1000; // 15 min
+    const WARNING = 13 * 60 * 1000; // aviso aos 13 min (2 min antes)
+    let warningTimer, logoutTimer, countdownInterval;
+
+    const resetTimers = () => {
+      clearTimeout(warningTimer);
+      clearTimeout(logoutTimer);
+      clearInterval(countdownInterval);
+      setSessionWarning(false);
+      setSessionCountdown(120);
+
+      warningTimer = setTimeout(() => {
+        setSessionWarning(true);
+        let cnt = 120;
+        setSessionCountdown(cnt);
+        countdownInterval = setInterval(() => {
+          cnt -= 1;
+          setSessionCountdown(cnt);
+          if (cnt <= 0) clearInterval(countdownInterval);
+        }, 1000);
+      }, WARNING);
+
+      logoutTimer = setTimeout(() => {
+        logoutUser();
+        setUser(null);
+        setSessionWarning(false);
+      }, TIMEOUT);
+    };
+
+    const events = ["mousemove","mousedown","keypress","scroll","touchstart","click"];
+    events.forEach(e => window.addEventListener(e, resetTimers));
+    resetTimers();
+
+    return () => {
+      clearTimeout(warningTimer);
+      clearTimeout(logoutTimer);
+      clearInterval(countdownInterval);
+      events.forEach(e => window.removeEventListener(e, resetTimers));
+    };
+  }, [user]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async fbUser => {
@@ -965,6 +1012,7 @@ export default function App() {
     nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
     "cq-materiais": "CQ — Cadastro de Materiais",
     "cq-analises": "CQ — Fichas de Análise",
+    "cq-dashboard": "CQ — Dashboard de Qualidade",
     auditorias: "Auditorias Internas",
     admin: "Administração",
   };
@@ -1116,6 +1164,7 @@ export default function App() {
               {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
               {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} />}
               {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} />}
+              {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
@@ -1124,6 +1173,30 @@ export default function App() {
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+
+        {/* ── AVISO DE SESSÃO EXPIRANDO ── */}
+        {sessionWarning && (
+          <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, background:"#1a1a2a", border:"1px solid #ffd16655", borderRadius:14, padding:"16px 20px", boxShadow:"0 8px 32px rgba(0,0,0,.6)", maxWidth:320, animation:"fadeIn .3s ease" }}>
+            <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+              <span style={{ fontSize:24, flexShrink:0 }}>⏱️</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"#ffd166", marginBottom:4 }}>Sessão expirando!</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,.7)", marginBottom:12, lineHeight:1.5 }}>
+                  Sua sessão será encerrada por inatividade em{" "}
+                  <strong style={{ color:"#ffd166" }}>
+                    {Math.floor(sessionCountdown/60)}:{String(sessionCountdown%60).padStart(2,"0")}
+                  </strong>
+                </div>
+                <button
+                  onClick={()=>{ setSessionWarning(false); }}
+                  style={{ width:"100%", padding:"8px", background:"linear-gradient(135deg,#2ab84a,#1a7a3c)", border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
+                >
+                  Continuar sessão →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ThemeCtx.Provider>
   );
@@ -5103,6 +5176,208 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ─── CQ DASHBOARD ───────────────────────────────────────────────────────────── */
+function CQDashboardTab() {
+  const T = useTheme(); const s = useS();
+  const [analises, setAnalises] = useState([]);
+  const [materiais, setMateriais] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [periodoMeses, setPeriodoMeses] = useState(6);
+
+  useEffect(()=>{
+    const u1 = subscribeCollection("cq_analises", list=>{ setAnalises(list); setLoading(false); });
+    const u2 = subscribeCollection("cq_materiais", list=>{ setMateriais(list); });
+    const t = setTimeout(()=>setLoading(false), 3000);
+    return ()=>{ u1(); u2(); clearTimeout(t); };
+  },[]);
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+
+  // Filtrar por período
+  const dataCorte = new Date();
+  dataCorte.setMonth(dataCorte.getMonth() - periodoMeses);
+  const cortStr = dataCorte.toISOString().split("T")[0];
+  const filtered = analises.filter(a => (a.dataAnalise||a.criadoEm||"") >= cortStr);
+
+  // Stats gerais
+  const total = filtered.length;
+  const aprovadas = filtered.filter(x=>x.conclusao==="Aprovado").length;
+  const reprovadas = filtered.filter(x=>x.conclusao==="Reprovado").length;
+  const pendentes = filtered.filter(x=>x.conclusao==="Pendente").length;
+  const taxaAprov = total>0 ? Math.round(aprovadas/total*100) : 0;
+
+  // Por material
+  const porMaterial = {};
+  filtered.forEach(a=>{
+    const k = a.materialNome||"Desconhecido";
+    if(!porMaterial[k]) porMaterial[k] = { total:0, aprovadas:0, reprovadas:0 };
+    porMaterial[k].total++;
+    if(a.conclusao==="Aprovado") porMaterial[k].aprovadas++;
+    if(a.conclusao==="Reprovado") porMaterial[k].reprovadas++;
+  });
+
+  // Por fornecedor
+  const porFornecedor = {};
+  filtered.forEach(a=>{
+    const k = a.fornecedor||"Não informado";
+    if(!porFornecedor[k]) porFornecedor[k] = { total:0, aprovadas:0, reprovadas:0 };
+    porFornecedor[k].total++;
+    if(a.conclusao==="Aprovado") porFornecedor[k].aprovadas++;
+    if(a.conclusao==="Reprovado") porFornecedor[k].reprovadas++;
+  });
+
+  // Evolução mensal
+  const meses = [];
+  for(let i=periodoMeses-1; i>=0; i--){
+    const d = new Date(); d.setMonth(d.getMonth()-i);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const label = d.toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+    const ms = filtered.filter(a=>(a.dataAnalise||"").startsWith(key));
+    meses.push({ key, label, total:ms.length, aprov:ms.filter(x=>x.conclusao==="Aprovado").length, reprov:ms.filter(x=>x.conclusao==="Reprovado").length });
+  }
+  const maxMes = Math.max(...meses.map(m=>m.total), 1);
+
+  return (
+    <div>
+      {/* Filtro de período */}
+      <div style={{ display:"flex", gap:8, marginBottom:"1rem" }}>
+        {[3,6,12].map(m=>(
+          <button key={m} onClick={()=>setPeriodoMeses(m)} style={{ padding:"6px 16px", borderRadius:20, border:`1px solid ${periodoMeses===m?T.accent+"55":T.border}`, background:periodoMeses===m?T.accentDim:T.surf, color:periodoMeses===m?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:periodoMeses===m?600:400 }}>
+            Últimos {m} meses
+          </button>
+        ))}
+        <div style={{ marginLeft:"auto", fontSize:12, color:T.text3, alignSelf:"center" }}>{total} análise(s) no período</div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1.5rem" }}>
+        {[
+          { l:"Total de análises",  n:total,      c:T.accent,  icon:"📋", sub:"No período selecionado" },
+          { l:"Taxa de aprovação",  n:`${taxaAprov}%`, c:taxaAprov>=80?T.accent:"#ff8c42", icon:"✅", sub:`${aprovadas} aprovadas` },
+          { l:"Reprovadas",         n:reprovadas, c:reprovadas>0?"#ff4f6a":T.text3, icon:"❌", sub:"Requerem ação" },
+          { l:"Pendentes",          n:pendentes,  c:"#ffd166", icon:"⏳", sub:"Análise incompleta" },
+        ].map(({l,n,c,icon,sub})=>(
+          <div key={l} style={{ background:T.card, border:`1px solid ${c}22`, borderRadius:14, padding:"1.1rem", position:"relative", overflow:"hidden", boxShadow:`0 0 16px ${c}10` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+              <span style={{ fontSize:22, opacity:.5 }}>{icon}</span>
+            </div>
+            <div style={{ fontSize:28, fontWeight:800, color:c, lineHeight:1, marginBottom:4 }}>{n}</div>
+            <div style={{ fontSize:11, fontWeight:700, color:T.text, marginBottom:2 }}>{l}</div>
+            <div style={{ fontSize:10, color:T.text3 }}>{sub}</div>
+            <div style={{ position:"absolute", bottom:-12, right:-12, width:55, height:55, borderRadius:"50%", background:c, opacity:.06 }}/>
+          </div>
+        ))}
+      </div>
+
+      {/* Evolução mensal */}
+      <div style={{ ...s.card, marginBottom:"1.5rem" }}>
+        <SecTitle icon="📈" ch="Evolução mensal de análises" />
+        <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:120, paddingTop:8 }}>
+          {meses.map((m,i)=>(
+            <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+              <div style={{ fontSize:9, color:T.text3, marginBottom:2 }}>{m.total>0?m.total:""}</div>
+              <div style={{ width:"100%", display:"flex", flexDirection:"column", justifyContent:"flex-end", height:90, gap:1 }}>
+                {m.reprov>0 && <div style={{ width:"100%", height:`${Math.round(m.reprov/maxMes*85)}px`, background:"#ff4f6a", borderRadius:"3px 3px 0 0", minHeight:3 }}/>}
+                {m.aprov>0  && <div style={{ width:"100%", height:`${Math.round(m.aprov/maxMes*85)}px`,  background:T.accent,   borderRadius: m.reprov>0?"0":"3px 3px 0 0", minHeight:3 }}/>}
+                {m.total===0 && <div style={{ width:"100%", height:3, background:T.border, borderRadius:3 }}/>}
+              </div>
+              <div style={{ fontSize:9, color:T.text3, textAlign:"center", whiteSpace:"nowrap" }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:16, marginTop:8 }}>
+          {[[T.accent,"Aprovadas"],["#ff4f6a","Reprovadas"]].map(([c,l])=>(
+            <div key={l} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:T.text2 }}>
+              <span style={{ width:10, height:10, borderRadius:2, background:c, display:"inline-block" }}/>
+              {l}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.5rem" }}>
+        {/* Por material */}
+        <div style={s.card}>
+          <SecTitle icon="📦" ch="Índice de aprovação por material" />
+          {Object.keys(porMaterial).length===0 ? (
+            <div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"1.5rem" }}>Sem dados no período.</div>
+          ) : Object.entries(porMaterial).sort((a,b)=>b[1].total-a[1].total).map(([mat,d])=>{
+            const taxa = Math.round(d.aprovadas/d.total*100);
+            const c = taxa>=80?T.accent:taxa>=50?"#ff8c42":"#ff4f6a";
+            return (
+              <div key={mat} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                  <span style={{ fontSize:12, color:T.text, fontWeight:500 }}>{mat}</span>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <span style={{ fontSize:10, color:T.text3 }}>{d.total} análise(s)</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:c }}>{taxa}%</span>
+                  </div>
+                </div>
+                <div style={{ height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${taxa}%`, background:c, borderRadius:4, transition:"width .6s" }}/>
+                </div>
+                {d.reprovadas>0 && <div style={{ fontSize:10, color:"#ff4f6a", marginTop:3 }}>⚠ {d.reprovadas} reprovada(s)</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Por fornecedor */}
+        <div style={s.card}>
+          <SecTitle icon="🏭" ch="Índice de aprovação por fornecedor" />
+          {Object.keys(porFornecedor).length===0 ? (
+            <div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"1.5rem" }}>Sem dados no período.</div>
+          ) : Object.entries(porFornecedor).sort((a,b)=>b[1].total-a[1].total).map(([forn,d])=>{
+            const taxa = Math.round(d.aprovadas/d.total*100);
+            const c = taxa>=80?T.accent:taxa>=50?"#ff8c42":"#ff4f6a";
+            return (
+              <div key={forn} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                  <span style={{ fontSize:12, color:T.text, fontWeight:500 }}>{forn}</span>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <span style={{ fontSize:10, color:T.text3 }}>{d.total} análise(s)</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:c }}>{taxa}%</span>
+                  </div>
+                </div>
+                <div style={{ height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${taxa}%`, background:c, borderRadius:4, transition:"width .6s" }}/>
+                </div>
+                {d.reprovadas>0 && <div style={{ fontSize:10, color:"#ff4f6a", marginTop:3 }}>⚠ {d.reprovadas} reprovada(s)</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Últimas análises reprovadas */}
+      {reprovadas > 0 && (
+        <div style={{ ...s.card, marginTop:"1.5rem" }}>
+          <SecTitle icon="❌" ch="Análises reprovadas no período" />
+          {filtered.filter(x=>x.conclusao==="Reprovado").sort((a,b)=>(b.criadoTs||0)-(a.criadoTs||0)).map(a=>(
+            <div key={a.id} style={{ background:"#ff4f6a0a", border:"1px solid #ff4f6a22", borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{a.num}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color:T.text }}>{a.materialNome}</span>
+                </div>
+                <span style={{ fontSize:11, color:T.text3 }}>{fmt(a.dataAnalise)}</span>
+              </div>
+              <div style={{ fontSize:12, color:T.text2 }}>
+                Fornecedor: {a.fornecedor||"—"} · Lote: {a.lote||"—"} · Analista: {a.resp}
+              </div>
+              {a.resultados?.filter(r=>r.conforme===false).length>0 && (
+                <div style={{ marginTop:6, fontSize:11, color:"#ff4f6a" }}>
+                  Ensaios NC: {a.resultados.filter(r=>r.conforme===false).map(r=>r.nome).join(", ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
