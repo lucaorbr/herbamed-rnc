@@ -4351,7 +4351,10 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
 </div>
 ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor disponível em: <a href="${ficha.coa.url}" target="_blank">${ficha.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
-  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">${ficha.resp}<br/>Analista de Controle de Qualidade</div></div>
+  <div style="flex:1;text-align:center;">
+    ${user.assinatura ? `<img src="${user.assinatura}" alt="Assinatura" style="height:56px;max-width:200px;object-fit:contain;display:block;margin:0 auto 4px;"/>` : `<div style="height:56px;"></div>`}
+    <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;">${ficha.resp}<br/>Analista de Controle de Qualidade<br/><span style="color:#666;font-size:10px;">Assinado eletronicamente em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div>
+  </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
 <div class="footer">
@@ -5050,7 +5053,10 @@ ${a.obs?`<div class="section"><div class="stitle">Observações</div><p>${a.obs}
 <div class="conclusao">${a.conclusao==="Aprovado"?"✅ APROVADO":a.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE"}</div>
 ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laudo: <a href="${a.coa.url}" target="_blank">${a.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
-  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">${a.resp}<br/>Analista de CQ</div></div>
+  <div style="flex:1;text-align:center;">
+    ${user.assinatura ? `<img src="${user.assinatura}" alt="Assinatura" style="height:56px;max-width:200px;object-fit:contain;display:block;margin:0 auto 4px;"/>` : `<div style="height:56px;"></div>`}
+    <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;">${a.resp}<br/>Analista de CQ<br/><span style="color:#666;font-size:10px;">Assinado eletronicamente em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span></div>
+  </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
 <div class="footer">
