@@ -6011,7 +6011,8 @@ function LaudosTab({ user, toast_, users }) {
   const [view, setView] = useState("lista");
   const [sel, setSel] = useState(null);
 
-  const [form, setForm] = useState({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", ensaios:[] });
+  const [form, setForm] = useState({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
+• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [busca, setBusca] = useState("");
 
@@ -6075,7 +6076,8 @@ function LaudosTab({ user, toast_, users }) {
     await saveCollection("laudos", String(id), laudo);
     toast_(sel?"Laudo atualizado!":"Laudo criado!", "green");
     setView("lista"); setSel(null);
-    setForm({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", ensaios:[] });
+    setForm({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
+• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
   };
 
   const assinarAnalista = async (laudo) => {
@@ -6167,6 +6169,7 @@ function LaudosTab({ user, toast_, users }) {
           <div style="font-size:12px;font-weight:bold;color:${statusColor}">${statusTxt}</div>
         </div>
         ${laudo.obs?`<div style="margin:0 24px 16px;padding:10px 14px;background:#f9f9f9;border-radius:4px;font-size:12px;color:#555"><strong>Observações:</strong> ${laudo.obs}</div>`:""}
+        ${laudo.armazenamento?`<div style="margin:0 24px 16px;padding:10px 14px;background:#e8f5e9;border-left:3px solid #2e7d32;border-radius:4px"><div style="font-size:11px;font-weight:bold;color:#2e7d32;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Condições de armazenamento</div><div style="font-size:11px;color:#333;white-space:pre-line">${laudo.armazenamento}</div></div>`:""}
         <div style="padding:16px 24px;border-top:1px solid #eee;display:grid;grid-template-columns:1fr 1fr;gap:24px">
           ${assinaturaAnalistaHTML}
           ${assinaturaRTHTML}
@@ -6208,6 +6211,7 @@ function LaudosTab({ user, toast_, users }) {
           <F lbl="Data" ch={<Inp type="date" value={form.data} onChange={e=>setF("data",e.target.value)} />} />
         </>} />
         <F lbl="Observações" ch={<Inp placeholder="Obs gerais do laudo..." value={form.obs} onChange={e=>setF("obs",e.target.value)} />} />
+        <F lbl="Condições de armazenamento" ch={<TA rows={3} value={form.armazenamento} onChange={e=>setF("armazenamento",e.target.value)} />} />
       </div>
 
       <div style={s.card}>
@@ -6278,7 +6282,8 @@ function LaudosTab({ user, toast_, users }) {
             {podeAssinarAnalista && <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>assinarAnalista(lSel)}>✍️ Assinar como Analista</button>}
             {podeAssinarRT && <button style={{ ...s.btnA, fontSize:12, background:T.orange||"#ff9800" }} onClick={()=>assinarRT(lSel)}>🔬 Assinar como RT</button>}
             <button style={{ ...s.btn, fontSize:12 }} onClick={()=>exportPDF(lSel)}>🖨️ Exportar PDF</button>
-            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>{setSel(lSel);setForm({tipo:lSel.tipo,clienteId:lSel.clienteId,produto:lSel.produto,linha:lSel.linha||"",lote:lSel.lote||"",op:lSel.op||"",data:lSel.data,obs:lSel.obs||"",ensaios:lSel.ensaios||[]});setView("novo");}}>✏️ Editar</button>
+            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>{setSel(lSel);setForm({tipo:lSel.tipo,clienteId:lSel.clienteId,produto:lSel.produto,linha:lSel.linha||"",lote:lSel.lote||"",op:lSel.op||"",data:lSel.data,obs:lSel.obs||"",armazenamento:lSel.armazenamento||`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
+• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:lSel.ensaios||[]});setView("novo");}}>✏️ Editar</button>
             <button style={{ ...s.btnD, fontSize:12 }} onClick={()=>deletar(lSel.id)}>🗑️</button>
           </div>
         </div>
@@ -6293,6 +6298,7 @@ function LaudosTab({ user, toast_, users }) {
             <F lbl="Data" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{fmt(lSel.data)}</div>} />
           </>} />
           {lSel.obs && <F lbl="Observações" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13, color:T.text2 }}>{lSel.obs}</div>} />}
+          {lSel.armazenamento && <F lbl="Condições de armazenamento" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2, whiteSpace:"pre-line" }}>{lSel.armazenamento}</div>} />}
         </div>
         <div style={s.card}>
           <SecTitle icon="🔬" ch="Ensaios" />
@@ -6368,7 +6374,8 @@ function LaudosTab({ user, toast_, users }) {
             <option value="Finalizado">🏆 Finalizado</option>
           </Sel>
         </div>
-        <button style={s.btnA} onClick={()=>{setSel(null);setForm({tipo:"produto_acabado",clienteId:"",produto:"",linha:"",lote:"",op:"",data:tod(),obs:"",ensaios:[]});setView("novo");}}>
+        <button style={s.btnA} onClick={()=>{setSel(null);setForm({tipo:"produto_acabado",clienteId:"",produto:"",linha:"",lote:"",op:"",data:tod(),obs:"",armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
+• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:[]});setView("novo");}}>
           + Novo Laudo
         </button>
       </div>
