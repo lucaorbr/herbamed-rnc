@@ -1845,7 +1845,7 @@ async function uploadToCloudinary(file) {
 
 /* ─── SUPABASE STORAGE — PDFs ────────────────────────────────────────────────── */
 const SUPABASE_URL = "https://zspipirhuzkwftidzrva.supabase.co";
-const SUPABASE_KEY = "sb_publishable__u4UeFl0SAeevJrC4U1xsQ_dj16mGgU";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzcGlwaXJodXprd2Z0aWR6cnZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MzA0MDcsImV4cCI6MjA5MzUwNjQwN30._bm_Mfu1JccgoKFEjd-mTqH8xaoTgw02Uo2x7zkEsMI";
 const SUPABASE_BUCKET = "coa-pdfs";
 
 async function uploadPdfToSupabase(file) {
