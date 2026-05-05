@@ -1833,7 +1833,12 @@ async function uploadToCloudinary(file) {
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
   formData.append("folder", "herbamed-rnc");
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+
+  // PDFs precisam de resource_type=raw para ficarem acessíveis no plano gratuito
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const resourceType = isPdf ? "raw" : "auto";
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, {
     method: "POST", body: formData
   });
   const data = await res.json();
@@ -1843,17 +1848,13 @@ async function uploadToCloudinary(file) {
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-// Helper para abrir COA — corrige URL do Cloudinary para PDFs
+// Helper para abrir COA — com resource_type=raw a URL já serve o PDF diretamente
 function openCOA(coa) {
   if (!coa?.url) return;
   // Remove fl_inline se existir em URLs antigas
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
-  // PDFs — usar Google Docs Viewer para garantir abertura no navegador
-  if (coa.type === "application/pdf" || url.toLowerCase().includes(".pdf")) {
-    window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`, "_blank", "noopener,noreferrer");
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
+  // Com resource_type=raw, a URL já é direta — abre sem precisar do Google Viewer
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function AnexosUpload({ anexos, setAnexos }) {
