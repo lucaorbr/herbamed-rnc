@@ -1826,19 +1826,14 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
 
 /* ─── CLOUDINARY UPLOAD ──────────────────────────────────────────────────────── */
 const CLOUD_NAME = "dswsg9w0w";
-const UPLOAD_PRESET = "herbamed_rnc"; // será criado no Cloudinary
+const UPLOAD_PRESET = "herbamed_rnc";
 
 async function uploadToCloudinary(file) {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
   formData.append("folder", "herbamed-rnc");
-
-  // PDFs precisam de resource_type=raw para ficarem acessíveis no plano gratuito
-  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  const resourceType = isPdf ? "raw" : "auto";
-
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, {
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
     method: "POST", body: formData
   });
   const data = await res.json();
@@ -1848,29 +1843,36 @@ async function uploadToCloudinary(file) {
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-// Helper para abrir COA — fetch+blob para PDFs (Cloudinary plano gratuito não serve PDFs inline)
-async function openCOA(coa) {
+/* ─── SUPABASE STORAGE — PDFs ────────────────────────────────────────────────── */
+const SUPABASE_URL = "https://zspipirhuzkwftidzrva.supabase.co";
+const SUPABASE_KEY = "sb_publishable__u4UeFl0SAeevJrC4U1xsQ_dj16mGgU";
+const SUPABASE_BUCKET = "coa-pdfs";
+
+async function uploadPdfToSupabase(file) {
+  const ext = file.name.split(".").pop();
+  const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${fileName}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": file.type || "application/pdf",
+      "x-upsert": "true"
+    },
+    body: file
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Erro no upload Supabase");
+  }
+  const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${fileName}`;
+  return { url: publicUrl, name: file.name, type: file.type, size: file.size };
+}
+
+// Helper para abrir COA — Supabase serve PDFs inline, Cloudinary abre direto para imagens
+function openCOA(coa) {
   if (!coa?.url) return;
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
-  const isPdf = coa.type === "application/pdf" || url.toLowerCase().includes(".pdf");
-  if (isPdf) {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = coa.name || "COA.pdf";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function AnexosUpload({ anexos, setAnexos }) {
@@ -4248,7 +4250,8 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     if(!file) return;
     setCoaUploading(true);
     try {
-      const result = await uploadToCloudinary(file);
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const result = isPdf ? await uploadPdfToSupabase(file) : await uploadToCloudinary(file);
       setCoa(result);
       toast_("COA anexado com sucesso!", "green");
     } catch { toast_("Erro ao enviar COA.", "red"); }
@@ -4931,7 +4934,11 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
   const uploadCOA = async (file) => {
     if(!file) return;
     setCoaUploading(true);
-    try { const r = await uploadToCloudinary(file); setCoa(r); toast_("COA anexado!", "green"); }
+    try {
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const r = isPdf ? await uploadPdfToSupabase(file) : await uploadToCloudinary(file);
+      setCoa(r); toast_("COA anexado!", "green");
+    }
     catch { toast_("Erro ao enviar COA.", "red"); }
     setCoaUploading(false);
   };
