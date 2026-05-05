@@ -6087,7 +6087,7 @@ function LaudosTab({ user, toast_, users }) {
   const assinarRT = async (laudo) => {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const novoStatus = calcStatus(laudo.ensaios) === "Aprovado" ? "Finalizado" : calcStatus(laudo.ensaios);
-    await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT:{ nome:user.name, cargo:"Responsável Técnico", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
+    await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT:{ nome:user.name, cargo:"Responsável Técnico", crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
     toast_("Laudo assinado como RT!", "green");
   };
 
@@ -6130,6 +6130,7 @@ function LaudosTab({ user, toast_, users }) {
         <div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">
           <strong>${laudo.assinaturaRT.nome}</strong><br/>
           Responsável Técnico<br/>
+          ${laudo.assinaturaRT.crf?`<span style="color:#555;font-size:11px">${laudo.assinaturaRT.crf}</span><br/>`:""}
           <span style="color:#888;font-size:10px">Assinado eletronicamente em ${laudo.assinaturaRT.dataHora}</span>
         </div>
       </div>` : `<div style="text-align:center"><div style="height:50px;display:flex;align-items:flex-end;justify-content:center"><div style="border-bottom:1px solid #333;width:160px"></div></div><div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">Responsável Técnico<br/><span style="color:#bbb;font-size:10px">Aguardando assinatura</span></div></div>`;
@@ -6340,6 +6341,7 @@ function LaudosTab({ user, toast_, users }) {
                 <img src={lSel.assinaturaRT.img} alt="Assinatura" style={{ height:50, maxWidth:180, objectFit:"contain", display:"block", margin:"0 auto 8px" }} />
                 <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{lSel.assinaturaRT.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>Responsável Técnico</div>
+                {lSel.assinaturaRT.crf && <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaRT.crf}</div>}
                 <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Assinado em {lSel.assinaturaRT.dataHora}</div>
               </>) : <div style={{ fontSize:12, color:T.text3, padding:"1rem" }}>Aguardando assinatura do RT</div>}
             </div>
@@ -6829,7 +6831,7 @@ function CQDashboardTab() {
 /* ─── ADMIN TAB ──────────────────────────────────────────────────────────────── */
 function AdminTab({ users, setUsers, toast_, currentUser }) {
   const T = useTheme(); const s = useS();
-  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"" });
+  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
   const [nuAssinatura, setNuAssinatura] = useState(null);
   const [nuAssinaturaUploading, setNuAssinaturaUploading] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -6854,10 +6856,10 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
     if(users.find(u=>u.email===nu.email)) { alert("E-mail já cadastrado."); return; }
     try {
       const cred = await createAuthUser(nu.email, nu.pw);
-      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
+      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
       await saveUser(cred.user.uid, userData);
       setUsers([...users, { ...userData, id:cred.user.uid }]);
-      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"" });
+      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
       setNuAssinatura(null);
       toast_("Usuário criado com sucesso!", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
@@ -6865,7 +6867,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
 
   const startEdit = (u) => {
     setEditing(u.id);
-    setEditData({ name:u.name, setor:u.setor||"", role:u.role });
+    setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"" });
     setEditAssinatura(u.assinatura||null);
   };
 
@@ -6896,6 +6898,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                 <G3 ch={<>
                   <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
                   <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
+                  {editData.role === "rt" && <F lbl="CRF" ch={<Inp placeholder="Ex: CRF-SP 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />}
                   <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
                     <option value="admin">Admin — acesso total</option>
                     <option value="user">Usuário — cria e edita suas RNCs</option>
@@ -6962,6 +6965,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
           <F lbl="E-mail" ch={<Inp type="email" placeholder="ana@herbamed.com" value={nu.email} onChange={e=>set("email",e.target.value)} />} />
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
+          {nu.role === "rt" && <F lbl="CRF" ch={<Inp placeholder="Ex: CRF-SP 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />}
           <F lbl="Perfil de acesso" ch={<Sel value={nu.role} onChange={e=>set("role",e.target.value)}>
             <option value="user">Usuário — cria e edita suas RNCs</option>
             <option value="admin">Admin — acesso total</option>
