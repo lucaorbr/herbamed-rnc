@@ -5466,29 +5466,41 @@ function IPCTab({ user, toast_ }) {
       {resultados.length > 0 && (
         <div style={s.card}>
           <SecTitle icon="🔬" ch="Ensaios" />
-          {resultados.map((r, i) => (
-            <div key={r.id} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                <div style={{ fontWeight:600, fontSize:13, color:T.text, minWidth:180 }}>{r.label}{r.unidade ? ` (${r.unidade})` : ""}</div>
-                <Inp
-                  placeholder="Resultado..."
-                  value={r.resultado}
-                  onChange={e => setRes(i, "resultado", e.target.value)}
-                  style={{ flex:1, minWidth:120 }}
-                />
-                <Sel value={r.conforme === null ? "" : String(r.conforme)} onChange={e => setRes(i, "conforme", e.target.value === "" ? null : e.target.value === "true")}>
-                  <option value="">— Situação —</option>
-                  <option value="true">✓ Conforme</option>
-                  <option value="false">✗ Não conforme</option>
-                </Sel>
-                <Inp placeholder="Obs..." value={r.obs} onChange={e => setRes(i, "obs", e.target.value)} style={{ minWidth:120 }} />
-              </div>
-            </div>
-          ))}
-
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ background:T.surf }}>
+                  {["Ensaio","Unidade","Resultado","Conforme?","Obs."].map(h=>(
+                    <th key={h} style={{ padding:"8px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {resultados.map((r, i) => (
+                  <tr key={r.id} style={{ background:i%2===0?T.card:T.surf, borderLeft: r.conforme===false?`3px solid ${T.red}`:r.conforme===true?`3px solid ${T.accent}`:"3px solid transparent" }}>
+                    <td style={{ padding:"8px 10px", fontSize:12, fontWeight:600, color:T.text, whiteSpace:"nowrap" }}>{r.label}</td>
+                    <td style={{ padding:"8px 10px", fontSize:11, color:T.text3 }}>{r.unidade||"—"}</td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <Inp placeholder="Digite o resultado..." value={r.resultado} onChange={e => setRes(i, "resultado", e.target.value)} sx={{ fontSize:12, padding:"5px 8px" }} />
+                    </td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <div style={{ display:"flex", gap:4 }}>
+                        <button onClick={()=>setRes(i,"conforme",true)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===true?T.accent+"55":T.border}`, background:r.conforme===true?T.accent+"22":"transparent", color:r.conforme===true?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓</button>
+                        <button onClick={()=>setRes(i,"conforme",false)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===false?T.red+"55":T.border}`, background:r.conforme===false?T.red+"22":"transparent", color:r.conforme===false?T.red:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗</button>
+                        <button onClick={()=>setRes(i,"conforme",null)} style={{ padding:"4px 6px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>—</button>
+                      </div>
+                    </td>
+                    <td style={{ padding:"8px 8px" }}>
+                      <Inp placeholder="obs..." value={r.obs} onChange={e => setRes(i, "obs", e.target.value)} sx={{ fontSize:11, padding:"4px 6px", width:90 }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {resultados.some(r => r.resultado !== "") && (
             <div style={{ padding:"12px 16px", borderRadius:10, textAlign:"center", fontWeight:700, fontSize:15,
-              background: statusBg[calcStatus()], color: statusColor[calcStatus()], border:`1px solid ${statusColor[calcStatus()]}33`, marginTop:8 }}>
+              background: statusBg[calcStatus()], color: statusColor[calcStatus()], border:`1px solid ${statusColor[calcStatus()]}33`, marginTop:12 }}>
               {statusIcon[calcStatus()]} {calcStatus() === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : calcStatus() === "Reprovado" ? "REPROVADO — NÃO LIBERAR" : "ANÁLISE PENDENTE"}
             </div>
           )}
