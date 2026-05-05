@@ -882,6 +882,7 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
       { id:"cq-dashboard", icon:"📈", label:"CQ — Dashboard" },
       { id:"nqa",          icon:"📐", label:"NQA / AQL" },
       { id:"ipc",          icon:"🏭", label:"Controle de Processo" },
+      { id:"ipc-produtos",   icon:"📦", label:"IPC — Produtos" },
     ]},
     { id:"gestao", icon:"🏭", label:"Gestão", items:[
       { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
@@ -1076,6 +1077,7 @@ export default function App() {
     { id: "cq-analises", icon: "📋", label: "CQ — Análises" },
     { id: "auditorias",  icon: "🔍", label: "Auditorias" },
     { id: "ipc",          icon: "🏭", label: "Controle de Processo" },
+    { id: "ipc-produtos",   icon: "📦", label: "IPC — Produtos" },
     ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
 
@@ -1093,6 +1095,7 @@ export default function App() {
     "cq-dashboard": "CQ — Dashboard de Qualidade",
     auditorias: "Auditorias Internas",
     ipc: "IPC — Controle de Processo",
+    "ipc-produtos": "IPC — Produtos Cadastrados",
     admin: "Administração",
   };
 
@@ -1273,6 +1276,7 @@ export default function App() {
               {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
+              {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
           </div>
@@ -5704,7 +5708,6 @@ function IPCTab({ user, toast_ }) {
           </Sel>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          {isAdmin && <button style={s.btn} onClick={() => setShowCadastroProd(v => !v)}>📦 Produtos</button>}
           <button style={s.btnA} onClick={() => { setSel(null); setForm({ area:"", sala:"", op:"", produto:"", linha:"", resp:"", data:tod(), obs:"" }); setResultados([]); setView("novo"); }}>
             + Novo Registro IPC
           </button>
@@ -5774,6 +5777,111 @@ function IPCTab({ user, toast_ }) {
   );
 }
 
+
+
+/* ─── IPC PRODUTOS TAB ───────────────────────────────────────────────────────── */
+function IPCProdutosTab({ user, toast_ }) {
+  const T = useTheme(); const s = useS();
+  const [produtos, setProdutos] = useState([]);
+  const [formProd, setFormProd] = useState({ nome: "", linha: "", forma: "" });
+  const [busca, setBusca] = useState("");
+  const [filtroLinha, setFiltroLinha] = useState("todas");
+  const isAdmin = user?.role === "admin" || user?.role === "keyuser";
+
+  useEffect(() => {
+    const unsub = subscribeCollection("ipc_produtos", list => {
+      setProdutos(list.sort((a, b) => (a.linha||"").localeCompare(b.linha||"") || (a.nome||"").localeCompare(b.nome||"")));
+    });
+    return unsub;
+  }, []);
+
+  const salvarProduto = async () => {
+    if (!formProd.nome) { alert("Informe o nome do produto."); return; }
+    if (!formProd.linha) { alert("Informe a linha."); return; }
+    const id = Date.now();
+    await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
+    setFormProd({ nome: "", linha: "", forma: "" });
+    toast_("Produto cadastrado!", "green");
+  };
+
+  const deletarProduto = async (id) => {
+    if (!confirm("Excluir este produto?")) return;
+    await deleteFromCollection("ipc_produtos", String(id));
+    toast_("Produto excluído.", "red");
+  };
+
+  const LINHAS = [...new Set(produtos.map(p => p.linha).filter(Boolean))];
+
+  const filtrados = produtos
+    .filter(p => filtroLinha === "todas" || p.linha === filtroLinha)
+    .filter(p => !busca || p.nome?.toLowerCase().includes(busca.toLowerCase()) || p.linha?.toLowerCase().includes(busca.toLowerCase()));
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:16, alignItems:"center" }}>
+        <div style={{ position:"relative" }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:13 }}>🔍</span>
+          <input placeholder="Buscar produto..." value={busca} onChange={e => setBusca(e.target.value)}
+            style={{ ...s.inp, paddingLeft:30, width:200, fontSize:12 }} />
+        </div>
+        <Sel value={filtroLinha} onChange={e => setFiltroLinha(e.target.value)}>
+          <option value="todas">Todas as linhas</option>
+          {LINHAS.map(l => <option key={l} value={l}>{l}</option>)}
+        </Sel>
+        <div style={{ marginLeft:"auto", fontSize:12, color:T.text2 }}>{filtrados.length} produto(s)</div>
+      </div>
+
+      {/* Form cadastro — admin/keyuser */}
+      {isAdmin && (
+        <div style={s.card}>
+          <SecTitle icon="➕" ch="Novo Produto" />
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <F lbl="Nome *" ch={<Inp placeholder="Ex: Vitamina B12" value={formProd.nome} onChange={e => setFormProd(p=>({...p,nome:e.target.value}))} />} />
+            <F lbl="Linha *" ch={<Inp placeholder="Ex: Supra, Verde, Especial" value={formProd.linha} onChange={e => setFormProd(p=>({...p,linha:e.target.value}))} />} />
+            <F lbl="Forma farmacêutica" ch={<Inp placeholder="Ex: Cápsula, Comprimido, Líquido" value={formProd.forma} onChange={e => setFormProd(p=>({...p,forma:e.target.value}))} />} />
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+            <button style={s.btnA} onClick={salvarProduto}>+ Cadastrar Produto</button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de produtos agrupada por linha */}
+      {filtrados.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>📦</div>
+          <div style={{ fontSize:14 }}>Nenhum produto cadastrado ainda.</div>
+          {isAdmin && <div style={{ fontSize:12, marginTop:6 }}>Cadastre os produtos acima para padronizar os lançamentos.</div>}
+        </div>
+      ) : (
+        LINHAS.filter(l => filtroLinha === "todas" || l === filtroLinha).map(linha => {
+          const prods = filtrados.filter(p => p.linha === linha);
+          if (prods.length === 0) return null;
+          return (
+            <div key={linha} style={{ marginBottom:16 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:2, marginBottom:8, padding:"4px 0", borderBottom:`1px solid ${T.border}` }}>
+                📦 Linha {linha}
+              </div>
+              {prods.map(p => (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:6 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{p.nome}</div>
+                    {p.forma && <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{p.forma}</div>}
+                  </div>
+                  <span style={{ fontSize:11, padding:"3px 10px", borderRadius:12, background:T.accentDim, color:T.accent, fontWeight:600 }}>{p.linha}</span>
+                  {isAdmin && (
+                    <button onClick={() => deletarProduto(p.id)} style={{ ...s.btnD, fontSize:11, padding:"4px 10px" }}>🗑️</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
 
 /* ─── AUDITORIA PDF EXPORT ───────────────────────────────────────────────────── */
 function exportAuditoriaPDF(a) {
