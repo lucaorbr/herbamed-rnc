@@ -1107,6 +1107,8 @@ export default function App() {
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           .rnc-row:hover{background:${T.card2}!important;}
           .th-sort:hover{color:${T.accent}!important;cursor:pointer;}
+          select option{background:${T.surf}!important;color:${T.text}!important;}
+          select{background:${T.surf}!important;color:${T.text}!important;}
           @media(max-width:768px){
             .header-kpis{display:none!important;}
             .sidebar-desktop{display:none!important;}
