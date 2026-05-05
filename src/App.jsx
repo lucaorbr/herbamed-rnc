@@ -825,6 +825,7 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
       { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
       { id:"cq-dashboard", icon:"📈", label:"CQ — Dashboard" },
       { id:"nqa",          icon:"📐", label:"NQA / AQL" },
+      { id:"ipc",          icon:"🏭", label:"Controle de Processo" },
     ]},
     { id:"gestao", icon:"🏭", label:"Gestão", items:[
       { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
