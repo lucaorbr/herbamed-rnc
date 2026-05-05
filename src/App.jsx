@@ -4585,11 +4585,19 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                 </tbody>
               </table>
             </div>
-            {selFicha.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
               <span style={{ fontSize:20 }}>📄</span>
-              <span style={{ fontSize:13, color:T.text }}>COA: {selFicha.coa.name}</span>
-              <button onClick={()=>openCOA(selFicha.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
-            </div>}
+              {selFicha.coa ? (<>
+                <span style={{ fontSize:13, color:T.text, flex:1 }}>COA: {selFicha.coa.name}</span>
+                <button onClick={()=>openCOA(selFicha.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
+                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btn, fontSize:11 }}>🔄 Trocar</button>
+                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:null}); setSelFicha({...selFicha, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}>🗑️ Excluir</button>
+              </>) : (<>
+                <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
+                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btnA, fontSize:11 }}>📎 Anexar COA</button>
+              </>)}
+              <input id="coa-reattach-ficha" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:r}); setSelFicha({...selFicha, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
+            </div>
             <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
               {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
             </div>
@@ -5264,11 +5272,19 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 </tbody>
               </table>
             </div>
-            {selAnalise.coa && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", gap:10, alignItems:"center" }}>
+            <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
               <span style={{ fontSize:20 }}>📄</span>
-              <span style={{ fontSize:13 }}>COA: {selAnalise.coa.name}</span>
-              <button onClick={()=>openCOA(selAnalise.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
-            </div>}
+              {selAnalise.coa ? (<>
+                <span style={{ fontSize:13, color:T.text, flex:1 }}>COA: {selAnalise.coa.name}</span>
+                <button onClick={()=>openCOA(selAnalise.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
+                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btn, fontSize:11 }}>🔄 Trocar</button>
+                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:null}); setSelAnalise({...selAnalise, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}>🗑️ Excluir</button>
+              </>) : (<>
+                <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
+                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}>📎 Anexar COA</button>
+              </>)}
+              <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
+            </div>
             {selAnalise.obs && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2 }}><b>Obs:</b> {selAnalise.obs}</div>}
             <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
               {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
