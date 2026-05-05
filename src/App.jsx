@@ -5358,11 +5358,13 @@ function IPCTab({ user, toast_ }) {
 
   useEffect(() => {
     setLoading(true);
+    const t = setTimeout(() => setLoading(false), 3000); // fallback coleção vazia
     const unsub = subscribeCollection("ipc_registros", list => {
+      clearTimeout(t);
       setRegistros(list.sort((a, b) => (b.criadoTs || 0) - (a.criadoTs || 0)));
       setLoading(false);
     });
-    return unsub;
+    return () => { clearTimeout(t); unsub && unsub(); };
   }, []);
 
   const areaAtual = AREAS.find(a => a.id === form.area);
@@ -5474,7 +5476,7 @@ function IPCTab({ user, toast_ }) {
                   onChange={e => setRes(i, "resultado", e.target.value)}
                   style={{ flex:1, minWidth:120 }}
                 />
-                <Sel value={r.conforme === null ? "" : String(r.conforme)} onChange={e => setRes(i, "conforme", e.target.value === "" ? null : e.target.value === "true")} style={{ minWidth:130 }}>
+                <Sel value={r.conforme === null ? "" : String(r.conforme)} onChange={e => setRes(i, "conforme", e.target.value === "" ? null : e.target.value === "true")}>
                   <option value="">— Situação —</option>
                   <option value="true">✓ Conforme</option>
                   <option value="false">✗ Não conforme</option>
@@ -5566,11 +5568,11 @@ function IPCTab({ user, toast_ }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <Sel value={filtroArea} onChange={e => setFiltroArea(e.target.value)} style={{ fontSize:12 }}>
+          <Sel value={filtroArea} onChange={e => setFiltroArea(e.target.value)}>
             <option value="todas">Todas as áreas</option>
             {AREAS.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
           </Sel>
-          <Sel value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ fontSize:12 }}>
+          <Sel value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
             <option value="todos">Todos os status</option>
             <option value="Liberado">✅ Liberado</option>
             <option value="Reprovado">❌ Reprovado</option>
