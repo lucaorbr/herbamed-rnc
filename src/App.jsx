@@ -1848,14 +1848,21 @@ async function uploadToCloudinary(file) {
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-// Helper para abrir COA — usa Google Docs Viewer para PDFs (Cloudinary plano gratuito)
+// Helper para abrir COA — faz download direto para PDFs (Cloudinary plano gratuito não serve PDFs inline)
 function openCOA(coa) {
   if (!coa?.url) return;
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
   const isPdf = coa.type === "application/pdf" || url.toLowerCase().includes(".pdf");
   if (isPdf) {
-    // Google Docs Viewer funciona com URLs raw do Cloudinary
-    window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`, "_blank", "noopener,noreferrer");
+    // Força download via link temporário — único método confiável com Cloudinary gratuito
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = coa.name || "COA.pdf";
+    a.target = "_blank";
+    a.rel = "noopener,noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }
