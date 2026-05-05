@@ -1848,13 +1848,17 @@ async function uploadToCloudinary(file) {
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-// Helper para abrir COA — com resource_type=raw a URL já serve o PDF diretamente
+// Helper para abrir COA — usa Google Docs Viewer para PDFs (Cloudinary plano gratuito)
 function openCOA(coa) {
   if (!coa?.url) return;
-  // Remove fl_inline se existir em URLs antigas
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
-  // Com resource_type=raw, a URL já é direta — abre sem precisar do Google Viewer
-  window.open(url, "_blank", "noopener,noreferrer");
+  const isPdf = coa.type === "application/pdf" || url.toLowerCase().includes(".pdf");
+  if (isPdf) {
+    // Google Docs Viewer funciona com URLs raw do Cloudinary
+    window.open(`https://docs.google.com/viewer?url=${encodeURIComponent(url)}`, "_blank", "noopener,noreferrer");
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }
 
 function AnexosUpload({ anexos, setAnexos }) {
