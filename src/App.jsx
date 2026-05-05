@@ -1848,21 +1848,26 @@ async function uploadToCloudinary(file) {
   throw new Error(data.error?.message || "Erro no upload");
 }
 
-// Helper para abrir COA — faz download direto para PDFs (Cloudinary plano gratuito não serve PDFs inline)
-function openCOA(coa) {
+// Helper para abrir COA — fetch+blob para PDFs (Cloudinary plano gratuito não serve PDFs inline)
+async function openCOA(coa) {
   if (!coa?.url) return;
   const url = coa.url.replace("/upload/fl_inline/", "/upload/");
   const isPdf = coa.type === "application/pdf" || url.toLowerCase().includes(".pdf");
   if (isPdf) {
-    // Força download via link temporário — único método confiável com Cloudinary gratuito
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = coa.name || "COA.pdf";
-    a.target = "_blank";
-    a.rel = "noopener,noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = coa.name || "COA.pdf";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   } else {
     window.open(url, "_blank", "noopener,noreferrer");
   }
