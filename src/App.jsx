@@ -391,7 +391,7 @@ function useS() {
 
 function F({ lbl, ch }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={s.lbl}>{lbl}</label>{ch}</div>; }
 function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
-function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", ...sx }} {...p}>{children}</select>; }
+function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", background: T.surf, color: T.text, ...sx }} {...p}>{children}</select>; }
 function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ ...s.inp, minHeight: 72, resize: "vertical", ...sx }} {...p} />; }
 function G2({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{ch}</div>; }
 function G3({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>{ch}</div>; }
