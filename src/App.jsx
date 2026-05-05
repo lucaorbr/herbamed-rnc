@@ -104,6 +104,22 @@ const THEMES = {
     border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
     red: "#ff3b30", yellow: "#ff9500", blue: "#007aff", orange: "#ff6b00", purple: "#af52de",
   },
+  win2k: {
+    name: "🖥️ Windows 2000", light: true,
+    bg: "#008080", surf: "#d4d0c8", card: "#d4d0c8", card2: "#c0bdb5",
+    accent: "#000080", accent2: "#00006a", accentDim: "#00008015",
+    accentGlow: "#00008030", text: "#000000", text2: "#444444", text3: "#888888",
+    border: "rgba(0,0,0,0.25)", border2: "rgba(0,0,0,0.4)",
+    red: "#cc0000", yellow: "#ccaa00", blue: "#000080", orange: "#cc6600", purple: "#660066",
+  },
+  winxp: {
+    name: "🪟 Windows XP", light: true,
+    bg: "#236dcd", surf: "#ece9d8", card: "#ffffff", card2: "#f1efe2",
+    accent: "#0a6ed1", accent2: "#084fa0", accentDim: "#0a6ed115",
+    accentGlow: "#0a6ed130", text: "#000000", text2: "#444444", text3: "#888888",
+    border: "rgba(0,0,0,0.15)", border2: "rgba(0,0,0,0.25)",
+    red: "#cc0000", yellow: "#e6a817", blue: "#0a6ed1", orange: "#e6720a", purple: "#7b0099",
+  },
 };
 
 const ThemeCtx = createContext(null);
