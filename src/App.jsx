@@ -5442,7 +5442,7 @@ function IPCTab({ user, toast_ }) {
 
   const salvarProduto = async () => {
     if (!formProd.nome) { alert("Informe o nome do produto."); return; }
-    if (!formProd.linha) { alert("Informe a linha."); return; }
+    if (!formProd.linha || formProd.linha === "__outro__") { alert("Informe a linha."); return; }
     const id = Date.now();
     await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
     setFormProd({ nome: "", linha: "", forma: "" });
@@ -5838,8 +5838,22 @@ function IPCProdutosTab({ user, toast_ }) {
           <SecTitle icon="➕" ch="Novo Produto" />
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             <F lbl="Nome *" ch={<Inp placeholder="Ex: Vitamina B12" value={formProd.nome} onChange={e => setFormProd(p=>({...p,nome:e.target.value}))} />} />
-            <F lbl="Linha *" ch={<Inp placeholder="Ex: Supra, Verde, Especial" value={formProd.linha} onChange={e => setFormProd(p=>({...p,linha:e.target.value}))} />} />
-            <F lbl="Forma farmacêutica" ch={<Inp placeholder="Ex: Cápsula, Comprimido, Líquido" value={formProd.forma} onChange={e => setFormProd(p=>({...p,forma:e.target.value}))} />} />
+            <F lbl="Linha *" ch={<>
+              <Sel value={formProd.linha.startsWith("__outro__") ? "__outro__" : formProd.linha} onChange={e => setFormProd(p=>({...p, linha: e.target.value === "__outro__" ? "__outro__" : e.target.value}))}>
+                <option value="">Selecione a linha...</option>
+                {["Supra","Verde","Beauty","Especial","Terceiros"].map(l=><option key={l} value={l}>{l}</option>)}
+                <option value="__outro__">Outros...</option>
+              </Sel>
+              {formProd.linha === "__outro__" && <Inp placeholder="Digite o nome da linha..." style={{marginTop:6}} onChange={e => setFormProd(p=>({...p, linha: e.target.value || "__outro__"}))} />}
+            </>} />
+            <F lbl="Forma farmacêutica" ch={<>
+              <Sel value={formProd.forma.startsWith("__outro__") ? "__outro__" : formProd.forma} onChange={e => setFormProd(p=>({...p, forma: e.target.value === "__outro__" ? "__outro__" : e.target.value}))}>
+                <option value="">Selecione a forma...</option>
+                {["Cápsula","Comprimido Mastigável","Líquido","Sachê","Lata","Potes"].map(f=><option key={f} value={f}>{f}</option>)}
+                <option value="__outro__">Outros...</option>
+              </Sel>
+              {formProd.forma === "__outro__" && <Inp placeholder="Digite a forma farmacêutica..." style={{marginTop:6}} onChange={e => setFormProd(p=>({...p, forma: e.target.value || "__outro__"}))} />}
+            </>} />
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
             <button style={s.btnA} onClick={salvarProduto}>+ Cadastrar Produto</button>
