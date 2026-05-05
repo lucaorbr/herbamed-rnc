@@ -25,7 +25,7 @@ const THEMES = {
     red: "#ff4f6a", yellow: "#ffd166", blue: "#4f9eff", orange: "#ff8c42", purple: "#a78bfa",
   },
   light: {
-    name: "☀️ Light Claro",
+    name: "☀️ Light Claro", light: true,
     bg: "#f4f7f4", surf: "#ffffff", card: "#ffffff", card2: "#f0f5f1",
     accent: "#1a7a3c", accent2: "#145c2e", accentDim: "#1a7a3c15",
     accentGlow: "#1a7a3c30", text: "#1a2e1e", text2: "#4a6b50", text3: "#8aaa8e",
@@ -47,6 +47,62 @@ const THEMES = {
     accentGlow: "#58a6ff35", text: "#e6edf3", text2: "#7d8590", text3: "#3d444d",
     border: "rgba(255,255,255,0.08)", border2: "rgba(255,255,255,0.15)",
     red: "#ff7b72", yellow: "#e3b341", blue: "#58a6ff", orange: "#ffa657", purple: "#d2a8ff",
+  },
+  midnight: {
+    name: "🌙 Midnight",
+    bg: "#0d0d1a", surf: "#12122a", card: "#16163a", card2: "#1a1a44",
+    accent: "#9d7fff", accent2: "#5b3fc8", accentDim: "#9d7fff18",
+    accentGlow: "#9d7fff40", text: "#e8e4ff", text2: "#8b87b8", text3: "#4a4680",
+    border: "rgba(157,127,255,0.1)", border2: "rgba(157,127,255,0.2)",
+    red: "#ff6b8a", yellow: "#ffd166", blue: "#7eb8ff", orange: "#ffaa5c", purple: "#c084fc",
+  },
+  cyberpunk: {
+    name: "🔥 Cyberpunk",
+    bg: "#0a0014", surf: "#100020", card: "#150028", card2: "#1a0030",
+    accent: "#ff00aa", accent2: "#aa0077", accentDim: "#ff00aa18",
+    accentGlow: "#ff00aa50", text: "#ffe0ff", text2: "#cc88cc", text3: "#884488",
+    border: "rgba(255,0,170,0.12)", border2: "rgba(255,0,170,0.25)",
+    red: "#ff3366", yellow: "#ffee00", blue: "#00eeff", orange: "#ff6600", purple: "#cc00ff",
+  },
+  matrix: {
+    name: "🍀 Matrix",
+    bg: "#000800", surf: "#001200", card: "#001800", card2: "#002000",
+    accent: "#00ff41", accent2: "#00aa2a", accentDim: "#00ff4118",
+    accentGlow: "#00ff4140", text: "#ccffcc", text2: "#44bb44", text3: "#226622",
+    border: "rgba(0,255,65,0.1)", border2: "rgba(0,255,65,0.2)",
+    red: "#ff4444", yellow: "#aaff00", blue: "#00ffcc", orange: "#88ff00", purple: "#44ff88",
+  },
+  sakura: {
+    name: "🌸 Sakura",
+    bg: "#1a0d12", surf: "#261118", card: "#2e1520", card2: "#361a26",
+    accent: "#ff6b9d", accent2: "#cc3366", accentDim: "#ff6b9d18",
+    accentGlow: "#ff6b9d40", text: "#ffe8f0", text2: "#cc8899", text3: "#884455",
+    border: "rgba(255,107,157,0.1)", border2: "rgba(255,107,157,0.2)",
+    red: "#ff4466", yellow: "#ffcc66", blue: "#cc88ff", orange: "#ff9966", purple: "#cc66ff",
+  },
+  cafe: {
+    name: "☕ Café",
+    bg: "#120a04", surf: "#1e1208", card: "#261608", card2: "#2e1a0a",
+    accent: "#d4874a", accent2: "#9a5a28", accentDim: "#d4874a18",
+    accentGlow: "#d4874a40", text: "#f5e6d0", text2: "#b08060", text3: "#705040",
+    border: "rgba(212,135,74,0.12)", border2: "rgba(212,135,74,0.22)",
+    red: "#e05555", yellow: "#f0c060", blue: "#80b0d0", orange: "#d4874a", purple: "#b088cc",
+  },
+  ubuntu: {
+    name: "🐧 Ubuntu",
+    bg: "#1a0a00", surf: "#2c1500", card: "#3a1c00", card2: "#442200",
+    accent: "#e95420", accent2: "#c0390a", accentDim: "#e9542018",
+    accentGlow: "#e9542040", text: "#fff8f5", text2: "#cc8866", text3: "#885533",
+    border: "rgba(233,84,32,0.12)", border2: "rgba(233,84,32,0.22)",
+    red: "#ff4444", yellow: "#f0a030", blue: "#4db8ff", orange: "#e95420", purple: "#aa66cc",
+  },
+  macos: {
+    name: "🍎 macOS", light: true,
+    bg: "#f0f0f5", surf: "#ffffff", card: "#ffffff", card2: "#f5f5fa",
+    accent: "#007aff", accent2: "#0055cc", accentDim: "#007aff12",
+    accentGlow: "#007aff30", text: "#1c1c1e", text2: "#6e6e73", text3: "#aeaeb2",
+    border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
+    red: "#ff3b30", yellow: "#ff9500", blue: "#007aff", orange: "#ff6b00", purple: "#af52de",
   },
 };
 
@@ -335,7 +391,7 @@ function useS() {
 
 function F({ lbl, ch }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={s.lbl}>{lbl}</label>{ch}</div>; }
 function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
-function Sel({ sx, children, ...p }) { const s = useS(); return <select style={{ ...s.inp, ...sx }} {...p}>{children}</select>; }
+function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", ...sx }} {...p}>{children}</select>; }
 function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ ...s.inp, minHeight: 72, resize: "vertical", ...sx }} {...p} />; }
 function G2({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{ch}</div>; }
 function G3({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>{ch}</div>; }
