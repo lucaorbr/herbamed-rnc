@@ -5407,23 +5407,49 @@ function IPCTab({ user, toast_ }) {
     },
   ];
 
-  const [form, setForm] = useState({ area: "", sala: "", op: "", produto: "", resp: "", data: "", obs: "" });
+  const [form, setForm] = useState({ area: "", sala: "", op: "", produto: "", linha: "", resp: "", data: "", obs: "" });
   const [resultados, setResultados] = useState([]);
   const [filtroArea, setFiltroArea] = useState("todas");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroLinha, setFiltroLinha] = useState("todas");
+  const [busca, setBusca] = useState("");
+  const [produtos, setProdutos] = useState([]);
+  const [showCadastroProd, setShowCadastroProd] = useState(false);
+  const [formProd, setFormProd] = useState({ nome: "", linha: "", forma: "" });
+
+  const LINHAS = [...new Set(produtos.map(p => p.linha).filter(Boolean))];
+  const isAdmin = user?.role === "admin";
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
     setLoading(true);
-    const t = setTimeout(() => setLoading(false), 3000); // fallback coleção vazia
+    const t = setTimeout(() => setLoading(false), 3000);
     const unsub = subscribeCollection("ipc_registros", list => {
       clearTimeout(t);
       setRegistros(list.sort((a, b) => (b.criadoTs || 0) - (a.criadoTs || 0)));
       setLoading(false);
     });
-    return () => { clearTimeout(t); unsub && unsub(); };
+    const unsubProd = subscribeCollection("ipc_produtos", list => {
+      setProdutos(list.sort((a, b) => (a.nome||"").localeCompare(b.nome||"")));
+    });
+    return () => { clearTimeout(t); unsub && unsub(); unsubProd && unsubProd(); };
   }, []);
+
+  const salvarProduto = async () => {
+    if (!formProd.nome) { alert("Informe o nome do produto."); return; }
+    if (!formProd.linha) { alert("Informe a linha."); return; }
+    const id = Date.now();
+    await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
+    setFormProd({ nome: "", linha: "", forma: "" });
+    toast_("Produto cadastrado!", "green");
+  };
+
+  const deletarProduto = async (id) => {
+    if (!confirm("Excluir este produto?")) return;
+    await deleteFromCollection("ipc_produtos", String(id));
+    toast_("Produto excluído.", "red");
+  };
 
   const areaAtual = AREAS.find(a => a.id === form.area);
 
@@ -5486,7 +5512,9 @@ function IPCTab({ user, toast_ }) {
 
   const filtrados = registros
     .filter(r => filtroArea === "todas" || r.area === filtroArea)
-    .filter(r => filtroStatus === "todos" || r.status === filtroStatus);
+    .filter(r => filtroStatus === "todos" || r.status === filtroStatus)
+    .filter(r => filtroLinha === "todas" || r.linha === filtroLinha)
+    .filter(r => !busca || r.op?.toLowerCase().includes(busca.toLowerCase()) || r.produto?.toLowerCase().includes(busca.toLowerCase()));
 
   // ── FORM NOVO/EDITAR ──
   if (view === "novo") return (
@@ -5514,7 +5542,23 @@ function IPCTab({ user, toast_ }) {
             } />
           )}
           <F lbl="OP *" ch={<Inp placeholder="Ex: OP-2025-001" value={form.op} onChange={e => setF("op", e.target.value)} />} />
-          <F lbl="Produto *" ch={<Inp placeholder="Ex: Cápsulas Vitamina C" value={form.produto} onChange={e => setF("produto", e.target.value)} />} />
+          <F lbl="Produto *" ch={
+            <Sel value={form.produto} onChange={e => {
+              const prod = produtos.find(p => p.nome === e.target.value);
+              setF("produto", e.target.value);
+              setF("linha", prod?.linha || "");
+            }}>
+              <option value="">Selecione o produto...</option>
+              {[...new Set(produtos.map(p=>p.linha))].map(linha => (
+                <optgroup key={linha} label={`— ${linha} —`}>
+                  {produtos.filter(p=>p.linha===linha).map(p => (
+                    <option key={p.id} value={p.nome}>{p.nome}{p.forma?` (${p.forma})`:""}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </Sel>
+          } />
+          {form.linha && <F lbl="Linha" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13, color:T.accent, fontWeight:600 }}>{form.linha}</div>} />}
           <F lbl="Responsável" ch={<Inp placeholder="Nome do operador" value={form.resp} onChange={e => setF("resp", e.target.value)} />} />
           <F lbl="Data" ch={<Inp type="date" value={form.data || tod()} onChange={e => setF("data", e.target.value)} />} />
         </>} />
@@ -5636,8 +5680,18 @@ function IPCTab({ user, toast_ }) {
   // ── LISTA ──
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:10 }}>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:10 }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          {/* Barra de busca */}
+          <div style={{ position:"relative" }}>
+            <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:13 }}>🔍</span>
+            <input placeholder="Buscar OP ou produto..." value={busca} onChange={e => setBusca(e.target.value)}
+              style={{ ...s.inp, paddingLeft:30, width:200, fontSize:12 }} />
+          </div>
+          <Sel value={filtroLinha} onChange={e => setFiltroLinha(e.target.value)}>
+            <option value="todas">Todas as linhas</option>
+            {LINHAS.map(l => <option key={l} value={l}>{l}</option>)}
+          </Sel>
           <Sel value={filtroArea} onChange={e => setFiltroArea(e.target.value)}>
             <option value="todas">Todas as áreas</option>
             {AREAS.map(a => <option key={a.id} value={a.id}>{a.icon} {a.label}</option>)}
@@ -5649,10 +5703,39 @@ function IPCTab({ user, toast_ }) {
             <option value="Pendente">⏳ Pendente</option>
           </Sel>
         </div>
-        <button style={s.btnA} onClick={() => { setSel(null); setForm({ area:"", sala:"", op:"", produto:"", resp:"", data:tod(), obs:"" }); setResultados([]); setView("novo"); }}>
-          + Novo Registro IPC
-        </button>
+        <div style={{ display:"flex", gap:8 }}>
+          {isAdmin && <button style={s.btn} onClick={() => setShowCadastroProd(v => !v)}>📦 Produtos</button>}
+          <button style={s.btnA} onClick={() => { setSel(null); setForm({ area:"", sala:"", op:"", produto:"", linha:"", resp:"", data:tod(), obs:"" }); setResultados([]); setView("novo"); }}>
+            + Novo Registro IPC
+          </button>
+        </div>
       </div>
+
+      {/* Painel de cadastro de produtos (admin) */}
+      {showCadastroProd && isAdmin && (
+        <div style={{ ...s.card, marginBottom:16 }}>
+          <SecTitle icon="📦" ch="Cadastro de Produtos" />
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+            <Inp placeholder="Nome do produto *" value={formProd.nome} onChange={e => setFormProd(p=>({...p,nome:e.target.value}))} style={{ flex:2, minWidth:160 }} />
+            <Inp placeholder="Linha (ex: Supra, Verde, Especial) *" value={formProd.linha} onChange={e => setFormProd(p=>({...p,linha:e.target.value}))} style={{ flex:1, minWidth:130 }} />
+            <Inp placeholder="Forma (ex: Cápsula, Comprimido)" value={formProd.forma} onChange={e => setFormProd(p=>({...p,forma:e.target.value}))} style={{ flex:1, minWidth:130 }} />
+            <button style={s.btnA} onClick={salvarProduto}>+ Adicionar</button>
+          </div>
+          {produtos.length > 0 && (
+            <div style={{ maxHeight:200, overflowY:"auto" }}>
+              {produtos.map(p => (
+                <div key={p.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:T.surf, borderRadius:8, marginBottom:4 }}>
+                  <div style={{ flex:1, fontSize:12, color:T.text, fontWeight:600 }}>{p.nome}</div>
+                  <span style={{ fontSize:11, padding:"2px 8px", borderRadius:12, background:T.accentDim, color:T.accent }}>{p.linha}</span>
+                  {p.forma && <span style={{ fontSize:11, color:T.text2 }}>{p.forma}</span>}
+                  <button onClick={() => deletarProduto(p.id)} style={{ ...s.btnD, fontSize:10, padding:"2px 8px" }}>🗑️</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {produtos.length === 0 && <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem" }}>Nenhum produto cadastrado ainda.</div>}
+        </div>
+      )}
 
       {loading ? (
         <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>
@@ -5671,7 +5754,7 @@ function IPCTab({ user, toast_ }) {
               <div style={{ fontSize:22 }}>{area?.icon||"🏭"}</div>
               <div style={{ flex:1, minWidth:150 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:T.text }}>OP: {r.op} — {r.produto}</div>
-                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{area?.label}{r.sala ? ` · ${r.sala}` : ""} · {fmt(r.data)}{r.resp ? ` · ${r.resp}` : ""}</div>
+                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{area?.label}{r.sala ? ` · ${r.sala}` : ""}{r.linha ? ` · ${r.linha}` : ""} · {fmt(r.data)}{r.resp ? ` · ${r.resp}` : ""}</div>
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                 {(r.resultados||[]).map((res, i) => (
