@@ -5982,7 +5982,7 @@ function IPCProdutosTab({ user, toast_ }) {
   );
 }
 
-/* ─── POPs — LEGADO (substituído por Gestão de Docs) ── início do bloco comentado ─
+/* POPs LEGADO - substituido por Gestao de Docs - inicio
 /* ─── POPs — PROCEDIMENTOS OPERACIONAIS PADRÃO ───────────────────────────────── */
 const LOGO_HERBAMED_POP = "https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li";
 const HERBAMED_POP = {
@@ -6487,7 +6487,7 @@ Seja técnico, claro e específico para a indústria nutracêutica/farmacêutica
 
 
 /* ─── CLIENTES TERCEIROS TAB ─────────────────────────────────────────────────── */
-─── fim do bloco comentado POPsTab ────────────────────────────────────────────── */
+fim do bloco POPs LEGADO */
 function ClientesTab({ user, toast_ }) {
   const T = useTheme(); const s = useS();
   const [clientes, setClientes] = useState([]);
