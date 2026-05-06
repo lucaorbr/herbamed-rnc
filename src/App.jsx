@@ -1732,6 +1732,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
     const va = a[sortCol] || ""; const vb = b[sortCol] || "";
     return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
   });
+  const {paginated:_rncs,page:_pgRNC,total:_totRNC,setPage:_setPgRNC} = usePagination(sorted, 20);
 
   // Steps de progresso da RNC
   const getRNCStep = (r) => {
@@ -1786,7 +1787,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
               </tr>
             </thead>
             <tbody>
-              {(()=>{const {paginated:_rncs,page:_pgRNC,total:_totRNC,setPage:_setPgRNC}=usePagination(sorted,20);return(<>{_rncs.map((r, idx) => {
+              {_rncs.map((r, idx) => {
                 const step = getRNCStep(r);
                 const vencido = past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz";
                 return (
@@ -1822,6 +1823,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
             <span>Clique em uma linha para ver detalhes</span>
           </div>
         </div>
+        <Pagination page={_pgRNC} total={_totRNC} setPage={_setPgRNC}/>
       )}
 
       {/* MODAL */}
