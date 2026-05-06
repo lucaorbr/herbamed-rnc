@@ -87,6 +87,17 @@ const useTheme = () => useContext(ThemeCtx);
 const FormalCtx = createContext(false);
 const useFormal = () => useContext(FormalCtx);
 
+// Remove emojis de strings quando modo formal ativo
+function stripEmoji(str) {
+  return String(str).replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{1F300}-\u{1FAFF}]/gu, "").replace(/\s+/g, " ").trim();
+}
+
+// Hook para retornar texto com ou sem emoji
+function useFT() {
+  const formal = useFormal();
+  return (str) => (formal && typeof str === "string") ? stripEmoji(str) : str;
+}
+
 const MENU_SVG_ICONS = {
   "home": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>`,
   "lista": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>`,
@@ -399,9 +410,10 @@ function Divider() { const T = useTheme(); return <div style={{ height: 1, backg
 
 function SecTitle({ icon, ch }) {
   const T = useTheme();
+  const formal = useFormal();
   return <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
     <span style={{ display: "block", width: 3, height: 13, background: `linear-gradient(to bottom,${T.accent},${T.accent2})`, borderRadius: 2 }} />
-    {icon && <span>{icon}</span>}{ch}
+    {icon && !formal && <span>{icon}</span>}{ch}
   </div>;
 }
 
@@ -674,7 +686,7 @@ function ThemePicker({ current, onChange, formal, onToggleFormal }) {
       {/* Seletor de tema */}
       <div style={{ position: "relative" }}>
         <button style={{ ...s.btn, padding: "6px 12px", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpen(o => !o)}>
-          🎨 {THEMES[current].name}
+          {formal ? "" : "🎨 "}{THEMES[current].name}
         </button>
         {open && (
           <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 8, zIndex: 500, minWidth: 200, boxShadow: "0 16px 48px #0008" }}>
@@ -1127,13 +1139,17 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={T}>
     <FormalCtx.Provider value={formalMode}>
-      <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
+      <div data-formal={formalMode ? "true" : "false"} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
           @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
           @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
+          ${formalMode ? `
+            button .emoji-hide, span.emoji-hide { display: none !important; }
+            [data-formal="true"] .btn-emoji { display: none !important; }
+          ` : ""}
           .rnc-row:hover{background:${T.card2}!important;}
           .th-sort:hover{color:${T.accent}!important;cursor:pointer;}
           select option{background:${T.surf}!important;color:${T.text}!important;}
@@ -1767,7 +1783,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <SevB s={sel.sev} /><Badge s={sel.status} />
                 {canEdit(sel) && !editing && (
-                  <button onClick={() => startEdit(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}>✏️ Editar</button>
+                  <button onClick={() => startEdit(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
                 )}
                 <button onClick={() => setSel(null)} style={{ background: T.border, border: "none", color: T.text2, cursor: "pointer", borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: "inherit" }}>✕</button>
               </div>
@@ -1904,10 +1920,10 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                 )}
 
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
-                  {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}>🗑️ Excluir</button>}
+                  {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
-                  {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}>✏️ Editar</button>}
+                  {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
                   <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
                 </div>
               </div>
@@ -3527,7 +3543,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
             </div>
           </div>
           <div style={{ display:"flex", gap:8 }}>
-            {items.length>0 && <button style={{ ...s.btn, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportFMEAPDF(items)}>📄 Exportar PDF</button>}
+            {items.length>0 && <button style={{ ...s.btn, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportFMEAPDF(items)}><span className="btn-emoji">📄 </span>Exportar PDF</button>}
             <button style={s.btnA} onClick={addItem}>+ Adicionar item</button>
           </div>
         </div>
@@ -3948,7 +3964,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
               </div>
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                 <span style={{ fontSize:11, fontWeight:600, color:STATUS_FORN[sel.status], background:`${STATUS_FORN[sel.status]}18`, padding:"4px 12px", borderRadius:20 }}>{sel.status}</span>
-                {isAdmin && !editMode && <button onClick={()=>{setEditData({...sel});setEditMode(true);}} style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }}>✏️ Editar</button>}
+                {isAdmin && !editMode && <button onClick={()=>{setEditData({...sel});setEditMode(true);}} style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>}
                 <button onClick={()=>{setSel(null);setEditMode(false);}} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
             </div>
@@ -3967,7 +3983,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
                 <F lbl="Observações" ch={<TA rows={3} value={editData.obs||""} onChange={e=>setEditData(p=>({...p,obs:e.target.value}))} />} />
                 <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:12 }}>
                   <button style={s.btn} onClick={()=>setEditMode(false)}>Cancelar</button>
-                  <button style={s.btnA} onClick={saveEdit}>💾 Salvar</button>
+                  <button style={s.btnA} onClick={saveEdit}><span className="btn-emoji">💾 </span>Salvar</button>
                 </div>
               </div>
             ) : (
@@ -4018,7 +4034,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
                 </div>
 
                 <div style={{ display:"flex", gap:8, justifyContent:"flex-end", borderTop:`1px solid ${T.border}`, paddingTop:"1rem" }}>
-                  {isAdmin && <button style={s.btnD} onClick={()=>delForn(sel.id)}>🗑️ Excluir</button>}
+                  {isAdmin && <button style={s.btnD} onClick={()=>delForn(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={s.btn} onClick={()=>setSel(null)}>Fechar</button>
                 </div>
               </div>
@@ -4647,7 +4663,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                       </span>
                     </td>
                     <td style={{ padding:"10px 8px", display:"flex", gap:4 }}>
-                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11 }} onClick={e=>{e.stopPropagation();exportRA(f);}}>📄 PDF</button>
+                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11 }} onClick={e=>{e.stopPropagation();exportRA(f);}}><span className="btn-emoji">📄 </span>PDF</button>
                     </td>
                   </tr>
                 );
@@ -4667,7 +4683,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selFicha.material} · {selFicha.fornecedor||"—"} · {fmt(selFicha.dataAnalise)}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selFicha)}>📄 Exportar PDF</button>
+                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selFicha)}><span className="btn-emoji">📄 </span>Exportar PDF</button>
                 <button style={s.btnD} onClick={()=>delFicha(selFicha.id)}>🗑️</button>
                 <button onClick={()=>setSelFicha(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
@@ -4697,11 +4713,11 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
               {selFicha.coa ? (<>
                 <span style={{ fontSize:13, color:T.text, flex:1 }}>COA: {selFicha.coa.name}</span>
                 <button onClick={()=>openCOA(selFicha.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
-                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btn, fontSize:11 }}>🔄 Trocar</button>
-                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:null}); setSelFicha({...selFicha, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}>🗑️ Excluir</button>
+                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btn, fontSize:11 }}><span className="btn-emoji">🔄 </span>Trocar</button>
+                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:null}); setSelFicha({...selFicha, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}><span className="btn-emoji">🗑️ </span>Excluir</button>
               </>) : (<>
                 <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
-                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btnA, fontSize:11 }}>📎 Anexar COA</button>
+                <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>
               </>)}
               <input id="coa-reattach-ficha" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:r}); setSelFicha({...selFicha, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
@@ -4931,7 +4947,7 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
                   <td style={{ padding:"10px 12px", fontSize:12, color:T.accent, fontWeight:700 }}>{m.ensaios?.length||0}</td>
                   <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.ref||"—"}</td>
                   <td style={{ padding:"10px 8px", display:"flex", gap:6 }}>
-                    <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}>✏️ Editar</button>
+                    <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
                     <button style={{ ...s.btnD, padding:"4px 10px", fontSize:11 }} onClick={()=>delMaterial(m.id)}>🗑️</button>
                   </td>
                 </tr>
@@ -4979,7 +4995,7 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
           <SecTitle icon="🔬" ch={`Ensaios (${ensaios.length})`} />
           <div style={{ display:"flex", gap:8 }}>
             <button style={s.btn} onClick={()=>aplicarSugestoes(form.tipo)}>↺ Recarregar sugestões</button>
-            <button style={s.btnA} onClick={addEnsaio}>+ Adicionar ensaio</button>
+            <button style={s.btnA} onClick={addEnsaio}><span className="btn-emoji">+ </span>Adicionar ensaio</button>
           </div>
         </div>
 
@@ -5008,7 +5024,7 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
 
       <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem" }}>
         <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>Cancelar</button>
-        <button style={s.btnA} onClick={salvar}>💾 Salvar material →</button>
+        <button style={s.btnA} onClick={salvar}><span className="btn-emoji">💾 </span>Salvar material →</button>
       </div>
     </div>
   );
@@ -5334,7 +5350,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                       </span>
                     </td>
                     <td style={{ padding:"10px 8px" }}>
-                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={e=>{e.stopPropagation();exportRA(a);}}>📄 PDF</button>
+                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={e=>{e.stopPropagation();exportRA(a);}}><span className="btn-emoji">📄 </span>PDF</button>
                     </td>
                   </tr>
                 );
@@ -5354,8 +5370,8 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}>📄 PDF</button>
-                <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}>📋 Gerar Laudo</button>
+                <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}><span className="btn-emoji">📄 </span>PDF</button>
+                <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>
                 <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
                 <button onClick={()=>setSelAnalise(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
@@ -5388,11 +5404,11 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               {selAnalise.coa ? (<>
                 <span style={{ fontSize:13, color:T.text, flex:1 }}>COA: {selAnalise.coa.name}</span>
                 <button onClick={()=>openCOA(selAnalise.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
-                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btn, fontSize:11 }}>🔄 Trocar</button>
-                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:null}); setSelAnalise({...selAnalise, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}>🗑️ Excluir</button>
+                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btn, fontSize:11 }}><span className="btn-emoji">🔄 </span>Trocar</button>
+                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:null}); setSelAnalise({...selAnalise, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}><span className="btn-emoji">🗑️ </span>Excluir</button>
               </>) : (<>
                 <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
-                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}>📎 Anexar COA</button>
+                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>
               </>)}
               <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
@@ -5730,8 +5746,8 @@ function IPCTab({ user, toast_ }) {
           </div>
         </div>
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-          <button style={{ ...s.btnD, fontSize:12 }} onClick={() => deletar(sel.id)}>🗑️ Excluir</button>
-          <button style={{ ...s.btn, fontSize:12 }} onClick={() => editar(sel)}>✏️ Editar</button>
+          <button style={{ ...s.btnD, fontSize:12 }} onClick={() => deletar(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>
+          <button style={{ ...s.btn, fontSize:12 }} onClick={() => editar(sel)}><span className="btn-emoji">✏️ </span>Editar</button>
         </div>
       </div>
     );
@@ -5912,7 +5928,7 @@ function IPCProdutosTab({ user, toast_ }) {
             </>} />
           </div>
           <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
-            <button style={s.btnA} onClick={salvarProduto}>+ Cadastrar Produto</button>
+            <button style={s.btnA} onClick={salvarProduto}><span className="btn-emoji">+ </span>Cadastrar Produto</button>
           </div>
         </div>
       )}
@@ -6282,7 +6298,7 @@ function LaudosTab({ user, toast_, users }) {
           <SecTitle icon="🔬" ch="Ensaios" />
           <div style={{ display:"flex", gap:8 }}>
             <button style={{ ...s.btn, fontSize:11 }} onClick={importarEnsaios}>📥 Importar do {form.tipo==="processo"?"IPC":"CQ"}</button>
-            <button style={{ ...s.btnA, fontSize:11 }} onClick={addEnsaio}>+ Adicionar ensaio</button>
+            <button style={{ ...s.btnA, fontSize:11 }} onClick={addEnsaio}><span className="btn-emoji">+ </span>Adicionar ensaio</button>
           </div>
         </div>
         {(form.ensaios||[]).length === 0 ? (
@@ -6342,11 +6358,11 @@ function LaudosTab({ user, toast_, users }) {
           <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>N° {lSel.numLaudo}</h2>
           <span style={{ padding:"3px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:statusBg[lSel.status], color:statusColor[lSel.status] }}>{statusIcon[lSel.status]} {lSel.status}</span>
           <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
-            {podeAssinarAnalista && <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>assinarAnalista(lSel)}>✍️ Assinar como Analista</button>}
-            {podeAssinarRT && <button style={{ ...s.btnA, fontSize:12, background:T.orange||"#ff9800" }} onClick={()=>assinarRT(lSel)}>🔬 Assinar como RT</button>}
-            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>exportPDF(lSel)}>🖨️ Exportar PDF</button>
+            {podeAssinarAnalista && <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>assinarAnalista(lSel)}><span className="btn-emoji">✍️ </span>Assinar como Analista</button>}
+            {podeAssinarRT && <button style={{ ...s.btnA, fontSize:12, background:T.orange||"#ff9800" }} onClick={()=>assinarRT(lSel)}><span className="btn-emoji">🔬 </span>Assinar como RT</button>}
+            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>exportPDF(lSel)}><span className="btn-emoji">🖨️ </span>Exportar PDF</button>
             <button style={{ ...s.btn, fontSize:12 }} onClick={()=>{setSel(lSel);setForm({tipo:lSel.tipo,clienteId:lSel.clienteId,produto:lSel.produto,linha:lSel.linha||"",lote:lSel.lote||"",op:lSel.op||"",data:lSel.data,obs:lSel.obs||"",armazenamento:lSel.armazenamento||`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
-• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:lSel.ensaios||[]});setView("novo");}}>✏️ Editar</button>
+• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:lSel.ensaios||[]});setView("novo");}}><span className="btn-emoji">✏️ </span>Editar</button>
             <button style={{ ...s.btnD, fontSize:12 }} onClick={()=>deletar(lSel.id)}>🗑️</button>
           </div>
         </div>
@@ -6685,8 +6701,8 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
             </div>
             <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
               <span style={{ fontSize:11, fontWeight:600, color:STATUS_AUD[a.status], background:`${STATUS_AUD[a.status]}18`, padding:"3px 10px", borderRadius:20 }}>{a.status}</span>
-              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportAuditoriaPDF(a)}>📄 PDF</button>
-              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}>✏️ Editar</button>
+              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportAuditoriaPDF(a)}><span className="btn-emoji">📄 </span>PDF</button>
+              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}><span className="btn-emoji">✏️ </span>Editar</button>
               <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={()=>del(a.id)}>🗑️</button>
             </div>
           </div>
@@ -7016,7 +7032,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                   <span style={{ display:"inline-flex", padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:u.role==="admin"?T.accentDim:u.role==="viewer"?"#4fc3f718":u.role==="rt"?"#ff980018":u.role==="keyuser"?"#9c27b018":T.border, color:u.role==="admin"?T.accent:u.role==="viewer"?"#4fc3f7":u.role==="rt"?"#ff9800":u.role==="keyuser"?"#9c27b0":T.text2 }}>
                     {u.role==="admin"?"Admin":u.role==="viewer"?"👁️ Visualizador":u.role==="rt"?"🔬 RT":u.role==="keyuser"?"⭐ Key User":"Usuário"}
                   </span>
-                  <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>startEdit(u)}>✏️ Editar</button>
+                  <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>startEdit(u)}><span className="btn-emoji">✏️ </span>Editar</button>
                   {u.id!==currentUser.uid && <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>delUser(u.id)}>🗑️ Remover</button>}
                 </div>
               </div>
