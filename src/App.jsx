@@ -84,6 +84,30 @@ const THEMES = {
 
 const ThemeCtx = createContext(null);
 const useTheme = () => useContext(ThemeCtx);
+const FormalCtx = createContext(false);
+const useFormal = () => useContext(FormalCtx);
+
+const MENU_SVG_ICONS = {
+  "home": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>`,
+  "lista": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>`,
+  "nova": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  "dashboard": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+  "relatorios": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  "cep": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
+  "fmea": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  "nqa": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  "cq-materiais": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>`,
+  "cq-analises": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2h-4"/><polyline points="9 3 9 11 12 8 15 11 15 3"/></svg>`,
+  "cq-dashboard": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`,
+  "ipc": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2z"/></svg>`,
+  "ipc-produtos": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>`,
+  "fornecedores": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`,
+  "auditorias": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  "laudos": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  "clientes": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+  "admin": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M5.34 17.66l-1.41 1.41M21 12h-2M5 12H3M17.66 17.66l1.41 1.41M4.93 4.93l1.41 1.41"/></svg>`,
+};
+
 
 /* ─── UTILS ─────────────────────────────────────────────────────────────────── */
 const tod = () => new Date().toISOString().split("T")[0];
@@ -630,24 +654,39 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
 }
 
 /* ─── THEME PICKER ───────────────────────────────────────────────────────────── */
-function ThemePicker({ current, onChange }) {
+function ThemePicker({ current, onChange, formal, onToggleFormal }) {
   const T = useTheme(); const s = useS();
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: "relative" }}>
-      <button style={{ ...s.btn, padding: "6px 12px", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpen(o => !o)}>
-        🎨 {THEMES[current].name}
+    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+      {/* Toggle Modo Formal */}
+      <button
+        onClick={onToggleFormal}
+        title={formal ? "Desativar Modo Formal" : "Ativar Modo Formal"}
+        style={{ ...s.btn, padding:"6px 10px", fontSize:11, display:"flex", alignItems:"center", gap:5,
+          background: formal ? T.accent : "transparent",
+          color: formal ? (T.light?"#fff":"#fff") : T.text2,
+          border: `1px solid ${formal ? T.accent : T.border2}`,
+        }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3h-8a2 2 0 00-2 2v2h12V5a2 2 0 00-2-2z"/></svg>
+        {formal ? "Formal ON" : "Formal"}
       </button>
-      {open && (
-        <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 8, zIndex: 500, minWidth: 200, boxShadow: "0 16px 48px #0008" }}>
-          {Object.entries(THEMES).map(([key, th]) => (
-            <button key={key} onClick={() => { onChange(key); setOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", border: "none", background: current === key ? T.accentDim : "transparent", color: current === key ? T.accent : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12, borderRadius: 8, fontWeight: current === key ? 600 : 400 }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: th.accent, display: "inline-block", boxShadow: `0 0 6px ${th.accent}` }} />
-              {th.name}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Seletor de tema */}
+      <div style={{ position: "relative" }}>
+        <button style={{ ...s.btn, padding: "6px 12px", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setOpen(o => !o)}>
+          🎨 {THEMES[current].name}
+        </button>
+        {open && (
+          <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 8, zIndex: 500, minWidth: 200, boxShadow: "0 16px 48px #0008" }}>
+            {Object.entries(THEMES).map(([key, th]) => (
+              <button key={key} onClick={() => { onChange(key); setOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", border: "none", background: current === key ? T.accentDim : "transparent", color: current === key ? T.accent : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12, borderRadius: 8, fontWeight: current === key ? 600 : 400 }}>
+                <span style={{ width: 12, height: 12, borderRadius: "50%", background: th.accent, display: "inline-block", boxShadow: `0 0 6px ${th.accent}` }} />
+                {th.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -809,12 +848,13 @@ function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
   const grupoAtivo = grupo.items.some(i => i.id === tab);
   const [open, setOpen] = useState(() => defaultOpen);
   const grupoBadge = grupo.items.reduce((s,i) => s + (i.badge||0), 0);
+  const formal = useFormal();
 
   return (
     <div style={{ marginBottom:2 }}>
       {sidebarOpen ? (
         <button onClick={()=>setOpen(o=>!o)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"7px 8px", border:"none", background: grupoAtivo?`${T.accent}12`:"transparent", color: grupoAtivo?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:700, borderRadius:8, textAlign:"left", textTransform:"uppercase", letterSpacing:".06em", transition:"all .15s", marginTop:4 }}>
-          <span style={{ fontSize:12, flexShrink:0 }}>{grupo.icon}</span>
+          {!formal && <span style={{ fontSize:12, flexShrink:0 }}>{grupo.icon}</span>}
           <span style={{ flex:1 }}>{grupo.label}</span>
           {grupoBadge>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px" }}>{grupoBadge}</span>}
           <span style={{ fontSize:8, opacity:.4, transition:"transform .2s", display:"inline-block", transform:open?"rotate(180deg)":"rotate(0)" }}>▼</span>
@@ -824,7 +864,10 @@ function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
       )}
       {(open || !sidebarOpen) && grupo.items.map(item=>(
         <button key={item.id} onClick={()=>setTab(item.id)} style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding: sidebarOpen?"7px 10px 7px 22px":"8px 10px", border: tab===item.id?`1px solid ${T.accent}22`:"1px solid transparent", background: tab===item.id?T.accentDim:"transparent", color: tab===item.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight: tab===item.id?600:400, borderRadius:8, marginBottom:1, transition:"all .15s", textAlign:"left", boxShadow: tab===item.id?`0 0 8px ${T.accentGlow}`:"none", whiteSpace:"nowrap", overflow:"hidden", position:"relative" }}>
-          <span style={{ fontSize:15, flexShrink:0, width:18, textAlign:"center" }}>{item.icon}</span>
+          {formal && MENU_SVG_ICONS[item.id]
+            ? <span style={{ display:"flex", alignItems:"center", flexShrink:0, width:18, justifyContent:"center" }} dangerouslySetInnerHTML={{ __html: MENU_SVG_ICONS[item.id] }} />
+            : <span style={{ fontSize:15, flexShrink:0, width:18, textAlign:"center" }}>{item.icon}</span>
+          }
           {sidebarOpen && <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", fontSize:12 }}>{item.label}</span>}
           {sidebarOpen && (item.badge||0)>0 && <span style={{ background:T.red, color:"#fff", fontSize:8, fontWeight:700, borderRadius:10, padding:"1px 5px", flexShrink:0 }}>{item.badge}</span>}
           {!sidebarOpen && (item.badge||0)>0 && <span style={{ position:"absolute", top:3, right:3, width:6, height:6, borderRadius:"50%", background:T.red }} />}
@@ -897,8 +940,10 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
 /* ─── MAIN APP ───────────────────────────────────────────────────────────────── */
 export default function App() {
   const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
+  const [formalMode, setFormalMode] = useState(() => localStorage.getItem("hm_formal") === "true");
   const T = THEMES[themeKey];
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
+  const toggleFormal = () => { const v = !formalMode; setFormalMode(v); localStorage.setItem("hm_formal", String(v)); };
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -1027,7 +1072,7 @@ export default function App() {
         </div>
         <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
       </div>
-    </ThemeCtx.Provider>
+    </FormalCtx.Provider></ThemeCtx.Provider>
   );
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
@@ -1081,6 +1126,7 @@ export default function App() {
 
   return (
     <ThemeCtx.Provider value={T}>
+    <FormalCtx.Provider value={formalMode}>
       <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
@@ -1146,7 +1192,7 @@ export default function App() {
 
           {/* Right: theme + notif + avatar */}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} /></div>
+            <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} formal={formalMode} onToggleFormal={toggleFormal} /></div>
 
             {/* Notifications bell */}
             <div style={{ position:"relative" }}>
@@ -1291,6 +1337,7 @@ export default function App() {
           </div>
         )}
       </div>
+    </FormalCtx.Provider>
     </ThemeCtx.Provider>
   );
 }
