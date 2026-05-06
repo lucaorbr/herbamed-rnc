@@ -1333,7 +1333,7 @@ export default function App() {
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
               {tab==="pops"         && <POPsTab user={user} toast_={toast_} users={users} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} saveCollection={saveCollection} deleteFromCollection={deleteFromCollection} subscribeCollection={subscribeCollection} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
@@ -7611,54 +7611,147 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
 }
 
 
-/* ─── GESTÃO DE DOCUMENTOS ─────────────────────────────────────────────────── */
-export function GestaoDocumentosTab({ user, toast_, users, saveCollection, deleteFromCollection, subscribeCollection }) {
-  const T  = useTheme();
-  const s  = useS();
 
-  // ── State ──
-  const [docs,     setDocs]     = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [view,     setView]     = useState("lista"); // lista | arvore | novo | detalhe | treino
-  const [sel,      setSel]      = useState(null);
-  const [aiLoading,setAiLoading]= useState(false);
+/* ─── GESTÃO DE DOCUMENTOS — CONSTANTES ─────────────────────────────────────── */
+const HERBAMED_INFO_GD = {
+  nome: "Herbamed Laboratório Nutracêutico LTDA",
+  cnpj: "14.829.598/0001-30",
+  endereco: "Av Irene Meneghetti Longhini, 500, Água do Ayero",
+  cidade: "Assis/SP - Brasil",
+  cep: "19816-370",
+  logo: "https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li",
+};
 
-  // Filtros
-  const [buscaTxt, setBuscaTxt]       = useState("");
+const TIPOS_DOC_GD = [
+  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a" },
+  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7" },
+  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa" },
+  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166" },
+  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42" },
+  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a" },
+  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0" },
+];
+
+const DEPARTAMENTOS_GD = [
+  { id: "SGQ", label: "Sistema de Gestão da Qualidade", cor: "#2ab84a" },
+  { id: "CQ",  label: "Controle de Qualidade",          cor: "#4fc3f7" },
+  { id: "PRD", label: "Produção",                       cor: "#ffd166" },
+  { id: "LOG", label: "Logística",                      cor: "#ff8c42" },
+  { id: "RH",  label: "Recursos Humanos",               cor: "#a78bfa" },
+  { id: "COM", label: "Comercial",                      cor: "#ff4f6a" },
+  { id: "ADM", label: "Administrativo",                 cor: "#5dd4b0" },
+  { id: "P&D", label: "Pesquisa e Desenvolvimento",     cor: "#818cf8" },
+];
+
+const STATUS_DOC_GD = {
+  "Rascunho":              { c: "#7a9c7e", bg: "#7a9c7e18", icon: "✏️" },
+  "Em Revisão":            { c: "#ffd166", bg: "#ffd16618", icon: "🔄" },
+  "Aguardando Aprovação":  { c: "#4fc3f7", bg: "#4fc3f718", icon: "⏳" },
+  "Vigente":               { c: "#2ab84a", bg: "#2ab84a18", icon: "✅" },
+  "Obsoleto":              { c: "#ff4f6a", bg: "#ff4f6a18", icon: "🗄️" },
+};
+
+const CAPITULOS_GD = [
+  { id: "objetivo",         label: "1. Objetivo",                   placeholder: "Descreva o propósito deste documento..." },
+  { id: "alcance",          label: "2. Alcance",                    placeholder: "Onde e a quem este documento se aplica..." },
+  { id: "responsabilidades",label: "3. Responsabilidades",          placeholder: "Quem é responsável pelo quê..." },
+  { id: "definicoes",       label: "4. Definições",                 placeholder: "Termos técnicos e abreviações usados..." },
+  { id: "procedimento",     label: "5. Procedimento",               placeholder: "Descrição detalhada do processo..." },
+  { id: "infComplementares",label: "6. Informações Complementares", placeholder: "Informações adicionais relevantes..." },
+  { id: "referencias",      label: "7. Referências",                placeholder: "Normas, legislações e documentos relacionados..." },
+  { id: "registros",        label: "8. Registros",                  placeholder: "Registros gerados por este procedimento..." },
+  { id: "anexos",           label: "9. Anexos",                     placeholder: "Lista de anexos vinculados..." },
+];
+
+function gerarCodigoGD(tipo, depto, docs) {
+  const prefix = `${tipo}-${depto}`;
+  const existentes = docs.filter(d => d.codigo && d.codigo.startsWith(prefix)).length;
+  return `${prefix}-${String(existentes + 1).padStart(3, "0")}`;
+}
+
+function calcProximaRevisaoGD(dataBase) {
+  if (!dataBase) return null;
+  const d = new Date(dataBase + "T12:00:00");
+  d.setFullYear(d.getFullYear() + 3);
+  return d.toISOString().split("T")[0];
+}
+
+function diasParaRevisaoGD(proximaRevisao) {
+  if (!proximaRevisao) return null;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const rev  = new Date(proximaRevisao + "T12:00:00");
+  return Math.ceil((rev - hoje) / 86400000);
+}
+
+function BadgeStatusGD({ status }) {
+  const T = useTheme();
+  const m = STATUS_DOC_GD[status] || STATUS_DOC_GD["Rascunho"];
+  return (
+    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:m.bg, color:m.c, whiteSpace:"nowrap" }}>
+      {m.icon} {status}
+    </span>
+  );
+}
+
+function BadgeTipoGD({ tipo }) {
+  const m = TIPOS_DOC_GD.find(t => t.id === tipo) || TIPOS_DOC_GD[0];
+  return (
+    <span style={{ padding:"3px 10px", borderRadius:6, fontSize:10, fontWeight:700, background:m.cor+"20", color:m.cor }}>
+      {m.icon} {m.id}
+    </span>
+  );
+}
+
+function AlertaRevisaoGD({ doc }) {
+  const dias = diasParaRevisaoGD(doc.proximaRevisao);
+  if (!dias || dias > 90) return null;
+  const vencido = dias <= 0;
+  return (
+    <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12,
+      background: vencido ? "#ff4f6a18" : "#ffd16618",
+      color: vencido ? "#ff4f6a" : "#ffd166", fontWeight:700 }}>
+      {vencido ? `⚠️ Vencido há ${Math.abs(dias)}d` : `⏰ Rev. em ${dias}d`}
+    </span>
+  );
+}
+
+/* ─── GESTÃO DE DOCUMENTOS — COMPONENTE PRINCIPAL ───────────────────────────── */
+function GestaoDocumentosTab({ user, toast_, users }) {
+  const T = useTheme();
+  const s = useS();
+
+  const [docs,      setDocs]      = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [view,      setView]      = useState("lista");
+  const [sel,       setSel]       = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [buscaTxt,  setBuscaTxt]  = useState("");
   const [filtroTipo,   setFiltroTipo]   = useState("todos");
   const [filtroDepto,  setFiltroDepto]  = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
-
-  // Form novo/editar
-  const formVazio = {
-    tipo: "PO", depto: "SGQ", titulo: "", versao: "01",
-    objetivo: "", alcance: "", responsabilidades: "", definicoes: "",
-    procedimento: "", infComplementares: "N/A", referencias: "", registros: "", anexos: "N/A",
-    etapas: [], materiais: [],
-    obs: "",
-    treinamentoObrigatorio: false,
-    proximaRevisao: "",
-    arquivosAnexos: [],
-  };
-  const [form, setForm]   = useState(formVazio);
-  const [novoMat, setNovoMat] = useState("");
-  const [novoEtapa, setNovoEtapa] = useState({ titulo: "", descricao: "" });
-  const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
-
-  // Treinamentos
   const [treinamentos, setTreinamentos] = useState([]);
-  const [novoTreino, setNovoTreino]     = useState({ userId: "", dataRealizacao: tod(), obs: "" });
+  const [novoTreino,   setNovoTreino]   = useState({ userId:"", dataRealizacao:tod(), obs:"" });
+  const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
+  const [novoMat, setNovoMat] = useState("");
 
-  const isAdmin   = ["admin","keyuser","rt"].includes(user?.role);
-  const isViewer  = user?.role === "viewer";
-  const setF      = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const formVazio = {
+    tipo:"PO", depto:"SGQ", titulo:"", versao:"01",
+    objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
+    procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
+    etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
+  };
+  const [form, setForm] = useState(formVazio);
+  const setF = (k,v) => setForm(p => ({...p,[k]:v}));
+  const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); };
 
-  // ── Subscrição Firebase ──
+  const isAdmin  = ["admin","keyuser","rt"].includes(user?.role);
+  const isViewer = user?.role === "viewer";
+
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
     const unsub = subscribeCollection("gestao_docs", list => {
       clearTimeout(t);
-      setDocs(list.sort((a, b) => (b.criadoTs || 0) - (a.criadoTs || 0)));
+      setDocs(list.sort((a,b) => (b.criadoTs||0)-(a.criadoTs||0)));
       setLoading(false);
     });
     return () => { clearTimeout(t); unsub && unsub(); };
@@ -7667,753 +7760,417 @@ export function GestaoDocumentosTab({ user, toast_, users, saveCollection, delet
   useEffect(() => {
     if (!sel) return;
     const unsub = subscribeCollection(`gestao_docs_treino_${sel.id}`, list => {
-      setTreinamentos(list.sort((a, b) => (b.ts || 0) - (a.ts || 0)));
+      setTreinamentos(list.sort((a,b) => (b.ts||0)-(a.ts||0)));
     });
     return () => unsub && unsub();
   }, [sel?.id]);
 
-  // ── Reset form ──
-  const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); };
-
-  // ── Salvar documento ──
   const salvar = async () => {
-    if (!form.titulo.trim()) { alert("Informe o título do documento."); return; }
-    if (!form.tipo)          { alert("Selecione o tipo."); return; }
-    if (!form.depto)         { alert("Selecione o departamento."); return; }
-
+    if (!form.titulo.trim()) { alert("Informe o título."); return; }
     const id  = sel ? sel.id : Date.now();
-    const codigo = sel ? sel.codigo : gerarCodigo(form.tipo, form.depto, docs);
-    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisao(tod());
-
-    // Determinar novo status
+    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
+    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod());
     let status = sel?.status || "Rascunho";
-
     const doc = {
       id, codigo, ...form, status, proximaRevisao,
       criadoEm:  sel?.criadoEm  || tod(),
       criadoTs:  sel?.criadoTs  || Date.now(),
       criadoPor: sel?.criadoPor || user?.name,
-      atualizadoEm: tod(),
-      atualizadoTs: Date.now(),
-      atualizadoPor: user?.name,
-      // preservar assinaturas
+      atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name,
       assinaturaElaborador: sel?.assinaturaElaborador || null,
       assinaturaRevisor:    sel?.assinaturaRevisor    || null,
       assinaturaAprovador:  sel?.assinaturaAprovador  || null,
-      // histórico de revisões
-      historicoRevisoes: sel?.historicoRevisoes || [],
+      historicoRevisoes:    sel?.historicoRevisoes    || [],
     };
-
     await saveCollection("gestao_docs", String(id), doc);
     toast_(sel ? `${codigo} atualizado!` : `${codigo} criado!`, "green");
-    setSel(doc);
-    setView("detalhe");
+    setSel(doc); setView("detalhe");
   };
 
-  // ── Assinar ──
   const assinar = async (doc, papel) => {
-    const campo = papel === "elaborador" ? "assinaturaElaborador" : papel === "revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
-    const cargo = papel === "elaborador" ? "Elaborador" : papel === "revisor" ? "Revisor" : "Aprovador";
-    if (!user?.assinatura) { alert("Você não possui assinatura cadastrada. Peça ao administrador para cadastrá-la no seu perfil."); return; }
-    if (!window.confirm(`Confirma a assinatura como ${cargo}?`)) return;
-
-    const updated = {
-      ...doc,
-      [campo]: {
-        nome: user.name, cargo, crf: user.crf || "",
-        img: user.assinatura,
-        dataHora: `${tod()} ${new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}`,
-      }
-    };
-
-    // Atualizar status conforme assinaturas
-    const temElab  = papel === "elaborador" || !!doc.assinaturaElaborador;
-    const temRevisor = papel === "revisor"  || !!doc.assinaturaRevisor;
-    const temAprov = papel === "aprovador"  || !!doc.assinaturaAprovador;
-
-    if (temElab && temRevisor && temAprov) updated.status = "Vigente";
-    else if (temElab && temRevisor)         updated.status = "Aguardando Aprovação";
-    else if (temElab)                       updated.status = "Em Revisão";
-
+    const campo = papel==="elaborador" ? "assinaturaElaborador" : papel==="revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
+    const cargo = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
+    if (!user?.assinatura) { alert("Você não possui assinatura cadastrada."); return; }
+    if (!window.confirm(`Confirma assinatura como ${cargo}?`)) return;
+    const updated = { ...doc, [campo]: { nome:user.name, cargo, crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` } };
+    const temE = papel==="elaborador" || !!doc.assinaturaElaborador;
+    const temR = papel==="revisor"    || !!doc.assinaturaRevisor;
+    const temA = papel==="aprovador"  || !!doc.assinaturaAprovador;
+    if (temE && temR && temA) updated.status = "Vigente";
+    else if (temE && temR)    updated.status = "Aguardando Aprovação";
+    else if (temE)            updated.status = "Em Revisão";
     await saveCollection("gestao_docs", String(doc.id), updated);
     toast_(`Assinado como ${cargo}!`, "green");
     setSel(updated);
   };
 
-  // ── Solicitar revisão (cria nova versão) ──
   const solicitarRevisao = async (doc) => {
-    if (!window.confirm("Criar nova revisão deste documento? A versão atual será registrada no histórico.")) return;
+    if (!window.confirm("Criar nova revisão? A versão atual será arquivada no histórico.")) return;
     const versaoAtual = doc.versao || "01";
-    const novaVersao  = String(parseInt(versaoAtual, 10) + 1).padStart(2, "0");
-
-    const historico = [...(doc.historicoRevisoes || []), {
-      versao: versaoAtual,
-      status: doc.status,
-      data: doc.atualizadoEm || doc.criadoEm,
-      responsavel: doc.atualizadoPor || doc.criadoPor,
-      assinaturaElaborador: doc.assinaturaElaborador,
-      assinaturaRevisor:    doc.assinaturaRevisor,
-      assinaturaAprovador:  doc.assinaturaAprovador,
-    }];
-
-    const updated = {
-      ...doc,
-      versao: novaVersao,
-      status: "Em Revisão",
-      assinaturaElaborador: null,
-      assinaturaRevisor:    null,
-      assinaturaAprovador:  null,
-      historicoRevisoes: historico,
-      proximaRevisao: calcProximaRevisao(tod()),
-      atualizadoEm: tod(),
-      atualizadoTs: Date.now(),
-      atualizadoPor: user?.name,
-    };
-
+    const novaVersao  = String(parseInt(versaoAtual,10)+1).padStart(2,"0");
+    const historico   = [...(doc.historicoRevisoes||[]), { versao:versaoAtual, status:doc.status, data:doc.atualizadoEm||doc.criadoEm, responsavel:doc.atualizadoPor||doc.criadoPor }];
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
     setSel(updated);
   };
 
-  // ── Tornar Obsoleto ──
   const tornarObsoleto = async (doc) => {
-    if (!window.confirm("Marcar como Obsoleto? O documento sairá da lista vigente.")) return;
-    const updated = { ...doc, status: "Obsoleto", atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name };
+    if (!window.confirm("Marcar como Obsoleto?")) return;
+    const updated = { ...doc, status:"Obsoleto", atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
-    toast_("Documento marcado como Obsoleto.", "red");
+    toast_("Documento obsoleto.", "red");
     setSel(updated);
   };
 
-  // ── Deletar ──
   const deletar = async (id) => {
     if (!window.confirm("Excluir permanentemente?")) return;
     await deleteFromCollection("gestao_docs", String(id));
-    toast_("Documento excluído.", "red");
+    toast_("Excluído.", "red");
     setSel(null); setView("lista");
   };
 
-  // ── Registrar treinamento ──
   const salvarTreino = async () => {
     if (!novoTreino.userId) { alert("Selecione o colaborador."); return; }
-    const u = users?.find(u => u.id === novoTreino.userId);
-    const t = {
-      id: Date.now(),
-      userId: novoTreino.userId,
-      userName: u?.name || "—",
-      userSetor: u?.setor || "—",
-      dataRealizacao: novoTreino.dataRealizacao,
-      obs: novoTreino.obs,
-      registradoPor: user?.name,
-      ts: Date.now(),
-    };
+    const u = users?.find(x => x.id===novoTreino.userId);
+    const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
     await saveCollection(`gestao_docs_treino_${sel.id}`, String(t.id), t);
     toast_("Treinamento registrado!", "green");
-    setNovoTreino({ userId: "", dataRealizacao: tod(), obs: "" });
+    setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
   };
 
-  // ── IA — gerar conteúdo ──
   const gerarComIA = async () => {
-    if (!form.titulo || !form.tipo || !form.depto) { alert("Preencha título, tipo e departamento antes de gerar com IA."); return; }
+    if (!form.titulo || !form.tipo) { alert("Preencha título e tipo antes de usar a IA."); return; }
     setAiLoading(true);
     try {
-      const tipoLabel = TIPOS_DOC.find(t => t.id === form.tipo)?.label || form.tipo;
-      const deptoLabel = DEPARTAMENTOS.find(d => d.id === form.depto)?.label || form.depto;
-
-      const prompt = `Você é um especialista em qualidade farmacêutica e nutracêutica com expertise em BPF (Boas Práticas de Fabricação) e normas ANVISA. Crie o conteúdo completo para um documento do sistema de qualidade.
-
-DADOS DO DOCUMENTO:
-Tipo: ${tipoLabel} (${form.tipo})
-Título: ${form.titulo}
-Departamento: ${deptoLabel} (${form.depto})
-Empresa: Herbamed Laboratório Nutracêutico LTDA — fabricante de produtos nutracêuticos e fitoterápicos
-
-Siga rigorosamente a estrutura obrigatória do PQ-SGQ da empresa (normas ISO 9001 e RDC 658/2022 ANVISA).
-
-Responda APENAS em JSON válido sem markdown:
-{
-  "objetivo": "texto técnico claro e preciso",
-  "alcance": "onde e a quem se aplica",
-  "responsabilidades": "responsabilidades por cargo/setor",
-  "definicoes": "definições de termos técnicos usados no documento",
-  "procedimento": "descrição detalhada do procedimento passo a passo",
-  "infComplementares": "cuidados especiais, desvios, pontos de atenção",
-  "referencias": "RDC ANVISA, normas ISO, documentos internos relacionados",
-  "registros": "formulários e registros gerados por este procedimento",
-  "etapas": [{"titulo": "Nome da etapa", "descricao": "Descrição detalhada"}],
-  "materiais": ["material 1", "material 2"],
-  "periodicidade": "frequência de execução",
-  "treinamentoObrigatorio": true
-}`;
-
-      const res = await fetch("/api/claude", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 3000, messages: [{ role: "user", content: prompt }] })
-      });
-      const data  = await res.json();
-      const text  = data.content?.[0]?.text || "";
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-
-      setForm(f => ({
-        ...f,
-        objetivo:          parsed.objetivo          || f.objetivo,
-        alcance:           parsed.alcance           || f.alcance,
-        responsabilidades: parsed.responsabilidades || f.responsabilidades,
-        definicoes:        parsed.definicoes        || f.definicoes,
-        procedimento:      parsed.procedimento      || f.procedimento,
-        infComplementares: parsed.infComplementares || f.infComplementares,
-        referencias:       parsed.referencias       || f.referencias,
-        registros:         parsed.registros         || f.registros,
-        materiais:         parsed.materiais         || f.materiais,
-        etapas:            (parsed.etapas || []).map((e, i) => ({ id: Date.now() + i, ...e })),
-        treinamentoObrigatorio: parsed.treinamentoObrigatorio ?? f.treinamentoObrigatorio,
-      }));
+      const tipoLabel  = TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label || form.tipo;
+      const deptoLabel = DEPARTAMENTOS_GD.find(d=>d.id===form.depto)?.label || form.depto;
+      const prompt = `Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022, ISO 9001). Crie conteúdo completo para:\nTipo: ${tipoLabel}\nTítulo: ${form.titulo}\nDepartamento: ${deptoLabel}\nEmpresa: Herbamed Laboratório Nutracêutico LTDA\n\nResponda APENAS em JSON válido sem markdown:\n{"objetivo":"","alcance":"","responsabilidades":"","definicoes":"","procedimento":"","infComplementares":"","referencias":"","registros":"","etapas":[{"titulo":"","descricao":""}],"materiais":[""],"treinamentoObrigatorio":true}`;
+      const res  = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:3000, messages:[{role:"user",content:prompt}] }) });
+      const data = await res.json();
+      const txt  = data.content?.[0]?.text || "";
+      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      setForm(f => ({ ...f, objetivo:parsed.objetivo||f.objetivo, alcance:parsed.alcance||f.alcance, responsabilidades:parsed.responsabilidades||f.responsabilidades, definicoes:parsed.definicoes||f.definicoes, procedimento:parsed.procedimento||f.procedimento, infComplementares:parsed.infComplementares||f.infComplementares, referencias:parsed.referencias||f.referencias, registros:parsed.registros||f.registros, materiais:parsed.materiais||f.materiais, etapas:(parsed.etapas||[]).map((e,i)=>({id:Date.now()+i,...e})), treinamentoObrigatorio:parsed.treinamentoObrigatorio??f.treinamentoObrigatorio }));
       toast_("Conteúdo gerado pela IA!", "green");
-    } catch(e) {
-      toast_("Erro ao gerar conteúdo com IA.", "red");
-    }
+    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
     setAiLoading(false);
   };
 
-  // ── Export PDF ──
   const exportPDF = (doc) => {
-    const tipo    = TIPOS_DOC.find(t => t.id === doc.tipo);
-    const depto   = DEPARTAMENTOS.find(d => d.id === doc.depto);
-    const cor     = tipo?.cor || "#2ab84a";
-
-    const assHTML = (ass, label) => ass ? `
-      <div style="text-align:center;padding:12px 8px;border:1px solid #eee;border-radius:6px;">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:6px;">${label}</div>
-        <img src="${ass.img}" style="height:36px;max-width:140px;object-fit:contain;display:block;margin:0 auto 4px;"/>
-        <div style="font-size:11px;font-weight:bold;">${ass.nome}</div>
-        ${ass.crf ? `<div style="font-size:10px;color:#666;">${ass.crf}</div>` : ""}
-        <div style="font-size:9px;color:${cor};margin-top:2px;">✓ ${ass.dataHora}</div>
-      </div>` : `
-      <div style="text-align:center;padding:12px 8px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;">
-        <div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:4px;">${label}</div>
-        <div style="font-size:11px;color:#ccc;padding:1rem 0;">Aguardando assinatura</div>
-      </div>`;
-
-    const etapasHTML = (doc.etapas || []).map((e, i) => `
-      <div style="display:flex;gap:12px;margin-bottom:10px;align-items:flex-start;">
-        <div style="min-width:24px;height:24px;border-radius:50%;background:${cor};color:#fff;font-size:11px;font-weight:bold;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div>
-        <div style="flex:1;border:1px solid #eee;border-radius:6px;padding:8px 12px;">
-          ${e.titulo ? `<div style="font-size:12px;font-weight:bold;color:#1a2e1e;margin-bottom:3px;">${e.titulo}</div>` : ""}
-          <div style="font-size:11px;color:#555;line-height:1.6;">${e.descricao}</div>
-        </div>
-      </div>`).join("");
-
-    const capitulosHTML = CAPITULOS_OBRIGATORIOS.map(cap => {
-      const conteudo = doc[cap.id];
-      if (!conteudo || conteudo === "N/A") return `
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
-          <div style="font-size:9px;color:#888;text-transform:uppercase;font-weight:bold;margin-bottom:3px;">${cap.label}</div>
-          <div style="font-size:11px;color:#bbb;font-style:italic;">N/A</div>
-        </div>`;
-      return `
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
-          <div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:5px;">${cap.label}</div>
-          <div style="font-size:12px;color:#333;line-height:1.7;white-space:pre-wrap;">${conteudo}</div>
-        </div>`;
-    }).join("");
-
-    const historicoHTML = (doc.historicoRevisoes || []).length > 0 ? `
-      <div style="margin-top:16px;">
-        <div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">10. Histórico de Revisões</div>
-        <table style="width:100%;border-collapse:collapse;font-size:11px;">
-          <tr style="background:${cor}15;">
-            <th style="border:1px solid #eee;padding:5px 8px;text-align:left;">Versão</th>
-            <th style="border:1px solid #eee;padding:5px 8px;text-align:left;">Data</th>
-            <th style="border:1px solid #eee;padding:5px 8px;text-align:left;">Responsável</th>
-            <th style="border:1px solid #eee;padding:5px 8px;text-align:left;">Status</th>
-          </tr>
-          ${(doc.historicoRevisoes || []).map(h => `
-          <tr>
-            <td style="border:1px solid #eee;padding:5px 8px;">${h.versao}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${fmt(h.data)}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${h.responsavel}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${h.status}</td>
-          </tr>`).join("")}
-          <tr style="background:${cor}08;">
-            <td style="border:1px solid #eee;padding:5px 8px;font-weight:bold;">${doc.versao}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${fmt(doc.atualizadoEm)}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${doc.atualizadoPor}</td>
-            <td style="border:1px solid #eee;padding:5px 8px;">${doc.status} (atual)</td>
-          </tr>
-        </table>
-      </div>` : "";
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;color:#333;">
-        <!-- CABEÇALHO -->
-        <div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:16px 24px;display:flex;align-items:center;justify-content:space-between;">
-          <div style="display:flex;align-items:center;gap:14px;">
-            <img src="${HERBAMED_INFO.logo}" style="width:44px;height:44px;border-radius:8px;object-fit:cover;"/>
-            <div>
-              <div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO.nome}</div>
-              <div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO.cnpj}</div>
-            </div>
-          </div>
-          <div style="text-align:right;">
-            <div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label || doc.tipo}</div>
-            <div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev. ${doc.versao}</div>
-          </div>
-        </div>
-
-        <!-- TÍTULO -->
-        <div style="padding:16px 24px;border-bottom:2px solid ${cor}20;background:#f9fdf9;">
-          <div style="font-size:16px;font-weight:bold;color:#1a4a2e;margin-bottom:6px;">${doc.titulo}</div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#666;">
-            <span>Departamento: <strong>${depto?.label || doc.depto}</strong></span>
-            <span>Elaborado em: <strong>${fmt(doc.criadoEm)}</strong></span>
-            <span>Próxima revisão: <strong>${fmt(doc.proximaRevisao)}</strong></span>
-            <span>Status: <strong style="color:${cor}">${doc.status}</strong></span>
-          </div>
-        </div>
-
-        <!-- MATERIAIS SE EXISTIREM -->
-        ${doc.materiais?.length ? `
-        <div style="padding:12px 24px;border-bottom:1px solid #eee;">
-          <div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">Materiais e Equipamentos</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${doc.materiais.map(m => `<span style="font-size:10px;padding:3px 10px;border-radius:20px;background:#f0f0f0;color:#555;">${m}</span>`).join("")}
-          </div>
-        </div>` : ""}
-
-        <!-- CAPÍTULOS -->
-        <div style="padding:0 24px;">${capitulosHTML}</div>
-
-        <!-- ETAPAS DETALHADAS SE EXISTIREM -->
-        ${doc.etapas?.length ? `
-        <div style="padding:12px 24px;border-top:1px solid #eee;">
-          <div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:10px;">Etapas Detalhadas</div>
-          ${etapasHTML}
-        </div>` : ""}
-
-        <!-- HISTÓRICO -->
-        <div style="padding:0 24px;">${historicoHTML}</div>
-
-        <!-- ASSINATURAS -->
-        <div style="padding:16px 24px;border-top:2px solid ${cor}30;margin-top:8px;">
-          <div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:10px;">Assinaturas</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-            ${assHTML(doc.assinaturaElaborador, "Elaborador")}
-            ${assHTML(doc.assinaturaRevisor,    "Revisor")}
-            ${assHTML(doc.assinaturaAprovador,  "Aprovador")}
-          </div>
-        </div>
-
-        <!-- RODAPÉ -->
-        <div style="padding:8px 24px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;">
-          <span>${HERBAMED_INFO.nome} · CNPJ: ${HERBAMED_INFO.cnpj}</span>
-          <span>${HERBAMED_INFO.endereco} · ${HERBAMED_INFO.cidade}</span>
-          <span>Impresso em ${new Date().toLocaleString("pt-BR")} · Cópia Controlada</span>
-        </div>
-      </div>`;
-
-    const win = window.open("", "_blank");
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${doc.codigo} — ${doc.titulo}</title><style>@media print{body{margin:0}.no-print{display:none}}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
+    const tipo  = TIPOS_DOC_GD.find(t=>t.id===doc.tipo);
+    const cor   = tipo?.cor || "#2ab84a";
+    const assHTML = (ass,label) => ass
+      ? `<div style="text-align:center;padding:10px;border:1px solid #eee;border-radius:6px;"><div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:4px;">${label}</div><img src="${ass.img}" style="height:36px;max-width:130px;object-fit:contain;display:block;margin:0 auto 4px;"/><div style="font-size:11px;font-weight:bold;">${ass.nome}</div>${ass.crf?`<div style="font-size:10px;color:#666;">${ass.crf}</div>`:""}<div style="font-size:9px;color:${cor};">✓ ${ass.dataHora}</div></div>`
+      : `<div style="text-align:center;padding:10px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${label}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando</div></div>`;
+    const caps = CAPITULOS_GD.map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
+    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;"><div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div><div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div><div style="padding:0 22px;">${caps}</div><div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div><div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · Cópia Controlada</span></div></div>`;
+    const win = window.open("","_blank");
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${doc.codigo}</title><style>@media print{body{margin:0}}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
     win.document.close();
   };
 
-  // ── Filtros ──
   const filtrados = docs.filter(d => {
-    if (filtroTipo   !== "todos"  && d.tipo   !== filtroTipo)   return false;
-    if (filtroDepto  !== "todos"  && d.depto  !== filtroDepto)  return false;
-    if (filtroStatus !== "todos"  && d.status !== filtroStatus) return false;
-    if (buscaTxt && !`${d.codigo} ${d.titulo}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
+    if (filtroTipo   !== "todos" && d.tipo   !== filtroTipo)   return false;
+    if (filtroDepto  !== "todos" && d.depto  !== filtroDepto)  return false;
+    if (filtroStatus !== "todos" && d.status !== filtroStatus) return false;
+    if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
     return true;
   });
 
-  // ── Stats ──
-  const totalVigente  = docs.filter(d => d.status === "Vigente").length;
-  const totalRevisao  = docs.filter(d => ["Em Revisão","Aguardando Aprovação"].includes(d.status)).length;
-  const totalVencendo = docs.filter(d => { const dias = diasParaRevisao(d.proximaRevisao); return dias !== null && dias <= 90 && d.status === "Vigente"; }).length;
-  const totalObsoleto = docs.filter(d => d.status === "Obsoleto").length;
+  const totalVigente  = docs.filter(d=>d.status==="Vigente").length;
+  const totalRevisao  = docs.filter(d=>["Em Revisão","Aguardando Aprovação"].includes(d.status)).length;
+  const totalVencendo = docs.filter(d=>{ const dias=diasParaRevisaoGD(d.proximaRevisao); return dias!==null&&dias<=90&&d.status==="Vigente"; }).length;
+  const totalObsoleto = docs.filter(d=>d.status==="Obsoleto").length;
 
-  /* ══════════════════════════════════════════════════════════════════════════════
-     RENDER — DETALHE
-  ══════════════════════════════════════════════════════════════════════════════ */
-  if (view === "detalhe" && sel) {
-    const d = docs.find(x => x.id === sel.id) || sel;
-    const tipo  = TIPOS_DOC.find(t => t.id === d.tipo);
-    const depto = DEPARTAMENTOS.find(x => x.id === d.depto);
-    const diasRev = diasParaRevisao(d.proximaRevisao);
-
-    const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor === user?.name);
+  /* ── DETALHE ── */
+  if (view==="detalhe" && sel) {
+    const d = docs.find(x=>x.id===sel.id)||sel;
+    const tipo  = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
+    const depto = DEPARTAMENTOS_GD.find(x=>x.id===d.depto);
+    const diasRev = diasParaRevisaoGD(d.proximaRevisao);
+    const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor===user?.name);
     const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && isAdmin;
-    const podeAssAprov = d.assinaturaRevisor    && !d.assinaturaAprovador && isAdmin;
-
+    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && isAdmin;
     return (
       <div>
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
-          <button style={s.btn} onClick={() => setView("lista")}>← Voltar</button>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:11, color:T.text3 }}>{d.codigo} · Rev. {d.versao}</div>
-            <div style={{ fontSize:16, fontWeight:700, color:T.text }}>{d.titulo}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:T.text3}}>{d.codigo} · Rev.{d.versao}</div>
+            <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
           </div>
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {podeAssElab  && <button style={{ ...s.btnA, fontSize:11 }} onClick={() => assinar(d,"elaborador")}>✍️ Assinar Elaborador</button>}
-            {podeAssRev   && <button style={{ ...s.btnA, fontSize:11, background:T.blue||"#4fc3f7" }} onClick={() => assinar(d,"revisor")}>🔎 Assinar Revisor</button>}
-            {podeAssAprov && <button style={{ ...s.btnA, fontSize:11, background:T.orange||"#ff9800" }} onClick={() => assinar(d,"aprovador")}>✅ Assinar Aprovador</button>}
-            {isAdmin && d.status === "Vigente" && <button style={{ ...s.btn, fontSize:11 }} onClick={() => solicitarRevisao(d)}>🔄 Nova Revisão</button>}
-            {isAdmin && d.status !== "Obsoleto" && d.status === "Vigente" && <button style={{ ...s.btnD, fontSize:11 }} onClick={() => tornarObsoleto(d)}>🗄️ Obsoleto</button>}
-            <button style={{ ...s.btn, fontSize:11 }} onClick={() => exportPDF(d)}>🖨️ PDF</button>
-            {isAdmin && !isViewer && <button style={{ ...s.btn, fontSize:11 }} onClick={() => { setSel(d); setForm({ tipo:d.tipo, depto:d.depto, titulo:d.titulo, versao:d.versao, objetivo:d.objetivo||"", alcance:d.alcance||"", responsabilidades:d.responsabilidades||"", definicoes:d.definicoes||"", procedimento:d.procedimento||"", infComplementares:d.infComplementares||"N/A", referencias:d.referencias||"", registros:d.registros||"", anexos:d.anexos||"N/A", etapas:d.etapas||[], materiais:d.materiais||[], obs:d.obs||"", treinamentoObrigatorio:d.treinamentoObrigatorio||false, proximaRevisao:d.proximaRevisao||"", arquivosAnexos:d.arquivosAnexos||[] }); setView("novo"); }}>✏️ Editar</button>}
-            {isAdmin && <button style={{ ...s.btnD, fontSize:11 }} onClick={() => deletar(d.id)}>🗑️</button>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {podeAssElab  && <button style={{...s.btnA,fontSize:11}} onClick={()=>assinar(d,"elaborador")}>✍️ Elaborador</button>}
+            {podeAssRev   && <button style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7"}} onClick={()=>assinar(d,"revisor")}>🔎 Revisor</button>}
+            {podeAssAprov && <button style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800"}} onClick={()=>assinar(d,"aprovador")}>✅ Aprovador</button>}
+            {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
+            {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
+            <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ PDF</button>
+            {!isViewer && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||""}); setView("novo"); }}>✏️ Editar</button>}
+            {isAdmin && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️</button>}
           </div>
         </div>
-
-        {/* Alerta revisão */}
-        {diasRev !== null && diasRev <= 90 && d.status === "Vigente" && (
-          <div style={{ background: diasRev <= 0 ? "#ff4f6a18" : "#ffd16618", border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`, borderRadius:10, padding:"10px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:10, fontSize:12 }}>
-            <span style={{ fontSize:18 }}>{diasRev<=0?"⚠️":"⏰"}</span>
-            <span style={{ color: diasRev<=0?"#ff4f6a":"#ffd166", fontWeight:600 }}>
-              {diasRev<=0 ? `Revisão vencida há ${Math.abs(diasRev)} dias!` : `Este documento precisa ser revisado em ${diasRev} dias (${fmt(d.proximaRevisao)}).`}
-            </span>
+        {diasRev!==null && diasRev<=90 && d.status==="Vigente" && (
+          <div style={{background:diasRev<=0?"#ff4f6a18":"#ffd16618",border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:12,color:diasRev<=0?"#ff4f6a":"#ffd166",fontWeight:600}}>
+            {diasRev<=0?`⚠️ Revisão vencida há ${Math.abs(diasRev)} dias!`:`⏰ Revisão necessária em ${diasRev} dias (${fmt(d.proximaRevisao)})`}
           </div>
         )}
-
-        {/* Identificação */}
         <div style={s.card}>
-          <SecTitle icon="🗂️" ch="Identificação do Documento" />
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:10 }}>
-            {[
-              ["Código",          d.codigo],
-              ["Versão",          `Rev. ${d.versao}`],
-              ["Tipo",            tipo?.label || d.tipo],
-              ["Departamento",    depto?.label || d.depto],
-              ["Elaborado por",   d.criadoPor],
-              ["Data elaboração", fmt(d.criadoEm)],
-              ["Próx. revisão",   fmt(d.proximaRevisao)],
-              ["Última atualiz.", fmt(d.atualizadoEm)],
-            ].map(([k,v]) => (
-              <div key={k} style={{ background:T.surf, borderRadius:8, padding:"8px 12px" }}>
-                <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>{k}</div>
-                <div style={{ fontSize:12, color:T.text, fontWeight:600 }}>{v}</div>
+          <SecTitle icon="🗂️" ch="Identificação" />
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
+            {[["Código",d.codigo],["Versão",`Rev.${d.versao}`],["Tipo",tipo?.label||d.tipo],["Departamento",depto?.label||d.depto],["Elaborado por",d.criadoPor],["Data",fmt(d.criadoEm)],["Próx. revisão",fmt(d.proximaRevisao)],["Atualizado",fmt(d.atualizadoEm)]].map(([k,v])=>(
+              <div key={k} style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
+                <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{k}</div>
+                <div style={{fontSize:12,color:T.text,fontWeight:600}}>{v}</div>
               </div>
             ))}
           </div>
-          <div style={{ marginTop:12, display:"flex", gap:8, alignItems:"center" }}>
-            <BadgeTipo tipo={d.tipo} />
-            <BadgeStatus status={d.status} />
-            {d.treinamentoObrigatorio && <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:T.blue+"20", color:T.blue||"#4fc3f7", fontWeight:700 }}>📚 Treinamento Obrigatório</span>}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <BadgeTipoGD tipo={d.tipo} />
+            <BadgeStatusGD status={d.status} />
+            {d.treinamentoObrigatorio && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
           </div>
         </div>
-
-        {/* Materiais */}
-        {d.materiais?.length > 0 && (
+        {d.materiais?.length>0 && (
           <div style={s.card}>
             <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {d.materiais.map((m,i) => <span key={i} style={{ fontSize:12, padding:"4px 12px", borderRadius:20, background:T.surf, border:`1px solid ${T.border}`, color:T.text }}>{m}</span>)}
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {d.materiais.map((m,i)=><span key={i} style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:T.surf,border:`1px solid ${T.border}`,color:T.text}}>{m}</span>)}
             </div>
           </div>
         )}
-
-        {/* Capítulos */}
         <div style={s.card}>
           <SecTitle icon="📑" ch="Conteúdo do Documento" />
-          {CAPITULOS_OBRIGATORIOS.map(cap => (
-            <div key={cap.id} style={{ marginBottom:16 }}>
-              <div style={{ fontSize:11, color:T.accent, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>{cap.label}</div>
-              <div style={{ padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color: d[cap.id] && d[cap.id] !== "N/A" ? T.text : T.text3, lineHeight:1.7, whiteSpace:"pre-wrap", fontStyle: (!d[cap.id] || d[cap.id]==="N/A") ? "italic" : "normal" }}>
-                {d[cap.id] || "N/A"}
+          {CAPITULOS_GD.map(cap=>(
+            <div key={cap.id} style={{marginBottom:14}}>
+              <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
+              <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:d[cap.id]&&d[cap.id]!=="N/A"?T.text:T.text3,lineHeight:1.7,whiteSpace:"pre-wrap",fontStyle:(!d[cap.id]||d[cap.id]==="N/A")?"italic":"normal"}}>
+                {d[cap.id]||"N/A"}
               </div>
             </div>
           ))}
         </div>
-
-        {/* Etapas detalhadas */}
-        {d.etapas?.length > 0 && (
+        {d.etapas?.length>0 && (
           <div style={s.card}>
             <SecTitle icon="📋" ch="Etapas Detalhadas" />
-            {d.etapas.map((e, i) => (
-              <div key={e.id||i} style={{ display:"flex", gap:12, marginBottom:10, alignItems:"flex-start" }}>
-                <div style={{ width:28, height:28, borderRadius:"50%", background:T.accent, color:"#fff", fontSize:12, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{i+1}</div>
-                <div style={{ flex:1, background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px" }}>
-                  {e.titulo && <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:3 }}>{e.titulo}</div>}
-                  <div style={{ fontSize:12, color:T.text2, lineHeight:1.6 }}>{e.descricao}</div>
+            {d.etapas.map((e,i)=>(
+              <div key={e.id||i} style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
+                <div style={{width:28,height:28,borderRadius:"50%",background:T.accent,color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                <div style={{flex:1,background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
+                  {e.titulo&&<div style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:3}}>{e.titulo}</div>}
+                  <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>{e.descricao}</div>
                 </div>
               </div>
             ))}
           </div>
         )}
-
-        {/* Assinaturas */}
         <div style={s.card}>
-          <SecTitle icon="✍️" ch="Assinaturas de Aprovação" />
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-            {[
-              { campo:d.assinaturaElaborador, label:"Elaborador" },
-              { campo:d.assinaturaRevisor,    label:"Revisor" },
-              { campo:d.assinaturaAprovador,  label:"Aprovador" },
-            ].map(({ campo, label }) => (
-              <div key={label} style={{ textAlign:"center", padding:"1rem", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
-                <div style={{ fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", marginBottom:10 }}>{label}</div>
-                {campo ? (<>
-                  <img src={campo.img} alt="" style={{ height:44, maxWidth:160, objectFit:"contain", display:"block", margin:"0 auto 6px" }} />
-                  <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{campo.nome}</div>
-                  {campo.crf && <div style={{ fontSize:11, color:T.text2 }}>{campo.crf}</div>}
-                  <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ {campo.dataHora}</div>
-                </>) : (
-                  <div style={{ fontSize:12, color:T.text3, padding:"1rem 0" }}>Aguardando assinatura</div>
+          <SecTitle icon="✍️" ch="Assinaturas" />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+            {[{campo:d.assinaturaElaborador,label:"Elaborador"},{campo:d.assinaturaRevisor,label:"Revisor"},{campo:d.assinaturaAprovador,label:"Aprovador"}].map(({campo,label})=>(
+              <div key={label} style={{textAlign:"center",padding:"1rem",background:T.surf,borderRadius:10,border:`1px solid ${T.border}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase",marginBottom:10}}>{label}</div>
+                {campo?(<>
+                  <img src={campo.img} alt="" style={{height:44,maxWidth:160,objectFit:"contain",display:"block",margin:"0 auto 6px"}}/>
+                  <div style={{fontSize:12,fontWeight:600,color:T.text}}>{campo.nome}</div>
+                  {campo.crf&&<div style={{fontSize:11,color:T.text2}}>{campo.crf}</div>}
+                  <div style={{fontSize:10,color:T.accent,marginTop:4}}>✓ {campo.dataHora}</div>
+                </>):(
+                  <div style={{fontSize:12,color:T.text3,padding:"1rem 0"}}>Aguardando</div>
                 )}
               </div>
             ))}
           </div>
         </div>
-
-        {/* Histórico de Revisões */}
-        {d.historicoRevisoes?.length > 0 && (
+        {d.historicoRevisoes?.length>0 && (
           <div style={s.card}>
             <SecTitle icon="🕐" ch="Histórico de Revisões" />
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-              <thead>
-                <tr style={{ background:T.surf }}>
-                  {["Versão","Data","Responsável","Status"].map(h => (
-                    <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:T.text3, fontWeight:700, fontSize:10, textTransform:"uppercase", borderBottom:`1px solid ${T.border}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{background:T.surf}}>
+                {["Versão","Data","Responsável","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+              </tr></thead>
               <tbody>
-                {d.historicoRevisoes.map((h, i) => (
-                  <tr key={i} style={{ borderBottom:`1px solid ${T.border}` }}>
-                    <td style={{ padding:"8px 10px", color:T.text, fontWeight:600 }}>Rev. {h.versao}</td>
-                    <td style={{ padding:"8px 10px", color:T.text2 }}>{fmt(h.data)}</td>
-                    <td style={{ padding:"8px 10px", color:T.text2 }}>{h.responsavel}</td>
-                    <td style={{ padding:"8px 10px" }}><BadgeStatus status={h.status} /></td>
+                {d.historicoRevisoes.map((h,i)=>(
+                  <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
+                    <td style={{padding:"8px 10px",color:T.text,fontWeight:600}}>Rev.{h.versao}</td>
+                    <td style={{padding:"8px 10px",color:T.text2}}>{fmt(h.data)}</td>
+                    <td style={{padding:"8px 10px",color:T.text2}}>{h.responsavel}</td>
+                    <td style={{padding:"8px 10px"}}><BadgeStatusGD status={h.status}/></td>
                   </tr>
                 ))}
-                <tr style={{ background:T.accentDim }}>
-                  <td style={{ padding:"8px 10px", color:T.accent, fontWeight:700 }}>Rev. {d.versao} (atual)</td>
-                  <td style={{ padding:"8px 10px", color:T.text2 }}>{fmt(d.atualizadoEm)}</td>
-                  <td style={{ padding:"8px 10px", color:T.text2 }}>{d.atualizadoPor}</td>
-                  <td style={{ padding:"8px 10px" }}><BadgeStatus status={d.status} /></td>
+                <tr style={{background:T.accentDim}}>
+                  <td style={{padding:"8px 10px",color:T.accent,fontWeight:700}}>Rev.{d.versao} (atual)</td>
+                  <td style={{padding:"8px 10px",color:T.text2}}>{fmt(d.atualizadoEm)}</td>
+                  <td style={{padding:"8px 10px",color:T.text2}}>{d.atualizadoPor}</td>
+                  <td style={{padding:"8px 10px"}}><BadgeStatusGD status={d.status}/></td>
                 </tr>
               </tbody>
             </table>
           </div>
         )}
-
-        {/* Treinamentos */}
         {d.treinamentoObrigatorio && (
           <div style={s.card}>
             <SecTitle icon="📚" ch="Controle de Treinamentos" />
-            <div style={{ background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8, padding:"8px 14px", marginBottom:12, fontSize:12, color:T.accent }}>
+            <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:T.accent}}>
               📋 Este documento requer treinamento formal dos colaboradores antes da execução.
             </div>
-            {/* Registrar novo */}
             {isAdmin && (
-              <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:10 }}>Registrar novo treinamento</div>
+              <div style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"1rem",marginBottom:12}}>
+                <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Registrar novo treinamento</div>
                 <G2 ch={<>
-                  <F lbl="Colaborador" ch={
-                    <Sel value={novoTreino.userId} onChange={e => setNovoTreino(p => ({...p, userId:e.target.value}))}>
-                      <option value="">Selecione...</option>
-                      {(users||[]).map(u => <option key={u.id} value={u.id}>{u.name} — {u.setor}</option>)}
-                    </Sel>
-                  } />
-                  <F lbl="Data do treinamento" ch={<Inp type="date" value={novoTreino.dataRealizacao} onChange={e => setNovoTreino(p => ({...p, dataRealizacao:e.target.value}))} />} />
+                  <F lbl="Colaborador" ch={<Sel value={novoTreino.userId} onChange={e=>setNovoTreino(p=>({...p,userId:e.target.value}))}><option value="">Selecione...</option>{(users||[]).map(u=><option key={u.id} value={u.id}>{u.name} — {u.setor}</option>)}</Sel>} />
+                  <F lbl="Data do treinamento" ch={<Inp type="date" value={novoTreino.dataRealizacao} onChange={e=>setNovoTreino(p=>({...p,dataRealizacao:e.target.value}))} />} />
                 </>} />
-                <F lbl="Observações" ch={<Inp placeholder="Ex: treinamento presencial na linha 2..." value={novoTreino.obs} onChange={e => setNovoTreino(p => ({...p, obs:e.target.value}))} />} />
-                <div style={{ textAlign:"right", marginTop:8 }}>
-                  <button style={s.btnA} onClick={salvarTreino}>Registrar treinamento ✓</button>
+                <F lbl="Observações" ch={<Inp placeholder="Ex: treinamento presencial..." value={novoTreino.obs} onChange={e=>setNovoTreino(p=>({...p,obs:e.target.value}))} />} />
+                <div style={{textAlign:"right",marginTop:8}}><button style={s.btnA} onClick={salvarTreino}>Registrar ✓</button></div>
+              </div>
+            )}
+            {treinamentos.length===0 ? (
+              <div style={{textAlign:"center",padding:"1.5rem",color:T.text3,fontSize:12}}>Nenhum treinamento registrado.</div>
+            ) : treinamentos.map(t=>(
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:6}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>📚</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t.userName}</div>
+                  <div style={{fontSize:11,color:T.text2}}>{t.userSetor} · {fmt(t.dataRealizacao)}</div>
+                  {t.obs&&<div style={{fontSize:11,color:T.text3,marginTop:2}}>{t.obs}</div>}
                 </div>
+                <span style={{fontSize:10,color:T.accent,background:T.accentDim,padding:"2px 8px",borderRadius:12,fontWeight:700}}>✓ Treinado</span>
               </div>
-            )}
-            {/* Lista treinamentos */}
-            {treinamentos.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:12 }}>Nenhum treinamento registrado ainda.</div>
-            ) : (
-              <div>
-                <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{treinamentos.length} treinamento(s) registrado(s)</div>
-                {treinamentos.map(t => (
-                  <div key={t.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:6 }}>
-                    <div style={{ width:32, height:32, borderRadius:"50%", background:T.accent, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>📚</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{t.userName}</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{t.userSetor} · Realizado em {fmt(t.dataRealizacao)}</div>
-                      {t.obs && <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>{t.obs}</div>}
-                    </div>
-                    <div style={{ fontSize:10, color:T.accent, background:T.accentDim, padding:"2px 8px", borderRadius:12, fontWeight:700 }}>✓ Treinado</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            ))}
           </div>
         )}
       </div>
     );
   }
 
-  /* ══════════════════════════════════════════════════════════════════════════════
-     RENDER — FORMULÁRIO NOVO/EDITAR
-  ══════════════════════════════════════════════════════════════════════════════ */
-  if (view === "novo") {
+  /* ── FORMULÁRIO ── */
+  if (view==="novo") {
     return (
       <div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-          <button style={s.btn} onClick={() => { if (sel) { setView("detalhe"); } else { setView("lista"); resetForm(); }}}>← Voltar</button>
-          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>{sel ? `Editar — ${sel.codigo}` : "Novo Documento"}</h2>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button style={s.btn} onClick={()=>{ if(sel)setView("detalhe"); else{setView("lista");resetForm();} }}>← Voltar</button>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>{sel?`Editar — ${sel.codigo}`:"Novo Documento"}</h2>
         </div>
-
-        {/* Gerador IA */}
-        <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2})`, border:`1px solid ${T.accent}33`, borderRadius:14, padding:"1rem", marginBottom:"1rem", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:36, height:36, borderRadius:8, background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🤖</div>
+        <div style={{background:`linear-gradient(135deg,${T.accentDim},${T.card2})`,border:`1px solid ${T.accent}33`,borderRadius:14,padding:"1rem",marginBottom:"1rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:8,background:`linear-gradient(135deg,${T.accent},${T.accent2})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🤖</div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Assistente IA — Gerador de Documentos</div>
-              <div style={{ fontSize:11, color:T.text2 }}>Preencha título, tipo e departamento e gere o conteúdo automaticamente</div>
+              <div style={{fontSize:13,fontWeight:700,color:T.text}}>Assistente IA — Gerador de Documentos</div>
+              <div style={{fontSize:11,color:T.text2}}>Preencha título, tipo e departamento e gere o conteúdo automaticamente</div>
             </div>
           </div>
-          <button style={{ ...s.btnA, opacity: aiLoading ? .6 : 1 }} onClick={gerarComIA} disabled={aiLoading}>
-            {aiLoading ? <><span style={{ animation:"spin 1s linear infinite", display:"inline-block" }}>⟳</span> Gerando...</> : "🤖 Gerar com IA"}
+          <button style={{...s.btnA,opacity:aiLoading?.6:1}} onClick={gerarComIA} disabled={aiLoading}>
+            {aiLoading?<><span style={{animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</span> Gerando...</>:"🤖 Gerar com IA"}
           </button>
         </div>
-
-        {/* Identificação */}
         <div style={s.card}>
           <SecTitle icon="🗂️" ch="Identificação" />
           <G3 ch={<>
-            <F lbl="Tipo de documento" ch={
-              <Sel value={form.tipo} onChange={e => setF("tipo",e.target.value)}>
-                {TIPOS_DOC.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label} ({t.id})</option>)}
-              </Sel>
-            } />
-            <F lbl="Departamento (sigla)" ch={
-              <Sel value={form.depto} onChange={e => setF("depto",e.target.value)}>
-                {DEPARTAMENTOS.map(d => <option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}
-              </Sel>
-            } />
-            <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e => setF("versao",e.target.value)} />} />
+            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{TIPOS_DOC_GD.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label} ({t.id})</option>)}</Sel>} />
+            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
+            <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
-          <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica de Matérias-Primas" value={form.titulo} onChange={e => setF("titulo",e.target.value)} />} />
-          {!sel && (
-            <div style={{ background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8, padding:"8px 12px", fontSize:12, color:T.accent, marginTop:4 }}>
-              💡 Código gerado automaticamente: <strong>{form.titulo && form.tipo && form.depto ? gerarCodigo(form.tipo, form.depto, docs) : "preencha tipo e departamento"}</strong>
-            </div>
-          )}
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:8, padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
-            <input type="checkbox" id="treino-obrig" checked={form.treinamentoObrigatorio} onChange={e => setF("treinamentoObrigatorio", e.target.checked)} style={{ width:16, height:16, accentColor:T.accent }} />
-            <label htmlFor="treino-obrig" style={{ fontSize:13, color:T.text, cursor:"pointer" }}>Treinamento obrigatório antes da execução</label>
+          <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
+          {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs)}</strong></div>}
+          <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+            <input type="checkbox" id="treino-gd" checked={form.treinamentoObrigatorio} onChange={e=>setF("treinamentoObrigatorio",e.target.checked)} style={{width:16,height:16,accentColor:T.accent}} />
+            <label htmlFor="treino-gd" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Treinamento obrigatório antes da execução</label>
           </div>
         </div>
-
-        {/* Materiais */}
         <div style={s.card}>
           <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
-          <div style={{ display:"flex", gap:8, marginBottom:10 }}>
-            <Inp placeholder="Ex: Balança analítica, Pipeta, Luvas nitrílicas..." value={novoMat} onChange={e => setNovoMat(e.target.value)} onKeyDown={e => { if(e.key==="Enter"){e.preventDefault(); if(novoMat.trim()){setF("materiais",[...form.materiais,novoMat.trim()]); setNovoMat("");}} }} style={{ flex:1 }} />
-            <button style={s.btnA} onClick={() => { if(novoMat.trim()){setF("materiais",[...form.materiais,novoMat.trim()]); setNovoMat("");} }}>+ Adicionar</button>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <Inp placeholder="Ex: Balança analítica, Pipeta..." value={novoMat} onChange={e=>setNovoMat(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();if(novoMat.trim()){setF("materiais",[...form.materiais,novoMat.trim()]);setNovoMat("");}}}} style={{flex:1}} />
+            <button style={s.btnA} onClick={()=>{if(novoMat.trim()){setF("materiais",[...form.materiais,novoMat.trim()]);setNovoMat("");}}}>+ Add</button>
           </div>
-          {form.materiais.length > 0 && (
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {form.materiais.map((m,i) => (
-                <span key={i} style={{ fontSize:12, padding:"4px 10px", borderRadius:20, background:T.surf, border:`1px solid ${T.border}`, color:T.text, display:"flex", alignItems:"center", gap:6 }}>
-                  {m}
-                  <button onClick={() => setF("materiais", form.materiais.filter((_,idx)=>idx!==i))} style={{ background:"none", border:"none", color:T.text3, cursor:"pointer", fontSize:12, padding:0, lineHeight:1 }}>×</button>
-                </span>
-              ))}
-            </div>
-          )}
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {form.materiais.map((m,i)=>(
+              <span key={i} style={{fontSize:12,padding:"4px 10px",borderRadius:20,background:T.surf,border:`1px solid ${T.border}`,color:T.text,display:"flex",alignItems:"center",gap:6}}>
+                {m}<button onClick={()=>setF("materiais",form.materiais.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:T.text3,cursor:"pointer",fontSize:12,padding:0}}>×</button>
+              </span>
+            ))}
+          </div>
         </div>
-
-        {/* Capítulos obrigatórios */}
         <div style={s.card}>
           <SecTitle icon="📑" ch="Capítulos Obrigatórios" />
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16 }}>
-            {CAPITULOS_OBRIGATORIOS.map(cap => (
-              <button key={cap.id} onClick={() => setCapituloAtivo(cap.id)}
-                style={{ padding:"5px 12px", borderRadius:20, fontSize:11, fontWeight:600, border:`1px solid ${capituloAtivo===cap.id ? T.accent : T.border}`,
-                  background: capituloAtivo===cap.id ? T.accent : T.surf,
-                  color: capituloAtivo===cap.id ? "#fff" : (form[cap.id] && form[cap.id]!=="N/A" ? T.text : T.text3),
-                  cursor:"pointer" }}>
-                {form[cap.id] && form[cap.id] !== "N/A" ? "✓ " : ""}{cap.label.replace(/^\d+\.\s/,"")}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+            {CAPITULOS_GD.map(cap=>(
+              <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
+                style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${capituloAtivo===cap.id?T.accent:T.border}`,background:capituloAtivo===cap.id?T.accent:T.surf,color:capituloAtivo===cap.id?"#fff":form[cap.id]&&form[cap.id]!=="N/A"?T.text:T.text3,cursor:"pointer"}}>
+                {form[cap.id]&&form[cap.id]!=="N/A"?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
               </button>
             ))}
           </div>
-          {CAPITULOS_OBRIGATORIOS.map(cap => capituloAtivo === cap.id && (
+          {CAPITULOS_GD.map(cap=>capituloAtivo===cap.id&&(
             <div key={cap.id}>
-              <div style={{ fontSize:12, fontWeight:700, color:T.accent, marginBottom:8 }}>{cap.label}</div>
-              <TA rows={8} placeholder={cap.placeholder} value={form[cap.id]} onChange={e => setF(cap.id, e.target.value)} style={{ width:"100%", boxSizing:"border-box" }} />
-              <div style={{ display:"flex", gap:6, marginTop:8, justifyContent:"flex-end" }}>
-                {CAPITULOS_OBRIGATORIOS.indexOf(cap) > 0 && (
-                  <button style={{ ...s.btn, fontSize:11 }} onClick={() => setCapituloAtivo(CAPITULOS_OBRIGATORIOS[CAPITULOS_OBRIGATORIOS.indexOf(cap)-1].id)}>← Anterior</button>
-                )}
-                {CAPITULOS_OBRIGATORIOS.indexOf(cap) < CAPITULOS_OBRIGATORIOS.length-1 && (
-                  <button style={{ ...s.btnA, fontSize:11 }} onClick={() => setCapituloAtivo(CAPITULOS_OBRIGATORIOS[CAPITULOS_OBRIGATORIOS.indexOf(cap)+1].id)}>Próximo →</button>
-                )}
+              <div style={{fontSize:12,fontWeight:700,color:T.accent,marginBottom:8}}>{cap.label}</div>
+              <TA rows={8} placeholder={cap.placeholder} value={form[cap.id]} onChange={e=>setF(cap.id,e.target.value)} style={{width:"100%",boxSizing:"border-box"}} />
+              <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"flex-end"}}>
+                {CAPITULOS_GD.indexOf(cap)>0&&<button style={{...s.btn,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)-1].id)}>← Anterior</button>}
+                {CAPITULOS_GD.indexOf(cap)<CAPITULOS_GD.length-1&&<button style={{...s.btnA,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)+1].id)}>Próximo →</button>}
               </div>
             </div>
           ))}
         </div>
-
-        {/* Etapas */}
         <div style={s.card}>
           <SecTitle icon="📋" ch="Etapas Detalhadas (opcional)" />
-          {form.etapas.map((e, i) => (
-            <div key={e.id} style={{ display:"flex", gap:8, marginBottom:10, alignItems:"flex-start" }}>
-              <div style={{ width:28, height:28, borderRadius:"50%", background:T.accent, color:"#fff", fontSize:12, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:6 }}>{i+1}</div>
-              <div style={{ flex:1, background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"10px 12px" }}>
-                <Inp placeholder="Título da etapa" value={e.titulo} onChange={ev => setF("etapas", form.etapas.map(x => x.id===e.id ? {...x, titulo:ev.target.value} : x))} style={{ marginBottom:6 }} />
-                <TA rows={2} placeholder="Descrição detalhada..." value={e.descricao} onChange={ev => setF("etapas", form.etapas.map(x => x.id===e.id ? {...x, descricao:ev.target.value} : x))} />
+          {form.etapas.map((e,i)=>(
+            <div key={e.id} style={{display:"flex",gap:8,marginBottom:10,alignItems:"flex-start"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:T.accent,color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:6}}>{i+1}</div>
+              <div style={{flex:1,background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 12px"}}>
+                <Inp placeholder="Título da etapa" value={e.titulo} onChange={ev=>setF("etapas",form.etapas.map(x=>x.id===e.id?{...x,titulo:ev.target.value}:x))} style={{marginBottom:6}} />
+                <TA rows={2} placeholder="Descrição..." value={e.descricao} onChange={ev=>setF("etapas",form.etapas.map(x=>x.id===e.id?{...x,descricao:ev.target.value}:x))} />
               </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:4, marginTop:4 }}>
-                {i > 0 && <button style={{ ...s.btn, padding:"4px 8px", fontSize:11 }} onClick={() => { const arr=[...form.etapas]; [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; setF("etapas",arr); }}>↑</button>}
-                {i < form.etapas.length-1 && <button style={{ ...s.btn, padding:"4px 8px", fontSize:11 }} onClick={() => { const arr=[...form.etapas]; [arr[i],arr[i+1]]=[arr[i+1],arr[i]]; setF("etapas",arr); }}>↓</button>}
-                <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={() => setF("etapas", form.etapas.filter(x => x.id!==e.id))}>×</button>
+              <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:4}}>
+                {i>0&&<button style={{...s.btn,padding:"4px 8px",fontSize:11}} onClick={()=>{const arr=[...form.etapas];[arr[i-1],arr[i]]=[arr[i],arr[i-1]];setF("etapas",arr);}}>↑</button>}
+                {i<form.etapas.length-1&&<button style={{...s.btn,padding:"4px 8px",fontSize:11}} onClick={()=>{const arr=[...form.etapas];[arr[i],arr[i+1]]=[arr[i+1],arr[i]];setF("etapas",arr);}}>↓</button>}
+                <button style={{...s.btnD,padding:"4px 8px",fontSize:11}} onClick={()=>setF("etapas",form.etapas.filter(x=>x.id!==e.id))}>×</button>
               </div>
             </div>
           ))}
-          <button style={s.btn} onClick={() => setF("etapas", [...form.etapas, { id:Date.now(), titulo:"", descricao:"" }])}>+ Adicionar etapa</button>
+          <button style={s.btn} onClick={()=>setF("etapas",[...form.etapas,{id:Date.now(),titulo:"",descricao:""}])}>+ Adicionar etapa</button>
         </div>
-
-        <div style={{ textAlign:"right", marginBottom:"2rem" }}>
-          <button style={{ ...s.btn, marginRight:8 }} onClick={() => { if(sel){setView("detalhe");}else{setView("lista");resetForm();} }}>Cancelar</button>
+        <div style={{textAlign:"right",marginBottom:"2rem"}}>
+          <button style={{...s.btn,marginRight:8}} onClick={()=>{if(sel)setView("detalhe");else{setView("lista");resetForm();}}}>Cancelar</button>
           <button style={s.btnA} onClick={salvar}>Salvar documento ✓</button>
         </div>
       </div>
     );
   }
 
-  /* ══════════════════════════════════════════════════════════════════════════════
-     RENDER — ÁRVORE DE DOCUMENTOS
-  ══════════════════════════════════════════════════════════════════════════════ */
-  if (view === "arvore") {
+  /* ── ÁRVORE ── */
+  if (view==="arvore") {
     return (
       <div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-          <button style={s.btn} onClick={() => setView("lista")}>← Voltar</button>
-          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>🌳 Árvore de Documentos</h2>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>🌳 Árvore de Documentos</h2>
         </div>
-        {DEPARTAMENTOS.map(dep => {
-          const docsDepto = docs.filter(d => d.depto === dep.id);
-          if (docsDepto.length === 0) return null;
+        {DEPARTAMENTOS_GD.map(dep=>{
+          const dd = docs.filter(d=>d.depto===dep.id);
+          if (!dd.length) return null;
           return (
             <div key={dep.id} style={s.card}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                <div style={{ width:10, height:10, borderRadius:"50%", background:dep.cor, flexShrink:0 }} />
-                <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{dep.id} — {dep.label}</div>
-                <span style={{ fontSize:11, color:T.text3, background:T.surf, padding:"2px 8px", borderRadius:20, border:`1px solid ${T.border}` }}>{docsDepto.length} doc{docsDepto.length!==1?"s":""}</span>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                <div style={{width:10,height:10,borderRadius:"50%",background:dep.cor,flexShrink:0}}/>
+                <div style={{fontSize:14,fontWeight:700,color:T.text}}>{dep.id} — {dep.label}</div>
+                <span style={{fontSize:11,color:T.text3,background:T.surf,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>{dd.length} doc{dd.length!==1?"s":""}</span>
               </div>
-              <div style={{ paddingLeft:20, borderLeft:`2px solid ${dep.cor}30` }}>
-                {TIPOS_DOC.map(tp => {
-                  const docsTipo = docsDepto.filter(d => d.tipo === tp.id);
-                  if (docsTipo.length === 0) return null;
+              <div style={{paddingLeft:20,borderLeft:`2px solid ${dep.cor}30`}}>
+                {TIPOS_DOC_GD.map(tp=>{
+                  const dt = dd.filter(d=>d.tipo===tp.id);
+                  if (!dt.length) return null;
                   return (
-                    <div key={tp.id} style={{ marginBottom:10 }}>
-                      <div style={{ fontSize:12, color:T.text2, fontWeight:600, marginBottom:6 }}>{tp.icon} {tp.label}</div>
-                      {docsTipo.map(d => (
-                        <div key={d.id} onClick={() => { setSel(d); setView("detalhe"); }}
-                          style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, marginBottom:4, cursor:"pointer" }}
-                          className="rnc-row">
-                          <div style={{ fontSize:12, fontWeight:700, color:T.accent }}>{d.codigo}</div>
-                          <div style={{ flex:1, fontSize:12, color:T.text }}>{d.titulo}</div>
-                          <BadgeStatus status={d.status} />
-                          <AlertaRevisao doc={d} T={T} />
+                    <div key={tp.id} style={{marginBottom:10}}>
+                      <div style={{fontSize:12,color:T.text2,fontWeight:600,marginBottom:6}}>{tp.icon} {tp.label}</div>
+                      {dt.map(d=>(
+                        <div key={d.id} onClick={()=>{setSel(d);setView("detalhe");}} className="rnc-row"
+                          style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:4,cursor:"pointer"}}>
+                          <div style={{fontSize:12,fontWeight:700,color:T.accent}}>{d.codigo}</div>
+                          <div style={{flex:1,fontSize:12,color:T.text}}>{d.titulo}</div>
+                          <BadgeStatusGD status={d.status}/>
+                          <AlertaRevisaoGD doc={d}/>
                         </div>
                       ))}
                     </div>
@@ -8423,96 +8180,78 @@ Responda APENAS em JSON válido sem markdown:
             </div>
           );
         })}
-        {docs.length === 0 && (
-          <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🌳</div>
-            <div>Nenhum documento cadastrado ainda.</div>
-          </div>
-        )}
+        {docs.length===0&&<div style={{textAlign:"center",padding:"3rem",color:T.text3}}><div style={{fontSize:40,marginBottom:12}}>🌳</div><div>Nenhum documento cadastrado.</div></div>}
       </div>
     );
   }
 
-  /* ══════════════════════════════════════════════════════════════════════════════
-     RENDER — LISTA MESTRA (default)
-  ══════════════════════════════════════════════════════════════════════════════ */
+  /* ── LISTA MESTRA ── */
   return (
     <div>
-      {/* Dashboard stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:16 }}>
-        {[
-          { label:"Vigentes",          value:totalVigente,  color:T.accent,          icon:"✅" },
-          { label:"Em Revisão",        value:totalRevisao,  color:T.yellow||"#ffd166",icon:"🔄" },
-          { label:"Vencendo (90d)",    value:totalVencendo, color:T.orange||"#ff8c42",icon:"⏰" },
-          { label:"Obsoletos",         value:totalObsoleto, color:T.red||"#ff4f6a",   icon:"🗄️" },
-          { label:"Total",             value:docs.length,   color:T.text2,            icon:"📄" },
-        ].map(stat => (
-          <div key={stat.label} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", textAlign:"center" }}>
-            <div style={{ fontSize:22, marginBottom:4 }}>{stat.icon}</div>
-            <div style={{ fontSize:22, fontWeight:800, color:stat.color }}>{stat.value}</div>
-            <div style={{ fontSize:10, color:T.text3, fontWeight:600, textTransform:"uppercase" }}>{stat.label}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16}}>
+        {[{label:"Vigentes",value:totalVigente,color:T.accent,icon:"✅"},{label:"Em Revisão",value:totalRevisao,color:T.yellow||"#ffd166",icon:"🔄"},{label:"Vencendo (90d)",value:totalVencendo,color:T.orange||"#ff8c42",icon:"⏰"},{label:"Obsoletos",value:totalObsoleto,color:T.red||"#ff4f6a",icon:"🗄️"},{label:"Total",value:docs.length,color:T.text2,icon:"📄"}].map(stat=>(
+          <div key={stat.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
+            <div style={{fontSize:22,marginBottom:4}}>{stat.icon}</div>
+            <div style={{fontSize:22,fontWeight:800,color:stat.color}}>{stat.value}</div>
+            <div style={{fontSize:10,color:T.text3,fontWeight:600,textTransform:"uppercase"}}>{stat.label}</div>
           </div>
         ))}
       </div>
-
-      {/* Toolbar */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-          <div style={{ position:"relative" }}>
-            <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:13 }}>🔍</span>
-            <input placeholder="Buscar código ou título..." value={buscaTxt} onChange={e => setBuscaTxt(e.target.value)} style={{ ...s.inp, paddingLeft:30, width:220, fontSize:12 }} />
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{position:"relative"}}>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:T.text3,fontSize:13}}>🔍</span>
+            <input placeholder="Buscar código ou título..." value={buscaTxt} onChange={e=>setBuscaTxt(e.target.value)} style={{...s.inp,paddingLeft:30,width:220,fontSize:12}} />
           </div>
-          <Sel value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+          <Sel value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
             <option value="todos">Todos os tipos</option>
-            {TIPOS_DOC.map(t => <option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+            {TIPOS_DOC_GD.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
           </Sel>
-          <Sel value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}>
+          <Sel value={filtroDepto} onChange={e=>setFiltroDepto(e.target.value)}>
             <option value="todos">Todos os deptos</option>
-            {DEPARTAMENTOS.map(d => <option key={d.id} value={d.id}>{d.id}</option>)}
+            {DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id}</option>)}
           </Sel>
-          <Sel value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+          <Sel value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
             <option value="todos">Todos os status</option>
-            {Object.keys(STATUS_DOC).map(s => <option key={s} value={s}>{STATUS_DOC[s].icon} {s}</option>)}
+            {Object.keys(STATUS_DOC_GD).map(st=><option key={st} value={st}>{STATUS_DOC_GD[st].icon} {st}</option>)}
           </Sel>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button style={s.btn} onClick={() => setView("arvore")}>🌳 Árvore</button>
-          {!isViewer && <button style={s.btnA} onClick={() => { setSel(null); resetForm(); setView("novo"); }}>+ Novo Documento</button>}
+        <div style={{display:"flex",gap:8}}>
+          <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
+          {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
       </div>
-
-      {/* Lista */}
-      {loading ? (
-        <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando lista mestra...</div>
-      ) : filtrados.length === 0 ? (
-        <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
-          <div style={{ fontSize:40, marginBottom:12 }}>🗂️</div>
-          <div style={{ fontSize:14 }}>{docs.length === 0 ? "Nenhum documento cadastrado." : "Nenhum resultado para os filtros aplicados."}</div>
-          {docs.length === 0 && <div style={{ fontSize:12, marginTop:6 }}>Crie o primeiro documento do sistema!</div>}
+      {loading?(
+        <div style={{textAlign:"center",padding:"3rem",color:T.text2}}>Carregando lista mestra...</div>
+      ):filtrados.length===0?(
+        <div style={{textAlign:"center",padding:"3rem",color:T.text3}}>
+          <div style={{fontSize:40,marginBottom:12}}>🗂️</div>
+          <div style={{fontSize:14}}>{docs.length===0?"Nenhum documento cadastrado.":"Nenhum resultado para os filtros."}</div>
+          {docs.length===0&&<div style={{fontSize:12,marginTop:6}}>Crie o primeiro documento do sistema!</div>}
         </div>
-      ) : filtrados.map(d => {
-        const tipo = TIPOS_DOC.find(t => t.id === d.tipo);
+      ):filtrados.map(d=>{
+        const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
         return (
-          <div key={d.id} className="rnc-row" onClick={() => { setSel(d); setView("detalhe"); }}
-            style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${tipo?.cor || T.border}`, borderRadius:10, padding:"10px 14px", marginBottom:8, cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-            <div style={{ width:38, height:38, borderRadius:8, background:(tipo?.cor||T.accent)+"20", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{tipo?.icon || "📄"}</div>
-            <div style={{ flex:1, minWidth:150 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                <div style={{ fontSize:12, fontWeight:700, color:tipo?.cor||T.accent }}>{d.codigo}</div>
-                <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{d.titulo}</div>
+          <div key={d.id} className="rnc-row" onClick={()=>{setSel(d);setView("detalhe");}}
+            style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${tipo?.cor||T.border}`,borderRadius:10,padding:"10px 14px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{width:38,height:38,borderRadius:8,background:(tipo?.cor||T.accent)+"20",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{tipo?.icon||"📄"}</div>
+            <div style={{flex:1,minWidth:150}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{fontSize:12,fontWeight:700,color:tipo?.cor||T.accent}}>{d.codigo}</div>
+                <div style={{fontSize:13,fontWeight:600,color:T.text}}>{d.titulo}</div>
               </div>
-              <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>
+              <div style={{fontSize:11,color:T.text2,marginTop:2}}>
                 {d.depto} · Rev.{d.versao} · {d.criadoPor} · {fmt(d.criadoEm)}
-                {d.treinamentoObrigatorio && <span style={{ marginLeft:8, color:T.blue||"#4fc3f7" }}>📚 Treino obrig.</span>}
+                {d.treinamentoObrigatorio&&<span style={{marginLeft:8,color:T.blue||"#4fc3f7"}}>📚</span>}
               </div>
             </div>
-            <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-              <AlertaRevisao doc={d} T={T} />
-              {d.assinaturaElaborador && <span style={{ fontSize:10, padding:"2px 6px", borderRadius:12, background:T.accent+"18", color:T.accent }}>✍️</span>}
-              {d.assinaturaRevisor    && <span style={{ fontSize:10, padding:"2px 6px", borderRadius:12, background:(T.blue||"#4fc3f7")+"18", color:T.blue||"#4fc3f7" }}>🔎</span>}
-              {d.assinaturaAprovador  && <span style={{ fontSize:10, padding:"2px 6px", borderRadius:12, background:(T.orange||"#ff9800")+"18", color:T.orange||"#ff9800" }}>✅</span>}
-              <BadgeTipo tipo={d.tipo} />
-              <BadgeStatus status={d.status} />
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <AlertaRevisaoGD doc={d}/>
+              {d.assinaturaElaborador&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:T.accent+"18",color:T.accent}}>✍️</span>}
+              {d.assinaturaRevisor&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:(T.blue||"#4fc3f7")+"18",color:T.blue||"#4fc3f7"}}>🔎</span>}
+              {d.assinaturaAprovador&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:(T.orange||"#ff9800")+"18",color:T.orange||"#ff9800"}}>✅</span>}
+              <BadgeTipoGD tipo={d.tipo}/>
+              <BadgeStatusGD status={d.status}/>
             </div>
           </div>
         );
