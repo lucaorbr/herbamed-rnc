@@ -6063,6 +6063,7 @@ function ClientesTab({ user, toast_ }) {
   const editar = (c) => { setSel(c); setForm({ nome:c.nome||"", cnpj:c.cnpj||"", contato:c.contato||"", email:c.email||"", tel:c.tel||"", obs:c.obs||"" }); };
 
   const filtrados = clientes.filter(c => !busca || c.nome?.toLowerCase().includes(busca.toLowerCase()) || c.cnpj?.includes(busca));
+  const {paginated:_cls,page:_pgC,total:_totC,setPage:_setPgC} = usePagination(filtrados, 20);
 
   return (
     <div>
@@ -6097,7 +6098,8 @@ function ClientesTab({ user, toast_ }) {
           <div style={{ fontSize:40, marginBottom:12 }}>🏢</div>
           <div style={{ fontSize:14 }}>Nenhum cliente cadastrado.</div>
         </div>
-      ) : (()=>{const {paginated:_cls,page:_pgC,total:_totC,setPage:_setPgC}=usePagination(filtrados,20);return(<>{_cls.map(c => (
+      ) : (<>
+      {_cls.map(c => (
         <div key={c.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:40, height:40, borderRadius:"50%", background:T.accentDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:T.accent, flexShrink:0 }}>{c.nome?.[0]||"?"}</div>
           <div style={{ flex:1 }}>
@@ -6329,6 +6331,7 @@ function LaudosTab({ user, toast_, users }) {
   const filtrados = laudos
     .filter(l => filtroStatus==="todos" || l.status===filtroStatus)
     .filter(l => !busca || l.produto?.toLowerCase().includes(busca.toLowerCase()) || l.numLaudo?.toLowerCase().includes(busca.toLowerCase()) || clientes.find(c=>String(c.id)===String(l.clienteId))?.nome?.toLowerCase().includes(busca.toLowerCase()));
+  const {paginated:_lds,page:_pgL,total:_totL,setPage:_setPgL} = usePagination(filtrados, 20);
 
   // ── FORM ──
   if (view === "novo") return (
@@ -6526,7 +6529,8 @@ function LaudosTab({ user, toast_, users }) {
           <div style={{ fontSize:14 }}>Nenhum laudo encontrado.</div>
           <div style={{ fontSize:12, marginTop:6 }}>Crie o primeiro laudo analítico!</div>
         </div>
-      ) : (()=>{const {paginated:_lds,page:_pgL,total:_totL,setPage:_setPgL}=usePagination(filtrados,20);return(<>{_lds.map(l => {
+      ) : (<>
+      {_lds.map(l => {
         const cliente = clientes.find(c=>String(c.id)===String(l.clienteId));
         const tipo = TIPOS.find(t=>t.id===l.tipo)?.label||l.tipo;
         return (
@@ -6546,7 +6550,9 @@ function LaudosTab({ user, toast_, users }) {
             </span>
           </div>
         );
-      })}<Pagination page={_pgL} total={_totL} setPage={_setPgL}/></>) })()}
+      })
+      }<Pagination page={_pgL} total={_totL} setPage={_setPgL}/>
+      </>
     </div>
   );
 }
@@ -6657,6 +6663,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
 
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
+  const {paginated:_auds,page:_pgA,total:_totA,setPage:_setPgA} = usePagination(auditorias, 20);
   if(view==="nova") return (
     <div>
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
@@ -6738,7 +6745,8 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
           <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🔍</div>
           <div style={{ fontSize:14, color:T.text2 }}>Nenhuma auditoria registrada</div>
         </div>
-      ) : (()=>{const {paginated:_auds,page:_pgA,total:_totA,setPage:_setPgA}=usePagination(auditorias,20);return(<>{_auds.map(a=>(
+      ) : (<>
+      {_auds.map(a=>(
         <div key={a.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${STATUS_AUD[a.status]||T.accent}`, borderRadius:12, padding:"1rem 1.25rem", marginBottom:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div>
@@ -7032,11 +7040,12 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
     toast_("Usuário removido.", "red");
   };
 
+  const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU} = usePagination(users||[], 20);
   return (
     <div>
       <div style={s.card}>
         <SecTitle icon="👥" ch={`Usuários do sistema (${users.length})`} />
-        {(()=>{const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU}=usePagination(users||[],20);return(<>{_usrs.map(u=>(
+        {_usrs.map(u=>(
           <div key={u.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, marginBottom:10, overflow:"hidden" }}>
             {editing===u.id ? (
               <div style={{ padding:"1rem" }}>
@@ -7097,7 +7106,8 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
               </div>
             )}
           </div>
-        ))}<Pagination page={_pgU} total={_totU} setPage={_setPgU}/></>) })()}
+        )}
+        <Pagination page={_pgU} total={_totU} setPage={_setPgU}/>
       </div>
 
       <div style={s.card}>
@@ -7411,6 +7421,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
 
   const filtrados = docs.filter(d => {
     if (filtroTipo   !== "todos" && d.tipo   !== filtroTipo)   return false;
+  const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
     if (filtroDepto  !== "todos" && d.depto  !== filtroDepto)  return false;
     if (filtroStatus !== "todos" && d.status !== filtroStatus) return false;
     if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
@@ -7769,7 +7780,9 @@ function GestaoDocumentosTab({ user, toast_, users }) {
           <div style={{fontSize:14}}>{docs.length===0?"Nenhum documento cadastrado.":"Nenhum resultado para os filtros."}</div>
           {docs.length===0&&<div style={{fontSize:12,marginTop:6}}>Crie o primeiro documento do sistema!</div>}
         </div>
-      ):(()=>{const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD}=usePagination(filtrados,20);return(<>{_gds.map(d=>{
+      ):
+      (<>
+      {_gds.map(d=>{
         const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
         return (
           <div key={d.id} className="rnc-row" onClick={()=>{setSel(d);setView("detalhe");}}
@@ -7795,7 +7808,9 @@ function GestaoDocumentosTab({ user, toast_, users }) {
             </div>
           </div>
         );
-      })}<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/></>) })()}
+      })
+      }<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/>
+      </>
     </div>
   );
 }
