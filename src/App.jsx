@@ -1072,7 +1072,7 @@ export default function App() {
         </div>
         <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
       </div>
-    </FormalCtx.Provider></ThemeCtx.Provider>
+    </ThemeCtx.Provider>
   );
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
