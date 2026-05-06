@@ -6025,6 +6025,7 @@ function IPCProdutosTab({ user, toast_ }) {
           );
         })
       )}
+      <Pagination page={pgIPC} total={totIPC} setPage={setPgIPC}/>
     </div>
   );
 }
