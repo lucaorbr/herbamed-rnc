@@ -929,7 +929,6 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
       { id:"auditorias",   icon:"🔍", label:"Auditorias" },
       { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
       { id:"clientes",     icon:"🏢", label:"Clientes Terceiros" },
-      { id:"pops",         icon:"📄", label:"POPs" },
       { id:"gestao-docs",  icon:"🗂️", label:"Gestão de Docs" },
       ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
     ]},
@@ -1141,7 +1140,6 @@ export default function App() {
     "cq-dashboard": "CQ — Dashboard de Qualidade",
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
-    pops: "POPs — Procedimentos Operacionais Padrão",
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
     clientes: "Clientes Terceiros",
     ipc: "IPC — Controle de Processo",
@@ -1332,7 +1330,6 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="pops"         && <POPsTab user={user} toast_={toast_} users={users} />}
               {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
@@ -5985,6 +5982,7 @@ function IPCProdutosTab({ user, toast_ }) {
   );
 }
 
+/* ─── POPs — LEGADO (substituído por Gestão de Docs) ── início do bloco comentado ─
 /* ─── POPs — PROCEDIMENTOS OPERACIONAIS PADRÃO ───────────────────────────────── */
 const LOGO_HERBAMED_POP = "https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li";
 const HERBAMED_POP = {
@@ -6489,6 +6487,7 @@ Seja técnico, claro e específico para a indústria nutracêutica/farmacêutica
 
 
 /* ─── CLIENTES TERCEIROS TAB ─────────────────────────────────────────────────── */
+─── fim do bloco comentado POPsTab ────────────────────────────────────────────── */
 function ClientesTab({ user, toast_ }) {
   const T = useTheme(); const s = useS();
   const [clientes, setClientes] = useState([]);
