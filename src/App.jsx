@@ -6114,6 +6114,8 @@ function ClientesTab({ user, toast_ }) {
           )}
         </div>
       ))}
+      <Pagination page={_pgC} total={_totC} setPage={_setPgC}/>
+      </>
     </div>
   );
 }
@@ -6774,7 +6776,9 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
             </div>
           </div>
         </div>
-      ))}
+      )}
+      <Pagination page={_pgA} total={_totA} setPage={_setPgA}/>
+      </>
     </div>
   );
 }
