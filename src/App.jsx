@@ -56,46 +56,6 @@ const THEMES = {
     border: "rgba(157,127,255,0.1)", border2: "rgba(157,127,255,0.2)",
     red: "#ff6b8a", yellow: "#ffd166", blue: "#7eb8ff", orange: "#ffaa5c", purple: "#c084fc",
   },
-  cyberpunk: {
-    name: "🔥 Cyberpunk",
-    bg: "#0a0014", surf: "#100020", card: "#150028", card2: "#1a0030",
-    accent: "#ff00aa", accent2: "#aa0077", accentDim: "#ff00aa18",
-    accentGlow: "#ff00aa50", text: "#ffe0ff", text2: "#cc88cc", text3: "#884488",
-    border: "rgba(255,0,170,0.12)", border2: "rgba(255,0,170,0.25)",
-    red: "#ff3366", yellow: "#ffee00", blue: "#00eeff", orange: "#ff6600", purple: "#cc00ff",
-  },
-  matrix: {
-    name: "🍀 Matrix",
-    bg: "#000800", surf: "#001200", card: "#001800", card2: "#002000",
-    accent: "#00ff41", accent2: "#00aa2a", accentDim: "#00ff4118",
-    accentGlow: "#00ff4140", text: "#ccffcc", text2: "#44bb44", text3: "#226622",
-    border: "rgba(0,255,65,0.1)", border2: "rgba(0,255,65,0.2)",
-    red: "#ff4444", yellow: "#aaff00", blue: "#00ffcc", orange: "#88ff00", purple: "#44ff88",
-  },
-  sakura: {
-    name: "🌸 Sakura",
-    bg: "#1a0d12", surf: "#261118", card: "#2e1520", card2: "#361a26",
-    accent: "#ff6b9d", accent2: "#cc3366", accentDim: "#ff6b9d18",
-    accentGlow: "#ff6b9d40", text: "#ffe8f0", text2: "#cc8899", text3: "#884455",
-    border: "rgba(255,107,157,0.1)", border2: "rgba(255,107,157,0.2)",
-    red: "#ff4466", yellow: "#ffcc66", blue: "#cc88ff", orange: "#ff9966", purple: "#cc66ff",
-  },
-  cafe: {
-    name: "☕ Café",
-    bg: "#120a04", surf: "#1e1208", card: "#261608", card2: "#2e1a0a",
-    accent: "#d4874a", accent2: "#9a5a28", accentDim: "#d4874a18",
-    accentGlow: "#d4874a40", text: "#f5e6d0", text2: "#b08060", text3: "#705040",
-    border: "rgba(212,135,74,0.12)", border2: "rgba(212,135,74,0.22)",
-    red: "#e05555", yellow: "#f0c060", blue: "#80b0d0", orange: "#d4874a", purple: "#b088cc",
-  },
-  ubuntu: {
-    name: "🐧 Ubuntu",
-    bg: "#1a0a00", surf: "#2c1500", card: "#3a1c00", card2: "#442200",
-    accent: "#e95420", accent2: "#c0390a", accentDim: "#e9542018",
-    accentGlow: "#e9542040", text: "#fff8f5", text2: "#cc8866", text3: "#885533",
-    border: "rgba(233,84,32,0.12)", border2: "rgba(233,84,32,0.22)",
-    red: "#ff4444", yellow: "#f0a030", blue: "#4db8ff", orange: "#e95420", purple: "#aa66cc",
-  },
   macos: {
     name: "🍎 macOS", light: true,
     bg: "#f0f0f5", surf: "#ffffff", card: "#ffffff", card2: "#f5f5fa",
@@ -1337,6 +1297,13 @@ export default function App() {
 
 /* ─── HOME TAB ───────────────────────────────────────────────────────────────── */
 function HomeTab({ rncs, user, setTab }) {
+  const [ipcPendentes, setIpcPendentes] = useState(0);
+  const [laudosPendentes, setLaudosPendentes] = useState(0);
+  useEffect(() => {
+    const u1 = subscribeCollection("ipc_registros", list => setIpcPendentes(list.filter(r=>r.status==="Pendente").length));
+    const u2 = subscribeCollection("laudos", list => setLaudosPendentes(list.filter(l=>!l.assinaturaRT&&l.status!=="Rascunho").length));
+    return () => { u1&&u1(); u2&&u2(); };
+  }, []);
   const T = useTheme(); const s = useS();
   const [slide, setSlide] = useState(0);
   const STORE_URL = "https://www.lojaherbamed.com.br/";
@@ -1501,10 +1468,12 @@ function HomeTab({ rncs, user, setTab }) {
               { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
               { l:"Taxa de eficácia",ok:taxaEf>=70,    val:`${taxaEf}%${taxaEf>=70?" ✓":""}`},
               { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0, val:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length} sem responsável` },
-            ].map(({ l, ok, val }) => (
-              <div key={l} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${T.border}` }}>
+              { l:"IPC — Liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
+              { l:"Laudos aguardando RT", ok:laudosPendentes===0, val:laudosPendentes===0?"✓ Todos assinados":`${laudosPendentes} aguardando assinatura`, link:"laudos" },
+            ].map(({ l, ok, val, link }) => (
+              <div key={l} onClick={link&&!ok?()=>setTab(link):undefined} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${T.border}`, cursor:link&&!ok?"pointer":"default" }}>
                 <span style={{ fontSize:12, color:T.text2 }}>{l}</span>
-                <span style={{ fontSize:12, fontWeight:600, color:ok?T.accent:"#ff4f6a" }}>{val}</span>
+                <span style={{ fontSize:12, fontWeight:600, color:ok?T.accent:"#ff4f6a" }}>{val}{link&&!ok?" →":""}</span>
               </div>
             ))}
           </div>
@@ -5339,6 +5308,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}>📄 PDF</button>
+                <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}>📋 Gerar Laudo</button>
                 <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
                 <button onClick={()=>setSelAnalise(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
@@ -5626,9 +5596,26 @@ function IPCTab({ user, toast_ }) {
               </tbody>
             </table>
           </div>
+          {/* Indicador de progresso */}
+          {resultados.length > 0 && (() => {
+            const preenchidos = resultados.filter(r => r.resultado !== "").length;
+            const total = resultados.length;
+            const pct = Math.round((preenchidos/total)*100);
+            return (
+              <div style={{ marginTop:12, padding:"10px 14px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <span style={{ fontSize:11, color:T.text2 }}>Progresso dos ensaios</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:pct===100?T.accent:T.text2 }}>{preenchidos}/{total} preenchidos</span>
+                </div>
+                <div style={{ height:6, background:T.border, borderRadius:10, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${pct}%`, background:pct===100?T.accent:T.yellow||"#f0c040", borderRadius:10, transition:"width 0.3s" }} />
+                </div>
+              </div>
+            );
+          })()}
           {resultados.some(r => r.resultado !== "") && (
             <div style={{ padding:"12px 16px", borderRadius:10, textAlign:"center", fontWeight:700, fontSize:15,
-              background: statusBg[calcStatus()], color: statusColor[calcStatus()], border:`1px solid ${statusColor[calcStatus()]}33`, marginTop:12 }}>
+              background: statusBg[calcStatus()], color: statusColor[calcStatus()], border:`1px solid ${statusColor[calcStatus()]}33`, marginTop:8 }}>
               {statusIcon[calcStatus()]} {calcStatus() === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : calcStatus() === "Reprovado" ? "REPROVADO — NÃO LIBERAR" : "ANÁLISE PENDENTE"}
             </div>
           )}
@@ -6041,6 +6028,16 @@ function LaudosTab({ user, toast_, users }) {
     { id:"processo",        label:"Processo (IPC)" },
   ];
 
+  // Capturar prefill vindo do CQ Análises
+  useEffect(() => {
+    if (window._laudoPreFill) {
+      const pf = window._laudoPreFill;
+      setForm(f => ({ ...f, ...pf }));
+      setView("novo");
+      delete window._laudoPreFill;
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => setLoading(false), 3000);
@@ -6086,7 +6083,10 @@ function LaudosTab({ user, toast_, users }) {
     if (!form.clienteId) { alert("Selecione o cliente."); return; }
     if (!form.produto) { alert("Informe o produto."); return; }
     const status = calcStatus(form.ensaios);
-    const numLaudo = sel ? sel.numLaudo : `LA-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
+    // Gerar número sequencial LA-AAAA-NNN
+    // Número sequencial: LA-AAAA-NNN baseado na contagem de laudos
+    const ano = new Date().getFullYear();
+    const numLaudo = sel ? sel.numLaudo : `LA-${ano}-${String(laudos.filter(l=>l.numLaudo?.startsWith(`LA-${ano}`)).length + 1).padStart(3,"0")}`;
     const id = sel ? sel.id : Date.now();
     const laudo = { id, numLaudo, ...form, status, assinaturaAnalista:null, assinaturaRT:null, criadoPor:user.name, criadoEm:tod(), criadoTs:sel?sel.criadoTs:Date.now(), atualizadoEm:tod() };
     await saveCollection("laudos", String(id), laudo);
