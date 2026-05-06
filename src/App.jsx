@@ -7113,7 +7113,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
               </div>
             )}
           </div>
-        )}
+        ))}
         <Pagination page={_pgU} total={_totU} setPage={_setPgU}/>
       </div>
 
