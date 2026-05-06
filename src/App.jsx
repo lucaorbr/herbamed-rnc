@@ -410,6 +410,47 @@ function useS() {
   };
 }
 
+/* ─── PAGINACAO ──────────────────────────────────────────────────────────────── */
+function usePagination(items, perPage = 20) {
+  const [page, setPage] = useState(1);
+  const total = Math.ceil(items.length / perPage) || 1;
+  const safePage = Math.min(page, total);
+  const paginated = items.slice((safePage - 1) * perPage, safePage * perPage);
+  useEffect(() => { setPage(1); }, [items.length]);
+  return { paginated, page: safePage, total, setPage };
+}
+
+function Pagination({ page, total, setPage }) {
+  const T = useTheme();
+  if (total <= 1) return null;
+  const pages = [];
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= page - 2 && i <= page + 2)) pages.push(i);
+    else if (pages[pages.length - 1] !== "...") pages.push("...");
+  }
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"1rem 0", flexWrap:"wrap" }}>
+      <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+        style={{ padding:"6px 12px", borderRadius:8, border:"1px solid "+T.border2, background:T.surf, color:page===1?T.text3:T.text2, cursor:page===1?"not-allowed":"pointer", fontSize:12, fontFamily:"inherit" }}>
+        Ant.
+      </button>
+      {pages.map((p, i) => p === "..." ? (
+        <span key={"e"+i} style={{ padding:"6px 4px", color:T.text3, fontSize:12 }}>...</span>
+      ) : (
+        <button key={p} onClick={() => setPage(p)}
+          style={{ padding:"6px 10px", borderRadius:8, border:"1px solid "+(p===page?T.accent:T.border2), background:p===page?T.accentDim:T.surf, color:p===page?T.accent:T.text2, cursor:"pointer", fontSize:12, fontFamily:"inherit", fontWeight:p===page?700:400, minWidth:32 }}>
+          {p}
+        </button>
+      ))}
+      <button onClick={() => setPage(p => Math.min(total, p + 1))} disabled={page === total}
+        style={{ padding:"6px 12px", borderRadius:8, border:"1px solid "+T.border2, background:T.surf, color:page===total?T.text3:T.text2, cursor:page===total?"not-allowed":"pointer", fontSize:12, fontFamily:"inherit" }}>
+        Prox.
+      </button>
+      <span style={{ fontSize:11, color:T.text3, marginLeft:4 }}>Pag. {page} de {total}</span>
+    </div>
+  );
+}
+
 function F({ lbl, ch }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={s.lbl}>{lbl}</label>{ch}</div>; }
 function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
 function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", background: T.surf, color: T.text, ...sx }} {...p}>{children}</select>; }
@@ -1745,7 +1786,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r, idx) => {
+              {(()=>{const {paginated:_rncs,page:_pgRNC,total:_totRNC,setPage:_setPgRNC}=usePagination(sorted,20);return(<>{_rncs.map((r, idx) => {
                 const step = getRNCStep(r);
                 const vencido = past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz";
                 return (
@@ -5901,6 +5942,7 @@ function IPCProdutosTab({ user, toast_ }) {
   const filtrados = produtos
     .filter(p => filtroLinha === "todas" || p.linha === filtroLinha)
     .filter(p => !busca || p.nome?.toLowerCase().includes(busca.toLowerCase()) || p.linha?.toLowerCase().includes(busca.toLowerCase()));
+  const {paginated:filtradosPg, page:pgIPC, total:totIPC, setPage:setPgIPC} = usePagination(filtrados, 20);
 
   return (
     <div>
@@ -5955,8 +5997,8 @@ function IPCProdutosTab({ user, toast_ }) {
           {isAdmin && <div style={{ fontSize:12, marginTop:6 }}>Cadastre os produtos acima para padronizar os lançamentos.</div>}
         </div>
       ) : (
-        LINHAS.filter(l => filtroLinha === "todas" || l === filtroLinha).map(linha => {
-          const prods = filtrados.filter(p => p.linha === linha);
+        [...new Set(filtradosPg.map(p=>p.linha))].map(linha => {
+          const prods = filtradosPg.filter(p => p.linha === linha);
           if (prods.length === 0) return null;
           return (
             <div key={linha} style={{ marginBottom:16 }}>
@@ -6051,7 +6093,7 @@ function ClientesTab({ user, toast_ }) {
           <div style={{ fontSize:40, marginBottom:12 }}>🏢</div>
           <div style={{ fontSize:14 }}>Nenhum cliente cadastrado.</div>
         </div>
-      ) : filtrados.map(c => (
+      ) : (()=>{const {paginated:_cls,page:_pgC,total:_totC,setPage:_setPgC}=usePagination(filtrados,20);return(<>{_cls.map(c => (
         <div key={c.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:8, display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:40, height:40, borderRadius:"50%", background:T.accentDim, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:T.accent, flexShrink:0 }}>{c.nome?.[0]||"?"}</div>
           <div style={{ flex:1 }}>
@@ -6480,7 +6522,7 @@ function LaudosTab({ user, toast_, users }) {
           <div style={{ fontSize:14 }}>Nenhum laudo encontrado.</div>
           <div style={{ fontSize:12, marginTop:6 }}>Crie o primeiro laudo analítico!</div>
         </div>
-      ) : filtrados.map(l => {
+      ) : (()=>{const {paginated:_lds,page:_pgL,total:_totL,setPage:_setPgL}=usePagination(filtrados,20);return(<>{_lds.map(l => {
         const cliente = clientes.find(c=>String(c.id)===String(l.clienteId));
         const tipo = TIPOS.find(t=>t.id===l.tipo)?.label||l.tipo;
         return (
@@ -6500,7 +6542,7 @@ function LaudosTab({ user, toast_, users }) {
             </span>
           </div>
         );
-      })}
+      })}<Pagination page={_pgL} total={_totL} setPage={_setPgL}/></>) })()}
     </div>
   );
 }
@@ -6692,7 +6734,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
           <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🔍</div>
           <div style={{ fontSize:14, color:T.text2 }}>Nenhuma auditoria registrada</div>
         </div>
-      ) : auditorias.map(a=>(
+      ) : (()=>{const {paginated:_auds,page:_pgA,total:_totA,setPage:_setPgA}=usePagination(auditorias,20);return(<>{_auds.map(a=>(
         <div key={a.id} style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${STATUS_AUD[a.status]||T.accent}`, borderRadius:12, padding:"1rem 1.25rem", marginBottom:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
             <div>
@@ -6990,7 +7032,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
     <div>
       <div style={s.card}>
         <SecTitle icon="👥" ch={`Usuários do sistema (${users.length})`} />
-        {users.map(u=>(
+        {(()=>{const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU}=usePagination(users||[],20);return(<>{_usrs.map(u=>(
           <div key={u.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, marginBottom:10, overflow:"hidden" }}>
             {editing===u.id ? (
               <div style={{ padding:"1rem" }}>
@@ -7051,7 +7093,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
               </div>
             )}
           </div>
-        ))}
+        ))}<Pagination page={_pgU} total={_totU} setPage={_setPgU}/></>) })()}
       </div>
 
       <div style={s.card}>
@@ -7723,7 +7765,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
           <div style={{fontSize:14}}>{docs.length===0?"Nenhum documento cadastrado.":"Nenhum resultado para os filtros."}</div>
           {docs.length===0&&<div style={{fontSize:12,marginTop:6}}>Crie o primeiro documento do sistema!</div>}
         </div>
-      ):filtrados.map(d=>{
+      ):(()=>{const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD}=usePagination(filtrados,20);return(<>{_gds.map(d=>{
         const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
         return (
           <div key={d.id} className="rnc-row" onClick={()=>{setSel(d);setView("detalhe");}}
@@ -7749,7 +7791,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
             </div>
           </div>
         );
-      })}
+      })}<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/></>) })()}
     </div>
   );
 }
