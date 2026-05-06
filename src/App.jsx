@@ -6116,6 +6116,7 @@ function ClientesTab({ user, toast_ }) {
       ))}
       <Pagination page={_pgC} total={_totC} setPage={_setPgC}/>
       </>
+      )}
     </div>
   );
 }
@@ -6555,6 +6556,7 @@ function LaudosTab({ user, toast_, users }) {
       })
       }<Pagination page={_pgL} total={_totL} setPage={_setPgL}/>
       </>
+      )}
     </div>
   );
 }
@@ -6779,6 +6781,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
       )}
       <Pagination page={_pgA} total={_totA} setPage={_setPgA}/>
       </>
+      )}
     </div>
   );
 }
@@ -7815,6 +7818,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
       })
       }<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/>
       </>
+      )}
     </div>
   );
 }
