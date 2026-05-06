@@ -1772,6 +1772,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
           <div style={{ fontSize:12 }}>{isViewer?"Nenhuma não conformidade registrada.":"Clique em \"+ Nova RNC\" para começar."}</div>
         </div>
       ) : (
+        <>
         <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
@@ -1824,6 +1825,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
           </div>
         </div>
         <Pagination page={_pgRNC} total={_totRNC} setPage={_setPgRNC}/>
+      </>
       )}
 
       {/* MODAL */}
