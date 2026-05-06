@@ -1360,6 +1360,7 @@ export default function App() {
 
 /* ─── HOME TAB ───────────────────────────────────────────────────────────────── */
 function HomeTab({ rncs, user, setTab }) {
+  const formal = useFormal();
   const [ipcPendentes, setIpcPendentes] = useState(0);
   const [laudosPendentes, setLaudosPendentes] = useState(0);
   useEffect(() => {
@@ -1413,7 +1414,7 @@ function HomeTab({ rncs, user, setTab }) {
           <div style={{ animation:"fadeUp2 .4s ease" }}>
             <div style={{ fontSize:11, color:T.text3, textTransform:"uppercase", letterSpacing:".1em", marginBottom:6 }}>{saud},</div>
             <div style={{ fontSize:26, fontWeight:800, color:T.text, lineHeight:1.2, marginBottom:6 }}>
-              {user.name.split(" ")[0]} 👋
+              {user.name.split(" ")[0]}{!formal && " 👋"}
             </div>
             <div style={{ fontSize:13, color:T.text2, lineHeight:1.5 }}>
               {abertas > 0
@@ -1456,13 +1457,13 @@ function HomeTab({ rncs, user, setTab }) {
             <div style={{ fontSize:12, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:10 }}>Ações rápidas</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
               {[
-                { icon:"➕", label:"Nova RNC",    color:"#2ab84a", action:()=>setTab("nova") },
-                { icon:"📊", label:"Dashboard",   color:"#4fc3f7", action:()=>setTab("dashboard") },
-                { icon:"📑", label:"Relatórios",  color:"#a78bfa", action:()=>setTab("relatorios") },
-                { icon:"📋", label:"Ver Registros",color:"#ff8c42",action:()=>setTab("lista") },
-              ].map(({ icon, label, color, action }) => (
+                { icon:"➕", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>, label:"Nova RNC",    color:"#2ab84a", action:()=>setTab("nova") },
+                { icon:"📊", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Dashboard",   color:"#4fc3f7", action:()=>setTab("dashboard") },
+                { icon:"📑", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>, label:"Relatórios",  color:"#a78bfa", action:()=>setTab("relatorios") },
+                { icon:"📋", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>, label:"Ver Registros",color:"#ff8c42",action:()=>setTab("lista") },
+              ].map(({ icon, svg, label, color, action }) => (
                 <button key={label} onClick={action} className="action-card" style={{ background:T.card, border:`1px solid ${color}22`, borderRadius:12, padding:"1rem", cursor:"pointer", fontFamily:"inherit", textAlign:"center", transition:"all .2s", boxShadow:`0 0 20px ${color}10` }}>
-                  <div style={{ fontSize:28, marginBottom:6 }}>{icon}</div>
+                  <div style={{ fontSize:28, marginBottom:6, color, display:"flex", alignItems:"center", justifyContent:"center" }}>{formal ? svg : icon}</div>
                   <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{label}</div>
                 </button>
               ))}
@@ -1472,7 +1473,7 @@ function HomeTab({ rncs, user, setTab }) {
           {/* Minha fila */}
           <div style={{ ...s.card, marginBottom:"1.5rem" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>👤 Minha fila de trabalho</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{formal ? "" : "👤 "}Minha fila de trabalho</div>
               <span style={{ fontSize:11, color:T.text3 }}>{minhas.length} pendente(s)</span>
             </div>
             {minhas.length === 0 ? (
@@ -1500,7 +1501,7 @@ function HomeTab({ rncs, user, setTab }) {
 
           {/* Atividade recente */}
           <div style={s.card}>
-            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>🕐 Atividade recente</div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>{formal ? "" : "🕐 "}Atividade recente</div>
             {recentes.length === 0 ? (
               <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:13 }}>Nenhuma RNC registrada ainda.</div>
             ) : recentes.map(r => (
@@ -1525,7 +1526,7 @@ function HomeTab({ rncs, user, setTab }) {
         <div>
           {/* Saúde do sistema */}
           <div style={{ ...s.card, marginBottom:"1rem" }}>
-            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>🩺 Saúde do sistema</div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>{formal ? "" : "🩺 "}Saúde do sistema</div>
             {[
               { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
               { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
