@@ -1181,6 +1181,17 @@ export default function App() {
     }
   }, [user?.name, user?.email, user?.uid, user?.id]);
 
+  // ── Verificação de permissões customizadas ───────────────────────────
+  // Para usuários com permissoes salvas no Firestore, usa elas.
+  // Para usuários antigos sem permissoes, cai no papel (role) como antes.
+  const perm = (key) => {
+    if (!user) return false;
+    if (user.permissoes && key in user.permissoes) return !!user.permissoes[key];
+    // fallback para papel
+    const role = user.role;
+    return PERMS_PADRAO[role] ? !!(PERMS_PADRAO[role][key]) : false;
+  };
+
   const fbErr = (e) => {
     console.error("[Firebase]", e?.code, e?.message);
     const codes = {
@@ -1446,8 +1457,8 @@ export default function App() {
 
             <div style={{ padding: tab==="home" ? "0" : "1.5rem" }}>
               {tab==="home"       && <HomeTab rncs={rncs} user={user} setTab={setTab} />}
-              {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} />}
-              {tab==="nova"       && !isViewer && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} fornecedores={fornecedores} />}
+              {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
+              {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} fornecedores={fornecedores} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
@@ -1458,13 +1469,13 @@ export default function App() {
               {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
               {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
-              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} />}
-              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} />}
+              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} />}
+              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
@@ -1736,7 +1747,7 @@ function HomeTab({ rncs, user, setTab }) {
 }
 
 /* ─── LISTA TAB ──────────────────────────────────────────────────────────────── */
-function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin }) {
+function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
   const T = useTheme(); const s = useS();
   const [q, setQ] = useState("");
   const [fSt, setFSt] = useState("");
@@ -2105,7 +2116,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
-                  {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
+                  {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
                   {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
@@ -4818,6 +4829,11 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     const conc = conclusao();
     const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
     const ficha = { id:Date.now(), num, ...form, ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    // Record edit history if editing existing analysis
+    if (sel?._editando) {
+      const hist = sel.historicoEdicoes || [];
+      ficha.historicoEdicoes = [...hist, { data: tod(), dataHora: new Date().toLocaleString("pt-BR"), editor: user.name, obs: "Análise editada" }];
+    }
     await salvarFichaDB(ficha);
     toast_(`${num} salva com sucesso!`, "green");
     if(conc==="Reprovado") {
@@ -5316,7 +5332,7 @@ const ENSAIOS_SUGERIDOS = {
 };
 
 /* ─── CQ MATERIAIS TAB ───────────────────────────────────────────────────────── */
-function CQMateriaisTab({ user, toast_, fornecedores }) {
+function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -5537,7 +5553,7 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
 }
 
 /* ─── CQ ANALISES TAB ────────────────────────────────────────────────────────── */
-function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
+function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -5625,6 +5641,30 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
       toast_(fbErr(e), "red");
       console.error(e);
     }
+  };
+
+  const editarAnalise = async (a) => {
+    const isOwner = a.resp === user?.name || a.analista === user?.name;
+    const canEdit = isOwner || ["admin","keyuser","rt"].includes(user?.role) || (perm && perm("editarAnalise"));
+    if (!canEdit) { alert("Você não tem permissão para editar esta análise."); return; }
+    // Load the material to get ensaio definitions
+    const mat = materiais.find(m => m.id === a.matId || m.nome === a.materialNome);
+    if (mat) {
+      setMatSel(mat);
+      const lista = mat.ensaios || [];
+      setEnsaios(lista.map((e,i) => {
+        const res = (a.resultados||[]).find(r => r.nome === e.nome || r.id === e.id) || {};
+        return { ...e, id:i, resultado:res.resultado||"", conforme:res.conforme!=null?res.conforme:null, obs:res.obs||"", tipo:e.tipo||"numero", casas:e.casas!==undefined?e.casas:2, multiplos:e.multiplos||false };
+      }));
+    } else {
+      setEnsaios((a.resultados||[]).map((r,i)=>({ ...r, id:i })));
+    }
+    setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataAnalise:a.dataAnalise||tod(), analista:a.analista||a.resp||user.name, obs:a.obs||"" });
+    setCoa(a.coa||null);
+    setSel({ ...a, _editando: true });
+    setView("novo");
+    setSelAnalise(null);
+    toast_("Editando análise — salve para registrar as alterações.", "green");
   };
 
   const delAnalise = async (id) => {
@@ -5897,6 +5937,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
+                <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}><span className="btn-emoji">✏️ </span>Editar</button>
                 <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}><span className="btn-emoji">📄 </span>PDF</button>
                 <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>
                 <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
@@ -5940,6 +5981,16 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
             {selAnalise.obs && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2 }}><b>Obs:</b> {selAnalise.obs}</div>}
+            {selAnalise.historicoEdicoes?.length > 0 && (
+              <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Histórico de edições</div>
+                {selAnalise.historicoEdicoes.map((h,i) => (
+                  <div key={i} style={{ fontSize:11, color:T.text2, padding:"3px 0", borderBottom:i<selAnalise.historicoEdicoes.length-1?`1px solid ${T.border}`:"none" }}>
+                    ✏️ {h.dataHora} — editado por <strong>{h.editor}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
               {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
             </div>
@@ -7527,10 +7578,80 @@ function CQDashboardTab() {
   );
 }
 
+
+/* ─── PERMISSÕES POR PERFIL ─────────────────────────────────────────────────── */
+const PERMS_GRUPOS = [
+  { grupo: "RNCs", items: [
+    { key: "criarRNC",           label: "Criar nova RNC" },
+    { key: "editarRNCpropria",   label: "Editar RNC própria" },
+    { key: "editarRNCtodas",     label: "Editar qualquer RNC" },
+    { key: "analisarRNC",        label: "Ishikawa / 5W2H / Eficácia" },
+    { key: "aprovarRNC",         label: "Aprovar como RT (RNC crítica)" },
+    { key: "excluirRNC",         label: "Excluir RNC" },
+  ]},
+  { grupo: "Controle de Qualidade", items: [
+    { key: "verCQMateriais",     label: "Visualizar CQ Materiais" },
+    { key: "criarMaterialCQ",    label: "Criar / editar material CQ" },
+    { key: "lancarAnalise",      label: "Lançar ficha de análise" },
+    { key: "aprovarAnalise",     label: "Aprovar / reprovar análise" },
+    { key: "editarAnalise",      label: "Editar análise aprovada" },
+    { key: "verLaudos",          label: "Visualizar laudos" },
+    { key: "criarLaudos",        label: "Criar / assinar laudos" },
+  ]},
+  { grupo: "Gestão de Documentos", items: [
+    { key: "criarDocumento",          label: "Criar / editar documento" },
+    { key: "assinarElaborador",       label: "Assinar como Elaborador" },
+    { key: "assinarRevisorAprovador", label: "Assinar como Revisor / Aprovador" },
+    { key: "excluirDocumento",        label: "Excluir documento" },
+    { key: "registrarTreinamento",    label: "Registrar treinamento" },
+  ]},
+  { grupo: "Outras áreas", items: [
+    { key: "editarFornecedores",  label: "Criar / editar Fornecedores" },
+    { key: "criarAuditorias",     label: "Criar / editar Auditorias" },
+    { key: "editarClientes",      label: "Criar / editar Clientes terceiros" },
+    { key: "editarIPC",           label: "Lançar IPC — Controle de processo" },
+    { key: "editarIPCProdutos",   label: "Gerenciar catálogo IPC Produtos" },
+  ]},
+];
+
+const PERMS_PADRAO = {
+  viewer: {
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
+    verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:true, criarLaudos:false,
+    criarDocumento:false, assinarElaborador:false, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
+    editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:false, editarIPCProdutos:false,
+  },
+  user: {
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false,
+    verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:true, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
+    criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
+    editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:true, editarIPCProdutos:false,
+  },
+  rt: {
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
+    criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:false, registrarTreinamento:true,
+    editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:false,
+  },
+  keyuser: {
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
+    criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:true, registrarTreinamento:true,
+    editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
+  },
+  admin: {
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
+    criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:true, registrarTreinamento:true,
+    editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
+  },
+};
+
 /* ─── ADMIN TAB ──────────────────────────────────────────────────────────────── */
 function AdminTab({ users, setUsers, toast_, currentUser }) {
   const T = useTheme(); const s = useS();
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
+  const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [nuAssinatura, setNuAssinatura] = useState(null);
   const [nuAssinaturaUploading, setNuAssinaturaUploading] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -7538,6 +7659,8 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
   const [editAssinatura, setEditAssinatura] = useState(null);
   const [editAssinaturaUploading, setEditAssinaturaUploading] = useState(false);
   const set = (k,v) => setNu(p=>({...p,[k]:v}));
+  const setRole = (role) => { set("role", role); setNuPermissoes({ ...PERMS_PADRAO[role] }); };
+  const togglePerm = (key) => setNuPermissoes(p => ({ ...p, [key]: !p[key] }));
 
   const uploadAssinatura = async (file, setImg, setLoading) => {
     if(!file) return;
@@ -7555,10 +7678,11 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
     if(users.find(u=>u.email===nu.email)) { alert("E-mail já cadastrado."); return; }
     try {
       const cred = await createAuthUser(nu.email, nu.pw);
-      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
+      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", permissoes:nuPermissoes, ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
       await saveUser(cred.user.uid, userData);
       setUsers([...users, { ...userData, id:cred.user.uid }]);
       setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
+      setNuPermissoes({ ...PERMS_PADRAO["user"] });
       setNuAssinatura(null);
       toast_("Usuário criado com sucesso!", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
@@ -7672,7 +7796,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
           {nu.role === "rt" && <F lbl="CRF" ch={<Inp placeholder="Ex: CRF-SP 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />}
-          <F lbl="Perfil de acesso" ch={<Sel value={nu.role} onChange={e=>set("role",e.target.value)}>
+          <F lbl="Perfil de acesso" tip="Selecione o perfil base — as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
             <option value="user">Usuário — cria e edita suas RNCs</option>
             <option value="admin">Admin — acesso total</option>
             <option value="viewer">Visualizador — apenas leitura</option>
@@ -7680,6 +7804,29 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
             <option value="rt">RT — Responsável Técnico</option>
           </Sel>} />
         </>} />
+
+        {/* Checklist de permissões */}
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>
+            Permissões customizadas
+          </div>
+          <div style={{ fontSize:11, color:T.text2, marginBottom:10, padding:"8px 12px", background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8 }}>
+            💡 Preenchido automaticamente pelo perfil selecionado. Ajuste individualmente se necessário. Usuários existentes não são afetados.
+          </div>
+          {PERMS_GRUPOS.map(grupo => (
+            <div key={grupo.grupo} style={{ marginBottom:12 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>{grupo.grupo}</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:4 }}>
+                {grupo.items.map(item => (
+                  <label key={item.key} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 10px", background:nuPermissoes[item.key]?T.accentDim:T.surf, border:`1px solid ${nuPermissoes[item.key]?T.accent+"44":T.border}`, borderRadius:6, cursor:"pointer", transition:"all .15s" }}>
+                    <input type="checkbox" checked={!!nuPermissoes[item.key]} onChange={()=>togglePerm(item.key)} style={{ accentColor:T.accent, width:14, height:14, flexShrink:0 }}/>
+                    <span style={{ fontSize:11, color:nuPermissoes[item.key]?T.accent:T.text2, userSelect:"none" }}>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
 
         {/* Assinatura opcional */}
         <div style={{ marginBottom:12 }}>
@@ -7817,7 +7964,7 @@ function AlertaRevisaoGD({ doc }) {
 }
 
 /* ─── GESTÃO DE DOCUMENTOS — COMPONENTE PRINCIPAL ───────────────────────────── */
-function GestaoDocumentosTab({ user, toast_, users, auditLog }) {
+function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const T = useTheme();
   const s = useS();
 
@@ -7845,8 +7992,8 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog }) {
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
   const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); };
 
-  const isAdmin  = ["admin","keyuser","rt"].includes(user?.role);
-  const isViewer = user?.role === "viewer";
+  const isAdmin  = ["admin","keyuser","rt"].includes(user?.role) || (perm && (perm("criarDocumento")||perm("excluirDocumento")));
+  const isViewer = user?.role === "viewer" && !(perm && perm("criarDocumento"));
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
