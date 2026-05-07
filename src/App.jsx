@@ -3969,7 +3969,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:T.surf }}>
-                {{[
+                {[
                   ["Processo", "Etapa ou processo sendo analisado. Ex: Pesagem de MP, Encapsulamento, Rotulagem."],
                   ["Modo de Falha", "O que pode dar errado neste processo? Ex: Peso fora da especificação, cápsula mal fechada, rótulo invertido."],
                   ["Efeito", "Qual o impacto se o modo de falha ocorrer? Ex: Produto fora do padrão, recall, risco ao paciente."],
