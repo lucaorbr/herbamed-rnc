@@ -1126,7 +1126,7 @@ export default function App() {
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
 
   // ── Auditoria ────────────────────────────────────────────────────────────
-  const auditLog = async (acao, colecao, docId, docNome, dadosAntes = null, dadosDepois = null) => {
+  const auditLog = useCallback(async (acao, colecao, docId, docNome, dadosAntes = null, dadosDepois = null) => {
     try {
       const entrada = {
         id: Date.now(),
@@ -1146,7 +1146,7 @@ export default function App() {
     } catch(e) {
       console.warn("[AuditLog] falha ao registrar:", e);
     }
-  };
+  }, [user?.name, user?.email, user?.uid, user?.id]);
 
   const fbErr = (e) => {
     console.error("[Firebase]", e?.code, e?.message);
@@ -1168,7 +1168,8 @@ export default function App() {
       await saveRNC(rnc.id, rnc);
       await auditLog(isNew ? "Criou RNC" : "Editou RNC", "rncs", rnc.id, rnc.num || rnc.id, isNew ? null : rncs.find(r=>r.id===rnc.id), rnc);
     } catch(e) { console.error(e); }
-  }, [rncs, auditLog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const doUpdateRNC = useCallback(async (id, data) => {
     try {
       const antes = rncs.find(r => r.id === id);
@@ -1176,14 +1177,16 @@ export default function App() {
       const acao = data.status ? `Status: ${data.status}` : data.ishikawa ? "Ishikawa atualizado" : data.w2h ? "5W2H atualizado" : data.eficacia ? "Eficácia registrada" : "Editou RNC";
       await auditLog(acao, "rncs", id, antes?.num || id, antes, data);
     } catch(e) { console.error(e); }
-  }, [rncs, auditLog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const doDeleteRNC = useCallback(async (id) => {
     try {
       const antes = rncs.find(r => r.id === id);
       await fbDeleteRNC(id);
       await auditLog("Excluiu RNC", "rncs", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
-  }, [rncs, auditLog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
