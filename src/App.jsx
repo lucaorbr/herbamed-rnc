@@ -6856,9 +6856,9 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
   const STATUS_AUD = { Planejada:"#4fc3f7", "Em andamento":"#ffd166", Concluída:"#2ab84a", Cancelada:"#ff4f6a" };
   const TIPOS_ACHADO = ["Não conformidade","Observação","Oportunidade de melhoria","Ponto positivo"];
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
-
   const {paginated:_auds,page:_pgA,total:_totA,setPage:_setPgA} = usePagination(auditorias, 20);
+
+  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
   if(view==="nova") return (
     <div>
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
