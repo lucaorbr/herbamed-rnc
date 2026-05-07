@@ -1168,7 +1168,6 @@ export default function App() {
       await saveRNC(rnc.id, rnc);
       await auditLog(isNew ? "Criou RNC" : "Editou RNC", "rncs", rnc.id, rnc.num || rnc.id, isNew ? null : rncs.find(r=>r.id===rnc.id), rnc);
     } catch(e) { console.error(e); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const doUpdateRNC = useCallback(async (id, data) => {
     try {
@@ -1177,7 +1176,6 @@ export default function App() {
       const acao = data.status ? `Status: ${data.status}` : data.ishikawa ? "Ishikawa atualizado" : data.w2h ? "5W2H atualizado" : data.eficacia ? "Eficácia registrada" : "Editou RNC";
       await auditLog(acao, "rncs", id, antes?.num || id, antes, data);
     } catch(e) { console.error(e); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const doDeleteRNC = useCallback(async (id) => {
     try {
@@ -1185,7 +1183,6 @@ export default function App() {
       await fbDeleteRNC(id);
       await auditLog("Excluiu RNC", "rncs", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (authLoading) return (
