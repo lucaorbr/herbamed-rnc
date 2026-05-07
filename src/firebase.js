@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, deleteApp } from "firebase/app";
 import {
   getFirestore, collection, doc, getDoc, getDocs,
   setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp
@@ -16,7 +16,16 @@ export const auth = getAuth(app);
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 export const loginUser = (email, pw) => signInWithEmailAndPassword(auth, email, pw);
 export const logoutUser = () => signOut(auth);
-export const createAuthUser = (email, pw) => createUserWithEmailAndPassword(auth, email, pw);
+export const createAuthUser = async (email, pw) => {
+  const secondaryApp = initializeApp(firebaseConfig, "secondary_" + Date.now());
+  const secondaryAuth = getAuth(secondaryApp);
+  try {
+    const result = await createUserWithEmailAndPassword(secondaryAuth, email, pw);
+    return result;
+  } finally {
+    await deleteApp(secondaryApp);
+  }
+};
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 export const getUser = async (uid) => {
