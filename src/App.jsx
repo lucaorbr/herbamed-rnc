@@ -127,6 +127,7 @@ const MENU_SVG_ICONS = {
   "lista": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>`,
   "nova": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   "gestao-docs": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="12" y1="10" x2="12" y2="16"/></svg>`,
+  "audit-log": `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`,
 };
 
 
@@ -972,6 +973,7 @@ function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
       { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
       { id:"clientes",     icon:"🏢", label:"Clientes Terceiros" },
       { id:"gestao-docs",  icon:"🗂️", label:"Gestão de Docs" },
+      ...(isAdmin?[{ id:"audit-log", icon:"🛡️", label:"Trilha de Auditoria" }]:[]),
       ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
     ]},
   ];
@@ -1123,6 +1125,29 @@ export default function App() {
 
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
 
+  // ── Auditoria ────────────────────────────────────────────────────────────
+  const auditLog = async (acao, colecao, docId, docNome, dadosAntes = null, dadosDepois = null) => {
+    try {
+      const entrada = {
+        id: Date.now(),
+        ts: Date.now(),
+        data: new Date().toISOString(),
+        usuario: user?.name || "—",
+        email: user?.email || "—",
+        userId: user?.uid || user?.id || "—",
+        acao,
+        colecao,
+        docId: String(docId),
+        docNome: docNome || String(docId),
+        dadosAntes: dadosAntes ? JSON.stringify(dadosAntes).slice(0, 2000) : null,
+        dadosDepois: dadosDepois ? JSON.stringify(dadosDepois).slice(0, 2000) : null,
+      };
+      await saveCollection("audit_log", String(entrada.id), entrada);
+    } catch(e) {
+      console.warn("[AuditLog] falha ao registrar:", e);
+    }
+  };
+
   const fbErr = (e) => {
     console.error("[Firebase]", e?.code, e?.message);
     const codes = {
@@ -1138,14 +1163,27 @@ export default function App() {
   };
   const openEmail = useCallback((rnc, evento) => setEmailCtx({ rnc, evento }), []);
   const doSaveRNC = useCallback(async (rnc) => {
-    try { await saveRNC(rnc.id, rnc); } catch(e) { console.error(e); }
-  }, []);
+    try {
+      const isNew = !rncs.find(r => r.id === rnc.id);
+      await saveRNC(rnc.id, rnc);
+      await auditLog(isNew ? "Criou RNC" : "Editou RNC", "rncs", rnc.id, rnc.num || rnc.id, isNew ? null : rncs.find(r=>r.id===rnc.id), rnc);
+    } catch(e) { console.error(e); }
+  }, [rncs, auditLog]);
   const doUpdateRNC = useCallback(async (id, data) => {
-    try { await updateRNC(id, data); } catch(e) { console.error(e); }
-  }, []);
+    try {
+      const antes = rncs.find(r => r.id === id);
+      await updateRNC(id, data);
+      const acao = data.status ? `Status: ${data.status}` : data.ishikawa ? "Ishikawa atualizado" : data.w2h ? "5W2H atualizado" : data.eficacia ? "Eficácia registrada" : "Editou RNC";
+      await auditLog(acao, "rncs", id, antes?.num || id, antes, data);
+    } catch(e) { console.error(e); }
+  }, [rncs, auditLog]);
   const doDeleteRNC = useCallback(async (id) => {
-    try { await fbDeleteRNC(id); } catch(e) { console.error(e); }
-  }, []);
+    try {
+      const antes = rncs.find(r => r.id === id);
+      await fbDeleteRNC(id);
+      await auditLog("Excluiu RNC", "rncs", id, antes?.num || id, antes, null);
+    } catch(e) { console.error(e); }
+  }, [rncs, auditLog]);
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
@@ -1203,6 +1241,7 @@ export default function App() {
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
+    "audit-log": "Trilha de Auditoria — RNCs e Documentos",
     clientes: "Clientes Terceiros",
     ipc: "IPC — Controle de Processo",
     "ipc-produtos": "IPC — Produtos Cadastrados",
@@ -1392,9 +1431,10 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
+              {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
             </div>
           </div>
@@ -7429,7 +7469,7 @@ function AlertaRevisaoGD({ doc }) {
 }
 
 /* ─── GESTÃO DE DOCUMENTOS — COMPONENTE PRINCIPAL ───────────────────────────── */
-function GestaoDocumentosTab({ user, toast_, users }) {
+function GestaoDocumentosTab({ user, toast_, users, auditLog }) {
   const T = useTheme();
   const s = useS();
 
@@ -7497,6 +7537,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
       historicoRevisoes:    sel?.historicoRevisoes    || [],
     };
     await saveCollection("gestao_docs", String(id), doc);
+    await auditLog(sel ? "Editou Documento" : "Criou Documento", "gestao_docs", id, `${codigo} — ${form.titulo}`, sel || null, doc);
     toast_(sel ? `${codigo} atualizado!` : `${codigo} criado!`, "green");
     setSel(doc); setView("detalhe");
     } catch(e) {
@@ -7519,6 +7560,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     else if (temE && temR)    updated.status = "Aguardando Aprovação";
     else if (temE)            updated.status = "Em Revisão";
     await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog(`Assinou como ${cargo}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: updated.status, [campo]: updated[campo] });
     toast_(`Assinado como ${cargo}!`, "green");
     setSel(updated);
     } catch(e) {
@@ -7535,6 +7577,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     const historico   = [...(doc.historicoRevisoes||[]), { versao:versaoAtual, status:doc.status, data:doc.atualizadoEm||doc.criadoEm, responsavel:doc.atualizadoPor||doc.criadoPor }];
     const updated = { ...doc, versao:novaVersao, status:"Em Revisão", assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
     setSel(updated);
     } catch(e) {
@@ -7548,6 +7591,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     if (!window.confirm("Marcar como Obsoleto?")) return;
     const updated = { ...doc, status:"Obsoleto", atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog("Marcou como Obsoleto", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { status: doc.status }, { status: "Obsoleto" });
     toast_("Documento obsoleto.", "red");
     setSel(updated);
     } catch(e) {
@@ -7560,6 +7604,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     try {
     if (!window.confirm("Excluir permanentemente?")) return;
     await deleteFromCollection("gestao_docs", String(id));
+    await auditLog("Excluiu Documento", "gestao_docs", id, sel?.codigo ? `${sel.codigo} — ${sel.titulo}` : String(id), sel || null, null);
     toast_("Excluído.", "red");
     setSel(null); setView("lista");
     } catch(e) {
@@ -7574,6 +7619,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     const u = users?.find(x => x.id===novoTreino.userId);
     const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
     await saveCollection(`gestao_docs_treino_${sel.id}`, String(t.id), t);
+    await auditLog("Registrou Treinamento", "gestao_docs", sel.id, `${sel.codigo} — ${sel.titulo}`, null, { colaborador: t.userName, data: t.dataRealizacao });
     toast_("Treinamento registrado!", "green");
     setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
     } catch(e) {
@@ -8008,3 +8054,212 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     </div>
   );
 }
+
+/* ─── TRILHA DE AUDITORIA ───────────────────────────────────────────────────── */
+function AuditLogTab({ user }) {
+  const T = useTheme(); const s = useS();
+  const [logs,     setLogs]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [filtroCol,  setFiltroCol]  = useState("todos");
+  const [filtroAcao, setFiltroAcao] = useState("todos");
+  const [filtroUser, setFiltroUser] = useState("");
+  const [busca,      setBusca]      = useState("");
+  const [sel,        setSel]        = useState(null);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim,    setDataFim]    = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 3000);
+    const unsub = subscribeCollection("audit_log", list => {
+      clearTimeout(t);
+      setLogs(list.sort((a,b) => (b.ts||0) - (a.ts||0)));
+      setLoading(false);
+    });
+    return () => { clearTimeout(t); unsub && unsub(); };
+  }, []);
+
+  const ACOES = [...new Set(logs.map(l => l.acao).filter(Boolean))].sort();
+  const USERS = [...new Set(logs.map(l => l.usuario).filter(Boolean))].sort();
+
+  const filtrados = logs.filter(l => {
+    if (filtroCol  !== "todos" && l.colecao  !== filtroCol)  return false;
+    if (filtroAcao !== "todos" && l.acao     !== filtroAcao) return false;
+    if (filtroUser && l.usuario !== filtroUser)               return false;
+    if (busca && !`${l.docNome||""} ${l.docId||""} ${l.usuario||""}`.toLowerCase().includes(busca.toLowerCase())) return false;
+    if (dataInicio && l.data < dataInicio) return false;
+    if (dataFim    && l.data > dataFim + "T23:59:59") return false;
+    return true;
+  });
+
+  const { paginated: pgLogs, page: pgN, total: pgT, setPage: setPgN } = usePagination(filtrados, 25);
+
+  const ACAO_COR = {
+    "Criou RNC":           "#2ab84a", "Criou Documento":     "#2ab84a",
+    "Editou RNC":          "#4fc3f7", "Editou Documento":    "#4fc3f7",
+    "Excluiu RNC":         "#ff4f6a", "Excluiu Documento":   "#ff4f6a",
+    "Assinou como Elaborador": "#a78bfa", "Assinou como Revisor": "#ffd166",
+    "Assinou como Aprovador":  "#2ab84a",
+    "Nova Revisão":        "#ff8c42", "Marcou como Obsoleto": "#ff4f6a",
+    "Registrou Treinamento": "#5dd4b0",
+  };
+
+  const corAcao = (acao) => {
+    for (const [key, cor] of Object.entries(ACAO_COR)) {
+      if (acao?.includes(key)) return cor;
+    }
+    return T.text3;
+  };
+
+  const fmtDataHora = (iso) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" });
+    } catch { return iso; }
+  };
+
+  const exportCSV = () => {
+    const header = ["Data/Hora","Usuário","E-mail","Ação","Coleção","Documento","ID"];
+    const rows = filtrados.map(l => [
+      fmtDataHora(l.data), l.usuario, l.email, l.acao,
+      l.colecao === "rncs" ? "RNCs" : "Gestão de Docs",
+      l.docNome, l.docId
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("
+");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `auditoria_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  if (sel) return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
+        <button style={s.btn} onClick={()=>setSel(null)}>← Voltar</button>
+        <h2 style={{ fontSize:16, fontWeight:700, color:T.text, margin:0 }}>Detalhe do Registro</h2>
+      </div>
+      <div style={s.card}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+          {[
+            ["Data/Hora",  fmtDataHora(sel.data)],
+            ["Usuário",    sel.usuario],
+            ["E-mail",     sel.email],
+            ["Ação",       sel.acao],
+            ["Coleção",    sel.colecao === "rncs" ? "RNCs" : "Gestão de Docs"],
+            ["Documento",  sel.docNome],
+            ["ID",         sel.docId],
+          ].map(([k,v]) => (
+            <div key={k} style={{ background:T.surf, borderRadius:8, padding:"8px 12px" }}>
+              <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>{k}</div>
+              <div style={{ fontSize:12, color:T.text, fontWeight:600, wordBreak:"break-all" }}>{v||"—"}</div>
+            </div>
+          ))}
+        </div>
+        <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:corAcao(sel.acao)+"22", color:corAcao(sel.acao) }}>{sel.acao}</span>
+      </div>
+      {(sel.dadosAntes || sel.dadosDepois) && (
+        <div style={s.card}>
+          <SecTitle icon="🔍" ch="Dados Alterados" />
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            {["dadosAntes","dadosDepois"].map(campo => (
+              <div key={campo}>
+                <div style={{ fontSize:11, fontWeight:700, color:campo==="dadosAntes"?T.red||"#ff4f6a":T.accent, textTransform:"uppercase", marginBottom:6 }}>
+                  {campo==="dadosAntes" ? "⬅️ Antes" : "➡️ Depois"}
+                </div>
+                <pre style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"10px 12px", fontSize:10, color:T.text2, overflow:"auto", maxHeight:300, whiteSpace:"pre-wrap", wordBreak:"break-all", margin:0 }}>
+                  {sel[campo] ? JSON.stringify(JSON.parse(sel[campo]), null, 2) : "—"}
+                </pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10, marginBottom:16 }}>
+        {[
+          { label:"Total",         value:logs.length,                                    icon:"📋", color:T.text2 },
+          { label:"RNCs",          value:logs.filter(l=>l.colecao==="rncs").length,      icon:"🔴", color:"#ff4f6a" },
+          { label:"Documentos",    value:logs.filter(l=>l.colecao==="gestao_docs").length,icon:"🗂️", color:T.accent },
+          { label:"Exclusões",     value:logs.filter(l=>l.acao?.includes("Excluiu")).length,icon:"🗑️", color:"#ff8c42" },
+          { label:"Hoje",          value:logs.filter(l=>l.data?.startsWith(new Date().toISOString().split("T")[0])).length, icon:"📅", color:T.blue||"#4fc3f7" },
+        ].map(stat => (
+          <div key={stat.label} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", textAlign:"center" }}>
+            <div style={{ fontSize:20, marginBottom:4 }}>{stat.icon}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:stat.color }}>{stat.value}</div>
+            <div style={{ fontSize:10, color:T.text3, fontWeight:600, textTransform:"uppercase" }}>{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12, alignItems:"center" }}>
+        <div style={{ position:"relative" }}>
+          <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:13 }}>🔍</span>
+          <input placeholder="Buscar documento, usuário..." value={busca} onChange={e=>setBusca(e.target.value)} style={{ ...s.inp, paddingLeft:30, width:200, fontSize:12 }} />
+        </div>
+        <Sel value={filtroCol} onChange={e=>setFiltroCol(e.target.value)}>
+          <option value="todos">Todas as coleções</option>
+          <option value="rncs">RNCs</option>
+          <option value="gestao_docs">Gestão de Docs</option>
+        </Sel>
+        <Sel value={filtroAcao} onChange={e=>setFiltroAcao(e.target.value)}>
+          <option value="todos">Todas as ações</option>
+          {ACOES.map(a => <option key={a} value={a}>{a}</option>)}
+        </Sel>
+        <Sel value={filtroUser} onChange={e=>setFiltroUser(e.target.value)}>
+          <option value="">Todos os usuários</option>
+          {USERS.map(u => <option key={u} value={u}>{u}</option>)}
+        </Sel>
+        <Inp type="date" value={dataInicio} onChange={e=>setDataInicio(e.target.value)} sx={{ fontSize:11, width:130 }} />
+        <Inp type="date" value={dataFim}    onChange={e=>setDataFim(e.target.value)}    sx={{ fontSize:11, width:130 }} />
+        <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+          <button style={{ ...s.btn, fontSize:11 }} onClick={()=>{ setFiltroCol("todos"); setFiltroAcao("todos"); setFiltroUser(""); setBusca(""); setDataInicio(""); setDataFim(""); }}>Limpar</button>
+          <button style={{ ...s.btnA, fontSize:11 }} onClick={exportCSV}>⬇️ CSV</button>
+        </div>
+      </div>
+
+      <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{filtrados.length} registro(s) encontrado(s)</div>
+
+      {loading ? (
+        <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando trilha de auditoria...</div>
+      ) : filtrados.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🛡️</div>
+          <div>{logs.length === 0 ? "Nenhuma ação registrada ainda." : "Nenhum resultado para os filtros."}</div>
+        </div>
+      ) : (
+        <>
+        {pgLogs.map(l => (
+          <div key={l.id} onClick={()=>setSel(l)} className="rnc-row"
+            style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${corAcao(l.acao)}`, borderRadius:10, padding:"10px 14px", marginBottom:6, cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+            <div style={{ width:36, height:36, borderRadius:8, background:corAcao(l.acao)+"20", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+              {l.colecao==="rncs" ? "🔴" : "🗂️"}
+            </div>
+            <div style={{ flex:1, minWidth:150 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <span style={{ fontSize:11, padding:"2px 8px", borderRadius:12, background:corAcao(l.acao)+"22", color:corAcao(l.acao), fontWeight:700 }}>{l.acao}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:T.text }}>{l.docNome}</span>
+              </div>
+              <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>
+                {l.usuario} · {l.email} · {fmtDataHora(l.data)}
+              </div>
+            </div>
+            <div style={{ fontSize:10, color:T.text3, background:T.surf, padding:"2px 8px", borderRadius:8, flexShrink:0 }}>
+              {l.colecao === "rncs" ? "RNC" : "Doc"}
+            </div>
+          </div>
+        ))}
+        <Pagination page={pgN} total={pgT} setPage={setPgN}/>
+        </>
+      )}
+    </div>
+  );
+}
+
