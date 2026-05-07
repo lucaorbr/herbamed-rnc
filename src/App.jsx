@@ -1,30 +1,4 @@
-impo
-
-  // ── Tratamento de erros Firebase ─────────────────────────────────────────
-  const fbErr = (e) => {
-    console.error("[Firebase]", e?.code, e?.message);
-    const msgs = {
-      "unavailable":        "Sem conexão com o servidor. Verifique sua internet.",
-      "permission-denied":  "Sem permissão para esta operação.",
-      "not-found":          "Registro não encontrado.",
-      "already-exists":     "Este registro já existe.",
-      "resource-exhausted": "Muitas requisições. Aguarde um momento.",
-      "unauthenticated":    "Sessão expirada. Faça login novamente.",
-      "cancelled":          "Operação cancelada.",
-      "deadline-exceeded":  "Tempo esgotado. Verifique sua conexão.",
-    };
-    return msgs[e?.code] || "Erro ao salvar. Tente novamente.";
-  };
-
-  const withSave = async (fn, onSuccess, onError) => {
-    try {
-      await fn();
-      onSuccess && onSuccess();
-    } catch(e) {
-      const msg = fbErr(e);
-      onError ? onError(msg) : toast_(msg, "red");
-    }
-  };rt React, { useState, useEffect, useCallback, createContext, useContext } from "react";
+import React, { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { auth, loginUser, logoutUser, getUser, saveUser, createAuthUser,
          deleteUser as fbDeleteUser, updateUser, getAllUsers,
          saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs,
@@ -1148,18 +1122,29 @@ export default function App() {
   }, [rncs, user]);
 
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
+
+  const fbErr = (e) => {
+    console.error("[Firebase]", e?.code, e?.message);
+    const codes = {
+      "unavailable":        "Sem conexao com o servidor. Verifique sua internet.",
+      "permission-denied":  "Sem permissao para esta operacao.",
+      "not-found":          "Registro nao encontrado.",
+      "already-exists":     "Este registro ja existe.",
+      "resource-exhausted": "Muitas requisicoes. Aguarde um momento.",
+      "unauthenticated":    "Sessao expirada. Faca login novamente.",
+      "deadline-exceeded":  "Tempo esgotado. Verifique sua conexao.",
+    };
+    return codes[e?.code] || "Erro ao salvar. Tente novamente.";
+  };
   const openEmail = useCallback((rnc, evento) => setEmailCtx({ rnc, evento }), []);
   const doSaveRNC = useCallback(async (rnc) => {
-    try { await saveRNC(rnc.id, rnc); }
-    catch(e) { console.error("[doSaveRNC]", e); }
+    try { await saveRNC(rnc.id, rnc); } catch(e) { console.error(e); }
   }, []);
   const doUpdateRNC = useCallback(async (id, data) => {
-    try { await updateRNC(id, data); }
-    catch(e) { console.error("[doUpdateRNC]", e); }
+    try { await updateRNC(id, data); } catch(e) { console.error(e); }
   }, []);
   const doDeleteRNC = useCallback(async (id) => {
-    try { await fbDeleteRNC(id); }
-    catch(e) { console.error("[doDeleteRNC]", e); }
+    try { await fbDeleteRNC(id); } catch(e) { console.error(e); }
   }, []);
 
   if (authLoading) return (
