@@ -4775,7 +4775,7 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
 
   const aplicarEnsaiosPadrao = (tipo) => {
     const lista = ENSAIOS_PADRAO[tipo] || [];
-    setEnsaios(lista.map((e,i)=>({ ...e, id:i, resultado:"", conforme:null, obs:"" })));
+    setEnsaios(lista.map((e,i)=>({ ...e, id:i, resultado:"", conforme:null, obs:"", tipo:e.tipo||"numero", casas:e.casas!==undefined?e.casas:2, multiplos:e.multiplos||false })));
   };
 
   const updEnsaio = (id, k, v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
@@ -4989,8 +4989,59 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                               <button onClick={()=>updEnsaio(e.id,"conforme",true)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${e.conforme===true?"#2ab84a55":T.border}`, background:e.conforme===true?"#2ab84a22":"transparent", color:e.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓ Conf.</button>
                               <button onClick={()=>updEnsaio(e.id,"conforme",false)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${e.conforme===false?"#ff4f6a55":T.border}`, background:e.conforme===false?"#ff4f6a22":"transparent", color:e.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗ N.C.</button>
                             </div>
+                          ) : e.tipo==="texto" ? (
+                            <Inp placeholder="Resultado..." value={e.resultado} onChange={ev=>updEnsaio(e.id,"resultado",ev.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:110 }}/>
                           ) : (
-                            <Inp type="number" placeholder="0.0" value={e.resultado} onChange={ev=>updEnsaio(e.id,"resultado",ev.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:90 }}/>
+                            <div>
+                              <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                                <Inp
+                                  placeholder={`0,${"0".repeat(e.casas||2)}`}
+                                  value={e.resultado}
+                                  onChange={ev=>updEnsaio(e.id,"resultado",ev.target.value)}
+                                  onBlur={ev=>{ if(ev.target.value) updEnsaio(e.id,"resultado",fmtNum(ev.target.value,e.casas||2)); }}
+                                  sx={{ padding:"5px 8px", fontSize:12, width:80 }}
+                                />
+                                {e.multiplos && (
+                                  <button onClick={()=>toggleMultiplos(e.id)}
+                                    title="Lançar múltiplos valores"
+                                    style={{ padding:"4px 7px", borderRadius:6, border:`1px solid ${multiplosState[e.id]?.aberto?T.accent:T.border}`, background:multiplosState[e.id]?.aberto?T.accentDim:"transparent", color:multiplosState[e.id]?.aberto?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>
+                                    Σ
+                                  </button>
+                                )}
+                              </div>
+                              {e.multiplos && multiplosState[e.id]?.aberto && (
+                                <div style={{ marginTop:6, padding:"8px", background:T.card, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
+                                  <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores — média automática</div>
+                                  <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
+                                    {(multiplosState[e.id]?.valores||["","","","",""]).map((v,vi)=>(
+                                      <Inp key={vi} type="number" placeholder={`#${vi+1}`} value={v}
+                                        onChange={ev=>updValorMultiplo(e.id,vi,ev.target.value)}
+                                        sx={{ width:56, padding:"4px 6px", fontSize:11 }}/>
+                                    ))}
+                                    <button onClick={()=>setMultiplosState(p=>({...p,[e.id]:{...p[e.id],valores:[...(p[e.id]?.valores||[]),""]}}))}
+                                      style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>+</button>
+                                  </div>
+                                  {(() => {
+                                    const vals = multiplosState[e.id]?.valores||[];
+                                    const nums = vals.map(v=>parseFloat(String(v).replace(",","."))).filter(n=>!isNaN(n));
+                                    if (!nums.length) return null;
+                                    const media = nums.reduce((a,b)=>a+b,0)/nums.length;
+                                    const dp = Math.sqrt(nums.reduce((s,v)=>s+Math.pow(v-media,2),0)/nums.length);
+                                    return (
+                                      <div style={{ fontSize:11, color:T.text2, marginBottom:6 }}>
+                                        <span style={{ fontWeight:700, color:T.accent }}>Média: {media.toFixed(e.casas||2).replace(".",",")} {e.unidade}</span>
+                                        {nums.length>1 && <span style={{ color:T.text3, marginLeft:8 }}>DP: ±{dp.toFixed(e.casas||2).replace(".",",")}</span>}
+                                        <span style={{ color:T.text3, marginLeft:8 }}>n={nums.length}</span>
+                                      </div>
+                                    );
+                                  })()}
+                                  <button onClick={()=>aplicarMedia(e.id,e.casas||2)}
+                                    style={{ ...s.btnA, fontSize:11, padding:"4px 12px" }}>
+                                    ✓ Aplicar média
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{e.unidade}</td>
@@ -5161,106 +5212,106 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
 /* ─── CQ — ENSAIOS SUGERIDOS POR TIPO ───────────────────────────────────────── */
 const ENSAIOS_SUGERIDOS = {
   "Matéria-prima (pó/granulado)": [
-    { nome:"Aspecto",               espec:"Conforme padrão",      unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",      unidade:"—" },
-    { nome:"Odor",                  espec:"Característico",       unidade:"—" },
-    { nome:"pH (solução 1%)",       espec:"",                     unidade:"pH" },
-    { nome:"Umidade",               espec:"",                     unidade:"%" },
-    { nome:"Densidade aparente",    espec:"",                     unidade:"g/mL" },
-    { nome:"Densidade compactada",  espec:"",                     unidade:"g/mL" },
-    { nome:"Granulometria",         espec:"",                     unidade:"%" },
-    { nome:"Identificação",         espec:"Positivo",             unidade:"—" },
-    { nome:"Contagem microbiana",   espec:"",                     unidade:"UFC/g" },
+    { nome:"Aspecto",               espec:"Conforme padrão",      unidade:"—",      tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",      unidade:"—",      tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Odor",                  espec:"Característico",       unidade:"—",      tipo:"conforme", casas:0, multiplos:false },
+    { nome:"pH (solução 1%)",       espec:"",                     unidade:"pH",     tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Umidade",               espec:"",                     unidade:"%",      tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Densidade aparente",    espec:"",                     unidade:"g/mL",   tipo:"numero",   casas:3, multiplos:false },
+    { nome:"Densidade compactada",  espec:"",                     unidade:"g/mL",   tipo:"numero",   casas:3, multiplos:false },
+    { nome:"Granulometria",         espec:"",                     unidade:"%",      tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Identificação",         espec:"Positivo",             unidade:"—",      tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Contagem microbiana",   espec:"",                     unidade:"UFC/g",  tipo:"numero",   casas:0, multiplos:false },
   ],
   "Matéria-prima (óleo/líquido)": [
-    { nome:"Aspecto",               espec:"Límpido, sem partículas", unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",         unidade:"—" },
-    { nome:"Odor",                  espec:"Característico",          unidade:"—" },
-    { nome:"Densidade",             espec:"",                        unidade:"g/mL" },
-    { nome:"Viscosidade",           espec:"",                        unidade:"cP" },
-    { nome:"pH",                    espec:"",                        unidade:"pH" },
-    { nome:"Índice de acidez",      espec:"",                        unidade:"mg KOH/g" },
-    { nome:"Índice de refração",    espec:"",                        unidade:"—" },
-    { nome:"Identificação",         espec:"Positivo",                unidade:"—" },
-    { nome:"Contagem microbiana",   espec:"",                        unidade:"UFC/mL" },
+    { nome:"Aspecto",               espec:"Límpido, sem partículas", unidade:"—",       tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",         unidade:"—",       tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Odor",                  espec:"Característico",          unidade:"—",       tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Densidade",             espec:"",                        unidade:"g/mL",    tipo:"numero",   casas:3, multiplos:false },
+    { nome:"Viscosidade",           espec:"",                        unidade:"cP",      tipo:"numero",   casas:1, multiplos:false },
+    { nome:"pH",                    espec:"",                        unidade:"pH",      tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Índice de acidez",      espec:"",                        unidade:"mg KOH/g",tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Índice de refração",    espec:"",                        unidade:"—",       tipo:"numero",   casas:4, multiplos:false },
+    { nome:"Identificação",         espec:"Positivo",                unidade:"—",       tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Contagem microbiana",   espec:"",                        unidade:"UFC/mL",  tipo:"numero",   casas:0, multiplos:false },
   ],
   "Cápsula vazia": [
-    { nome:"Aspecto visual",        espec:"Sem defeitos, sem deformações", unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",               unidade:"—" },
-    { nome:"Comprimento",           espec:"",                              unidade:"mm" },
-    { nome:"Diâmetro",              espec:"",                              unidade:"mm" },
-    { nome:"Peso médio",            espec:"",                              unidade:"mg" },
-    { nome:"Umidade",               espec:"12,0 – 16,0",                  unidade:"%" },
-    { nome:"Desintegração",         espec:"≤ 15 min",                     unidade:"min" },
+    { nome:"Aspecto visual",        espec:"Sem defeitos, sem deformações", unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",               unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Comprimento",           espec:"",                              unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Diâmetro",              espec:"",                              unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Peso médio",            espec:"",                              unidade:"mg",  tipo:"numero",   casas:1, multiplos:true  },
+    { nome:"Umidade",               espec:"12,0 – 16,0",                  unidade:"%",   tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Desintegração",         espec:"≤ 15 min",                     unidade:"min", tipo:"numero",   casas:1, multiplos:false },
   ],
   "Embalagem — Pote (plástico/vidro)": [
-    { nome:"Aspecto visual",        espec:"Sem trincas, deformações ou manchas", unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",                     unidade:"—" },
-    { nome:"Altura",                espec:"",                                    unidade:"mm" },
-    { nome:"Diâmetro externo",      espec:"",                                    unidade:"mm" },
-    { nome:"Diâmetro da boca",      espec:"",                                    unidade:"mm" },
-    { nome:"Peso",                  espec:"",                                    unidade:"g" },
-    { nome:"Capacidade volumétrica",espec:"",                                    unidade:"mL" },
-    { nome:"Vedação / Torque",      espec:"Sem vazamento",                       unidade:"N.m" },
-    { nome:"Impressão / Gravação",  espec:"Legível e conforme",                  unidade:"—" },
+    { nome:"Aspecto visual",        espec:"Sem trincas, deformações ou manchas", unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",                     unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Altura",                espec:"",                                    unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Diâmetro externo",      espec:"",                                    unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Diâmetro da boca",      espec:"",                                    unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Peso",                  espec:"",                                    unidade:"g",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Capacidade volumétrica",espec:"",                                    unidade:"mL",  tipo:"numero",   casas:0, multiplos:false },
+    { nome:"Vedação / Torque",      espec:"Sem vazamento",                       unidade:"N.m", tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Impressão / Gravação",  espec:"Legível e conforme",                  unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
   ],
   "Embalagem — Tampa": [
-    { nome:"Aspecto visual",        espec:"Sem defeitos",          unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",       unidade:"—" },
-    { nome:"Diâmetro interno",      espec:"",                      unidade:"mm" },
-    { nome:"Altura",                espec:"",                      unidade:"mm" },
-    { nome:"Torque de fechamento",  espec:"",                      unidade:"N.m" },
-    { nome:"Vedação",               espec:"Sem vazamento",         unidade:"—" },
+    { nome:"Aspecto visual",        espec:"Sem defeitos",          unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",       unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Diâmetro interno",      espec:"",                      unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Altura",                espec:"",                      unidade:"mm",  tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Torque de fechamento",  espec:"",                      unidade:"N.m", tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Vedação",               espec:"Sem vazamento",         unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
   ],
   "Embalagem — Caixa de papelão / Cartucho": [
-    { nome:"Aspecto visual",        espec:"Sem manchas, rasgos ou defeitos", unidade:"—" },
-    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",          unidade:"—" },
-    { nome:"Código de barras",      espec:"Leitura correta",                 unidade:"—" },
-    { nome:"Altura",                espec:"",                                unidade:"mm" },
-    { nome:"Largura",               espec:"",                                unidade:"mm" },
-    { nome:"Profundidade",          espec:"",                                unidade:"mm" },
-    { nome:"Gramatura",             espec:"",                                unidade:"g/m²" },
-    { nome:"Espessura",             espec:"",                                unidade:"mm" },
-    { nome:"Resistência",           espec:"Conforme especificação",          unidade:"—" },
+    { nome:"Aspecto visual",        espec:"Sem manchas, rasgos ou defeitos", unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",          unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Código de barras",      espec:"Leitura correta",                 unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Altura",                espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Largura",               espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Profundidade",          espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Gramatura",             espec:"",                                unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Espessura",             espec:"",                                unidade:"mm",   tipo:"numero",   casas:3, multiplos:true  },
+    { nome:"Resistência",           espec:"Conforme especificação",          unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
   ],
   "Embalagem — Rótulo": [
-    { nome:"Aspecto visual",        espec:"Sem defeitos de impressão",  unidade:"—" },
-    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",     unidade:"—" },
-    { nome:"Código de barras",      espec:"Leitura correta",            unidade:"—" },
-    { nome:"Altura",                espec:"",                           unidade:"mm" },
-    { nome:"Largura",               espec:"",                           unidade:"mm" },
-    { nome:"Gramatura",             espec:"",                           unidade:"g/m²" },
-    { nome:"Aderência",             espec:"Sem descolamento",           unidade:"—" },
-    { nome:"Cor (CMYK)",            espec:"Conforme aprovado",          unidade:"—" },
+    { nome:"Aspecto visual",        espec:"Sem defeitos de impressão",  unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Impressão / Texto",     espec:"Conforme arte aprovada",     unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Código de barras",      espec:"Leitura correta",            unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Altura",                espec:"",                           unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Largura",               espec:"",                           unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Gramatura",             espec:"",                           unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Aderência",             espec:"Sem descolamento",           unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor (CMYK)",            espec:"Conforme aprovado",          unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
   ],
   "Embalagem — Filme de sachê": [
-    { nome:"Aspecto visual",        espec:"Sem furos, rasgos ou contaminação", unidade:"—" },
-    { nome:"Impressão",             espec:"Conforme arte aprovada",            unidade:"—" },
-    { nome:"Largura",               espec:"",                                  unidade:"mm" },
-    { nome:"Espessura",             espec:"",                                  unidade:"µm" },
-    { nome:"Gramatura",             espec:"",                                  unidade:"g/m²" },
-    { nome:"Resistência ao calor",  espec:"Selagem íntegra",                   unidade:"—" },
-    { nome:"Resistência ao rasgo",  espec:"",                                  unidade:"N" },
+    { nome:"Aspecto visual",        espec:"Sem furos, rasgos ou contaminação", unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Impressão",             espec:"Conforme arte aprovada",            unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Largura",               espec:"",                                  unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Espessura",             espec:"",                                  unidade:"µm",   tipo:"numero",   casas:3, multiplos:true  },
+    { nome:"Gramatura",             espec:"",                                  unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Resistência ao calor",  espec:"Selagem íntegra",                   unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Resistência ao rasgo",  espec:"",                                  unidade:"N",    tipo:"numero",   casas:1, multiplos:false },
   ],
   "Produto acabado (cápsula/comprimido)": [
-    { nome:"Aspecto",               espec:"Conforme padrão", unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão", unidade:"—" },
-    { nome:"Peso médio",            espec:"",                unidade:"mg" },
-    { nome:"Variação de peso",      espec:"≤ 5,0%",         unidade:"%" },
-    { nome:"Desintegração",         espec:"≤ 30 min",        unidade:"min" },
-    { nome:"Dureza",                espec:"",                unidade:"N" },
-    { nome:"Friabilidade",          espec:"≤ 1,0%",         unidade:"%" },
-    { nome:"Doseamento",            espec:"",                unidade:"%" },
+    { nome:"Aspecto",               espec:"Conforme padrão", unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão", unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Peso médio",            espec:"",                unidade:"mg",  tipo:"numero",   casas:1, multiplos:true  },
+    { nome:"Variação de peso",      espec:"≤ 5,0%",         unidade:"%",   tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Desintegração",         espec:"≤ 30 min",        unidade:"min", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Dureza",                espec:"",                unidade:"N",   tipo:"numero",   casas:1, multiplos:true  },
+    { nome:"Friabilidade",          espec:"≤ 1,0%",         unidade:"%",   tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Doseamento",            espec:"",                unidade:"%",   tipo:"numero",   casas:1, multiplos:false },
   ],
   "Produto acabado (sachê/pó)": [
-    { nome:"Aspecto",               espec:"Conforme padrão",    unidade:"—" },
-    { nome:"Cor",                   espec:"Conforme padrão",    unidade:"—" },
-    { nome:"Odor",                  espec:"Característico",     unidade:"—" },
-    { nome:"Peso médio",            espec:"",                   unidade:"g" },
-    { nome:"Variação de peso",      espec:"≤ 5,0%",            unidade:"%" },
-    { nome:"pH",                    espec:"",                   unidade:"pH" },
-    { nome:"Umidade",               espec:"",                   unidade:"%" },
-    { nome:"Vedação da embalagem",  espec:"Sem vazamento",      unidade:"—" },
+    { nome:"Aspecto",               espec:"Conforme padrão",    unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Cor",                   espec:"Conforme padrão",    unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Odor",                  espec:"Característico",     unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
+    { nome:"Peso médio",            espec:"",                   unidade:"g",   tipo:"numero",   casas:2, multiplos:true  },
+    { nome:"Variação de peso",      espec:"≤ 5,0%",            unidade:"%",   tipo:"numero",   casas:2, multiplos:false },
+    { nome:"pH",                    espec:"",                   unidade:"pH",  tipo:"numero",   casas:2, multiplos:false },
+    { nome:"Umidade",               espec:"",                   unidade:"%",   tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Vedação da embalagem",  espec:"Sem vazamento",      unidade:"—",   tipo:"conforme", casas:0, multiplos:false },
   ],
 };
 
@@ -5289,7 +5340,7 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
     setEnsaios(sugs.map((e,i)=>({ id:i+1, ...e, ref:"" })));
   };
 
-  const addEnsaio = () => setEnsaios(p=>[...p, { id:Date.now(), nome:"", espec:"", unidade:"", ref:"" }]);
+  const addEnsaio = () => setEnsaios(p=>[...p, { id:Date.now(), nome:"", espec:"", unidade:"", ref:"", tipo:"numero", casas:2, multiplos:false }]);
   const updEnsaio = (id,k,v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
   const delEnsaio = (id) => setEnsaios(p=>p.filter(e=>e.id!==id));
 
@@ -5305,6 +5356,9 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
         espec: e.espec||"",
         unidade: e.unidade||"",
         ref: e.ref||"",
+        tipo: e.tipo||"numero",
+        casas: e.casas !== undefined ? e.casas : 2,
+        multiplos: e.multiplos||false,
       }));
       const material = {
         id,
@@ -5438,16 +5492,36 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
         ) : (
           <div>
             {/* Header */}
-            <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 40px", gap:8, padding:"6px 8px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>
-              <span>Ensaio *</span><span>Especificação</span><span>Unidade</span><span>Referência</span><span></span>
+            <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, padding:"6px 8px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>
+              <span>Ensaio *</span><span>Especificação</span><span>Unidade</span><span>Referência</span><span>Tipo de resultado</span><span>Casas dec.</span><span></span>
             </div>
             {ensaios.map((e,i)=>(
-              <div key={e.id} style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 40px", gap:8, marginBottom:8, alignItems:"center", padding:"8px", background:T.surf, borderRadius:8, border:`1px solid ${T.border}` }}>
-                <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev=>updEnsaio(e.id,"nome",ev.target.value)} sx={{ fontSize:12 }}/>
-                <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
-                <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev=>updEnsaio(e.id,"unidade",ev.target.value)} sx={{ fontSize:12 }}/>
-                <Inp placeholder="Ex: EI-001" value={e.ref||""} onChange={ev=>updEnsaio(e.id,"ref",ev.target.value)} sx={{ fontSize:12 }}/>
-                <button onClick={()=>delEnsaio(e.id)} style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontFamily:"inherit" }}>✕</button>
+              <div key={e.id} style={{ marginBottom:8, background:T.surf, borderRadius:8, border:`1px solid ${T.border}`, padding:"8px" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, alignItems:"center" }}>
+                  <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev=>updEnsaio(e.id,"nome",ev.target.value)} sx={{ fontSize:12 }}/>
+                  <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
+                  <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev=>updEnsaio(e.id,"unidade",ev.target.value)} sx={{ fontSize:12 }}/>
+                  <Inp placeholder="Ex: EI-001" value={e.ref||""} onChange={ev=>updEnsaio(e.id,"ref",ev.target.value)} sx={{ fontSize:12 }}/>
+                  <Sel value={e.tipo||"numero"} onChange={ev=>updEnsaio(e.id,"tipo",ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
+                    <option value="numero">🔢 Numérico</option>
+                    <option value="conforme">✓/✗ Conforme</option>
+                    <option value="texto">📝 Texto livre</option>
+                  </Sel>
+                  <Sel value={String(e.casas!==undefined?e.casas:2)} onChange={ev=>updEnsaio(e.id,"casas",parseInt(ev.target.value))} disabled={e.tipo!=="numero"} sx={{ fontSize:11, padding:"5px 6px", opacity:e.tipo!=="numero"?.4:1 }}>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </Sel>
+                  <button onClick={()=>delEnsaio(e.id)} style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontFamily:"inherit" }}>✕</button>
+                </div>
+                {e.tipo==="numero" && (
+                  <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, paddingLeft:2 }}>
+                    <input type="checkbox" id={`mult-${e.id}`} checked={!!e.multiplos} onChange={ev=>updEnsaio(e.id,"multiplos",ev.target.checked)} style={{ accentColor:T.accent, width:14, height:14 }}/>
+                    <label htmlFor={`mult-${e.id}`} style={{ fontSize:11, color:T.text2, cursor:"pointer" }}>Permite lançamento de múltiplos valores (calcula média automaticamente)</label>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -5493,6 +5567,17 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
   };
 
   const updRes = (id,k,v) => setResultados(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
+
+  const fmtNum = (val, casas) => {
+    const n = parseFloat(String(val).replace(",","."));
+    if (isNaN(n)) return val;
+    return n.toFixed(casas).replace(".",",");
+  };
+  const calcMedia = (valores, casas) => {
+    const nums = valores.map(v=>parseFloat(String(v).replace(",","."))).filter(n=>!isNaN(n));
+    if (!nums.length) return "";
+    return (nums.reduce((a,b)=>a+b,0)/nums.length).toFixed(casas).replace(".",",");
+  };
 
   const uploadCOA = async (file) => {
     if(!file) return;
