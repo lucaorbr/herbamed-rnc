@@ -8070,11 +8070,18 @@ function AuditLogTab({ user }) {
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
-    const unsub = subscribeCollection("audit_log", list => {
+    let unsub;
+    try {
+      unsub = subscribeCollection("audit_log", list => {
+        clearTimeout(t);
+        setLogs(list.sort((a,b) => (b.ts||0) - (a.ts||0)));
+        setLoading(false);
+      });
+    } catch(e) {
       clearTimeout(t);
-      setLogs(list.sort((a,b) => (b.ts||0) - (a.ts||0)));
       setLoading(false);
-    });
+      console.warn("[AuditLog]", e);
+    }
     return () => { clearTimeout(t); unsub && unsub(); };
   }, []);
 

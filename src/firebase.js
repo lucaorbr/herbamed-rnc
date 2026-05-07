@@ -1,4 +1,4 @@
-import { initializeApp, deleteApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, doc, getDoc, getDocs,
   setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp
@@ -16,16 +16,7 @@ export const auth = getAuth(app);
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 export const loginUser = (email, pw) => signInWithEmailAndPassword(auth, email, pw);
 export const logoutUser = () => signOut(auth);
-export const createAuthUser = async (email, pw) => {
-  const secondaryApp = initializeApp(firebaseConfig, "secondary_" + Date.now());
-  const secondaryAuth = getAuth(secondaryApp);
-  try {
-    const result = await createUserWithEmailAndPassword(secondaryAuth, email, pw);
-    return result;
-  } finally {
-    await deleteApp(secondaryApp);
-  }
-};
+export const createAuthUser = (email, pw) => createUserWithEmailAndPassword(auth, email, pw);
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
 export const getUser = async (uid) => {
@@ -72,10 +63,12 @@ export const saveCollection = (colName, id, data) =>
 export const deleteFromCollection = (colName, id) =>
   deleteDoc(doc(db, colName, String(id)));
 
-export const subscribeCollection = (colName, cb) =>
-  onSnapshot(collection(db, colName), snap => {
-    cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
+export const subscribeCollection = (colName, cb, onErr) =>
+  onSnapshot(
+    collection(db, colName),
+    snap => { cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
+    err  => { console.warn(`[subscribeCollection:${colName}]`, err?.code); onErr && onErr(err); }
+  );
 
 export const getCollection = async (colName) => {
   const snap = await getDocs(collection(db, colName));
