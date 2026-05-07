@@ -2312,7 +2312,7 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
     <div>
       <div style={{ ...s.card }}>
         <SecTitle icon="🪪" ch="Identificação" />
-        <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
+        <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>
           <F lbl="Tipo de não conformidade" tip="Classifique a origem da NC. Ex: Matéria-prima (insumo fora do padrão), Processo (falha na fabricação), Produto acabado (produto final com desvio)." ch={
             <div>
@@ -2329,11 +2329,11 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
               )}
             </div>
           } />
-          <F lbl="Setor" ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} />
+          <F lbl="Setor" tip="Setor onde a não conformidade foi identificada. Ex: Controle de Qualidade, Produção, Logística." ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} />
           <F lbl="Detectado por" tip="Nome completo do colaborador que identificou a não conformidade." ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} />
         </>} />
-        <G2 ch={<><F lbl="Produto / Material" ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
-          <F lbl="Fornecedor" ch={
+        <G2 ch={<><F lbl="Produto / Material" tip="Nome do produto ou matéria-prima envolvida. Ex: Calcivitam D3 Cápsula 60un ou Celulose Microcristalina." ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
+          <F lbl="Fornecedor" tip="Fornecedor relacionado à NC. Preencha se a origem for matéria-prima ou material de embalagem de terceiros." ch={
             <div style={{ position:"relative" }}>
               <div style={{ display:"flex", gap:6 }}>
                 <Inp
@@ -2362,10 +2362,10 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
       </div>
       <div style={s.card}>
         <SecTitle icon="📝" ch="Descrição" />
-        <F lbl="Descrição da não conformidade" ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
-        <G3 ch={<><F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOTE-2025-XXX" value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" ch={<Inp placeholder="Ex: 100 kg / 500 unidades" value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" ch={<Inp placeholder="Ex: Farmacopeia Brasileira / Especificação interna" value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
+        <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades." ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
+        <G3 ch={<><F lbl="Nº do lote" tip="Número do lote afetado conforme registrado no sistema de rastreabilidade. Essencial para eventual recall ou bloqueio de lote." ch={<Inp placeholder="Ex: LOTE-2025-XXX" value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" tip="Quantidade de unidades, kg ou litros afetados. Ex: 500 cápsulas, 20kg, 2 tambores." ch={<Inp placeholder="Ex: 100 kg / 500 unidades" value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" tip="Norma ou procedimento que define o padrão descumprido. Ex: PO-CQ-003, RDC 658/2022, Especificação Técnica ETE-001." ch={<Inp placeholder="Ex: Farmacopeia Brasileira / Especificação interna" value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
         <F lbl="Evidências (descrição)" tip="Descreva as evidências coletadas. Ex: Foto registrada, amostra retida, laudo de análise nº 123. Anexe os arquivos abaixo." ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo de análise, registro fotográfico, relatório..." />} />
-        <F lbl="📎 Anexos (fotos, laudos, documentos)" ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />
+        <F lbl="📎 Anexos (fotos, laudos, documentos)" tip="Adicione fotos, laudos ou documentos que comprovem a não conformidade. Formatos aceitos: JPG, PNG, PDF." ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />
       </div>
 
       {/* AI PANEL */}
@@ -2375,12 +2375,12 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
 
       <div style={s.card}>
         <SecTitle icon="⚡" ch="Ação de contenção" />
-        <F lbl="Ação realizada" ch={<TA rows={3} value={f.contencao} onChange={e => set("contencao", e.target.value)} />} />
-        <G2 ch={<><F lbl="Responsável" ch={<Inp value={f.respCont} onChange={e => set("respCont", e.target.value)} />} /><F lbl="Data" ch={<Inp type="date" value={f.dataContencao} onChange={e => set("dataContencao", e.target.value)} />} /></>} />
+        <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={f.contencao} onChange={e => set("contencao", e.target.value)} />} />
+        <G2 ch={<><F lbl="Responsável" tip="Nome do responsável pela execução da ação de contenção." ch={<Inp value={f.respCont} onChange={e => set("respCont", e.target.value)} />} /><F lbl="Data" tip="Data em que a ação de contenção foi executada." ch={<Inp type="date" value={f.dataContencao} onChange={e => set("dataContencao", e.target.value)} />} /></>} />
       </div>
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
-        <G3 ch={<><F lbl="Responsável pela análise" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
+        <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
         <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: ".5rem" }}>
