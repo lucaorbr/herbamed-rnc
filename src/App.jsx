@@ -1,4 +1,30 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from "react";
+impo
+
+  // ── Tratamento de erros Firebase ─────────────────────────────────────────
+  const fbErr = (e) => {
+    console.error("[Firebase]", e?.code, e?.message);
+    const msgs = {
+      "unavailable":        "Sem conexão com o servidor. Verifique sua internet.",
+      "permission-denied":  "Sem permissão para esta operação.",
+      "not-found":          "Registro não encontrado.",
+      "already-exists":     "Este registro já existe.",
+      "resource-exhausted": "Muitas requisições. Aguarde um momento.",
+      "unauthenticated":    "Sessão expirada. Faça login novamente.",
+      "cancelled":          "Operação cancelada.",
+      "deadline-exceeded":  "Tempo esgotado. Verifique sua conexão.",
+    };
+    return msgs[e?.code] || "Erro ao salvar. Tente novamente.";
+  };
+
+  const withSave = async (fn, onSuccess, onError) => {
+    try {
+      await fn();
+      onSuccess && onSuccess();
+    } catch(e) {
+      const msg = fbErr(e);
+      onError ? onError(msg) : toast_(msg, "red");
+    }
+  };rt React, { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { auth, loginUser, logoutUser, getUser, saveUser, createAuthUser,
          deleteUser as fbDeleteUser, updateUser, getAllUsers,
          saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs,
@@ -1123,9 +1149,18 @@ export default function App() {
 
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
   const openEmail = useCallback((rnc, evento) => setEmailCtx({ rnc, evento }), []);
-  const doSaveRNC = useCallback(async (rnc) => { await saveRNC(rnc.id, rnc); }, []);
-  const doUpdateRNC = useCallback(async (id, data) => { await updateRNC(id, data); }, []);
-  const doDeleteRNC = useCallback(async (id) => { await fbDeleteRNC(id); }, []);
+  const doSaveRNC = useCallback(async (rnc) => {
+    try { await saveRNC(rnc.id, rnc); }
+    catch(e) { console.error("[doSaveRNC]", e); }
+  }, []);
+  const doUpdateRNC = useCallback(async (id, data) => {
+    try { await updateRNC(id, data); }
+    catch(e) { console.error("[doUpdateRNC]", e); }
+  }, []);
+  const doDeleteRNC = useCallback(async (id) => {
+    try { await fbDeleteRNC(id); }
+    catch(e) { console.error("[doDeleteRNC]", e); }
+  }, []);
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
@@ -2163,6 +2198,7 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
   };
 
   const salvar = async () => {
+    try {
     if (!f.desc.trim()) { alert("Preencha a descrição."); return; }
     const nc = await incrementCounter();
     const rnc = { id: String(Date.now()), num: genNum(nc), ...f, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now() };
@@ -2170,6 +2206,10 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
     toast_(`${rnc.num} registrada!`, "green");
     openEmail(rnc, "abertura");
     setTab("lista");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const rncPreview = { ...f, ishikawa, w2h };
@@ -3538,18 +3578,33 @@ function FMEATab({ user, toast_ }) {
   }, []);
 
   const addItem = async () => {
+    try {
     const novo = { id: Date.now(), processo: "", modoFalha: "", efeito: "", causa: "", S: 1, O: 1, D: 1, acao: "", resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name };
     await saveCollection("fmea", String(novo.id), novo);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const upd = async (id, k, v) => {
+    try {
     const item = items.find(x => String(x.id) === String(id));
     if (item) await saveCollection("fmea", String(id), { ...item, [k]: v });
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const del = async (id) => {
+    try {
     if (!confirm("Remover este item?")) return;
     await deleteFromCollection("fmea", String(id));
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const rpn = (item) => item.S * item.O * item.D;
@@ -3863,6 +3918,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
   const STATUS_FORN = { Ativo:"#2ab84a", Inativo:"#ffd166", Bloqueado:"#ff4f6a" };
 
   const addForn = async () => {
+    try {
     if (!novoForn.nome.trim()) { alert("Nome é obrigatório."); return; }
     const id = String(Date.now());
     const novo = { ...novoForn, id, criadoEm: tod(), criadoPor: user.name };
@@ -3870,19 +3926,33 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
     setNovoForn({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", status:"Ativo", obs:"" });
     setShowNovo(false);
     toast_("Fornecedor cadastrado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const saveEdit = async () => {
+    try {
     await saveCollection("fornecedores", String(sel.id), { ...sel, ...editData });
     setSel(p => ({ ...p, ...editData }));
     setEditMode(false);
     toast_("Fornecedor atualizado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const delForn = async (id) => {
+    try {
     if (!confirm("Excluir este fornecedor?")) return;
     await deleteFromCollection("fornecedores", String(id));
     setSel(null); toast_("Fornecedor removido.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const list = fornecedores.filter(f =>
@@ -4395,14 +4465,24 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
   },[]);
 
   const salvarFichaDB = async (ficha) => {
+    try {
     await saveCollection(CQ_KEY, String(ficha.id), ficha);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const delFicha = async (id) => {
+    try {
     if(!confirm("Excluir esta ficha?")) return;
     await deleteFromCollection(CQ_KEY, String(id));
     setSelFicha(null); setView("lista");
     toast_("Ficha excluída.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const aplicarEnsaiosPadrao = (tipo) => {
@@ -4969,9 +5049,14 @@ function CQMateriaisTab({ user, toast_, fornecedores }) {
   };
 
   const delMaterial = async (id) => {
+    try {
     if(!confirm("Excluir este material e todos os seus ensaios?")) return;
     await deleteFromCollection("cq_materiais", String(id));
     toast_("Material excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
@@ -5136,6 +5221,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
   const getNCs = () => resultados.filter(r => r.conforme === false);
 
   const salvar = async () => {
+    try {
     if(!matSel) { alert("Selecione o material."); return; }
     const ncs = getNCs();
     if(ncs.length > 0) {
@@ -5162,12 +5248,21 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab }) {
     setMatSel(null);
     setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
     setResultados([]); setCoa(null);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const delAnalise = async (id) => {
+    try {
     if(!confirm("Excluir esta análise?")) return;
     await deleteFromCollection("cq_analises", String(id));
     setSelAnalise(null); toast_("Análise excluída.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const exportRA = (a) => {
@@ -5555,18 +5650,28 @@ function IPCTab({ user, toast_ }) {
   }, []);
 
   const salvarProduto = async () => {
+    try {
     if (!formProd.nome) { alert("Informe o nome do produto."); return; }
     if (!formProd.linha || formProd.linha === "__outro__") { alert("Informe a linha."); return; }
     const id = Date.now();
     await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
     setFormProd({ nome: "", linha: "", forma: "" });
     toast_("Produto cadastrado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletarProduto = async (id) => {
+    try {
     if (!confirm("Excluir este produto?")) return;
     await deleteFromCollection("ipc_produtos", String(id));
     toast_("Produto excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const areaAtual = AREAS.find(a => a.id === form.area);
@@ -5588,6 +5693,7 @@ function IPCTab({ user, toast_ }) {
   };
 
   const salvar = async () => {
+    try {
     if (!form.area) { alert("Selecione a área."); return; }
     if (!form.op)   { alert("Informe a OP."); return; }
     if (!form.produto) { alert("Informe o produto."); return; }
@@ -5608,13 +5714,22 @@ function IPCTab({ user, toast_ }) {
     setForm({ area: "", sala: "", op: "", produto: "", resp: "", data: tod(), obs: "" });
     setResultados([]);
     setView("lista");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletar = async (id) => {
+    try {
     if (!confirm("Excluir este registro?")) return;
     await deleteFromCollection("ipc_registros", String(id));
     setSel(null); setView("lista");
     toast_("Registro excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const editar = (r) => {
@@ -5927,18 +6042,28 @@ function IPCProdutosTab({ user, toast_ }) {
   }, []);
 
   const salvarProduto = async () => {
+    try {
     if (!formProd.nome) { alert("Informe o nome do produto."); return; }
     if (!formProd.linha) { alert("Informe a linha."); return; }
     const id = Date.now();
     await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
     setFormProd({ nome: "", linha: "", forma: "" });
     toast_("Produto cadastrado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletarProduto = async (id) => {
+    try {
     if (!confirm("Excluir este produto?")) return;
     await deleteFromCollection("ipc_produtos", String(id));
     toast_("Produto excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const LINHAS = [...new Set(produtos.map(p => p.linha).filter(Boolean))];
@@ -6047,18 +6172,28 @@ function ClientesTab({ user, toast_ }) {
   }, []);
 
   const salvar = async () => {
+    try {
     if (!form.nome) { alert("Informe o nome do cliente."); return; }
     const id = sel ? sel.id : Date.now();
     await saveCollection("clientes_terceiros", String(id), { id, ...form, atualizadoEm: tod() });
     toast_(sel ? "Cliente atualizado!" : "Cliente cadastrado!", "green");
     setForm({ nome:"", cnpj:"", contato:"", email:"", tel:"", obs:"" });
     setSel(null);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletar = async (id) => {
+    try {
     if (!confirm("Excluir este cliente?")) return;
     await deleteFromCollection("clientes_terceiros", String(id));
     toast_("Cliente excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const editar = (c) => { setSel(c); setForm({ nome:c.nome||"", cnpj:c.cnpj||"", contato:c.contato||"", email:c.email||"", tel:c.tel||"", obs:c.obs||"" }); };
@@ -6208,6 +6343,7 @@ function LaudosTab({ user, toast_, users }) {
   };
 
   const salvar = async () => {
+    try {
     if (!form.clienteId) { alert("Selecione o cliente."); return; }
     if (!form.produto) { alert("Informe o produto."); return; }
     const status = calcStatus(form.ensaios);
@@ -6222,26 +6358,45 @@ function LaudosTab({ user, toast_, users }) {
     setView("lista"); setSel(null);
     setForm({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
 • Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const assinarAnalista = async (laudo) => {
+    try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     await saveCollection("laudos", String(laudo.id), { ...laudo, assinaturaAnalista:{ nome:user.name, cargo:user.role==="rt"?"Responsável Técnico":"Analista de CQ", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
     toast_("Laudo assinado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const assinarRT = async (laudo) => {
+    try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const novoStatus = calcStatus(laudo.ensaios) === "Aprovado" ? "Finalizado" : calcStatus(laudo.ensaios);
     await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT:{ nome:user.name, cargo:"Responsável Técnico", crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
     toast_("Laudo assinado como RT!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletar = async (id) => {
+    try {
     if (!confirm("Excluir este laudo?")) return;
     await deleteFromCollection("laudos", String(id));
     setView("lista"); setSel(null);
     toast_("Laudo excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const exportPDF = (laudo) => {
@@ -6640,6 +6795,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
   const delAchado = (id) => setAchados(p=>p.filter(a=>a.id!==id));
 
   const salvar = async () => {
+    try {
     if(!form.titulo.trim()) { alert("Informe o título da auditoria."); return; }
     const id = sel ? String(sel.id) : String(Date.now());
     const aud = { id, ...form, achados, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
@@ -6648,12 +6804,21 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
     setView("lista"); setSel(null);
     setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" });
     setAchados([]);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const del = async (id) => {
+    try {
     if(!confirm("Excluir esta auditoria?")) return;
     await deleteFromCollection("auditorias", String(id));
     setSel(null); toast_("Auditoria excluída.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const editAuditoria = (a) => {
@@ -7033,11 +7198,16 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
   };
 
   const saveEdit = async (uid) => {
+    try {
     const data = { ...editData, ...(editAssinatura?{assinatura:editAssinatura}:{assinatura:null}) };
     await updateUser(uid, data);
     setUsers(users.map(u=>u.id===uid?{...u,...data}:u));
     setEditing(null);
     toast_("Usuário atualizado!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const delUser = async (uid) => {
@@ -7324,6 +7494,7 @@ function GestaoDocumentosTab({ user, toast_, users }) {
   }, [sel?.id]);
 
   const salvar = async () => {
+    try {
     if (!form.titulo.trim()) { alert("Informe o título."); return; }
     const id  = sel ? sel.id : Date.now();
     const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
@@ -7343,9 +7514,14 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     await saveCollection("gestao_docs", String(id), doc);
     toast_(sel ? `${codigo} atualizado!` : `${codigo} criado!`, "green");
     setSel(doc); setView("detalhe");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const assinar = async (doc, papel) => {
+    try {
     const campo = papel==="elaborador" ? "assinaturaElaborador" : papel==="revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
     const cargo = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
     if (!user?.assinatura) { alert("Você não possui assinatura cadastrada."); return; }
@@ -7360,9 +7536,14 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     await saveCollection("gestao_docs", String(doc.id), updated);
     toast_(`Assinado como ${cargo}!`, "green");
     setSel(updated);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const solicitarRevisao = async (doc) => {
+    try {
     if (!window.confirm("Criar nova revisão? A versão atual será arquivada no histórico.")) return;
     const versaoAtual = doc.versao || "01";
     const novaVersao  = String(parseInt(versaoAtual,10)+1).padStart(2,"0");
@@ -7371,30 +7552,49 @@ function GestaoDocumentosTab({ user, toast_, users }) {
     await saveCollection("gestao_docs", String(doc.id), updated);
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
     setSel(updated);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const tornarObsoleto = async (doc) => {
+    try {
     if (!window.confirm("Marcar como Obsoleto?")) return;
     const updated = { ...doc, status:"Obsoleto", atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     toast_("Documento obsoleto.", "red");
     setSel(updated);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const deletar = async (id) => {
+    try {
     if (!window.confirm("Excluir permanentemente?")) return;
     await deleteFromCollection("gestao_docs", String(id));
     toast_("Excluído.", "red");
     setSel(null); setView("lista");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const salvarTreino = async () => {
+    try {
     if (!novoTreino.userId) { alert("Selecione o colaborador."); return; }
     const u = users?.find(x => x.id===novoTreino.userId);
     const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
     await saveCollection(`gestao_docs_treino_${sel.id}`, String(t.id), t);
     toast_("Treinamento registrado!", "green");
     setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
   };
 
   const gerarComIA = async () => {
