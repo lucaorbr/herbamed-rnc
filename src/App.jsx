@@ -452,7 +452,40 @@ function Pagination({ page, total, setPage }) {
   );
 }
 
-function F({ lbl, ch }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={s.lbl}>{lbl}</label>{ch}</div>; }
+
+function Tooltip({ text }) {
+  const T = useTheme();
+  const [show, setShow] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!show) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [show]);
+
+  return (
+    <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center", marginLeft:5, verticalAlign:"middle", flexShrink:0 }}>
+      <span
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(v => !v)}
+        style={{ width:15, height:15, borderRadius:"50%", background:T.accent+"22", border:`1px solid ${T.accent}44`, color:T.accent, fontSize:9, fontWeight:700, display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none", lineHeight:1, flexShrink:0 }}>
+        ?
+      </span>
+      {show && (
+        <span style={{ position:"absolute", bottom:"calc(100% + 6px)", left:"50%", transform:"translateX(-50%)", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", fontSize:11, color:T.text2, lineHeight:1.5, whiteSpace:"normal", width:220, boxShadow:"0 4px 16px #0004", zIndex:9999, pointerEvents:"none" }}>
+          <span style={{ display:"block", marginBottom:3, color:T.accent, fontWeight:700, fontSize:10, textTransform:"uppercase" }}>💡 Ajuda</span>
+          {text}
+          <span style={{ position:"absolute", bottom:-5, left:"50%", transform:"translateX(-50%)", width:10, height:10, background:T.card, border:`1px solid ${T.border}`, borderRadius:1, rotate:"45deg", borderTop:"none", borderLeft:"none" }} />
+        </span>
+      )}
+    </span>
+  );
+}
+
+function F({ lbl, ch, tip }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>{lbl}{tip && <Tooltip text={tip}/>}</label>{ch}</div>; }
 function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
 function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", background: T.surf, color: T.text, ...sx }} {...p}>{children}</select>; }
 function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ ...s.inp, minHeight: 72, resize: "vertical", ...sx }} {...p} />; }
@@ -1957,35 +1990,35 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                   <SecTitle icon="📝" ch="Identificação" />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                     <F lbl="Tipo" ch={<Sel value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} />
-                    <F lbl="Severidade" ch={<Sel value={editData.sev} onChange={e => setEditData(p => ({ ...p, sev: e.target.value }))}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
-                    <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))} />} />
+                    <F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={editData.sev} onChange={e => setEditData(p => ({ ...p, sev: e.target.value }))}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
+                    <F lbl="Setor" tip="Setor onde a não conformidade foi identificada. Ex: Controle de Qualidade, Produção, Logística." ch={<Inp value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))} />} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <F lbl="Produto / Material" ch={<Inp value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
-                    <F lbl="Fornecedor" ch={<Inp value={editData.fornecedor} onChange={e => setEditData(p => ({ ...p, fornecedor: e.target.value }))} />} />
-                    <F lbl="Nº do lote" ch={<Inp value={editData.lote} onChange={e => setEditData(p => ({ ...p, lote: e.target.value }))} />} />
-                    <F lbl="Quantidade afetada" ch={<Inp value={editData.qtd} onChange={e => setEditData(p => ({ ...p, qtd: e.target.value }))} />} />
+                    <F lbl="Produto / Material" tip="Nome do produto acabado ou matéria-prima envolvida. Seja específico. Ex: Calcivitam D3 Cápsula 60un ou Celulose Microcristalina." ch={<Inp value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
+                    <F lbl="Fornecedor" tip="Fornecedor relacionado à NC. Preencha apenas se a origem for de matéria-prima ou material de embalagem de terceiros." ch={<Inp value={editData.fornecedor} onChange={e => setEditData(p => ({ ...p, fornecedor: e.target.value }))} />} />
+                    <F lbl="Nº do lote" tip="Número do lote afetado conforme registrado no sistema de rastreabilidade. Essencial para eventual recall ou bloqueio de lote." ch={<Inp value={editData.lote} onChange={e => setEditData(p => ({ ...p, lote: e.target.value }))} />} />
+                    <F lbl="Quantidade afetada" tip="Quantidade de unidades, kg ou litros afetados pela não conformidade. Ex: 500 cápsulas, 20kg, 2 tambores." ch={<Inp value={editData.qtd} onChange={e => setEditData(p => ({ ...p, qtd: e.target.value }))} />} />
                   </div>
-                  <F lbl="Referência normativa" ch={<Inp value={editData.ref} onChange={e => setEditData(p => ({ ...p, ref: e.target.value }))} />} />
+                  <F lbl="Referência normativa" tip="Norma, especificação ou procedimento que define o padrão que foi descumprido. Ex: PO-CQ-003, RDC 658/2022, Especificação Técnica ETE-001." ch={<Inp value={editData.ref} onChange={e => setEditData(p => ({ ...p, ref: e.target.value }))} />} />
                   <F lbl="Evidências" ch={<Inp value={editData.evidencia} onChange={e => setEditData(p => ({ ...p, evidencia: e.target.value }))} />} />
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="📋" ch="Descrição" />
-                  <F lbl="Descrição da não conformidade" ch={<TA rows={4} value={editData.desc} onChange={e => setEditData(p => ({ ...p, desc: e.target.value }))} />} />
+                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<TA rows={4} value={editData.desc} onChange={e => setEditData(p => ({ ...p, desc: e.target.value }))} />} />
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="⚡" ch="Ação de contenção" />
-                  <F lbl="Ação realizada" ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
+                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <F lbl="Responsável" ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
+                    <F lbl="Responsável" tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
                   </div>
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="🗓️" ch="Prazos" />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                     <F lbl="Responsável análise" ch={<Inp value={editData.resp} onChange={e => setEditData(p => ({ ...p, resp: e.target.value }))} />} />
-                    <F lbl="Prazo ação corretiva" ch={<Inp type="date" value={editData.prazoAC} onChange={e => setEditData(p => ({ ...p, prazoAC: e.target.value }))} />} />
-                    <F lbl="Prazo eficácia" ch={<Inp type="date" value={editData.prazoEfic} onChange={e => setEditData(p => ({ ...p, prazoEfic: e.target.value }))} />} />
+                    <F lbl="Prazo ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H." ch={<Inp type="date" value={editData.prazoAC} onChange={e => setEditData(p => ({ ...p, prazoAC: e.target.value }))} />} />
+                    <F lbl="Prazo eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou." ch={<Inp type="date" value={editData.prazoEfic} onChange={e => setEditData(p => ({ ...p, prazoEfic: e.target.value }))} />} />
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -2279,9 +2312,9 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
     <div>
       <div style={{ ...s.card }}>
         <SecTitle icon="🪪" ch="Identificação" />
-        <G3 ch={<><F lbl="Data de abertura" ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
+        <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>
-          <F lbl="Tipo de não conformidade" ch={
+          <F lbl="Tipo de não conformidade" tip="Classifique a origem da NC. Ex: Matéria-prima (insumo fora do padrão), Processo (falha na fabricação), Produto acabado (produto final com desvio)." ch={
             <div>
               <Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>
                 {Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}
@@ -2297,7 +2330,7 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
             </div>
           } />
           <F lbl="Setor" ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} />
-          <F lbl="Detectado por" ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} />
+          <F lbl="Detectado por" tip="Nome completo do colaborador que identificou a não conformidade." ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} />
         </>} />
         <G2 ch={<><F lbl="Produto / Material" ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
           <F lbl="Fornecedor" ch={
@@ -2331,7 +2364,7 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
         <SecTitle icon="📝" ch="Descrição" />
         <F lbl="Descrição da não conformidade" ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
         <G3 ch={<><F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOTE-2025-XXX" value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Quantidade afetada" ch={<Inp placeholder="Ex: 100 kg / 500 unidades" value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /><F lbl="Referência normativa" ch={<Inp placeholder="Ex: Farmacopeia Brasileira / Especificação interna" value={f.ref} onChange={e => set("ref", e.target.value)} />} /></>} />
-        <F lbl="Evidências (descrição)" ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo de análise, registro fotográfico, relatório..." />} />
+        <F lbl="Evidências (descrição)" tip="Descreva as evidências coletadas. Ex: Foto registrada, amostra retida, laudo de análise nº 123. Anexe os arquivos abaixo." ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo de análise, registro fotográfico, relatório..." />} />
         <F lbl="📎 Anexos (fotos, laudos, documentos)" ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />
       </div>
 
@@ -2347,8 +2380,8 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
       </div>
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
-        <G3 ch={<><F lbl="Responsável pela análise" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
-        <F lbl="Prazo — verificação de eficácia" ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
+        <G3 ch={<><F lbl="Responsável pela análise" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
+        <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: ".5rem" }}>
         <button style={s.btn} onClick={() => setTab("lista")}>Cancelar</button>
