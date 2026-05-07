@@ -2010,7 +2010,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                   <SecTitle icon="⚡" ch="Ação de contenção" />
                   <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <F lbl="Responsável" tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
+                    <F lbl="Responsável" tip="Nome do responsável por verificar e atestar a eficácia da ação corretiva. Geralmente o RT ou coordenador de qualidade." tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
                   </div>
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
@@ -2403,6 +2403,64 @@ function IshikawaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
   useEffect(() => { if (!r) return; setEfeito(r.ishikawa?.efeito || r.desc?.substring(0, 60) || ""); setCauses(r.ishikawa?.causes || { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }); setWhys(r.ishikawa?.whys?.length ? r.ishikawa.whys : ["", "", "", "", ""]); setRoot(r.ishikawa?.root || ""); setWCausa(r.ishikawa?.whyCausa || ""); }, [sid]);
   const addC = cat => { const v = inps[cat]?.trim(); if (!v) return; setCauses(p => ({ ...p, [cat]: [...p[cat], v] })); setInps(p => ({ ...p, [cat]: "" })); };
   const remC = (cat, i) => setCauses(p => ({ ...p, [cat]: p[cat].filter((_, j) => j !== i) }));
+  const [ishiAiLoading, setIshiAiLoading] = React.useState(false);
+  const [porquesAiLoading, setPorquesAiLoading] = React.useState(false);
+  const gerarPorquesIA = async () => {
+    if (!r) { alert("Selecione uma RNC primeiro."); return; }
+    if (!wCausa) { alert("Selecione a causa a aprofundar primeiro."); return; }
+    setPorquesAiLoading(true);
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:800,
+          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica. Gere a análise dos 5 Porquês para a causa abaixo em uma indústria nutracêutica.
+
+Problema: ${r.desc||""}
+Causa a aprofundar: ${wCausa}
+Produto: ${r.produto||""}
+
+Responda APENAS em JSON sem markdown:
+{"porques":["Por que 1?","Por que 2?","Por que 3?","Por que 4?","Por que 5?"],"causaRaiz":"causa raiz fundamental identificada"}` }]})});
+      const data = await res.json();
+      const txt = data.content?.[0]?.text || "";
+      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      if (parsed.porques?.length) setWhys(parsed.porques.slice(0,5).concat(Array(5).fill("")).slice(0,5));
+      if (parsed.causaRaiz) setRoot(parsed.causaRaiz);
+      toast_("5 Porquês gerados pela IA! Revise e ajuste.", "green");
+    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
+    setPorquesAiLoading(false);
+  };
+  const gerarIshikawaIA = async () => {
+    if (!r) { alert("Selecione uma RNC primeiro."); return; }
+    const desc = efeito || r.desc || r.ishikawa?.efeito || "";
+    if (!desc) { alert("Preencha o campo Efeito primeiro."); return; }
+    setIshiAiLoading(true);
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:1500,
+          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA). Para o problema abaixo, sugira causas potenciais para o diagrama de Ishikawa em uma indústria nutracêutica.
+
+Problema: ${desc}
+Produto: ${r.produto||""}
+Tipo de NC: ${r.tipo||""}
+
+Responda APENAS em JSON sem markdown:
+{"mao":["causa1","causa2"],"maquina":["causa1","causa2"],"metodo":["causa1","causa2"],"material":["causa1","causa2"],"medicao":["causa1","causa2"],"meioamb":["causa1","causa2"]}` }]})});
+      const data = await res.json();
+      const txt = data.content?.[0]?.text || "";
+      const parsed = JSON.parse(txt.replace(/\`\`\`json|\`\`\`/g,"").trim());
+      setCauses(p => ({
+        mao:     [...(p.mao||[]),     ...(parsed.mao||[])],
+        maquina: [...(p.maquina||[]), ...(parsed.maquina||[])],
+        metodo:  [...(p.metodo||[]),  ...(parsed.metodo||[])],
+        material:[...(p.material||[]),...(parsed.material||[])],
+        medicao: [...(p.medicao||[]), ...(parsed.medicao||[])],
+        meioamb: [...(p.meioamb||[]), ...(parsed.meioamb||[])],
+      }));
+      toast_("Causas geradas pela IA! Revise e ajuste conforme necessário.", "green");
+    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
+    setIshiAiLoading(false);
+  };
+
   const saveI = async () => { if (!r) return; const ishi = { ...r.ishikawa, efeito, causes }; await doUpdateRNC(r.id, { ishikawa: ishi, historico: [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: "—" }] }); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
   const saveW = async () => { if (!r) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; await doUpdateRNC(r.id, { ishikawa: ishi, historico: [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: "—" }] }); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
   const CATS = [["mao", "👤 Mão de obra", T.blue], ["maquina", "⚙️ Máquina", T.orange], ["metodo", "📋 Método", T.accent], ["material", "📦 Material", T.yellow], ["medicao", "📏 Medição", T.purple], ["meioamb", "🌿 Meio ambiente", "#5dd4b0"]];
@@ -2412,7 +2470,19 @@ function IshikawaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
       {r && <>
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}><SecTitle icon="🐟" ch="Diagrama de Ishikawa — 6M" /><span style={{ fontSize: 11, color: T.text3 }}>Clique em uma causa → usar nos 5 Porquês</span></div>
-          <F lbl="Efeito / Problema central" ch={<Inp value={efeito} onChange={e => setEfeito(e.target.value)} sx={{ fontSize: 15, fontWeight: 500, color: T.orange }} />} />
+          <F lbl="Efeito / Problema central" tip="Descreva o problema que será analisado — copie exatamente a descrição da não conformidade. Ex: Cápsulas do lote 2024-001 com coloração fora do padrão." ch={<Inp value={efeito} onChange={e => setEfeito(e.target.value)} sx={{ fontSize: 15, fontWeight: 500, color: T.orange }} />} />
+          <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:T.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+              <div>
+                <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — Ishikawa</div>
+                <div style={{ fontSize:11, color:T.text2 }}>Sugere causas potenciais por categoria com base na descrição da RNC</div>
+              </div>
+            </div>
+            <button style={{ ...s.btnA, opacity:ishiAiLoading?.6:1, fontSize:11 }} onClick={gerarIshikawaIA} disabled={ishiAiLoading}>
+              {ishiAiLoading ? "⟳ Gerando..." : "🤖 Gerar causas com IA"}
+            </button>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: "1rem" }}>
             {CATS.map(([cat, label, color]) => (
               <div key={cat} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
@@ -2426,7 +2496,13 @@ function IshikawaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
         </div>
         <div style={s.card}>
           <SecTitle icon="🔍" ch="Análise dos 5 Porquês" />
-          <F lbl="Causa a aprofundar" ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} sx={{ color: T.yellow, fontWeight: 500 }} />} />
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, flexWrap:"wrap", gap:8 }}>
+            <div style={{ fontSize:12, color:T.text2 }}>Selecione a causa e gere a análise automaticamente</div>
+            <button style={{ ...s.btnA, opacity:porquesAiLoading?.6:1, fontSize:11 }} onClick={gerarPorquesIA} disabled={porquesAiLoading}>
+              {porquesAiLoading ? "⟳ Gerando..." : "🤖 Gerar 5 Porquês com IA"}
+            </button>
+          </div>
+          <F lbl="Causa a aprofundar" tip="Após preencher as categorias abaixo, selecione a causa mais provável para aprofundar com os 5 Porquês." ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} sx={{ color: T.yellow, fontWeight: 500 }} />} />
           {["Por quê ocorreu?", "Por quê isso aconteceu?", "Por quê essa causa existe?", "Por quê não foi controlado?", "Por quê não foi evitado?"].map((q, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <div style={{ minWidth: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg,${T.accent},${T.accent2})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#fff", flexShrink: 0, boxShadow: `0 0 10px ${T.accentGlow}` }}>{i + 1}</div>
@@ -2435,7 +2511,7 @@ function IshikawaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
             </div>
           ))}
           <Divider />
-          <F lbl="🎯 Causa raiz identificada" ch={<TA rows={2} value={root} onChange={e => setRoot(e.target.value)} sx={{ borderColor: T.accent, color: T.accent }} placeholder="Conclusão: a causa raiz é..." />} />
+          <F lbl="🎯 Causa raiz identificada" tip="Conclusão da análise — a causa fundamental que, se eliminada, evita que o problema se repita. Deve ser específica e acionável." ch={<TA rows={2} value={root} onChange={e => setRoot(e.target.value)} sx={{ borderColor: T.accent, color: T.accent }} placeholder="Conclusão: a causa raiz é..." />} />
           <div style={{ textAlign: "right" }}><button style={s.btnA} onClick={saveW}>Salvar análise →</button></div>
         </div>
       </>}
@@ -2452,6 +2528,34 @@ function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
   const add = () => setActs(p => [...p, { what: "", why: "", who: user.name, where: "", when: "", how: "", howMuch: "", status: "Pendente", evidencia: "" }]);
   const upd = (i, k, v) => setActs(p => p.map((a, j) => j === i ? { ...a, [k]: v } : a));
   const del = i => setActs(p => p.filter((_, j) => j !== i));
+  const [w2hAiLoading, setW2hAiLoading] = React.useState(false);
+  const gerarW2HIA = async () => {
+    if (!r) { alert("Selecione uma RNC primeiro."); return; }
+    const causaRaiz = r.ishikawa?.root || r.ishikawa?.whyCausa || r.desc || "";
+    if (!causaRaiz) { alert("Preencha a causa raiz no Ishikawa primeiro."); return; }
+    setW2hAiLoading(true);
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:2000,
+          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022). Crie um plano de ação corretiva 5W2H para a não conformidade abaixo.
+
+Problema: ${r.desc||""}
+Causa raiz: ${causaRaiz}
+Produto: ${r.produto||""}
+Setor: ${r.setor||""}
+Severidade: ${r.sev||""}
+
+Responda APENAS em JSON sem markdown com array de 3 a 5 ações:
+[{"what":"o que fazer","why":"por que","who":"responsável (cargo)","where":"local","when":"prazo ex: 15 dias","how":"como executar passo a passo","howMuch":"esforço estimado","status":"Pendente","evidencia":""}]` }]})});
+      const data = await res.json();
+      const txt = data.content?.[0]?.text || "";
+      const parsed = JSON.parse(txt.replace(/\`\`\`json|\`\`\`/g,"").trim());
+      setActs(p => [...p, ...parsed.map(a => ({ ...a, id: Date.now() + Math.random() }))]);
+      toast_("Plano de ação gerado pela IA! Revise e ajuste os responsáveis e prazos.", "green");
+    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
+    setW2hAiLoading(false);
+  };
+
   const save = async () => { if (!r) return; await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `5W2H — ${acts.length} ação(ões)`, resp: user.name }] }); toast_("5W2H salvo!", "green"); openEmail({ ...r, w2h: acts }, "5w2h"); };
   const sc = { "Pendente": T.yellow, "Em andamento": T.blue, "Concluída": T.accent, "Cancelada": "#ff4f6a" };
   return (
@@ -2470,15 +2574,15 @@ function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <F lbl="O quê?" ch={<Inp placeholder="Ação a executar" value={a.what} onChange={e => upd(i, "what", e.target.value)} />} />
-              <F lbl="Por quê?" ch={<Inp placeholder="Justificativa" value={a.why} onChange={e => upd(i, "why", e.target.value)} />} />
-              <F lbl="Quem?" ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
-              <F lbl="Onde?" ch={<Inp value={a.where} onChange={e => upd(i, "where", e.target.value)} />} />
-              <F lbl="Quando?" ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
-              <F lbl="Custo/Esforço" ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
-              <div style={{ gridColumn: "span 2" }}><F lbl="Como?" ch={<TA rows={2} value={a.how} onChange={e => upd(i, "how", e.target.value)} />} /></div>
+              <F lbl="O quê?" tip="Descreva a ação corretiva a ser executada. Seja específico e use verbos de ação. Ex: Revisar e atualizar o PO-CQ-003 de controle de qualidade de cápsulas." ch={<Inp placeholder="Ação a executar" value={a.what} onChange={e => upd(i, "what", e.target.value)} />} />
+              <F lbl="Por quê?" tip="Justifique por que esta ação é necessária. Conecte com a causa raiz identificada no Ishikawa." ch={<Inp placeholder="Justificativa" value={a.why} onChange={e => upd(i, "why", e.target.value)} />} />
+              <F lbl="Quem?" tip="Nome do responsável pela execução desta ação. Deve ser uma pessoa específica, não um setor." ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
+              <F lbl="Onde?" tip="Local onde a ação será executada. Ex: Linha de produção 2, Laboratório de CQ, Almoxarifado." ch={<Inp value={a.where} onChange={e => upd(i, "where", e.target.value)} />} />
+              <F lbl="Quando?" tip="Data limite para conclusão desta ação. Deve ser realista e alinhada com o prazo de ação corretiva definido na RNC." ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
+              <F lbl="Custo/Esforço" tip="Estimativa de custo ou esforço necessário para executar esta ação. Ex: 4 horas de trabalho, R$ 500, sem custo adicional." ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
+              <div style={{ gridColumn: "span 2" }}><F lbl="Como?" tip="Descreva passo a passo como a ação será executada. Quanto mais detalhado, mais fácil de executar e verificar." ch={<TA rows={2} value={a.how} onChange={e => upd(i, "how", e.target.value)} />} /></div>
               <div style={{ gridColumn: "span 2" }}>
-                <F lbl="Evidência de execução" ch={
+                <F lbl="Evidência de execução" tip="Descreva ou registre a comprovação de que esta ação foi concluída. Ex: PO-CQ-003 revisado e aprovado pelo RT em 15/05/2025, registro de treinamento anexo." ch={
                   <div>
                     <Inp placeholder="Descreva a evidência (ex: foto anexada, relatório nº, registro de treinamento...)" value={a.evidencia||""} onChange={e => upd(i, "evidencia", e.target.value)} />
                     {a.evidencia && <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Evidência registrada</div>}
@@ -2489,6 +2593,18 @@ function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
             </div>
           </div>
         ))}
+        <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:32, height:32, borderRadius:8, background:T.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — 5W2H</div>
+              <div style={{ fontSize:11, color:T.text2 }}>Gera o plano de ação completo baseado na causa raiz do Ishikawa</div>
+            </div>
+          </div>
+          <button style={{ ...s.btnA, opacity:w2hAiLoading?.6:1, fontSize:11 }} onClick={gerarW2HIA} disabled={w2hAiLoading}>
+            {w2hAiLoading ? "⟳ Gerando..." : "🤖 Gerar plano com IA"}
+          </button>
+        </div>
         <button style={{ ...s.btn, width: "100%", borderStyle: "dashed", color: T.text3, marginTop: 6 }} onClick={add}>+ Adicionar nova ação</button>
         <div style={{ textAlign: "right", marginTop: "1rem" }}><button style={s.btnA} onClick={save}>Salvar e notificar →</button></div>
       </div>}
@@ -2503,6 +2619,32 @@ function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const r = rncs.find(x => x.id === sid);
   useEffect(() => { if (!r) return; setF({ criterio: r.eficacia?.criterio || "", data: r.eficacia?.data || "", resp: r.eficacia?.resp || "", evidencias: r.eficacia?.evidencias || "", resultado: r.eficacia?.resultado || "", obs: r.eficacia?.obs || "" }); }, [sid]);
+
+  const [eficAiLoading, setEficAiLoading] = React.useState(false);
+  const gerarEficaciaIA = async () => {
+    if (!r) { alert("Selecione uma RNC primeiro."); return; }
+    setEficAiLoading(true);
+    try {
+      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:800,
+          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica. Sugira um critério de verificação de eficácia e lições aprendidas para esta NC.
+
+Problema: ${r.desc||""}
+Causa raiz: ${r.ishikawa?.root||r.ishikawa?.whyCausa||""}
+Ações executadas: ${(r.w2h||[]).map(a=>a.what).join("; ")}
+Severidade: ${r.sev||""}
+
+Responda APENAS em JSON sem markdown:
+{"criterio":"critério objetivo e mensurável","obs":"lições aprendidas e recomendações sistêmicas"}` }]})});
+      const data = await res.json();
+      const txt = data.content?.[0]?.text || "";
+      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
+      setF(p => ({ ...p, criterio: parsed.criterio||p.criterio, obs: parsed.obs||p.obs }));
+      toast_("Critério gerado pela IA! Ajuste conforme necessário.", "green");
+    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
+    setEficAiLoading(false);
+  };
+
   const save = async () => {
     if (!r) return;
     const ns = f.resultado === "Eficaz" ? "Eficaz" : f.resultado === "Ineficaz" ? "Ineficaz" : "Pendente verificação";
@@ -2515,10 +2657,23 @@ function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
       <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC —</option>{rncs.map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
       {r && <div style={s.card}>
         <SecTitle icon="✅" ch="Verificação de eficácia" />
-        <F lbl="Critério de verificação" ch={<TA rows={3} value={f.criterio} onChange={e => set("criterio", e.target.value)} placeholder="Ex: Ausência de telescopia em 3 lotes consecutivos; Cp ≥ 1,33" />} />
-        <G2 ch={<><F lbl="Data da verificação" ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Responsável" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /></>} />
-        <F lbl="Evidências coletadas" ch={<TA rows={3} value={f.evidencias} onChange={e => set("evidencias", e.target.value)} />} />
-        <F lbl="Resultado da verificação" ch={
+        {/* IA Button */}
+        <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:32, height:32, borderRadius:8, background:`linear-gradient(135deg,${T.accent},${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
+            <div>
+              <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — Eficácia</div>
+              <div style={{ fontSize:11, color:T.text2 }}>Sugere critério de verificação e lições aprendidas com base nas ações executadas</div>
+            </div>
+          </div>
+          <button style={{ ...s.btnA, opacity:eficAiLoading?.6:1, fontSize:11 }} onClick={gerarEficaciaIA} disabled={eficAiLoading}>
+            {eficAiLoading ? "⟳ Gerando..." : "🤖 Gerar critério com IA"}
+          </button>
+        </div>
+        <F lbl="Critério de verificação" tip="Defina como será verificado se a ação corretiva resolveu o problema. Ex: Ausência de reclamações do mesmo tipo nos próximos 90 dias, ou lote seguinte aprovado em 100% das análises." ch={<TA rows={3} value={f.criterio} onChange={e => set("criterio", e.target.value)} placeholder="Ex: Ausência de telescopia em 3 lotes consecutivos; Cp ≥ 1,33" />} />
+        <G2 ch={<><F lbl="Data da verificação" tip="Data em que a verificação de eficácia foi ou será realizada. Deve coincidir com o prazo de eficácia definido na RNC." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Responsável" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /></>} />
+        <F lbl="Evidências coletadas" tip="Descreva as evidências que comprovam que a ação foi eficaz. Ex: Análise dos lotes subsequentes sem desvios, relatório de auditoria interna, registros de treinamento." ch={<TA rows={3} value={f.evidencias} onChange={e => set("evidencias", e.target.value)} />} />
+        <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações foram suficientes. Ineficaz: o problema persistiu — uma nova RNC deverá ser aberta com análise de causa complementar." ch={
           <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
             {[["Eficaz", T.accent, "Causa raiz eliminada"], ["Ineficaz", "#ff4f6a", "NC recorreu, reabrir"], ["Pendente verificação", T.yellow, "Aguardando dados"]].map(([v, color, desc]) => (
               <label key={v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 16px", background: f.resultado === v ? `${color}18` : T.surf, border: `1px solid ${f.resultado === v ? color + "55" : T.border}`, borderRadius: 8, flex: 1, minWidth: 150 }}>
@@ -2528,7 +2683,7 @@ function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
             ))}
           </div>
         } />
-        <F lbl="Lições aprendidas / Observações finais" ch={<TA rows={3} value={f.obs} onChange={e => set("obs", e.target.value)} />} />
+        <F lbl="Lições aprendidas / Observações finais" tip="Registre o aprendizado gerado por esta NC. O que pode ser melhorado no sistema para evitar recorrências? Este campo alimenta a análise de tendência." ch={<TA rows={3} value={f.obs} onChange={e => set("obs", e.target.value)} />} />
         <div style={{ textAlign: "right" }}><button style={s.btnA} onClick={save}>Registrar e notificar ✓</button></div>
       </div>}
     </div>
@@ -3814,9 +3969,25 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:T.surf }}>
-                {["Processo","Modo de Falha","Efeito","Causa","S","O","D","RPN","Prioridade","Ação","Resp.","Status",""].map(h=>(
-                  <th key={h} style={{ padding:"10px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
-                ))}
+                {{[
+                  ["Processo", "Etapa ou processo sendo analisado. Ex: Pesagem de MP, Encapsulamento, Rotulagem."],
+                  ["Modo de Falha", "O que pode dar errado neste processo? Ex: Peso fora da especificação, cápsula mal fechada, rótulo invertido."],
+                  ["Efeito", "Qual o impacto se o modo de falha ocorrer? Ex: Produto fora do padrão, recall, risco ao paciente."],
+                  ["Causa", "Por que o modo de falha pode ocorrer? Ex: Balança descalibrada, falha do operador, matéria-prima fora do padrão."],
+                  ["S", "Severidade (1-10): impacto do efeito. 1=mínimo, 10=catastrófico."],
+                  ["O", "Ocorrência (1-10): probabilidade de a causa ocorrer. 1=improvável, 10=quase certo."],
+                  ["D", "Detecção (1-10): capacidade de detectar a falha antes que chegue ao cliente. 1=detecção certa, 10=indetectável."],
+                  ["RPN", "Número de Prioridade de Risco = S × O × D. Quanto maior, maior a prioridade de ação."],
+                  ["Prioridade", "Classificação automática baseada no RPN: Crítico (>200), Alto (>120), Médio (>60), Baixo."],
+                  ["Ação", "Ação recomendada para reduzir o RPN. Foque em reduzir Severidade, Ocorrência ou melhorar Detecção."],
+                  ["Resp.", "Responsável pela execução da ação recomendada."],
+                  ["Status", "Estado atual da ação: Pendente, Em andamento ou Concluída."],
+                  ["", ""],
+                ].map(([h, tip]) => (
+                  <th key={h} style={{ padding:"10px 10px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:3 }}>{h}{tip && <Tooltip text={tip}/>}</span>
+                  </th>
+                ))}}
               </tr>
             </thead>
             <tbody>
