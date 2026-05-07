@@ -1730,6 +1730,18 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
     const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado → ${status}`, resp: user.name, tipo: "status" };
     await doUpdateRNC(id, { status, historico: [...(r?.historico || []), h] });
     setSel(p => p ? { ...p, status, historico: [...(p.historico || []), h] } : null);
+
+  const assinarRTRNC = async (r) => {
+    if (!user?.assinatura) { alert("Você não possui assinatura cadastrada. Solicite ao administrador."); return; }
+    if (user?.role !== "rt" && user?.role !== "admin" && user?.role !== "keyuser") { alert("Apenas o Responsável Técnico pode assinar RNCs."); return; }
+    if (!window.confirm(`Confirma assinatura como RT na RNC ${r.num}?`)) return;
+    const ass = { nome: user.name, crf: user.crf || "", img: user.assinatura, dataHora: `${tod()} ${new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}` };
+    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "RNC aprovada pelo RT", resp: user.name, tipo: "rt" };
+    const updated = { ...r, assinaturaRT: ass, historico: [...(r.historico||[]), h] };
+    await doUpdateRNC(r.id, { assinaturaRT: ass, historico: updated.historico });
+    setSel(updated);
+    toast_("RNC aprovada pelo RT!", "green");
+  };
     toast_("Status atualizado!", "green");
     const updated = { ...r, status, historico: [...(r?.historico || []), h] };
     openEmail(updated, "status");
@@ -1901,6 +1913,17 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <SevB s={sel.sev} /><Badge s={sel.status} />
+                {sel.assinaturaRT ? (
+                  <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"#2ab84a18", color:"#2ab84a", fontWeight:700, display:"flex", alignItems:"center", gap:4 }}>
+                    ✅ RT: {sel.assinaturaRT.nome} · {sel.assinaturaRT.dataHora}
+                  </span>
+                ) : (sel.sev === "Crítica" && (user?.role === "rt" || user?.role === "admin" || user?.role === "keyuser")) ? (
+                  <button onClick={() => assinarRTRNC(sel)} style={{ ...s.btnA, fontSize:10, padding:"3px 12px" }}>
+                    ✍️ Aprovar como RT
+                  </button>
+                ) : sel.sev === "Crítica" && !sel.assinaturaRT ? (
+                  <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"#ffd16618", color:"#ffd166", fontWeight:700 }}>⏳ Aguardando aprovação RT</span>
+                ) : null}
                 {canEdit(sel) && !editing && (
                   <button onClick={() => startEdit(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
                 )}
@@ -2038,6 +2061,16 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                   </div>
                 )}
 
+                {sel.assinaturaRT && (
+                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#2ab84a0a", border:"1px solid #2ab84a25", borderRadius:10, marginBottom:10 }}>
+                    <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
+                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · ${sel.assinaturaRT.crf}` : ""} · {sel.assinaturaRT.dataHora}</div>
+                    </div>
+                    {sel.assinaturaRT.img && <img src={sel.assinaturaRT.img} alt="Assinatura RT" style={{ height:36, maxWidth:120, objectFit:"contain", background:"#fff", padding:4, borderRadius:4 }} />}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {isAdmin && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
@@ -2224,9 +2257,12 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
 
   const salvar = async () => {
     try {
-    if (!f.desc.trim()) { alert("Preencha a descrição."); return; }
+    if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
+    if (!f.sev)                 { alert("Selecione a severidade (Crítica / Maior / Menor)."); return; }
+    if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
+    if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
     const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now() };
+    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
     await doSaveRNC(rnc);
     toast_(`${rnc.num} registrada!`, "green");
     openEmail(rnc, "abertura");
@@ -2380,7 +2416,7 @@ function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
   const [sid, setSid] = useState(""); const [acts, setActs] = useState([]);
   const r = rncs.find(x => x.id === sid);
   useEffect(() => { if (!r) return; setActs(JSON.parse(JSON.stringify(r.w2h || []))); }, [sid]);
-  const add = () => setActs(p => [...p, { what: "", why: "", who: user.name, where: "", when: "", how: "", howMuch: "", status: "Pendente" }]);
+  const add = () => setActs(p => [...p, { what: "", why: "", who: user.name, where: "", when: "", how: "", howMuch: "", status: "Pendente", evidencia: "" }]);
   const upd = (i, k, v) => setActs(p => p.map((a, j) => j === i ? { ...a, [k]: v } : a));
   const del = i => setActs(p => p.filter((_, j) => j !== i));
   const save = async () => { if (!r) return; await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `5W2H — ${acts.length} ação(ões)`, resp: user.name }] }); toast_("5W2H salvo!", "green"); openEmail({ ...r, w2h: acts }, "5w2h"); };
@@ -2408,6 +2444,15 @@ function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
               <F lbl="Quando?" ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
               <F lbl="Custo/Esforço" ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
               <div style={{ gridColumn: "span 2" }}><F lbl="Como?" ch={<TA rows={2} value={a.how} onChange={e => upd(i, "how", e.target.value)} />} /></div>
+              <div style={{ gridColumn: "span 2" }}>
+                <F lbl="Evidência de execução" ch={
+                  <div>
+                    <Inp placeholder="Descreva a evidência (ex: foto anexada, relatório nº, registro de treinamento...)" value={a.evidencia||""} onChange={e => upd(i, "evidencia", e.target.value)} />
+                    {a.evidencia && <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Evidência registrada</div>}
+                    {a.status === "Concluída" && !a.evidencia && <div style={{ fontSize:10, color:"#ff4f6a", marginTop:4 }}>⚠️ Ação concluída sem evidência — recomendado registrar comprovação</div>}
+                  </div>
+                } />
+              </div>
             </div>
           </div>
         ))}
@@ -3518,6 +3563,20 @@ function exportRNCPDF(rnc, assinatura = null) {
       </div>
     </div>
   </div>
+
+  <!-- ASSINATURA RT -->
+  ${rnc.assinaturaRT ? `
+  <div style="margin-top:16px;padding:12px 16px;border:1px solid #2ab84a33;border-radius:8px;background:#f6fff8;display:flex;align-items:center;gap:16px;">
+    <div style="flex:1;">
+      <div style="font-size:10px;color:#2ab84a;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">✅ Aprovado pelo Responsável Técnico</div>
+      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · " + rnc.assinaturaRT.crf : ""}</div>
+      <div style="font-size:11px;color:#666;">Assinado em ${rnc.assinaturaRT.dataHora}</div>
+    </div>
+    ${rnc.assinaturaRT.img ? `<img src="${rnc.assinaturaRT.img}" style="height:44px;max-width:140px;object-fit:contain;"/>` : ""}
+  </div>` : rnc.sev === "Crítica" ? `
+  <div style="margin-top:12px;padding:10px 14px;border:1px solid #ffd16633;border-radius:8px;background:#fffbf0;font-size:11px;color:#b8860b;">
+    ⏳ RNC Crítica — Aprovação do Responsável Técnico pendente
+  </div>` : ""}
 
   <!-- FOOTER -->
   <div class="footer">
