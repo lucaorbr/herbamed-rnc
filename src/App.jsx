@@ -5578,7 +5578,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
 
   const selecionarMaterial = (mat) => {
     setMatSel(mat);
-    setResultados((mat.ensaios||[]).map(e=>({ ...e, resultado:"", conforme:null, obs:"" })));
+    setResultados((mat.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e, resultado:"", conforme:null, obs:"" })));
     if(mat.fornecedorPadrao && mat.fornecedorPadrao!=="Vários") setF("fornecedor", mat.fornecedorPadrao);
   };
 
@@ -5821,7 +5821,65 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                     <td style={{ padding:"8px 10px", fontSize:12, fontWeight:600, color:T.text, whiteSpace:"nowrap" }}>{r.nome}</td>
                     <td style={{ padding:"8px 10px", fontSize:11, color:T.text2 }}>{r.espec||"—"}</td>
                     <td style={{ padding:"8px 8px" }}>
-                      <Inp placeholder="Digite o resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ fontSize:12, padding:"5px 8px" }}/>
+                      {r.tipo==="conforme" ? (
+                        <div style={{ display:"flex", gap:4 }}>
+                          <button onClick={()=>updRes(r.id,"conforme",true)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${r.conforme===true?"#2ab84a55":T.border}`, background:r.conforme===true?"#2ab84a22":"transparent", color:r.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓ Conf.</button>
+                          <button onClick={()=>updRes(r.id,"conforme",false)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${r.conforme===false?"#ff4f6a55":T.border}`, background:r.conforme===false?"#ff4f6a22":"transparent", color:r.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗ N.C.</button>
+                        </div>
+                      ) : r.tipo==="texto" ? (
+                        <Inp placeholder="Resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:110 }}/>
+                      ) : (
+                        <div>
+                          <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                            <Inp
+                              placeholder={`0,${"0".repeat(r.casas||2)}`}
+                              value={r.resultado}
+                              onChange={e=>updRes(r.id,"resultado",e.target.value)}
+                              onBlur={e=>{ if(e.target.value) updRes(r.id,"resultado",fmtNum(e.target.value,r.casas||2)); }}
+                              sx={{ padding:"5px 8px", fontSize:12, width:80 }}
+                            />
+                            {r.multiplos && (
+                              <button onClick={()=>toggleMultiplos(r.id)}
+                                title="Lançar múltiplos valores"
+                                style={{ padding:"4px 7px", borderRadius:6, border:`1px solid ${multiplosState[r.id]?.aberto?T.accent:T.border}`, background:multiplosState[r.id]?.aberto?T.accentDim:"transparent", color:multiplosState[r.id]?.aberto?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>
+                                Σ
+                              </button>
+                            )}
+                          </div>
+                          {r.multiplos && multiplosState[r.id]?.aberto && (
+                            <div style={{ marginTop:6, padding:"8px", background:T.card, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
+                              <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores — média automática</div>
+                              <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
+                                {(multiplosState[r.id]?.valores||["","","","",""]).map((v,vi)=>(
+                                  <Inp key={vi} type="number" placeholder={`#${vi+1}`} value={v}
+                                    onChange={ev=>updValorMultiplo(r.id,vi,ev.target.value)}
+                                    sx={{ width:56, padding:"4px 6px", fontSize:11 }}/>
+                                ))}
+                                <button onClick={()=>setMultiplosState(p=>({...p,[r.id]:{...p[r.id],valores:[...(p[r.id]?.valores||[]),""]}}))
+                                } style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>+</button>
+                              </div>
+                              {(() => {
+                                const vals = multiplosState[r.id]?.valores||[];
+                                const nums = vals.map(v=>parseFloat(String(v).replace(",","."))).filter(n=>!isNaN(n));
+                                if (!nums.length) return null;
+                                const media = nums.reduce((a,b)=>a+b,0)/nums.length;
+                                const dp = Math.sqrt(nums.reduce((s,v)=>s+Math.pow(v-media,2),0)/nums.length);
+                                return (
+                                  <div style={{ fontSize:11, color:T.text2, marginBottom:6 }}>
+                                    <span style={{ fontWeight:700, color:T.accent }}>Média: {media.toFixed(r.casas||2).replace(".",",")} {r.unidade}</span>
+                                    {nums.length>1 && <span style={{ color:T.text3, marginLeft:8 }}>DP: ±{dp.toFixed(r.casas||2).replace(".",",")}</span>}
+                                    <span style={{ color:T.text3, marginLeft:8 }}>n={nums.length}</span>
+                                  </div>
+                                );
+                              })()}
+                              <button onClick={()=>aplicarMedia(r.id,r.casas||2)}
+                                style={{ ...s.btnA, fontSize:11, padding:"4px 12px" }}>
+                                ✓ Aplicar média
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.unidade||"—"}</td>
                     <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.ref||"—"}</td>
