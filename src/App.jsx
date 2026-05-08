@@ -8413,12 +8413,12 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
 
   const filtrados = docs.filter(d => {
     if (filtroTipo   !== "todos" && d.tipo   !== filtroTipo)   return false;
-  const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
     if (filtroDepto  !== "todos" && d.depto  !== filtroDepto)  return false;
     if (filtroStatus !== "todos" && d.status !== filtroStatus) return false;
     if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
     return true;
   });
+  const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
 
   const totalVigente  = docs.filter(d=>d.status==="Vigente").length;
   const totalRevisao  = docs.filter(d=>["Em Revisão","Aguardando Aprovação"].includes(d.status)).length;
