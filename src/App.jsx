@@ -5353,7 +5353,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
 
   const aplicarSugestoes = (tipo) => {
     const sugs = ENSAIOS_SUGERIDOS[tipo] || [];
-    setEnsaios(sugs.map((e,i)=>({ id:i+1, ...e, ref:"" })));
+    setEnsaios(sugs.map((e,i)=>({ tipo:"numero", casas:2, multiplos:false, ...e, id:i+1, ref:e.ref||"" })));
   };
 
   const addEnsaio = () => setEnsaios(p=>[...p, { id:Date.now(), nome:"", espec:"", unidade:"", ref:"", tipo:"numero", casas:2, multiplos:false }]);
@@ -5402,7 +5402,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const editarMaterial = (m) => {
     setSel(m);
     setForm({ nome:m.nome, tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
-    setEnsaios(m.ensaios||[]);
+    setEnsaios((m.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e })));
     setView("editar");
   };
 
