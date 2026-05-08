@@ -8051,6 +8051,19 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
     }
   }, [value]);
 
+  const [showHtml, setShowHtml] = React.useState(false);
+  const [htmlInput, setHtmlInput] = React.useState("");
+
+  const applyHtml = () => {
+    if (!htmlInput.trim()) return;
+    if (quillRef.current) {
+      quillRef.current.root.innerHTML = htmlInput;
+      onChangeRef.current(htmlInput);
+    }
+    setShowHtml(false);
+    setHtmlInput("");
+  };
+
   return (
     <div style={{ border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
       <style>{`
@@ -8077,6 +8090,21 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
         .ql-editor p { margin:4px 0; }
       `}</style>
       <div ref={containerRef} />
+      <div style={{ borderTop:"1px solid "+T.border, padding:"6px 10px", display:"flex", alignItems:"center", justifyContent:"flex-end", background:T.surf }}>
+        <button onClick={()=>setShowHtml(v=>!v)} style={{ padding:"3px 10px", borderRadius:6, border:"1px solid "+T.border, background:showHtml?T.accentDim:"transparent", color:showHtml?T.accent:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>
+          {"</>"} Inserir HTML
+        </button>
+      </div>
+      {showHtml && (
+        <div style={{ borderTop:"1px solid "+T.border, padding:"10px 12px", background:T.surf }}>
+          <div style={{ fontSize:11, color:T.text2, marginBottom:6 }}>Cole o HTML gerado (ex: wordtohtml.net). O conteúdo atual será <strong>substituído</strong>.</div>
+          <textarea value={htmlInput} onChange={e=>setHtmlInput(e.target.value)} placeholder="<table><tr><td>...</td></tr></table>" style={{ width:"100%", minHeight:120, padding:"8px 10px", borderRadius:6, border:"1px solid "+T.border, background:T.card, color:T.text, fontSize:11, fontFamily:"monospace", resize:"vertical", boxSizing:"border-box" }} />
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
+            <button onClick={()=>{setShowHtml(false);setHtmlInput("");}} style={{ padding:"5px 12px", borderRadius:6, border:"1px solid "+T.border, background:"transparent", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>Cancelar</button>
+            <button onClick={applyHtml} style={{ padding:"5px 14px", borderRadius:6, border:"none", background:T.accent, color:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>Aplicar HTML ✓</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
