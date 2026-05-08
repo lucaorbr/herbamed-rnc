@@ -5584,6 +5584,11 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
 
   const updRes = (id,k,v) => setResultados(p=>p.map(r=>r.id===id?{...r,[k]:v}:r));
 
+  const [multiplosState, setMultiplosState] = useState({});
+  const toggleMultiplos = (id) => setMultiplosState(p=>({...p,[id]:{aberto:!p[id]?.aberto,valores:p[id]?.valores||["","","","",""]}}));
+  const updValorMultiplo = (id,idx,val) => setMultiplosState(p=>({...p,[id]:{...p[id],valores:p[id].valores.map((v,i)=>i===idx?val:v)}}));
+  const aplicarMedia = (id,casas) => { const vals=multiplosState[id]?.valores||[]; const media=calcMedia(vals,casas); if(media){updRes(id,"resultado",media);setMultiplosState(p=>({...p,[id]:{...p[id],aberto:false}}));} };
+
   const fmtNum = (val, casas) => {
     const n = parseFloat(String(val).replace(",","."));
     if (isNaN(n)) return val;
