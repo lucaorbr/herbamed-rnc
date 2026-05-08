@@ -7924,6 +7924,97 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
 
 
 /* ─── GESTÃO DE DOCUMENTOS — CONSTANTES ─────────────────────────────────────── */
+
+/* ─── QUILL RICH TEXT EDITOR ────────────────────────────────────────────────── */
+function QuillEditor({ value, onChange, placeholder, minHeight = 200 }) {
+  const T = useTheme();
+  const containerRef = React.useRef(null);
+  const quillRef = React.useRef(null);
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
+
+  React.useEffect(() => {
+    if (!containerRef.current || quillRef.current) return;
+
+    if (!document.getElementById("quill-css")) {
+      const link = document.createElement("link");
+      link.id = "quill-css";
+      link.rel = "stylesheet";
+      link.href = "https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.snow.min.css";
+      document.head.appendChild(link);
+    }
+
+    const loadQuill = () => {
+      if (window.Quill) { initQuill(); return; }
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/quill/1.3.7/quill.min.js";
+      script.onload = initQuill;
+      document.head.appendChild(script);
+    };
+
+    const initQuill = () => {
+      if (!containerRef.current || quillRef.current) return;
+      const q = new window.Quill(containerRef.current, {
+        theme: "snow",
+        placeholder: placeholder || "Digite aqui...",
+        modules: {
+          toolbar: [
+            [{ header: [1, 2, 3, false] }],
+            ["bold", "italic", "underline"],
+            [{ list: "ordered" }, { list: "bullet" }],
+            ["clean"],
+          ],
+        },
+      });
+      if (value) {
+        const isHtml = value.includes("<") && value.includes(">");
+        if (isHtml) { q.root.innerHTML = value; }
+        else { q.setText(value); }
+      }
+      q.on("text-change", () => {
+        const html = q.root.innerHTML;
+        const empty = html === "<p><br></p>" || html === "";
+        onChangeRef.current(empty ? "" : html);
+      });
+      quillRef.current = q;
+    };
+
+    loadQuill();
+    return () => { quillRef.current = null; };
+  }, []);
+
+  React.useEffect(() => {
+    const q = quillRef.current;
+    if (!q) return;
+    const currentHtml = q.root.innerHTML;
+    const isEmpty = currentHtml === "<p><br></p>" || currentHtml === "";
+    const incomingEmpty = !value || value === "";
+    if (isEmpty && incomingEmpty) return;
+    if (currentHtml !== value && document.activeElement !== q.root) {
+      q.root.innerHTML = value || "";
+    }
+  }, [value]);
+
+  return (
+    <div style={{ border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+      <style>{`
+        .ql-toolbar.ql-snow { background:${T.surf}!important; border:none!important; border-bottom:1px solid ${T.border}!important; padding:6px 8px!important; }
+        .ql-container.ql-snow { background:${T.card}!important; border:none!important; }
+        .ql-editor { color:${T.text}!important; font-family:Arial,sans-serif!important; font-size:13px!important; line-height:1.7!important; min-height:${minHeight}px!important; }
+        .ql-editor.ql-blank::before { color:${T.text3}!important; font-style:normal!important; }
+        .ql-snow .ql-stroke { stroke:${T.text2}!important; }
+        .ql-snow .ql-fill { fill:${T.text2}!important; }
+        .ql-snow .ql-picker-label { color:${T.text2}!important; }
+        .ql-snow .ql-picker-options { background:${T.card}!important; border-color:${T.border}!important; }
+        .ql-snow .ql-picker-item { color:${T.text}!important; }
+        .ql-snow button:hover .ql-stroke, .ql-snow button.ql-active .ql-stroke { stroke:${T.accent}!important; }
+        .ql-snow button:hover .ql-fill, .ql-snow button.ql-active .ql-fill { fill:${T.accent}!important; }
+      `}</style>
+      <div ref={containerRef} />
+    </div>
+  );
+}
+
 const HERBAMED_INFO_GD = {
   nome: "Herbamed Laboratório Nutracêutico LTDA",
   cnpj: "14.829.598/0001-30",
@@ -8453,10 +8544,54 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
           {CAPITULOS_GD.map(cap=>capituloAtivo===cap.id&&(
             <div key={cap.id}>
               <div style={{fontSize:12,fontWeight:700,color:T.accent,marginBottom:8}}>{cap.label}</div>
-              <TA rows={8} placeholder={cap.placeholder} value={form[cap.id]} onChange={e=>setF(cap.id,e.target.value)} style={{width:"100%",boxSizing:"border-box"}} />
-              <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"flex-end"}}>
-                {CAPITULOS_GD.indexOf(cap)>0&&<button style={{...s.btn,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)-1].id)}>← Anterior</button>}
-                {CAPITULOS_GD.indexOf(cap)<CAPITULOS_GD.length-1&&<button style={{...s.btnA,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)+1].id)}>Próximo →</button>}
+              <QuillEditor value={form[cap.id]||""} onChange={v=>setF(cap.id,v)} placeholder={cap.placeholder} minHeight={180} />
+              <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"space-between",flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:6}}>
+                  <button style={{...s.btn,fontSize:11,opacity:aiLoading?.6:1}} disabled={aiLoading}
+                    onClick={async()=>{
+                      const txt=form[cap.id];
+                      if(!txt){alert("Escreva algo primeiro.");return;}
+                      setAiLoading(true);
+                      try{
+                        const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:1500,messages:[{role:"user",content:`Melhore a formatação do texto abaixo para um documento de qualidade farmacêutica (BPF). Use HTML com <p>, <strong>, <ul>, <li>, <ol>. Retorne APENAS o HTML sem markdown ou explicações.
+
+Texto:
+${txt}`}]})});
+                        const data=await res.json();
+                        const html=data.content?.[0]?.text||"";
+                        if(html)setF(cap.id,html.replace(/\`\`\`html|\`\`\`/g,"").trim());
+                        toast_("Formatação melhorada!","green");
+                      }catch(e){toast_("Erro ao formatar.","red");}
+                      setAiLoading(false);
+                    }}>
+                    {aiLoading?"⟳ ...":"✨ Melhorar formatação"}
+                  </button>
+                  <button style={{...s.btn,fontSize:11,opacity:aiLoading?.6:1}} disabled={aiLoading}
+                    onClick={async()=>{
+                      if(!form.titulo){alert("Preencha o título do documento.");return;}
+                      setAiLoading(true);
+                      try{
+                        const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:1500,messages:[{role:"user",content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA). Expanda e aprofunde o seguinte capítulo de um documento:
+
+Documento: ${form.titulo}
+Capítulo: ${cap.label}
+Conteúdo atual: ${form[cap.id]||"(vazio)"}
+
+Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdown.`}]})});
+                        const data=await res.json();
+                        const html=data.content?.[0]?.text||"";
+                        if(html)setF(cap.id,html.replace(/\`\`\`html|\`\`\`/g,"").trim());
+                        toast_("Capítulo expandido!","green");
+                      }catch(e){toast_("Erro ao expandir.","red");}
+                      setAiLoading(false);
+                    }}>
+                    {aiLoading?"⟳ ...":"🔍 Expandir capítulo"}
+                  </button>
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  {CAPITULOS_GD.indexOf(cap)>0&&<button style={{...s.btn,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)-1].id)}>← Anterior</button>}
+                  {CAPITULOS_GD.indexOf(cap)<CAPITULOS_GD.length-1&&<button style={{...s.btnA,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)+1].id)}>Próximo →</button>}
+                </div>
               </div>
             </div>
           ))}
