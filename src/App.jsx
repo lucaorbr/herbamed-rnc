@@ -7979,20 +7979,41 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
   const containerRef = React.useRef(null);
   const quillRef = React.useRef(null);
   const onChangeRef = React.useRef(onChange);
+  const imgInputRef = React.useRef(null);
   onChangeRef.current = onChange;
+  const [showHtml, setShowHtml] = React.useState(false);
+  const [htmlInput, setHtmlInput] = React.useState("");
+  const [imgUploading, setImgUploading] = React.useState(false);
+
+  const applyHtml = () => {
+    if (!htmlInput.trim()) return;
+    if (quillRef.current) { quillRef.current.root.innerHTML = htmlInput; onChangeRef.current(htmlInput); }
+    setShowHtml(false); setHtmlInput("");
+  };
+
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    setImgUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      if (quillRef.current && url) {
+        const range = quillRef.current.getSelection(true);
+        quillRef.current.insertEmbed(range ? range.index : 0, "image", url);
+        const html = quillRef.current.root.innerHTML;
+        onChangeRef.current(html);
+      }
+    } catch(e) { alert("Erro ao enviar imagem. Tente novamente."); }
+    setImgUploading(false);
+  };
 
   React.useEffect(() => {
     if (!containerRef.current || quillRef.current) return;
-
-    // Load Quill 2.0 CSS
     if (!document.getElementById("quill-css")) {
       const link = document.createElement("link");
-      link.id = "quill-css";
-      link.rel = "stylesheet";
+      link.id = "quill-css"; link.rel = "stylesheet";
       link.href = "https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css";
       document.head.appendChild(link);
     }
-
     const loadQuill = () => {
       if (window.Quill) { initQuill(); return; }
       const script = document.createElement("script");
@@ -8000,41 +8021,39 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
       script.onload = initQuill;
       document.head.appendChild(script);
     };
-
     const initQuill = () => {
       if (!containerRef.current || quillRef.current) return;
       const q = new window.Quill(containerRef.current, {
         theme: "snow",
         placeholder: placeholder || "Digite aqui...",
         modules: {
-          toolbar: [
-            [{ header: [1, 2, 3, false] }],
-            [{ size: ["small", false, "large", "huge"] }],
-            ["bold", "italic", "underline", "strike"],
-            [{ color: [] }, { background: [] }],
-            [{ align: [] }],
-            [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
-            ["blockquote", "code-block"],
-            ["link", "clean"],
-          ],
+          toolbar: {
+            container: [
+              [{ header: [1, 2, 3, false] }],
+              [{ size: ["small", false, "large", "huge"] }],
+              ["bold", "italic", "underline", "strike"],
+              [{ color: [] }, { background: [] }],
+              [{ align: [] }],
+              [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
+              ["blockquote", "link", "image", "clean"],
+            ],
+            handlers: {
+              image: () => { if (imgInputRef.current) imgInputRef.current.click(); }
+            }
+          },
         },
       });
-
       if (value) {
         const isHtml = value.includes("<") && value.includes(">");
-        if (isHtml) { q.root.innerHTML = value; }
-        else { q.setText(value); }
+        if (isHtml) { q.root.innerHTML = value; } else { q.setText(value); }
       }
-
       q.on("text-change", () => {
         const html = q.root.innerHTML;
-        const empty = html === "<p><br></p>" || html === "" || html === "<p></p>";
+        const empty = ["<p><br></p>","<p></p>",""].includes(html);
         onChangeRef.current(empty ? "" : html);
       });
-
       quillRef.current = q;
     };
-
     loadQuill();
     return () => { quillRef.current = null; };
   }, []);
@@ -8051,21 +8070,11 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
     }
   }, [value]);
 
-  const [showHtml, setShowHtml] = React.useState(false);
-  const [htmlInput, setHtmlInput] = React.useState("");
-
-  const applyHtml = () => {
-    if (!htmlInput.trim()) return;
-    if (quillRef.current) {
-      quillRef.current.root.innerHTML = htmlInput;
-      onChangeRef.current(htmlInput);
-    }
-    setShowHtml(false);
-    setHtmlInput("");
-  };
-
   return (
     <div style={{ border:"1px solid "+T.border, borderRadius:8, overflow:"hidden" }}>
+      <input ref={imgInputRef} type="file" accept="image/*" style={{ display:"none" }}
+        onChange={e=>{ if(e.target.files?.[0]) handleImageUpload(e.target.files[0]); e.target.value=""; }} />
+      {imgUploading && <div style={{ padding:"6px 12px", background:T.accentDim, fontSize:11, color:T.accent }}>⏳ Enviando imagem...</div>}
       <style>{`
         .ql-toolbar.ql-snow { background:${T.surf}!important; border:none!important; border-bottom:1px solid ${T.border}!important; padding:6px 8px!important; flex-wrap:wrap!important; }
         .ql-container.ql-snow { background:${T.card}!important; border:none!important; }
@@ -8083,11 +8092,12 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
         .ql-editor th { background:${T.surf}; font-weight:bold; }
         .ql-editor blockquote { border-left:3px solid ${T.accent}; padding-left:12px; color:${T.text2}; margin:8px 0; }
         .ql-editor pre { background:${T.surf}; padding:10px 14px; border-radius:6px; font-size:12px; }
-        .ql-editor h1 { font-size:20px; font-weight:700; margin:12px 0 6px; color:${T.text}; }
-        .ql-editor h2 { font-size:16px; font-weight:700; margin:10px 0 4px; color:${T.text}; }
-        .ql-editor h3 { font-size:14px; font-weight:700; margin:8px 0 4px; color:${T.text}; }
+        .ql-editor h1 { font-size:20px; font-weight:700; margin:12px 0 6px; }
+        .ql-editor h2 { font-size:16px; font-weight:700; margin:10px 0 4px; }
+        .ql-editor h3 { font-size:14px; font-weight:700; margin:8px 0 4px; }
         .ql-editor ul, .ql-editor ol { padding-left:20px; margin:6px 0; }
         .ql-editor p { margin:4px 0; }
+        .ql-editor img { max-width:100%; height:auto; border-radius:4px; margin:6px 0; }
       `}</style>
       <div ref={containerRef} />
       <div style={{ borderTop:"1px solid "+T.border, padding:"6px 10px", display:"flex", alignItems:"center", justifyContent:"flex-end", background:T.surf }}>
@@ -8098,7 +8108,7 @@ function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
       {showHtml && (
         <div style={{ borderTop:"1px solid "+T.border, padding:"10px 12px", background:T.surf }}>
           <div style={{ fontSize:11, color:T.text2, marginBottom:6 }}>Cole o HTML gerado (ex: wordtohtml.net). O conteúdo atual será <strong>substituído</strong>.</div>
-          <textarea value={htmlInput} onChange={e=>setHtmlInput(e.target.value)} placeholder="<table><tr><td>...</td></tr></table>" style={{ width:"100%", minHeight:120, padding:"8px 10px", borderRadius:6, border:"1px solid "+T.border, background:T.card, color:T.text, fontSize:11, fontFamily:"monospace", resize:"vertical", boxSizing:"border-box" }} />
+          <textarea value={htmlInput} onChange={e=>setHtmlInput(e.target.value)} placeholder="<table><tr><td>...</td></tr></table>" style={{ width:"100%", minHeight:100, padding:"8px 10px", borderRadius:6, border:"1px solid "+T.border, background:T.card, color:T.text, fontSize:11, fontFamily:"monospace", resize:"vertical", boxSizing:"border-box" }} />
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
             <button onClick={()=>{setShowHtml(false);setHtmlInput("");}} style={{ padding:"5px 12px", borderRadius:6, border:"1px solid "+T.border, background:"transparent", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>Cancelar</button>
             <button onClick={applyHtml} style={{ padding:"5px 14px", borderRadius:6, border:"none", background:T.accent, color:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>Aplicar HTML ✓</button>
@@ -8403,12 +8413,12 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
 
   const filtrados = docs.filter(d => {
     if (filtroTipo   !== "todos" && d.tipo   !== filtroTipo)   return false;
+  const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
     if (filtroDepto  !== "todos" && d.depto  !== filtroDepto)  return false;
     if (filtroStatus !== "todos" && d.status !== filtroStatus) return false;
     if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
     return true;
   });
-  const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
 
   const totalVigente  = docs.filter(d=>d.status==="Vigente").length;
   const totalRevisao  = docs.filter(d=>["Em Revisão","Aguardando Aprovação"].includes(d.status)).length;
@@ -8590,12 +8600,50 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             <div style={{width:36,height:36,borderRadius:8,background:`linear-gradient(135deg,${T.accent},${T.accent2})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🤖</div>
             <div>
               <div style={{fontSize:13,fontWeight:700,color:T.text}}>Assistente IA — Gerador de Documentos</div>
-              <div style={{fontSize:11,color:T.text2}}>Preencha título, tipo e departamento e gere o conteúdo automaticamente</div>
+              <div style={{fontSize:11,color:T.text2}}>Gere conteúdo com IA ou importe um arquivo Word existente</div>
             </div>
           </div>
-          <button style={{...s.btnA,opacity:aiLoading?.6:1}} onClick={gerarComIA} disabled={aiLoading}>
-            {aiLoading?<><span style={{animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</span> Gerando...</>:"🤖 Gerar com IA"}
-          </button>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <label style={{...s.btn,fontSize:11,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,opacity:aiLoading?.6:1}}>
+              📄 Importar Word
+              <input type="file" accept=".docx" style={{display:"none"}} disabled={aiLoading}
+                onChange={async(e)=>{
+                  const file=e.target.files?.[0]; e.target.value="";
+                  if(!file) return;
+                  if(!form.tipo||!form.depto){alert("Selecione o tipo e departamento antes de importar.");return;}
+                  setAiLoading(true);
+                  try{
+                    if(!window.mammoth){
+                      await new Promise((res,rej)=>{
+                        const s=document.createElement("script");
+                        s.src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js";
+                        s.onload=res;s.onerror=rej;document.head.appendChild(s);
+                      });
+                    }
+                    const buf=await file.arrayBuffer();
+                    const result=await window.mammoth.convertToHtml({arrayBuffer:buf});
+                    const docHtml=result.value;
+                    const tipoLabel=TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label||form.tipo;
+                    const capIds=CAPITULOS_GD.map(c=>c.id).join(", ");
+                    const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
+                      body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:4000,
+                        messages:[{role:"user",content:"Voce e especialista em qualidade farmaceutica (BPF, ANVISA). O HTML abaixo e um documento Word convertido para "+tipoLabel+".\n\nDistribua o conteudo pelos capitulos: "+capIds+".\nMantenha toda a formatacao HTML (tabelas, listas, negrito etc).\nSe um capitulo nao existir, coloque N/A.\n\nResponda APENAS em JSON sem markdown:\n{\"objetivo\":\"html...\",\"alcance\":\"html...\",\"responsabilidades\":\"html...\",\"definicoes\":\"html...\",\"procedimento\":\"html...\",\"infComplementares\":\"html...\",\"referencias\":\"html...\",\"registros\":\"html...\",\"anexos\":\"html...\"}\n\nDocumento:\n"+docHtml.slice(0,8000)}]})
+                    });
+                    const data=await res.json();
+                    const txt=data.content?.[0]?.text||"";
+                    const parsed=JSON.parse(txt.replace(/```json|```/g,"").trim());
+                    CAPITULOS_GD.forEach(cap=>{ if(parsed[cap.id]&&parsed[cap.id]!=="N/A") setF(cap.id,parsed[cap.id]); });
+                    if(!form.titulo&&file.name) setF("titulo",file.name.replace(".docx","").replace(/_/g," "));
+                    toast_("Documento importado e distribuido pela IA!","green");
+                  }catch(e){console.error(e);toast_("Erro ao importar. Verifique o arquivo.","red");}
+                  setAiLoading(false);
+                }}
+              />
+            </label>
+            <button style={{...s.btnA,opacity:aiLoading?.6:1,fontSize:11}} onClick={gerarComIA} disabled={aiLoading}>
+              {aiLoading?<><span style={{animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</span> Aguarde...</>:"🤖 Gerar com IA"}
+            </button>
+          </div>
         </div>
         <div style={s.card}>
           <SecTitle icon="🗂️" ch="Identificação" />
