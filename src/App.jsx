@@ -1107,9 +1107,19 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async fbUser => {
       if (fbUser) {
         const ud = await getUser(fbUser.uid);
-        if (ud) setUser({ ...ud, uid: fbUser.uid });
-        else setUser(null);
-      } else setUser(null);
+        if (ud) {
+          const agora = new Date().toISOString();
+          setUser({ ...ud, uid: fbUser.uid });
+          // Grava ultimo acesso silenciosamente
+          try { await saveUser(fbUser.uid, { ultimoAcesso: agora, online: true }); } catch(e) {}
+        } else setUser(null);
+      } else {
+        // Marca offline ao sair
+        if (auth.currentUser) {
+          try { await saveUser(auth.currentUser.uid, { online: false }); } catch(e) {}
+        }
+        setUser(null);
+      }
       setAuthLoading(false);
     });
     return unsub;
@@ -1155,6 +1165,24 @@ export default function App() {
       }
     }
   }, [rncs, user]);
+
+  // ── Heartbeat — atualiza online status a cada 2 minutos ──────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    const update = async () => {
+      try { await saveUser(user.uid, { ultimoAcesso: new Date().toISOString(), online: true }); } catch(e) {}
+    };
+    update();
+    const interval = setInterval(update, 2 * 60 * 1000);
+    const handleUnload = () => {
+      try { saveUser(user.uid, { online: false }); } catch(e) {}
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", handleUnload);
+    };
+  }, [user?.uid]);
 
   const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
 
@@ -7830,6 +7858,26 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{u.name}</div>
                       {u.assinatura && <span style={{ fontSize:10, color:T.accent, background:T.accentDim, padding:"1px 8px", borderRadius:20 }}>✓ Assinatura</span>}
+
+                      {(() => {
+                        const agora = Date.now();
+                        const ultimo = u.ultimoAcesso ? new Date(u.ultimoAcesso).getTime() : null;
+                        const diffMin = ultimo ? Math.floor((agora - ultimo) / 60000) : null;
+                        const online = u.online && diffMin !== null && diffMin < 5;
+                        const cor = online ? "#2ab84a" : diffMin !== null && diffMin < 60 ? "#ffd166" : "#888";
+                        const bg  = online ? "#2ab84a18" : diffMin !== null && diffMin < 60 ? "#ffd16618" : "#88888818";
+                        const dot = online ? "🟢" : diffMin !== null && diffMin < 60 ? "🟡" : "⚫";
+                        const label = online ? "Online agora"
+                          : diffMin === null ? "Nunca acessou"
+                          : diffMin < 60 ? `Há ${diffMin} min`
+                          : diffMin < 1440 ? `Há ${Math.floor(diffMin/60)}h`
+                          : `Há ${Math.floor(diffMin/1440)}d`;
+                        return (
+                          <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:bg, color:cor, fontWeight:600, display:"inline-flex", alignItems:"center", gap:3, whiteSpace:"nowrap" }}>
+                            {dot} {label}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div style={{ fontSize:11, color:T.text2 }}>{u.email} · {u.setor||"—"}</div>
                   </div>
