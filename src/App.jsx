@@ -8245,6 +8245,7 @@ const CAPITULOS_GD = [
   { id: "referencias",      label: "7. Referências",                placeholder: "Normas, legislações e documentos relacionados..." },
   { id: "registros",        label: "8. Registros",                  placeholder: "Registros gerados por este procedimento..." },
   { id: "anexos",           label: "9. Anexos",                     placeholder: "Lista de anexos vinculados..." },
+  { id: "historicoRevisoes", label: "10. Histórico de Revisões",    placeholder: "", special: true },
 ];
 
 function gerarCodigoGD(tipo, depto, docs) {
@@ -8317,12 +8318,17 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const [novoTreino,   setNovoTreino]   = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [novoMat, setNovoMat] = useState("");
+  const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
+  const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
+  const [editEntradaIdx, setEditEntradaIdx] = useState(null);
+  const setE = (k,v) => setNovaEntrada(p=>({...p,[k]:v}));
 
   const formVazio = {
     tipo:"PO", depto:"SGQ", titulo:"", versao:"01",
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
+    historicoRevisoes:[],
   };
   const [form, setForm] = useState(formVazio);
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
@@ -8365,7 +8371,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       assinaturaElaborador: sel?.assinaturaElaborador || null,
       assinaturaRevisor:    sel?.assinaturaRevisor    || null,
       assinaturaAprovador:  sel?.assinaturaAprovador  || null,
-      historicoRevisoes:    sel?.historicoRevisoes    || [],
+      historicoRevisoes:    form.historicoRevisoes?.length ? form.historicoRevisoes : (sel?.historicoRevisoes || []),
     };
     await saveCollection("gestao_docs", String(id), doc);
     await auditLog(sel ? "Editou Documento" : "Criou Documento", "gestao_docs", id, `${codigo} — ${form.titulo}`, sel || null, doc);
@@ -8405,7 +8411,18 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     if (!window.confirm("Criar nova revisão? A versão atual será arquivada no histórico.")) return;
     const versaoAtual = doc.versao || "01";
     const novaVersao  = String(parseInt(versaoAtual,10)+1).padStart(2,"0");
-    const historico   = [...(doc.historicoRevisoes||[]), { versao:versaoAtual, status:doc.status, data:doc.atualizadoEm||doc.criadoEm, responsavel:doc.atualizadoPor||doc.criadoPor }];
+    const motivo      = window.prompt("Motivo da revisão:", "") || "";
+    const descricao   = window.prompt("Descrição das alterações realizadas:", "") || "";
+    const aprovador   = window.prompt("Aprovador desta revisão:", "") || "";
+    const historico   = [...(doc.historicoRevisoes||[]), {
+      versao: versaoAtual,
+      status: doc.status,
+      data:   doc.atualizadoEm||doc.criadoEm,
+      responsavel: doc.atualizadoPor||doc.criadoPor,
+      motivo,
+      descricao,
+      aprovador,
+    }];
     const updated = { ...doc, versao:novaVersao, status:"Em Revisão", assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
@@ -8527,7 +8544,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ PDF</button>
-            {!isViewer && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||""}); setView("novo"); }}>✏️ Editar</button>}
+            {!isViewer && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️</button>}
           </div>
         </div>
@@ -8603,30 +8620,36 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             ))}
           </div>
         </div>
-        {d.historicoRevisoes?.length>0 && (
+        {(d.historicoRevisoes?.length>0) && (
           <div style={s.card}>
             <SecTitle icon="🕐" ch="Histórico de Revisões" />
+            <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{background:T.surf}}>
-                {["Versão","Data","Responsável","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+                {["Versão","Data","Motivo","Descrição das alterações","Responsável","Aprovador","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {d.historicoRevisoes.map((h,i)=>(
-                  <tr key={i} style={{borderBottom:`1px solid ${T.border}`}}>
-                    <td style={{padding:"8px 10px",color:T.text,fontWeight:600}}>Rev.{h.versao}</td>
-                    <td style={{padding:"8px 10px",color:T.text2}}>{fmt(h.data)}</td>
-                    <td style={{padding:"8px 10px",color:T.text2}}>{h.responsavel}</td>
-                    <td style={{padding:"8px 10px"}}><BadgeStatusGD status={h.status}/></td>
+                  <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                    <td style={{padding:"8px 10px",color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>Rev.{h.versao}</td>
+                    <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{fmt(h.data)}</td>
+                    <td style={{padding:"8px 10px",color:T.text2,maxWidth:140}}>{h.motivo||"—"}</td>
+                    <td style={{padding:"8px 10px",color:T.text,maxWidth:280,lineHeight:1.5}}>{h.descricao||"—"}</td>
+                    <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.responsavel||"—"}</td>
+                    <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.aprovador||"—"}</td>
+                    <td style={{padding:"8px 10px"}}>{h.status?<BadgeStatusGD status={h.status}/>:<span style={{color:T.text3,fontSize:11}}>—</span>}</td>
                   </tr>
                 ))}
                 <tr style={{background:T.accentDim}}>
-                  <td style={{padding:"8px 10px",color:T.accent,fontWeight:700}}>Rev.{d.versao} (atual)</td>
-                  <td style={{padding:"8px 10px",color:T.text2}}>{fmt(d.atualizadoEm)}</td>
-                  <td style={{padding:"8px 10px",color:T.text2}}>{d.atualizadoPor}</td>
+                  <td style={{padding:"8px 10px",color:T.accent,fontWeight:700,whiteSpace:"nowrap"}}>Rev.{d.versao} (atual)</td>
+                  <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{fmt(d.atualizadoEm)}</td>
+                  <td style={{padding:"8px 10px",color:T.text3}} colSpan={3}>—</td>
+                  <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{d.atualizadoPor}</td>
                   <td style={{padding:"8px 10px"}}><BadgeStatusGD status={d.status}/></td>
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
         )}
         {d.treinamentoObrigatorio && (
@@ -8756,14 +8779,85 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
             {CAPITULOS_GD.map(cap=>(
               <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
-                style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${capituloAtivo===cap.id?T.accent:T.border}`,background:capituloAtivo===cap.id?T.accent:T.surf,color:capituloAtivo===cap.id?"#fff":form[cap.id]&&form[cap.id]!=="N/A"?T.text:T.text3,cursor:"pointer"}}>
-                {form[cap.id]&&form[cap.id]!=="N/A"?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
+                style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${capituloAtivo===cap.id?T.accent:T.border}`,background:capituloAtivo===cap.id?T.accent:T.surf,color:capituloAtivo===cap.id?"#fff":( cap.special ? (form[cap.id]?.length>0?T.text:T.text3) : (form[cap.id]&&form[cap.id]!=="N/A"?T.text:T.text3) ),cursor:"pointer"}}>
+                {(cap.special ? form[cap.id]?.length>0 : (form[cap.id]&&form[cap.id]!=="N/A"))?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
               </button>
             ))}
           </div>
           {CAPITULOS_GD.map(cap=>capituloAtivo===cap.id&&(
             <div key={cap.id}>
               <div style={{fontSize:12,fontWeight:700,color:T.accent,marginBottom:8}}>{cap.label}</div>
+              {cap.special ? (
+                /* ── Histórico de Revisões — UI estruturada ── */
+                <div>
+                  {/* Formulário de nova entrada */}
+                  <div style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"1rem",marginBottom:14}}>
+                    <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>
+                      {editEntradaIdx!==null ? "✏️ Editar entrada" : "➕ Nova entrada"}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:10}}>
+                      <F lbl="Revisão (Rev.)" ch={<Inp placeholder="01" value={novaEntrada.versao} onChange={e=>setE("versao",e.target.value)} />} />
+                      <F lbl="Data" ch={<Inp type="date" value={novaEntrada.data} onChange={e=>setE("data",e.target.value)} />} />
+                      <F lbl="Responsável" ch={<Inp placeholder="Nome do responsável" value={novaEntrada.responsavel} onChange={e=>setE("responsavel",e.target.value)} />} />
+                      <F lbl="Aprovador" ch={<Inp placeholder="Nome do aprovador" value={novaEntrada.aprovador} onChange={e=>setE("aprovador",e.target.value)} />} />
+                    </div>
+                    <F lbl="Motivo da revisão" ch={<Inp placeholder="Ex: Adequação regulatória, Melhoria de processo, Correção de erro..." value={novaEntrada.motivo} onChange={e=>setE("motivo",e.target.value)} />} />
+                    <div style={{marginTop:8}}>
+                      <F lbl="Descrição das alterações" ch={<textarea rows={3} placeholder="Descreva detalhadamente o que foi alterado nesta revisão..." value={novaEntrada.descricao} onChange={e=>setE("descricao",e.target.value)} style={{width:"100%",borderRadius:8,border:`1px solid ${T.border}`,padding:"8px 10px",fontSize:12,color:T.text,background:T.bg,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"}} />} />
+                    </div>
+                    <div style={{display:"flex",gap:8,marginTop:10}}>
+                      <button style={s.btnA} onClick={()=>{
+                        if(!novaEntrada.versao.trim()||!novaEntrada.data){alert("Preencha ao menos Revisão e Data.");return;}
+                        const entry={...novaEntrada};
+                        if(editEntradaIdx!==null){
+                          const arr=[...(form.historicoRevisoes||[])];
+                          arr[editEntradaIdx]=entry;
+                          setF("historicoRevisoes",arr);
+                          setEditEntradaIdx(null);
+                        } else {
+                          setF("historicoRevisoes",[...(form.historicoRevisoes||[]),entry]);
+                        }
+                        setNovaEntrada(entradaVazia);
+                      }}>{editEntradaIdx!==null?"Salvar edição":"Adicionar entrada"}</button>
+                      {editEntradaIdx!==null&&<button style={s.btn} onClick={()=>{setEditEntradaIdx(null);setNovaEntrada(entradaVazia);}}>Cancelar</button>}
+                    </div>
+                  </div>
+                  {/* Tabela de entradas */}
+                  {(form.historicoRevisoes||[]).length===0 ? (
+                    <div style={{fontSize:12,color:T.text3,textAlign:"center",padding:"1rem",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`}}>Nenhuma entrada registrada ainda.</div>
+                  ) : (
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr style={{background:T.surf}}>
+                          {["Rev.","Data","Motivo","Descrição das alterações","Responsável","Aprovador",""].map((h,i)=>(
+                            <th key={i} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {[...(form.historicoRevisoes||[])].map((h,i)=>(
+                            <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                              <td style={{padding:"8px 10px",fontWeight:700,color:T.accent,whiteSpace:"nowrap"}}>Rev.{h.versao}</td>
+                              <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{fmt(h.data)}</td>
+                              <td style={{padding:"8px 10px",color:T.text2,maxWidth:150}}>{h.motivo||"—"}</td>
+                              <td style={{padding:"8px 10px",color:T.text,maxWidth:280,lineHeight:1.5}}>{h.descricao||"—"}</td>
+                              <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.responsavel||"—"}</td>
+                              <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.aprovador||"—"}</td>
+                              <td style={{padding:"8px 10px",whiteSpace:"nowrap"}}>
+                                <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginRight:4}} onClick={()=>{setNovaEntrada({...h});setEditEntradaIdx(i);}}>✏️</button>
+                                <button style={{...s.btnD,fontSize:10,padding:"3px 8px"}} onClick={()=>{if(confirm("Remover esta entrada?"))setF("historicoRevisoes",(form.historicoRevisoes||[]).filter((_,idx)=>idx!==i));}}>🗑️</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:6,marginTop:12,justifyContent:"flex-end"}}>
+                    {CAPITULOS_GD.indexOf(cap)>0&&<button style={{...s.btn,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)-1].id)}>← Anterior</button>}
+                  </div>
+                </div>
+              ) : (
+              <>
               <QuillEditor value={form[cap.id]||""} onChange={v=>setF(cap.id,v)} placeholder={cap.placeholder} minHeight={400} />
               <div style={{display:"flex",gap:6,marginTop:8,justifyContent:"space-between",flexWrap:"wrap"}}>
                 <div style={{display:"flex",gap:6}}>
@@ -8813,6 +8907,8 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                   {CAPITULOS_GD.indexOf(cap)<CAPITULOS_GD.length-1&&<button style={{...s.btnA,fontSize:11}} onClick={()=>setCapituloAtivo(CAPITULOS_GD[CAPITULOS_GD.indexOf(cap)+1].id)}>Próximo →</button>}
                 </div>
               </div>
+              </>
+              )}
             </div>
           ))}
         </div>
