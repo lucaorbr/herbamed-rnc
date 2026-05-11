@@ -8582,9 +8582,8 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
           {CAPITULOS_GD.filter(cap=>!cap.special).map(cap=>(
             <div key={cap.id} style={{marginBottom:14}}>
               <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
-              <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:d[cap.id]&&d[cap.id]!=="N/A"?T.text:T.text3,lineHeight:1.7,whiteSpace:"pre-wrap",fontStyle:(!d[cap.id]||d[cap.id]==="N/A")?"italic":"normal"}}>
-                {d[cap.id]||"N/A"}
-              </div>
+              <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:d[cap.id]&&d[cap.id]!=="N/A"?T.text:T.text3,lineHeight:1.7,fontStyle:(!d[cap.id]||d[cap.id]==="N/A")?"italic":"normal"}}
+                dangerouslySetInnerHTML={{__html: d[cap.id]||"<em>N/A</em>"}} />
             </div>
           ))}
         </div>
