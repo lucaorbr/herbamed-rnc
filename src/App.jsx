@@ -1342,6 +1342,16 @@ export default function App() {
             .header-kpis{display:none!important;}
             .sidebar-desktop{display:none!important;}
             .header-theme{display:none!important;}
+            .sidebar-nav{display:none!important;}
+            .sidebar-nav.mobile-open{
+              display:flex!important;
+              width:270px!important;
+              position:fixed!important;
+              top:0!important;left:0!important;bottom:0!important;
+              height:100vh!important;
+              z-index:295!important;
+              box-shadow:4px 0 32px rgba(0,0,0,.5)!important;
+            }
           }
           @media(min-width:769px){
             .mobile-only{display:none!important;}
@@ -1460,8 +1470,8 @@ export default function App() {
           )}
 
           {/* SIDEBAR */}
-          <div className="sidebar-nav" style={{ width: mobileMenuOpen ? 260 : sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position: mobileMenuOpen ? "fixed" : "sticky", top: mobileMenuOpen ? 0 : 60, left:0, bottom:0, height: mobileMenuOpen ? "100vh" : "calc(100vh - 60px)", zIndex: mobileMenuOpen ? 295 : "auto", boxShadow: mobileMenuOpen ? "4px 0 24px rgba(0,0,0,.4)" : "none" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={sidebarOpen || mobileMenuOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
+          <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, left:0, bottom:0, height:"calc(100vh - 60px)", zIndex:"auto" }}>
+            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
           </div>
 
           {/* MAIN CONTENT */}
