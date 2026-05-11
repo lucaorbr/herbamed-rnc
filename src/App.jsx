@@ -8499,7 +8499,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     const assHTML = (ass,label) => ass
       ? `<div style="text-align:center;padding:10px;border:1px solid #eee;border-radius:6px;"><div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:4px;">${label}</div><img src="${ass.img}" style="height:36px;max-width:130px;object-fit:contain;display:block;margin:0 auto 4px;"/><div style="font-size:11px;font-weight:bold;">${ass.nome}</div>${ass.crf?`<div style="font-size:10px;color:#666;">${ass.crf}</div>`:""}<div style="font-size:9px;color:${cor};">✓ ${ass.dataHora}</div></div>`
       : `<div style="text-align:center;padding:10px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${label}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando</div></div>`;
-    const caps = CAPITULOS_GD.map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
+    const caps = CAPITULOS_GD.filter(cap=>!cap.special).map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
     const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;"><div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div><div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div><div style="padding:0 22px;">${caps}</div><div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div><div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · Cópia Controlada</span></div></div>`;
     const win = window.open("","_blank");
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${doc.codigo}</title><style>@media print{body{margin:0}}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
@@ -8579,7 +8579,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
         )}
         <div style={s.card}>
           <SecTitle icon="📑" ch="Conteúdo do Documento" />
-          {CAPITULOS_GD.map(cap=>(
+          {CAPITULOS_GD.filter(cap=>!cap.special).map(cap=>(
             <div key={cap.id} style={{marginBottom:14}}>
               <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
               <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:d[cap.id]&&d[cap.id]!=="N/A"?T.text:T.text3,lineHeight:1.7,whiteSpace:"pre-wrap",fontStyle:(!d[cap.id]||d[cap.id]==="N/A")?"italic":"normal"}}>
@@ -8725,7 +8725,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     const result=await window.mammoth.convertToHtml({arrayBuffer:buf});
                     const docHtml=result.value;
                     const tipoLabel=TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label||form.tipo;
-                    const capIds=CAPITULOS_GD.map(c=>c.id).join(", ");
+                    const capIds=CAPITULOS_GD.filter(c=>!c.special).map(c=>c.id).join(", ");
                     const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
                       body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:4000,
                         messages:[{role:"user",content:"Voce e especialista em qualidade farmaceutica (BPF, ANVISA). O HTML abaixo e um documento Word convertido para "+tipoLabel+".\n\nDistribua o conteudo pelos capitulos: "+capIds+".\nMantenha toda a formatacao HTML (tabelas, listas, negrito etc).\nSe um capitulo nao existir, coloque N/A.\n\nResponda APENAS em JSON sem markdown:\n{\"objetivo\":\"html...\",\"alcance\":\"html...\",\"responsabilidades\":\"html...\",\"definicoes\":\"html...\",\"procedimento\":\"html...\",\"infComplementares\":\"html...\",\"referencias\":\"html...\",\"registros\":\"html...\",\"anexos\":\"html...\"}\n\nDocumento:\n"+docHtml.slice(0,8000)}]})
@@ -8733,7 +8733,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     const data=await res.json();
                     const txt=data.content?.[0]?.text||"";
                     const parsed=JSON.parse(txt.replace(/```json|```/g,"").trim());
-                    CAPITULOS_GD.forEach(cap=>{ if(parsed[cap.id]&&parsed[cap.id]!=="N/A") setF(cap.id,parsed[cap.id]); });
+                    CAPITULOS_GD.filter(c=>!c.special).forEach(cap=>{ if(parsed[cap.id]&&parsed[cap.id]!=="N/A") setF(cap.id,parsed[cap.id]); });
                     if(!form.titulo&&file.name) setF("titulo",file.name.replace(".docx","").replace(/_/g," "));
                     toast_("Documento importado e distribuido pela IA!","green");
                   }catch(e){console.error(e);toast_("Erro ao importar. Verifique o arquivo.","red");}
