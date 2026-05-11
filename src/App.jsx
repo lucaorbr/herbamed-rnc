@@ -8349,7 +8349,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
 
   useEffect(() => {
     if (!sel) return;
-    const unsub = subscribeCollection(`gestao_docs_treino_${sel.id}`, list => {
+    const unsub = subscribeCollection(`gestao_docs/${sel.id}/treinos`, list => {
       setTreinamentos(list.sort((a,b) => (b.ts||0)-(a.ts||0)));
     });
     return () => unsub && unsub();
@@ -8466,7 +8466,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     if (!novoTreino.userId) { alert("Selecione o colaborador."); return; }
     const u = users?.find(x => x.id===novoTreino.userId);
     const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
-    await saveCollection(`gestao_docs_treino_${sel.id}`, String(t.id), t);
+    await saveCollection(`gestao_docs/${sel.id}/treinos`, String(t.id), t);
     await auditLog("Registrou Treinamento", "gestao_docs", sel.id, `${sel.codigo} — ${sel.titulo}`, null, { colaborador: t.userName, data: t.dataRealizacao });
     toast_("Treinamento registrado!", "green");
     setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
@@ -8724,18 +8724,46 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     const result=await window.mammoth.convertToHtml({arrayBuffer:buf});
                     const docHtml=result.value;
                     const tipoLabel=TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label||form.tipo;
-                    const capIds=CAPITULOS_GD.filter(c=>!c.special).map(c=>c.id).join(", ");
+                    const caps=CAPITULOS_GD.filter(c=>!c.special);
+                    const capIds=caps.map(c=>c.id).join(", ");
                     const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
-                      body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:4000,
-                        messages:[{role:"user",content:"Voce e especialista em qualidade farmaceutica (BPF, ANVISA). O HTML abaixo e um documento Word convertido para "+tipoLabel+".\n\nDistribua o conteudo pelos capitulos: "+capIds+".\nMantenha toda a formatacao HTML (tabelas, listas, negrito etc).\nSe um capitulo nao existir, coloque N/A.\n\nResponda APENAS em JSON sem markdown:\n{\"objetivo\":\"html...\",\"alcance\":\"html...\",\"responsabilidades\":\"html...\",\"definicoes\":\"html...\",\"procedimento\":\"html...\",\"infComplementares\":\"html...\",\"referencias\":\"html...\",\"registros\":\"html...\",\"anexos\":\"html...\"}\n\nDocumento:\n"+docHtml.slice(0,8000)}]})
+                      body:JSON.stringify({model:"claude-sonnet-4-5",max_tokens:6000,
+                        messages:[{role:"user",content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA). O HTML abaixo é um documento Word convertido para ${tipoLabel}.
+
+Distribua o conteúdo pelos capítulos: ${capIds}.
+Mantenha a formatação HTML (tabelas, listas, negrito, etc).
+Se um capítulo não existir no documento, coloque N/A.
+
+Responda APENAS neste formato com delimitadores exatos (sem texto antes ou depois):
+<objetivo>html aqui</objetivo>
+<alcance>html aqui</alcance>
+<responsabilidades>html aqui</responsabilidades>
+<definicoes>html aqui</definicoes>
+<procedimento>html aqui</procedimento>
+<infComplementares>html aqui</infComplementares>
+<referencias>html aqui</referencias>
+<registros>html aqui</registros>
+<anexos>html aqui</anexos>
+
+Documento:
+${docHtml.slice(0,9000)}`}]})
                     });
                     const data=await res.json();
                     const txt=data.content?.[0]?.text||"";
-                    const parsed=JSON.parse(txt.replace(/```json|```/g,"").trim());
-                    CAPITULOS_GD.filter(c=>!c.special).forEach(cap=>{ if(parsed[cap.id]&&parsed[cap.id]!=="N/A") setF(cap.id,parsed[cap.id]); });
+                    // Parse XML-style delimiters — muito mais robusto que JSON com HTML embutido
+                    let imported=0;
+                    caps.forEach(cap=>{
+                      const re=new RegExp(`<${cap.id}>([\\s\\S]*?)<\\/${cap.id}>`,"i");
+                      const m=txt.match(re);
+                      if(m&&m[1]&&m[1].trim()&&m[1].trim()!=="N/A"){
+                        setF(cap.id,m[1].trim());
+                        imported++;
+                      }
+                    });
+                    if(imported===0) throw new Error("Nenhum capítulo extraído. Verifique o arquivo.");
                     if(!form.titulo&&file.name) setF("titulo",file.name.replace(".docx","").replace(/_/g," "));
-                    toast_("Documento importado e distribuido pela IA!","green");
-                  }catch(e){console.error(e);toast_("Erro ao importar. Verifique o arquivo.","red");}
+                    toast_(`Documento importado! ${imported} capítulo(s) preenchido(s).`,"green");
+                  }catch(e){console.error(e);toast_("Erro ao importar: "+e.message,"red");}
                   setAiLoading(false);
                 }}
               />
