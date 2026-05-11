@@ -5363,11 +5363,13 @@ const ENSAIOS_SUGERIDOS = {
 function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("lista"); // lista | novo | editar
   const [sel, setSel] = useState(null);
   const [form, setForm] = useState({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
   const [ensaios, setEnsaios] = useState([]);
+  const [templateSel, setTemplateSel] = useState("");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -5375,9 +5377,62 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
       setMateriais(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
       setLoading(false);
     });
+    const unsubT = subscribeCollection("cq_templates", list=>{
+      setTemplates(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
+    });
     const t = setTimeout(()=>setLoading(false), 3000);
-    return ()=>{ unsub(); clearTimeout(t); };
+    return ()=>{ unsub(); unsubT(); clearTimeout(t); };
   },[]);
+
+  const carregarTemplate = (tplId) => {
+    if(!tplId) return;
+    const tpl = templates.find(t=>String(t.id)===String(tplId));
+    if(!tpl) return;
+    if(ensaios.length > 0 && !confirm(`Substituir os ensaios atuais pelo template "${tpl.nome}"?`)) return;
+    setF("tipo", tpl.tipo);
+    setEnsaios((tpl.ensaios||[]).map((e,i)=>({ tipo:"numero", casas:2, multiplos:false, ...e, id:Date.now()+i })));
+    setTemplateSel(tplId);
+    toast_(`Template "${tpl.nome}" carregado!`, "green");
+  };
+
+  const salvarTemplate = async () => {
+    if(ensaios.length===0) { alert("Adicione ensaios antes de salvar o template."); return; }
+    const nomeTemplate = prompt("Nome do template:", `${form.tipo} — padrão`);
+    if(!nomeTemplate || !nomeTemplate.trim()) return;
+    try {
+      const id = String(Date.now());
+      await saveCollection("cq_templates", id, {
+        id,
+        nome: nomeTemplate.trim(),
+        tipo: form.tipo,
+        ensaios: ensaios.map((e,i)=>({
+          id: i+1,
+          nome: e.nome||"",
+          espec: e.espec||"",
+          unidade: e.unidade||"",
+          ref: e.ref||"",
+          tipo: e.tipo||"numero",
+          casas: e.casas!==undefined?e.casas:2,
+          multiplos: e.multiplos||false,
+        })),
+        criadoPor: user.name,
+        criadoEm: tod(),
+      });
+      toast_(`Template "${nomeTemplate.trim()}" salvo!`, "green");
+    } catch(e) {
+      alert("Erro ao salvar template: " + e.message);
+    }
+  };
+
+  const delTemplate = async (tpl) => {
+    if(!confirm(`Excluir o template "${tpl.nome}"?`)) return;
+    try {
+      await deleteFromCollection("cq_templates", String(tpl.id));
+      toast_("Template excluído.", "red");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+    }
+  };
 
   const aplicarSugestoes = (tipo) => {
     const sugs = ENSAIOS_SUGERIDOS[tipo] || [];
@@ -5451,7 +5506,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{materiais.length} material(is) cadastrado(s)</div>
-        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setSel(null); setView("novo"); }}>+ Novo Material</button>
+        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
       </div>
 
       {materiais.length===0 ? (
@@ -5495,6 +5550,29 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
         <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>← Voltar</button>
         <div style={{ fontSize:15, fontWeight:700, color:T.text }}>{sel?"Editar material":"Novo material"}</div>
+      </div>
+
+      {/* Templates */}
+      <div style={{ ...s.card, background: T.accentDim, border:`1px solid ${T.accent}33` }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:240 }}>
+            <span style={{ fontSize:16 }}>📋</span>
+            <span style={{ fontSize:13, fontWeight:700, color:T.accent }}>Carregar template</span>
+            <Sel value={templateSel} onChange={e=>carregarTemplate(e.target.value)} sx={{ flex:1, maxWidth:320 }}>
+              <option value="">Selecionar template...</option>
+              {templates.map(t=><option key={t.id} value={t.id}>{t.nome}</option>)}
+            </Sel>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {templates.length > 0 && templateSel && (
+              <button style={{ ...s.btnD, fontSize:11, padding:"5px 10px" }} onClick={()=>{ const tpl=templates.find(t=>String(t.id)===String(templateSel)); if(tpl) delTemplate(tpl); }}>🗑️ Excluir template</button>
+            )}
+            <button style={{ ...s.btn, fontSize:11, padding:"5px 12px", color:T.accent, borderColor:T.accent+"44", background:"transparent" }} onClick={salvarTemplate}>💾 Salvar como template</button>
+          </div>
+        </div>
+        {templates.length===0 && (
+          <div style={{ fontSize:11, color:T.text3, marginTop:8 }}>Nenhum template salvo. Preencha os ensaios e clique em "Salvar como template" para reaproveitar nas próximas criações.</div>
+        )}
       </div>
 
       {/* Dados gerais */}
