@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
 import { auth, loginUser, logoutUser, getUser, saveUser, createAuthUser,
          deleteUser as fbDeleteUser, updateUser, getAllUsers,
          saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs,
@@ -1270,6 +1271,12 @@ export default function App() {
   );
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
+
+  if (user.role === "exec") return (
+    <ThemeCtx.Provider value={T}>
+      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} />
+    </ThemeCtx.Provider>
+  );
 
   const isViewer = user.role === "viewer";
   const isAdmin = user.role === "admin";
@@ -7824,7 +7831,255 @@ const PERMS_PADRAO = {
     criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:true, registrarTreinamento:true,
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
   },
+  exec: {
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
+    verCQMateriais:false, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
+    criarDocumento:false, assinarElaborador:false, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
+    editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:false, editarIPCProdutos:false,
+  },
 };
+
+/* ─── EXECUTIVE DASHBOARD ────────────────────────────────────────────────────── */
+function ExecutivoDashboard({ user, rncs, fornecedores }) {
+  const T = useTheme();
+  const [analises, setAnalises] = useState([]);
+  const [docs, setDocs] = useState([]);
+  const [clock, setClock] = useState(new Date());
+
+  useEffect(() => {
+    const unsub1 = subscribeCollection("cq_analises", list => setAnalises(list));
+    const unsub2 = subscribeCollection("gestao_docs", list => setDocs(list));
+    const timer = setInterval(() => setClock(new Date()), 1000);
+    return () => { unsub1(); unsub2(); clearInterval(timer); };
+  }, []);
+
+  const hoje = tod();
+  const mes = hoje.slice(0, 7);
+  const d30 = new Date(); d30.setDate(d30.getDate() + 30);
+  const d30str = d30.toISOString().split("T")[0];
+
+  // ── KPIs ──
+  const rncsAbertas     = rncs.filter(r => r.status === "Aberta").length;
+  const rncsVencidas    = rncs.filter(r => r.prazoAC && r.prazoAC < hoje && r.status !== "Eficaz" && r.status !== "Ineficaz").length;
+  const eficaz          = rncs.filter(r => r.status === "Eficaz").length;
+  const ineficaz        = rncs.filter(r => r.status === "Ineficaz").length;
+  const taxaEficacia    = eficaz + ineficaz > 0 ? Math.round(eficaz / (eficaz + ineficaz) * 100) : null;
+  const docsVencendo    = docs.filter(d => d.proximaRevisao && d.proximaRevisao >= hoje && d.proximaRevisao <= d30str && d.status !== "Obsoleto").length;
+  const reprovMes       = analises.filter(a => (a.conclusao === "Reprovado") && a.data && a.data.startsWith(mes)).length;
+
+  // ── Gráfico 1: RNCs por mês (últimos 6 meses) ──
+  const mesesLabels = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    mesesLabels.push(d.toISOString().slice(0, 7));
+  }
+  const rncsPorMes = mesesLabels.map(m => ({
+    mes: new Date(m + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+    Abertas:  rncs.filter(r => r.data && r.data.startsWith(m)).length,
+    Eficazes: rncs.filter(r => r.data && r.data.startsWith(m) && r.status === "Eficaz").length,
+  }));
+
+  // ── Gráfico 2: Top 5 fornecedores com mais RNCs ──
+  const fornMap = {};
+  rncs.forEach(r => {
+    if (!r.fornecedor) return;
+    fornMap[r.fornecedor] = (fornMap[r.fornecedor] || 0) + 1;
+  });
+  const topForn = Object.entries(fornMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([nome, qty]) => ({ nome: nome.length > 18 ? nome.slice(0, 16) + "…" : nome, RNCs: qty }));
+
+  // ── Gráfico 3: Materiais com mais reprovações ──
+  const matMap = {};
+  analises.filter(a => a.conclusao === "Reprovado").forEach(a => {
+    const k = a.materialNome || "N/D";
+    matMap[k] = (matMap[k] || 0) + 1;
+  });
+  const topMat = Object.entries(matMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([nome, qty]) => ({ nome: nome.length > 18 ? nome.slice(0, 16) + "…" : nome, Reprovações: qty }));
+
+  // ── Gráfico 4: Status documentos ──
+  const docStatusMap = {};
+  docs.forEach(d => { if (d.status) docStatusMap[d.status] = (docStatusMap[d.status] || 0) + 1; });
+  const docStatusData = Object.entries(docStatusMap).map(([name, value]) => ({ name, value }));
+  const PIE_COLORS = [T.accent, T.yellow, T.blue, T.red, T.orange, T.purple];
+
+  const C = T;
+  const fmtClock = d => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const fmtDate  = d => d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+
+  const KpiCard = ({ icon, label, value, sub, color, big }) => (
+    <div style={{ background: C.card, border: `1px solid ${color}33`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column", gap: 6, flex: 1, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: -10, right: -10, fontSize: 52, opacity: 0.06 }}>{icon}</div>
+      <div style={{ fontSize: 11, color: C.text3, textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: big ? 42 : 36, fontWeight: 800, color, lineHeight: 1 }}>{value ?? "—"}</div>
+      {sub && <div style={{ fontSize: 11, color: C.text2 }}>{sub}</div>}
+    </div>
+  );
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{ background: C.card2, border: `1px solid ${C.border2}`, borderRadius: 10, padding: "8px 14px", fontSize: 12 }}>
+        <div style={{ color: C.text2, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+        {payload.map((p, i) => (
+          <div key={i} style={{ color: p.color }}>{p.name}: <strong>{p.value}</strong></div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "'DM Sans', system-ui, sans-serif", color: C.text, overflow: "hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+      {/* ── HEADER ── */}
+      <div style={{ background: `linear-gradient(135deg,${C.surf},${C.card})`, borderBottom: `1px solid ${C.border2}`, padding: "0 2rem", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ background: "#fff", borderRadius: 10, padding: "4px 14px", boxShadow: `0 0 18px ${C.accentGlow}` }}>
+            <HerbamedLogo height={26} white={false} />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: "-.01em" }}>SGQ Herbamed®</div>
+            <div style={{ fontSize: 10, color: C.accent, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em" }}>Dashboard Executivo</div>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: "-.02em", lineHeight: 1 }}>{fmtClock(clock)}</div>
+          <div style={{ fontSize: 11, color: C.text2, marginTop: 2, textTransform: "capitalize" }}>{fmtDate(clock)}</div>
+        </div>
+        <button onClick={() => { logoutUser(); window.location.reload(); }} style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 8, color: C.text3, cursor: "pointer", fontSize: 11, padding: "6px 12px", fontFamily: "inherit" }}>
+          🚪 Sair
+        </button>
+      </div>
+
+      {/* ── BODY ── */}
+      <div style={{ flex: 1, padding: "1.2rem 1.5rem 1rem", display: "flex", flexDirection: "column", gap: "1rem", overflow: "auto" }}>
+
+        {/* ── ROW 1: KPI CARDS ── */}
+        <div style={{ display: "flex", gap: "1rem" }}>
+          <KpiCard icon="📋" label="RNCs Abertas"   value={rncsAbertas}  color={rncsAbertas > 0 ? C.red : C.accent}   sub={`${rncs.length} total no sistema`} />
+          <KpiCard icon="⚠️" label="Prazos Vencidos" value={rncsVencidas} color={rncsVencidas > 0 ? C.yellow : C.accent} sub="Ações corretivas em atraso" />
+          <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz · ${ineficaz} ineficaz`} />
+          <KpiCard icon="🗂️" label="Docs p/ Revisão"  value={docsVencendo}  color={docsVencendo > 0 ? C.orange : C.accent} sub="Vencendo em 30 dias" />
+          <KpiCard icon="🧪" label="Reprovações CQ"   value={reprovMes}     color={reprovMes > 0 ? C.red : C.accent}     sub="Análises reprovadas no mês" />
+        </div>
+
+        {/* ── ROW 2: CHARTS ── */}
+        <div style={{ display: "flex", gap: "1rem", flex: 1 }}>
+
+          {/* RNCs por mês */}
+          <div style={{ flex: 2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>📊 RNCs por Mês</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Últimos 6 meses</div>
+            <div style={{ flex: 1, minHeight: 160 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={rncsPorMes} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                  <Bar dataKey="Abertas"  fill={C.red}    radius={[5,5,0,0]} />
+                  <Bar dataKey="Eficazes" fill={C.accent} radius={[5,5,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              {[["Abertas", C.red], ["Eficazes", C.accent]].map(([l, c]) => (
+                <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.text2 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{l}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Top Fornecedores */}
+          <div style={{ flex: 1.2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>🏭 Top Fornecedores</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Por número de RNCs</div>
+            {topForn.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text3, fontSize: 12 }}>Sem dados</div>
+            ) : (
+              <div style={{ flex: 1, minHeight: 140 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topForn} layout="vertical" barCategoryGap="25%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                    <XAxis type="number" tick={{ fill: C.text2, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <YAxis type="category" dataKey="nome" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                    <Bar dataKey="RNCs" fill={C.orange} radius={[0,5,5,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── ROW 3: CHARTS ── */}
+        <div style={{ display: "flex", gap: "1rem", flex: 1 }}>
+
+          {/* Materiais Reprovados */}
+          <div style={{ flex: 2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>🧪 Materiais com Mais Reprovações</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Histórico acumulado de análises reprovadas</div>
+            {topMat.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text3, fontSize: 12 }}>Sem reprovações registradas ✓</div>
+            ) : (
+              <div style={{ flex: 1, minHeight: 130 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topMat} barCategoryGap="30%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                    <XAxis dataKey="nome" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                    <Bar dataKey="Reprovações" fill={C.red} radius={[5,5,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Status Documentos */}
+          <div style={{ flex: 1.2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>🗂️ Status dos Documentos</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>{docs.length} documento(s) no sistema</div>
+            {docStatusData.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text3, fontSize: 12 }}>Nenhum documento</div>
+            ) : (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "1rem", minHeight: 130 }}>
+                <div style={{ flex: 1, height: "100%" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={docStatusData} dataKey="value" cx="50%" cy="50%" innerRadius="40%" outerRadius="70%" paddingAngle={3}>
+                        {docStatusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+                  {docStatusData.map((d, i) => (
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 3, background: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0 }} />
+                      <span style={{ color: C.text2 }}>{d.name}</span>
+                      <span style={{ color: C.text, fontWeight: 700, marginLeft: "auto", paddingLeft: 8 }}>{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ textAlign: "center", fontSize: 10, color: C.text3, paddingBottom: 4 }}>
+          SGQ Herbamed® · Dados em tempo real · Atualizado às {fmtClock(clock)}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ─── ADMIN TAB ──────────────────────────────────────────────────────────────── */
 function AdminTab({ users, setUsers, toast_, currentUser }) {
@@ -7913,6 +8168,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
                     <option value="viewer">Visualizador — apenas leitura</option>
                     <option value="keyuser">Key User — edita qualquer RNC</option>
                     <option value="rt">RT — Responsável Técnico</option>
+                    <option value="exec">Executivo — Dashboard gerencial</option>
                   </Sel>} />
                 </>} />
 
@@ -8001,6 +8257,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
             <option value="viewer">Visualizador — apenas leitura</option>
             <option value="keyuser">Key User — edita qualquer RNC</option>
             <option value="rt">RT — Responsável Técnico</option>
+            <option value="exec">Executivo — Dashboard gerencial</option>
           </Sel>} />
         </>} />
 
