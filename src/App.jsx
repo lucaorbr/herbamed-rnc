@@ -1057,6 +1057,7 @@ export default function App() {
   const [emailCtx, setEmailCtx] = useState(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [sessionCountdown, setSessionCountdown] = useState(120);
 
@@ -1411,7 +1412,12 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} formal={formalMode} onToggleFormal={toggleFormal} /></div>
 
-            {/* Notifications bell */}
+            {/* Presentation mode button — admin/keyuser/rt only */}
+            {["admin","keyuser","rt"].includes(user.role) && (
+              <button onClick={() => setPresentationMode(true)} title="Modo Apresentação" style={{ background: T.accentDim, border: `1px solid ${T.accent}44`, borderRadius: 8, color: T.accent, cursor: "pointer", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+                📊
+              </button>
+            )}
             <div style={{ position:"relative" }}>
               <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:notifs.length>0?"#ffd16618":"none", border:`1px solid ${notifs.length>0?"#ffd16633":T.border}`, borderRadius:8, color:notifs.length>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
                 🔔
@@ -1531,6 +1537,13 @@ export default function App() {
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+
+        {/* ── MODO APRESENTAÇÃO ── */}
+        {presentationMode && (
+          <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.bg }}>
+            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} onClose={() => setPresentationMode(false)} />
+          </div>
+        )}
 
         {/* ── AVISO DE SESSÃO EXPIRANDO ── */}
         {sessionWarning && (
@@ -7840,7 +7853,7 @@ const PERMS_PADRAO = {
 };
 
 /* ─── EXECUTIVE DASHBOARD ────────────────────────────────────────────────────── */
-function ExecutivoDashboard({ user, rncs, fornecedores }) {
+function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   const T = useTheme();
   const [analises, setAnalises] = useState([]);
   const [docs, setDocs] = useState([]);
@@ -7850,8 +7863,10 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
     const unsub1 = subscribeCollection("cq_analises", list => setAnalises(list));
     const unsub2 = subscribeCollection("gestao_docs", list => setDocs(list));
     const timer = setInterval(() => setClock(new Date()), 1000);
-    return () => { unsub1(); unsub2(); clearInterval(timer); };
-  }, []);
+    const onKey = e => { if (e.key === "Escape" && onClose) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { unsub1(); unsub2(); clearInterval(timer); window.removeEventListener("keydown", onKey); };
+  }, [onClose]);
 
   const hoje = tod();
   const mes = hoje.slice(0, 7);
@@ -7949,9 +7964,15 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
           <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: "-.02em", lineHeight: 1 }}>{fmtClock(clock)}</div>
           <div style={{ fontSize: 11, color: C.text2, marginTop: 2, textTransform: "capitalize" }}>{fmtDate(clock)}</div>
         </div>
-        <button onClick={() => { logoutUser(); window.location.reload(); }} style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 8, color: C.text3, cursor: "pointer", fontSize: 11, padding: "6px 12px", fontFamily: "inherit" }}>
-          🚪 Sair
-        </button>
+        {onClose ? (
+          <button onClick={onClose} title="Fechar apresentação (ESC)" style={{ background:"none", border:`1px solid ${C.border2}`, borderRadius:8, color:C.text3, cursor:"pointer", fontSize:11, padding:"6px 14px", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}>
+            ✕ Fechar
+          </button>
+        ) : (
+          <button onClick={() => { logoutUser(); window.location.reload(); }} style={{ background:"none", border:`1px solid ${C.border2}`, borderRadius:8, color:C.text3, cursor:"pointer", fontSize:11, padding:"6px 12px", fontFamily:"inherit" }}>
+            🚪 Sair
+          </button>
+        )}
       </div>
 
       {/* ── BODY ── */}
