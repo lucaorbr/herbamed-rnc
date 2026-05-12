@@ -138,6 +138,31 @@ const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "�
 const past = d => d && d < tod();
 const genNum = c => `RNC-${new Date().getFullYear()}-${String(c).padStart(3, "0")}`;
 
+const applyMask = (tipo, val) => {
+  const d = (val || "").replace(/\D/g, "");
+  if (tipo === "cnpj") {
+    const n = d.slice(0, 14);
+    if (n.length <= 2)  return n;
+    if (n.length <= 5)  return `${n.slice(0,2)}.${n.slice(2)}`;
+    if (n.length <= 8)  return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5)}`;
+    if (n.length <= 12) return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8)}`;
+    return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8,12)}-${n.slice(12)}`;
+  }
+  if (tipo === "telefone") {
+    const n = d.slice(0, 11);
+    if (n.length <= 2)  return n.length ? `(${n}` : n;
+    if (n.length <= 6)  return `(${n.slice(0,2)}) ${n.slice(2)}`;
+    if (n.length <= 10) return `(${n.slice(0,2)}) ${n.slice(2,6)}-${n.slice(6)}`;
+    return `(${n.slice(0,2)}) ${n.slice(2,7)}-${n.slice(7)}`;
+  }
+  if (tipo === "cep") {
+    const n = d.slice(0, 8);
+    if (n.length <= 5) return n;
+    return `${n.slice(0,5)}-${n.slice(5)}`;
+  }
+  return val;
+};
+
 const SMETA = {
   "Aberta":              { c: "#ff4f6a", bg: "#ff4f6a18", dot: "#ff4f6a" },
   "Em andamento":        { c: "#ffd166", bg: "#ffd16618", dot: "#ffd166" },
@@ -488,6 +513,14 @@ function Tooltip({ text }) {
 
 function F({ lbl, ch, tip }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>{lbl}{tip && <Tooltip text={tip}/>}</label>{ch}</div>; }
 function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
+function MaskedInp({ mask, value, onChange, sx, ...p }) {
+  const s = useS();
+  const handleChange = (e) => {
+    const masked = applyMask(mask, e.target.value);
+    onChange({ ...e, target: { ...e.target, value: masked } });
+  };
+  return <input style={{ ...s.inp, ...sx }} value={value} onChange={handleChange} {...p} />;
+}
 function Sel({ sx, children, ...p }) { const T = useTheme(); const s = useS(); return <select style={{ ...s.inp, colorScheme: T.light ? "light" : "dark", background: T.surf, color: T.text, ...sx }} {...p}>{children}</select>; }
 function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ ...s.inp, minHeight: 72, resize: "vertical", ...sx }} {...p} />; }
 function G2({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{ch}</div>; }
@@ -4272,7 +4305,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
   const [editMode, setEditMode] = useState(false);
   const [q, setQ] = useState("");
   const [catFiltro, setCatFiltro] = useState("");
-  const [novoForn, setNovoForn] = useState({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", status:"Ativo", obs:"" });
+  const [novoForn, setNovoForn] = useState({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", cep:"", endereco:"", status:"Ativo", obs:"" });
   const [showNovo, setShowNovo] = useState(false);
   const [editData, setEditData] = useState({});
 
@@ -4285,7 +4318,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
     const id = String(Date.now());
     const novo = { ...novoForn, id, criadoEm: tod(), criadoPor: user.name };
     await saveCollection("fornecedores", id, novo);
-    setNovoForn({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", status:"Ativo", obs:"" });
+    setNovoForn({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", cep:"", endereco:"", status:"Ativo", obs:"" });
     setShowNovo(false);
     toast_("Fornecedor cadastrado!", "green");
     } catch(e) {
@@ -4356,11 +4389,13 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
           <SecTitle icon="🏭" ch="Cadastrar novo fornecedor" />
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
             <F lbl="Nome *" ch={<Inp placeholder="Nome do fornecedor" value={novoForn.nome} onChange={e=>setNovoForn(p=>({...p,nome:e.target.value}))} />} />
-            <F lbl="CNPJ" ch={<Inp placeholder="00.000.000/0000-00" value={novoForn.cnpj} onChange={e=>setNovoForn(p=>({...p,cnpj:e.target.value}))} />} />
+            <F lbl="CNPJ" ch={<MaskedInp mask="cnpj" placeholder="00.000.000/0000-00" value={novoForn.cnpj} onChange={e=>setNovoForn(p=>({...p,cnpj:e.target.value}))} />} />
             <F lbl="Categoria" ch={<Sel value={novoForn.categoria} onChange={e=>setNovoForn(p=>({...p,categoria:e.target.value}))}>{CATS.map(c=><option key={c}>{c}</option>)}</Sel>} />
             <F lbl="Nome do contato" ch={<Inp placeholder="Responsável comercial" value={novoForn.contato} onChange={e=>setNovoForn(p=>({...p,contato:e.target.value}))} />} />
             <F lbl="E-mail" ch={<Inp type="email" placeholder="contato@fornecedor.com" value={novoForn.email} onChange={e=>setNovoForn(p=>({...p,email:e.target.value}))} />} />
-            <F lbl="Telefone" ch={<Inp placeholder="(00) 00000-0000" value={novoForn.telefone} onChange={e=>setNovoForn(p=>({...p,telefone:e.target.value}))} />} />
+            <F lbl="Telefone" ch={<MaskedInp mask="telefone" placeholder="(00) 00000-0000" value={novoForn.telefone} onChange={e=>setNovoForn(p=>({...p,telefone:e.target.value}))} />} />
+            <F lbl="CEP" ch={<MaskedInp mask="cep" placeholder="00000-000" value={novoForn.cep||""} onChange={e=>setNovoForn(p=>({...p,cep:e.target.value}))} />} />
+            <F lbl="Endereço" ch={<Inp placeholder="Rua, número, bairro, cidade" value={novoForn.endereco||""} onChange={e=>setNovoForn(p=>({...p,endereco:e.target.value}))} />} />
           </div>
           <F lbl="Observações" ch={<TA rows={2} placeholder="Informações adicionais..." value={novoForn.obs} onChange={e=>setNovoForn(p=>({...p,obs:e.target.value}))} />} />
           <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
@@ -4464,11 +4499,13 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
               <div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
                   <F lbl="Nome" ch={<Inp value={editData.nome} onChange={e=>setEditData(p=>({...p,nome:e.target.value}))} />} />
-                  <F lbl="CNPJ" ch={<Inp value={editData.cnpj||""} onChange={e=>setEditData(p=>({...p,cnpj:e.target.value}))} />} />
+                  <F lbl="CNPJ" ch={<MaskedInp mask="cnpj" value={editData.cnpj||""} onChange={e=>setEditData(p=>({...p,cnpj:e.target.value}))} />} />
                   <F lbl="Categoria" ch={<Sel value={editData.categoria} onChange={e=>setEditData(p=>({...p,categoria:e.target.value}))}>{CATS.map(c=><option key={c}>{c}</option>)}</Sel>} />
                   <F lbl="Contato" ch={<Inp value={editData.contato||""} onChange={e=>setEditData(p=>({...p,contato:e.target.value}))} />} />
                   <F lbl="E-mail" ch={<Inp value={editData.email||""} onChange={e=>setEditData(p=>({...p,email:e.target.value}))} />} />
-                  <F lbl="Telefone" ch={<Inp value={editData.telefone||""} onChange={e=>setEditData(p=>({...p,telefone:e.target.value}))} />} />
+                  <F lbl="Telefone" ch={<MaskedInp mask="telefone" value={editData.telefone||""} onChange={e=>setEditData(p=>({...p,telefone:e.target.value}))} />} />
+                  <F lbl="CEP" ch={<MaskedInp mask="cep" value={editData.cep||""} onChange={e=>setEditData(p=>({...p,cep:e.target.value}))} />} />
+                  <F lbl="Endereço" ch={<Inp value={editData.endereco||""} onChange={e=>setEditData(p=>({...p,endereco:e.target.value}))} />} />
                   <F lbl="Status" ch={<Sel value={editData.status} onChange={e=>setEditData(p=>({...p,status:e.target.value}))}>{Object.keys(STATUS_FORN).map(x=><option key={x}>{x}</option>)}</Sel>} />
                 </div>
                 <F lbl="Observações" ch={<TA rows={3} value={editData.obs||""} onChange={e=>setEditData(p=>({...p,obs:e.target.value}))} />} />
@@ -4481,7 +4518,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
               <div>
                 {/* Dados */}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:"1rem" }}>
-                  {[["CNPJ",sel.cnpj],["Contato",sel.contato],["E-mail",sel.email],["Telefone",sel.telefone]].filter(([,v])=>v).map(([k,v])=>(
+                  {[["CNPJ",sel.cnpj],["Contato",sel.contato],["E-mail",sel.email],["Telefone",sel.telefone],["CEP",sel.cep],["Endereço",sel.endereco]].filter(([,v])=>v).map(([k,v])=>(
                     <div key={k} style={{ background:T.surf, borderRadius:8, padding:"10px 12px" }}>
                       <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", marginBottom:3 }}>{k}</div>
                       <div style={{ fontSize:13 }}>{v}</div>
@@ -6248,7 +6285,7 @@ function IPCTab({ user, toast_ }) {
     },
   ];
 
-  const [form, setForm] = useState({ area: "", sala: "", op: "", produto: "", linha: "", resp: "", data: "", obs: "" });
+  const [form, setForm] = useState({ area: "", sala: "", op: "", lote: "", produto: "", linha: "", resp: "", data: "", obs: "" });
   const [resultados, setResultados] = useState([]);
   const [filtroArea, setFiltroArea] = useState("todas");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -6339,7 +6376,7 @@ function IPCTab({ user, toast_ }) {
     await saveCollection("ipc_registros", String(reg.id), reg);
     toast_(sel ? "Registro atualizado!" : "Registro salvo!", "green");
     setSel(null);
-    setForm({ area: "", sala: "", op: "", produto: "", resp: "", data: tod(), obs: "" });
+    setForm({ area: "", sala: "", op: "", lote: "", produto: "", resp: "", data: tod(), obs: "" });
     setResultados([]);
     setView("lista");
     } catch(e) {
@@ -6403,6 +6440,7 @@ function IPCTab({ user, toast_ }) {
             } />
           )}
           <F lbl="OP *" ch={<Inp placeholder="Ex: OP-2025-001" value={form.op} onChange={e => setF("op", e.target.value)} />} />
+          <F lbl="Lote" ch={<Inp placeholder="Ex: LOTE-2025-001" value={form.lote||""} onChange={e => setF("lote", e.target.value)} />} />
           <F lbl="Produto *" ch={
             <Sel value={form.produto} onChange={e => {
               const prod = produtos.find(p => p.nome === e.target.value);
@@ -6501,7 +6539,7 @@ function IPCTab({ user, toast_ }) {
       <div>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
           <button style={s.btn} onClick={() => { setView("lista"); setSel(null); }}>← Voltar</button>
-          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>OP: {sel.op}</h2>
+          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>OP: {sel.op}{sel.lote && <span style={{ fontSize:13, color:T.text2, fontWeight:400, marginLeft:10 }}>Lote: {sel.lote}</span>}</h2>
           <span style={{ padding:"3px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:statusBg[sel.status], color:statusColor[sel.status] }}>{statusIcon[sel.status]} {sel.status}</span>
         </div>
         <div style={s.card}>
@@ -6786,7 +6824,7 @@ function IPCProdutosTab({ user, toast_ }) {
 function ClientesTab({ user, toast_ }) {
   const T = useTheme(); const s = useS();
   const [clientes, setClientes] = useState([]);
-  const [form, setForm] = useState({ nome:"", cnpj:"", contato:"", email:"", tel:"", obs:"" });
+  const [form, setForm] = useState({ nome:"", cnpj:"", contato:"", email:"", tel:"", cep:"", endereco:"", obs:"" });
   const [sel, setSel] = useState(null);
   const [busca, setBusca] = useState("");
   const isAdmin = user?.role === "admin" || user?.role === "keyuser";
@@ -6805,7 +6843,7 @@ function ClientesTab({ user, toast_ }) {
     const id = sel ? sel.id : Date.now();
     await saveCollection("clientes_terceiros", String(id), { id, ...form, atualizadoEm: tod() });
     toast_(sel ? "Cliente atualizado!" : "Cliente cadastrado!", "green");
-    setForm({ nome:"", cnpj:"", contato:"", email:"", tel:"", obs:"" });
+    setForm({ nome:"", cnpj:"", contato:"", email:"", tel:"", cep:"", endereco:"", obs:"" });
     setSel(null);
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -6824,7 +6862,7 @@ function ClientesTab({ user, toast_ }) {
     }
   };
 
-  const editar = (c) => { setSel(c); setForm({ nome:c.nome||"", cnpj:c.cnpj||"", contato:c.contato||"", email:c.email||"", tel:c.tel||"", obs:c.obs||"" }); };
+  const editar = (c) => { setSel(c); setForm({ nome:c.nome||"", cnpj:c.cnpj||"", contato:c.contato||"", email:c.email||"", tel:c.tel||"", cep:c.cep||"", endereco:c.endereco||"", obs:c.obs||"" }); };
 
   const filtrados = clientes.filter(c => !busca || c.nome?.toLowerCase().includes(busca.toLowerCase()) || c.cnpj?.includes(busca));
   const {paginated:_cls,page:_pgC,total:_totC,setPage:_setPgC} = usePagination(filtrados, 20);
@@ -6836,14 +6874,16 @@ function ClientesTab({ user, toast_ }) {
           <SecTitle icon="🏢" ch={sel ? "Editar Cliente" : "Novo Cliente"} />
           <G2 ch={<>
             <F lbl="Nome da empresa *" ch={<Inp placeholder="Ex: Suplementos XYZ Ltda" value={form.nome} onChange={e=>setF("nome",e.target.value)} />} />
-            <F lbl="CNPJ" ch={<Inp placeholder="00.000.000/0001-00" value={form.cnpj} onChange={e=>setF("cnpj",e.target.value)} />} />
+            <F lbl="CNPJ" ch={<MaskedInp mask="cnpj" placeholder="00.000.000/0001-00" value={form.cnpj} onChange={e=>setF("cnpj",e.target.value)} />} />
             <F lbl="Contato" ch={<Inp placeholder="Nome do responsável" value={form.contato} onChange={e=>setF("contato",e.target.value)} />} />
             <F lbl="E-mail" ch={<Inp placeholder="contato@empresa.com.br" value={form.email} onChange={e=>setF("email",e.target.value)} />} />
-            <F lbl="Telefone" ch={<Inp placeholder="(00) 00000-0000" value={form.tel} onChange={e=>setF("tel",e.target.value)} />} />
+            <F lbl="Telefone" ch={<MaskedInp mask="telefone" placeholder="(00) 00000-0000" value={form.tel} onChange={e=>setF("tel",e.target.value)} />} />
+            <F lbl="CEP" ch={<MaskedInp mask="cep" placeholder="00000-000" value={form.cep} onChange={e=>setF("cep",e.target.value)} />} />
+            <F lbl="Endereço" ch={<Inp placeholder="Rua, número, bairro, cidade" value={form.endereco} onChange={e=>setF("endereco",e.target.value)} />} />
             <F lbl="Observações" ch={<Inp placeholder="Obs..." value={form.obs} onChange={e=>setF("obs",e.target.value)} />} />
           </>} />
           <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:8 }}>
-            {sel && <button style={s.btn} onClick={()=>{setSel(null);setForm({nome:"",cnpj:"",contato:"",email:"",tel:"",obs:""});}}>Cancelar</button>}
+            {sel && <button style={s.btn} onClick={()=>{setSel(null);setForm({nome:"",cnpj:"",contato:"",email:"",tel:"",cep:"",endereco:"",obs:""});}}>Cancelar</button>}
             <button style={s.btnA} onClick={salvar}>{sel ? "Salvar alterações" : "+ Cadastrar Cliente"}</button>
           </div>
         </div>
@@ -7953,7 +7993,7 @@ function ConfigRefugoModal({ config, onClose, toast_ }) {
   );
 }
 
-function ProcessoFormModal({ processo, user, analisesCQ, configRefugo, onSave, onClose, toast_ }) {
+function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, configRefugo, onSave, onClose, toast_ }) {
   const T = useTheme(); const s = useS();
   const isEdicao = !!processo?.id;
   const [saving, setSaving] = useState(false);
@@ -8064,13 +8104,54 @@ function ProcessoFormModal({ processo, user, analisesCQ, configRefugo, onSave, o
           </>}
         </div>
 
-        {form.op && form.tipo==="Encapsulamento" && (
-          <div style={{padding:"10px 14px",borderRadius:10,marginBottom:8,background:cqStatus==="Aprovado"?"#2ab84a18":cqStatus==="Reprovado"?"#ff4f6a18":"#ffd16618",border:`1px solid ${cqStatus==="Aprovado"?"#2ab84a33":cqStatus==="Reprovado"?"#ff4f6a33":"#ffd16633"}`,fontSize:12}}>
+        {form.op && form.tipo==="Encapsulamento" && (\n          <div style={{padding:"10px 14px",borderRadius:10,marginBottom:8,background:cqStatus==="Aprovado"?"#2ab84a18":cqStatus==="Reprovado"?"#ff4f6a18":"#ffd16618",border:`1px solid ${cqStatus==="Aprovado"?"#2ab84a33":cqStatus==="Reprovado"?"#ff4f6a33":"#ffd16633"}`,fontSize:12}}>
             {cqStatus==="Aprovado"&&<span style={{color:"#2ab84a",fontWeight:700}}>✓ Análise CQ: Aprovada — OP liberada para encapsulamento</span>}
             {cqStatus==="Reprovado"&&<span style={{color:"#ff4f6a",fontWeight:700}}>✗ Análise CQ: Reprovada — OP bloqueada</span>}
             {!cqStatus&&<span style={{color:"#ffd166",fontWeight:700}}>⚠ Análise CQ não localizada para esta OP</span>}
           </div>
         )}
+
+        {/* ── ANÁLISE IPC VINCULADA ── */}
+        {(() => {
+          if (form.tipo !== "Encapsulamento" || !form.op) return null;
+          const ipc = (ipcRegistros||[]).find(r => r.op === form.op || r.lote === form.op);
+          if (!ipc) return (
+            <div style={{padding:"12px 14px",borderRadius:10,marginBottom:12,background:"#ffd16610",border:"1px solid #ffd16633",fontSize:12,color:"#ffd166"}}>
+              ⚠ Nenhuma análise IPC localizada para a OP <strong>{form.op}</strong>. Lance a análise no módulo IPC — Controle de Processo antes de prosseguir.
+            </div>
+          );
+          const statusColor = ipc.status==="Liberado"?"#2ab84a":ipc.status==="Reprovado"?"#ff4f6a":"#ffd166";
+          return (
+            <div style={{marginBottom:16,border:`1px solid ${statusColor}44`,borderRadius:12,overflow:"hidden"}}>
+              <div style={{background:`${statusColor}18`,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{fontWeight:700,fontSize:13,color:statusColor}}>🏭 Análise IPC Vinculada — {ipc.status}</div>
+                <div style={{fontSize:11,color:T.text3}}>{ipc.produto} · {fmt(ipc.data)} · {ipc.resp||ipc.criadoPor}</div>
+              </div>
+              <div style={{padding:"12px 14px",background:T.surf}}>
+                {ipc.lote && <div style={{fontSize:11,color:T.text2,marginBottom:10}}>Lote: <strong>{ipc.lote}</strong></div>}
+                {(ipc.resultados||[]).length > 0 ? (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
+                    {(ipc.resultados||[]).map((r,i) => (
+                      <div key={i} style={{background:T.card,border:`1px solid ${r.conforme===false?"#ff4f6a33":r.conforme===true?"#2ab84a22":T.border}`,borderRadius:8,padding:"8px 10px"}}>
+                        <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>{r.nome||r.ensaio}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:r.conforme===false?"#ff4f6a":r.conforme===true?"#2ab84a":T.text}}>
+                          {r.resultado||"—"}{r.unidade?` ${r.unidade}`:""}
+                        </div>
+                        {r.especificacao && <div style={{fontSize:10,color:T.text3,marginTop:2}}>Esp: {r.especificacao}</div>}
+                        {r.conforme===false && <div style={{fontSize:10,color:"#ff4f6a",marginTop:2}}>✗ Fora do padrão</div>}
+                        {r.conforme===true  && <div style={{fontSize:10,color:"#2ab84a",marginTop:2}}>✓ Conforme</div>}
+                        {r.obs && <div style={{fontSize:10,color:T.text3,marginTop:2,fontStyle:"italic"}}>{r.obs}</div>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{fontSize:12,color:T.text3}}>Sem resultados registrados nesta análise.</div>
+                )}
+                {ipc.obs && <div style={{fontSize:11,color:T.text2,marginTop:10,fontStyle:"italic"}}>Obs: {ipc.obs}</div>}
+              </div>
+            </div>
+          );
+        })()}
 
         {temChecklist && <>
           <SecTitle icon="☑️" label="Checklist de Verificação"/>
@@ -8223,6 +8304,7 @@ function ProcessosProducaoTab({ user, toast_ }) {
   const isAdmin = ["admin","keyuser","rt"].includes(user.role);
   const [processos, setProcessos]         = useState([]);
   const [analisesCQ, setAnalisesCQ]       = useState([]);
+  const [ipcRegistros, setIpcRegistros]   = useState([]);
   const [configRefugo, setConfigRefugo]   = useState({});
   const [modal, setModal]                 = useState(null);
   const [configModal, setConfigModal]     = useState(false);
@@ -8235,8 +8317,9 @@ function ProcessosProducaoTab({ user, toast_ }) {
   useEffect(()=>{
     const u1 = subscribeCollection("producao_processos", list=>{ setProcessos(list.sort((a,b)=>(b.criadoTs||0)-(a.criadoTs||0))); setLoading(false); });
     const u2 = subscribeCollection("cq_analises", list=>setAnalisesCQ(list));
+    const u4 = subscribeCollection("ipc_registros", list=>setIpcRegistros(list));
     const u3 = subscribeCollection("producao_config_refugo", list=>{ const map={}; list.forEach(c=>{map[c.tipo]=c.categorias||[];}); setConfigRefugo(map); });
-    return ()=>{ u1(); u2(); u3(); };
+    return ()=>{ u1(); u2(); u3(); u4(); };
   },[]);
 
   const validar = async (processo, assinatura) => {
@@ -8328,6 +8411,7 @@ function ProcessosProducaoTab({ user, toast_ }) {
 
       {modal&&(
         <ProcessoFormModal processo={modal==="new"?null:modal} user={user} analisesCQ={analisesCQ}
+          ipcRegistros={ipcRegistros}
           configRefugo={configRefugo} onSave={()=>setModal(null)} onClose={()=>setModal(null)} toast_={toast_}/>
       )}
       {configModal&&isAdmin&&(
