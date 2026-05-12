@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RcTooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid } from "recharts";
 import { auth, loginUser, logoutUser, getUser, saveUser, createAuthUser,
          deleteUser as fbDeleteUser, updateUser, getAllUsers,
          saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs,
@@ -7979,7 +7979,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="mes" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                  <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
                   <Bar dataKey="Abertas"  fill={C.red}    radius={[5,5,0,0]} />
                   <Bar dataKey="Eficazes" fill={C.accent} radius={[5,5,0,0]} />
                 </BarChart>
@@ -8007,7 +8007,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
                     <XAxis type="number" tick={{ fill: C.text2, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="nome" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} width={100} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                    <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
                     <Bar dataKey="RNCs" fill={C.orange} radius={[0,5,5,0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -8032,7 +8032,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
                     <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                     <XAxis dataKey="nome" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
+                    <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
                     <Bar dataKey="Reprovações" fill={C.red} radius={[5,5,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -8054,7 +8054,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores }) {
                       <Pie data={docStatusData} dataKey="value" cx="50%" cy="50%" innerRadius="40%" outerRadius="70%" paddingAngle={3}>
                         {docStatusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip content={<CustomTooltip />} />
+                      <RcTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
