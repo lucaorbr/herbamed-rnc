@@ -8104,7 +8104,8 @@ function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, configRef
           </>}
         </div>
 
-        {form.op && form.tipo==="Encapsulamento" && (\n          <div style={{padding:"10px 14px",borderRadius:10,marginBottom:8,background:cqStatus==="Aprovado"?"#2ab84a18":cqStatus==="Reprovado"?"#ff4f6a18":"#ffd16618",border:`1px solid ${cqStatus==="Aprovado"?"#2ab84a33":cqStatus==="Reprovado"?"#ff4f6a33":"#ffd16633"}`,fontSize:12}}>
+        {form.op && form.tipo==="Encapsulamento" && (
+          <div style={{padding:"10px 14px",borderRadius:10,marginBottom:8,background:cqStatus==="Aprovado"?"#2ab84a18":cqStatus==="Reprovado"?"#ff4f6a18":"#ffd16618",border:`1px solid ${cqStatus==="Aprovado"?"#2ab84a33":cqStatus==="Reprovado"?"#ff4f6a33":"#ffd16633"}`,fontSize:12}}>
             {cqStatus==="Aprovado"&&<span style={{color:"#2ab84a",fontWeight:700}}>✓ Análise CQ: Aprovada — OP liberada para encapsulamento</span>}
             {cqStatus==="Reprovado"&&<span style={{color:"#ff4f6a",fontWeight:700}}>✗ Análise CQ: Reprovada — OP bloqueada</span>}
             {!cqStatus&&<span style={{color:"#ffd166",fontWeight:700}}>⚠ Análise CQ não localizada para esta OP</span>}
