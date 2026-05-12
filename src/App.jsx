@@ -7946,7 +7946,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   };
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "'DM Sans', system-ui, sans-serif", color: C.text, overflow: "hidden" }}>
+    <div style={{ background: C.bg, height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'DM Sans', system-ui, sans-serif", color: C.text, overflow: "hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
       {/* ── HEADER ── */}
