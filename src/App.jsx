@@ -5742,6 +5742,9 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
   // Form
   const [matSel, setMatSel] = useState(null);
   const [form, setForm] = useState({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
+  const [filtroTipo, setFiltroTipo] = useState("Todos");
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [filtroConc, setFiltroConc] = useState("Todos");
   const [resultados, setResultados] = useState([]);
   const [coa, setCoa] = useState(null);
   const [coaUploading, setCoaUploading] = useState(false);
@@ -5954,17 +5957,29 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
           <div style={{ color:T.text3, fontSize:13, padding:"1rem", textAlign:"center" }}>
             Nenhum material cadastrado. Cadastre um material em <strong>CQ — Materiais</strong> primeiro.
           </div>
-        ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
-            {materiais.map(m=>(
-              <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
-                <div style={{ fontSize:13, fontWeight:600, color:matSel?.id===m.id?T.accent:T.text }}>{m.nome}</div>
-                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{m.tipo}</div>
-                <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{m.ensaios?.length||0} ensaios</div>
+        ) : ((() => {
+          const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
+          const matFiltrados = filtroTipo==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipo);
+          return (
+            <>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+                {tiposUnicos.map(t=>(
+                  <button key={t} onClick={()=>setFiltroTipo(t)} style={{ padding:"4px 12px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipo===t?T.accent:T.border}`, background:filtroTipo===t?T.accentDim:"transparent", color:filtroTipo===t?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t}</button>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+                {matFiltrados.map(m=>(
+                  <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:matSel?.id===m.id?T.accent:T.text }}>{m.nome}</div>
+                    <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{m.tipo}</div>
+                    <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{m.ensaios?.length||0} ensaios</div>
+                  </div>
+                ))}
+                {matFiltrados.length===0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:T.text3, fontSize:13, padding:"1rem" }}>Nenhum material nesta categoria.</div>}
+              </div>
+            </>
+          );
+        })())}
       </div>
 
       {matSel && <>
@@ -6120,11 +6135,27 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   );
 
   // ── LISTA ──
+  const analiseFiltradas = analises.filter(a=>{
+    const textoOk = !filtroTexto || (a.materialNome||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.num||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.lote||"").toLowerCase().includes(filtroTexto.toLowerCase());
+    const concOk = filtroConc==="Todos" || a.conclusao===filtroConc;
+    return textoOk && concOk;
+  });
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const { paginated: analisePg, page: pgAn, total: totAn, setPage: setPgAn } = usePagination(analiseFiltradas, 15);
+
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
-        <div style={{ fontSize:13, color:T.text2 }}>{analises.length} análise(s) registrada(s)</div>
-        <button style={s.btnA} onClick={()=>{ setMatSel(null); setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+        <div style={{ fontSize:13, color:T.text2 }}>{analiseFiltradas.length} de {analises.length} análise(s)</div>
+        <button style={s.btnA} onClick={()=>{ setMatSel(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:10, marginBottom:"1rem", flexWrap:"wrap" }}>
+        <input value={filtroTexto} onChange={e=>{ setFiltroTexto(e.target.value); setPgAn(1); }} placeholder="Buscar por material, RA ou lote..." style={{ flex:1, minWidth:200, padding:"7px 12px", fontSize:13, borderRadius:8, border:`1px solid ${T.border}`, background:T.surf, color:T.text, outline:"none" }} />
+        {["Todos","Aprovado","Reprovado","Pendente"].map(c=>(
+          <button key={c} onClick={()=>{ setFiltroConc(c); setPgAn(1); }} style={{ padding:"6px 14px", fontSize:12, fontWeight:600, borderRadius:20, border:`1px solid ${filtroConc===c?T.accent:T.border}`, background:filtroConc===c?T.accentDim:"transparent", color:filtroConc===c?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{c}</button>
+        ))}
       </div>
 
       {analises.length===0 ? (
@@ -6132,7 +6163,12 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
           <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>📋</div>
           <div style={{ fontSize:14, color:T.text2 }}>Nenhuma análise registrada</div>
         </div>
+      ) : analiseFiltradas.length===0 ? (
+        <div style={{ ...s.card, textAlign:"center", padding:"2rem" }}>
+          <div style={{ fontSize:13, color:T.text2 }}>Nenhuma análise encontrada com os filtros aplicados.</div>
+        </div>
       ) : (
+        <>
         <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:T.surf }}>
@@ -6141,7 +6177,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               ))}
             </tr></thead>
             <tbody>
-              {analises.map((a,i)=>{
+              {analisePg.map((a,i)=>{
                 const cc = a.conclusao;
                 const c = cc==="Aprovado"?"#2ab84a":cc==="Reprovado"?"#ff4f6a":"#ffd166";
                 return (
@@ -6166,6 +6202,14 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             </tbody>
           </table>
         </div>
+        {totAn > 15 && (
+          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, marginTop:"1rem" }}>
+            <button onClick={()=>setPgAn(p=>Math.max(1,p-1))} disabled={pgAn===1} style={{ ...s.btn, padding:"5px 12px", fontSize:12, opacity:pgAn===1?.4:1 }}>← Anterior</button>
+            <span style={{ fontSize:12, color:T.text2 }}>Página {pgAn} de {Math.ceil(totAn/15)}</span>
+            <button onClick={()=>setPgAn(p=>Math.min(Math.ceil(totAn/15),p+1))} disabled={pgAn===Math.ceil(totAn/15)} style={{ ...s.btn, padding:"5px 12px", fontSize:12, opacity:pgAn===Math.ceil(totAn/15)?.4:1 }}>Próxima →</button>
+          </div>
+        )}
+        </>
       )}
 
       {/* Modal detalhe */}
