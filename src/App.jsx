@@ -6201,13 +6201,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             </tbody>
           </table>
         </div>
-        {totAn > 15 && (
-          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, marginTop:"1rem" }}>
-            <button onClick={()=>setPgAn(p=>Math.max(1,p-1))} disabled={pgAn===1} style={{ ...s.btn, padding:"5px 12px", fontSize:12, opacity:pgAn===1?.4:1 }}>← Anterior</button>
-            <span style={{ fontSize:12, color:T.text2 }}>Página {pgAn} de {Math.ceil(totAn/15)}</span>
-            <button onClick={()=>setPgAn(p=>Math.min(Math.ceil(totAn/15),p+1))} disabled={pgAn===Math.ceil(totAn/15)} style={{ ...s.btn, padding:"5px 12px", fontSize:12, opacity:pgAn===Math.ceil(totAn/15)?.4:1 }}>Próxima →</button>
-          </div>
-        )}
+        <Pagination page={pgAn} total={totAn} setPage={setPgAn} />
         </>
       )}
 
