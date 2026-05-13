@@ -6479,16 +6479,17 @@ function IPCTab({ user, toast_ }) {
           <F lbl="OP *" ch={<Inp placeholder="Ex: OP-2025-001" value={form.op} onChange={e => setF("op", e.target.value)} />} />
           <F lbl="Lote" ch={<Inp placeholder="Ex: LOTE-2025-001" value={form.lote||""} onChange={e => setF("lote", e.target.value)} />} />
           <F lbl="Produto *" ch={
-            <Sel value={form.produto} onChange={e => {
-              const prod = produtos.find(p => p.nome === e.target.value);
-              setF("produto", e.target.value);
+            <Sel value={form.produtoId||""} onChange={e => {
+              const prod = produtos.find(p => String(p.id) === e.target.value);
+              setF("produtoId", e.target.value);
+              setF("produto", prod?.nome || "");
               setF("linha", prod?.linha || "");
             }}>
               <option value="">Selecione o produto...</option>
               {[...new Set(produtos.map(p=>p.linha))].map(linha => (
                 <optgroup key={linha} label={`— ${linha} —`}>
                   {produtos.filter(p=>p.linha===linha).map(p => (
-                    <option key={p.id} value={p.nome}>{p.nome}{p.forma?` (${p.forma})`:""}</option>
+                    <option key={p.id} value={String(p.id)}>{p.nome}{p.forma?` (${p.forma})`:""}</option>
                   ))}
                 </optgroup>
               ))}
