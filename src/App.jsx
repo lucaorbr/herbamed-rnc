@@ -6451,6 +6451,8 @@ function IPCTab({ user, toast_ }) {
     .filter(r => filtroLinha === "todas" || r.linha === filtroLinha)
     .filter(r => !busca || r.op?.toLowerCase().includes(busca.toLowerCase()) || r.produto?.toLowerCase().includes(busca.toLowerCase()));
 
+  const { paginated: filtradosPg, page: pgIPC, total: totIPC, setPage: setPgIPC } = usePagination(filtrados, 20);
+
   // ── FORM NOVO/EDITAR ──
   if (view === "novo") return (
     <div>
@@ -6699,7 +6701,7 @@ function IPCTab({ user, toast_ }) {
           <div style={{ fontSize:12, marginTop:6 }}>Crie o primeiro registro de controle de processo!</div>
         </div>
       ) : (
-        filtrados.map(r => {
+        filtradosPg.map(r => {
           const area = AREAS.find(a => a.id === r.area);
           return (
             <div key={r.id} className="rnc-row" onClick={() => { setSel(r); setView("detalhe"); }}
@@ -6723,6 +6725,7 @@ function IPCTab({ user, toast_ }) {
           );
         })
       )}
+      <Pagination page={pgIPC} total={totIPC} setPage={setPgIPC} />
     </div>
   );
 }
