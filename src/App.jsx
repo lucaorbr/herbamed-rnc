@@ -5940,6 +5940,13 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
     win.document.write(html); win.document.close();
   };
 
+  const analiseFiltradas = analises.filter(a=>{
+    const textoOk = !filtroTexto || (a.materialNome||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.num||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.lote||"").toLowerCase().includes(filtroTexto.toLowerCase());
+    const concOk = filtroConc==="Todos" || a.conclusao===filtroConc;
+    return textoOk && concOk;
+  });
+  const { paginated: analisePg, page: pgAn, total: totAn, setPage: setPgAn } = usePagination(analiseFiltradas, 15);
+
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
   // ── NOVA ANÁLISE ──
@@ -6135,13 +6142,6 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   );
 
   // ── LISTA ──
-  const analiseFiltradas = analises.filter(a=>{
-    const textoOk = !filtroTexto || (a.materialNome||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.num||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.lote||"").toLowerCase().includes(filtroTexto.toLowerCase());
-    const concOk = filtroConc==="Todos" || a.conclusao===filtroConc;
-    return textoOk && concOk;
-  });
-  const { paginated: analisePg, page: pgAn, total: totAn, setPage: setPgAn } = usePagination(analiseFiltradas, 15);
-
   return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
