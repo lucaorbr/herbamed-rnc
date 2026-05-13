@@ -6140,7 +6140,6 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
     const concOk = filtroConc==="Todos" || a.conclusao===filtroConc;
     return textoOk && concOk;
   });
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { paginated: analisePg, page: pgAn, total: totAn, setPage: setPgAn } = usePagination(analiseFiltradas, 15);
 
   return (
