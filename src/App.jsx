@@ -5443,6 +5443,9 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const [ensaios, setEnsaios] = useState([]);
   const [templateSel, setTemplateSel] = useState("");
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
+  const [pgMat, setPgMat] = useState(1);
+  const matFiltrados = filtroTipoLista==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipoLista);
+  const { paginated: matPg, total: totMat } = usePagination(matFiltrados, 15);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -5577,8 +5580,6 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
 
   if(view==="lista") {
     const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
-    const matFiltrados = filtroTipoLista==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipoLista);
-    const { paginated: matPg, page: pgMat, total: totMat, setPage: setPgMat } = usePagination(matFiltrados, 15);
     return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
