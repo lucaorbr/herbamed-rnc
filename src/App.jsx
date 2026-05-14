@@ -5442,6 +5442,8 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const [form, setForm] = useState({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
   const [ensaios, setEnsaios] = useState([]);
   const [templateSel, setTemplateSel] = useState("");
+  const [fichasTecnicas, setFichasTecnicas] = useState([]);
+  const [ftUploading, setFtUploading] = useState(null);
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
   const [pgMat, setPgMat] = useState(1);
   const PER_PAGE_MAT = 15;
@@ -5522,6 +5524,24 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const updEnsaio = (id,k,v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
   const delEnsaio = (id) => setEnsaios(p=>p.filter(e=>e.id!==id));
 
+  const addLinhaFicha = () => setFichasTecnicas(p=>[...p, { id: Date.now(), fornecedorNome:"", url:"", nome:"", size:0, uploadedAt:"" }]);
+  const updLinhaFicha = (id, k, v) => setFichasTecnicas(p=>p.map(f=>f.id===id?{...f,[k]:v}:f));
+  const delLinhaFicha = (id) => setFichasTecnicas(p=>p.filter(f=>f.id!==id));
+  const uploadFicha = async (id, file) => {
+    if(!file) return;
+    setFtUploading(id);
+    try {
+      const result = await uploadPdfToSupabase(file);
+      updLinhaFicha(id, "url", result.url);
+      updLinhaFicha(id, "nome", result.name);
+      updLinhaFicha(id, "size", result.size);
+      updLinhaFicha(id, "uploadedAt", tod());
+      toast_("Ficha técnica anexada!", "green");
+    } catch(e) {
+      toast_("Erro no upload: " + e.message, "red");
+    } finally { setFtUploading(null); }
+  };
+
   const salvar = async () => {
     if(!form.nome.trim()) { alert("Nome é obrigatório."); return; }
     if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
@@ -5546,6 +5566,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
         ref: form.ref||"",
         obs: form.obs||"",
         ensaios: ensaiosLimpos,
+        fichasTecnicas: fichasTecnicas.filter(f=>f.url||f.fornecedorNome),
         criadoPor: user.name,
         criadoEm: tod(),
         atualizadoEm: tod(),
@@ -5555,6 +5576,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
       setView("lista"); setSel(null);
       setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
       setEnsaios([]);
+      setFichasTecnicas([]);
     } catch(e) {
       alert("Erro ao salvar: " + e.message);
       console.error(e);
@@ -5565,6 +5587,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
     setSel(m);
     setForm({ nome:m.nome, tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
     setEnsaios((m.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e })));
+    setFichasTecnicas((m.fichasTecnicas||[]).map(f=>({ id:Date.now()+Math.random(), ...f })));
     setView("editar");
   };
 
@@ -5737,6 +5760,47 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
                     <label htmlFor={`mult-${e.id}`} style={{ fontSize:11, color:T.text2, cursor:"pointer" }}>Permite lançamento de múltiplos valores (calcula média automaticamente)</label>
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Fichas Técnicas */}
+      <div style={s.card}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
+          <SecTitle icon="📄" ch={`Fichas Técnicas (${fichasTecnicas.length})`} />
+          <button style={s.btnA} onClick={addLinhaFicha}><span className="btn-emoji">+ </span>Adicionar ficha</button>
+        </div>
+        {fichasTecnicas.length===0 ? (
+          <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:13 }}>Nenhuma ficha técnica anexada. Clique em "+ Adicionar ficha" para começar.</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {fichasTecnicas.map(f=>(
+              <div key={f.id} style={{ display:"grid", gridTemplateColumns:"1fr 1fr auto auto", gap:8, alignItems:"center", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 10px" }}>
+                <Sel value={f.fornecedorNome} onChange={e=>updLinhaFicha(f.id,"fornecedorNome",e.target.value)} sx={{ fontSize:12 }}>
+                  <option value="">Selecionar fornecedor...</option>
+                  {fornecedores.filter(x=>x.status==="Ativo").map(forn=><option key={forn.id} value={forn.nome}>{forn.nome}</option>)}
+                  <option value="Outro">Outro</option>
+                </Sel>
+                {f.url ? (
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ fontSize:12, color:T.accent, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={f.nome}>📎 {f.nome}</span>
+                    <button onClick={()=>window.open(f.url,"_blank","noopener,noreferrer")} style={{ ...s.btn, padding:"3px 8px", fontSize:11, color:T.accent, whiteSpace:"nowrap" }}>👁 Ver</button>
+                  </div>
+                ) : (
+                  <label style={{ ...s.btn, padding:"5px 12px", fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>
+                    {ftUploading===f.id ? "Enviando..." : "📎 Anexar PDF"}
+                    <input type="file" accept=".pdf,image/*" style={{ display:"none" }} disabled={ftUploading===f.id} onChange={e=>uploadFicha(f.id, e.target.files[0])} />
+                  </label>
+                )}
+                {f.url ? (
+                  <label style={{ ...s.btn, padding:"5px 10px", fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>
+                    {ftUploading===f.id ? "..." : "↺ Trocar"}
+                    <input type="file" accept=".pdf,image/*" style={{ display:"none" }} disabled={ftUploading===f.id} onChange={e=>uploadFicha(f.id, e.target.files[0])} />
+                  </label>
+                ) : <div />}
+                <button onClick={()=>delLinhaFicha(f.id)} style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontFamily:"inherit" }}>✕</button>
               </div>
             ))}
           </div>
