@@ -5610,7 +5610,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) {filtroTipoLista!=="Todos"?`em "${filtroTipoLista}"`:"cadastrado(s)"}</div>
-        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
+        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
       </div>
 
       {materiais.length===0 ? (
