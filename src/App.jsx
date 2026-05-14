@@ -5444,8 +5444,11 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const [templateSel, setTemplateSel] = useState("");
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
   const [pgMat, setPgMat] = useState(1);
+  const PER_PAGE_MAT = 15;
   const matFiltrados = filtroTipoLista==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipoLista);
-  const { paginated: matPg, total: totMat } = usePagination(matFiltrados, 15);
+  const totMatPg = Math.ceil(matFiltrados.length / PER_PAGE_MAT) || 1;
+  const safePgMat = Math.min(pgMat, totMatPg);
+  const matPg = matFiltrados.slice((safePgMat-1)*PER_PAGE_MAT, safePgMat*PER_PAGE_MAT);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -5628,7 +5631,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
               </tbody>
             </table>
           </div>
-          <Pagination page={pgMat} total={totMat} setPage={setPgMat} />
+          <Pagination page={safePgMat} total={totMatPg} setPage={setPgMat} />
         </>
       )}
     </div>
