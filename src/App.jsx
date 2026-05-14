@@ -5442,6 +5442,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const [form, setForm] = useState({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
   const [ensaios, setEnsaios] = useState([]);
   const [templateSel, setTemplateSel] = useState("");
+  const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -5574,10 +5575,14 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
 
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
-  if(view==="lista") return (
+  if(view==="lista") {
+    const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
+    const matFiltrados = filtroTipoLista==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipoLista);
+    const { paginated: matPg, page: pgMat, total: totMat, setPage: setPgMat } = usePagination(matFiltrados, 15);
+    return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
-        <div style={{ fontSize:13, color:T.text2 }}>{materiais.length} material(is) cadastrado(s)</div>
+        <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) {filtroTipoLista!=="Todos"?`em "${filtroTipoLista}"`:"cadastrado(s)"}</div>
         <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
       </div>
 
@@ -5588,33 +5593,45 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
           <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Novo Material" para começar</div>
         </div>
       ) : (
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:T.surf }}>
-              {["Material","Tipo","Fornecedor padrão","Ensaios","Referência",""].map(h=>(
-                <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {materiais.map((m,i)=>(
-                <tr key={m.id} style={{ background:i%2===0?T.card:T.surf }}>
-                  <td style={{ padding:"10px 12px", fontSize:13, fontWeight:600, color:T.text }}>{m.nome}</td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.tipo}</td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.fornecedorPadrao||"—"}</td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:T.accent, fontWeight:700 }}>{m.ensaios?.length||0}</td>
-                  <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.ref||"—"}</td>
-                  <td style={{ padding:"10px 8px", display:"flex", gap:6 }}>
-                    <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
-                    <button style={{ ...s.btnD, padding:"4px 10px", fontSize:11 }} onClick={()=>delMaterial(m.id)}>🗑️</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Filtro por tipo */}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
+            {tiposUnicos.map(t=>(
+              <button key={t} onClick={()=>{ setFiltroTipoLista(t); setPgMat(1); }} style={{ padding:"4px 14px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipoLista===t?T.accent:T.border}`, background:filtroTipoLista===t?T.accentDim:"transparent", color:filtroTipoLista===t?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t}</button>
+            ))}
+          </div>
+
+          <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead><tr style={{ background:T.surf }}>
+                {["Material","Tipo","Fornecedor padrão","Ensaios","Referência",""].map(h=>(
+                  <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {matPg.length===0 ? (
+                  <tr><td colSpan={6} style={{ padding:"2rem", textAlign:"center", color:T.text3, fontSize:13 }}>Nenhum material nesta categoria.</td></tr>
+                ) : matPg.map((m,i)=>(
+                  <tr key={m.id} style={{ background:i%2===0?T.card:T.surf }}>
+                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:600, color:T.text }}>{m.nome}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.tipo}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.fornecedorPadrao||"—"}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.accent, fontWeight:700 }}>{m.ensaios?.length||0}</td>
+                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.ref||"—"}</td>
+                    <td style={{ padding:"10px 8px", display:"flex", gap:6 }}>
+                      <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
+                      <button style={{ ...s.btnD, padding:"4px 10px", fontSize:11 }} onClick={()=>delMaterial(m.id)}>🗑️</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={pgMat} total={totMat} setPage={setPgMat} />
+        </>
       )}
     </div>
-  );
+  );}
 
   // Formulário novo/editar
   return (
