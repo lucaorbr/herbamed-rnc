@@ -4978,9 +4978,18 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
   .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
   @media print{body{background:#fff!important;}}
 </style></head><body><div class="page">
-<div class="header">
-  <div><div class="logo">🌿 HERBAMED®</div><div style="font-size:10px;color:#666;">Relatório de Análise — Controle de Qualidade</div></div>
-  <div><div class="ra-num">${ficha.num}</div><div style="font-size:11px;color:#666;text-align:right;">Data: ${fmt(ficha.dataAnalise)}</div></div>
+<div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <img src="https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <div>
+      <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
+      <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
+    </div>
+  </div>
+  <div style="text-align:right;">
+    <div style="color:#fff;font-size:13px;font-weight:bold;">Relatório de Análise</div>
+    <div style="color:#9fd4b2;font-size:11px;">N° ${ficha.num} · ${fmt(ficha.dataAnalise)}</div>
+  </div>
 </div>
 <div class="section">
   <div class="section-title">Identificação do Material</div>
@@ -5020,9 +5029,9 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
-<div class="footer">
-  <div>Herbamed® · Controle de Qualidade · ${ficha.num}</div>
-  <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
+<div style="padding:10px 24px;background:#f5f5f5;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#888;">
+  <span>Herbamed Laboratório Nutracêutico LTDA · CNPJ: 14.829.598/0001-30</span>
+  <span>Av Irene Meneghetti Longhini, 500 · Assis/SP - Brasil · CEP: 19816-370</span>
 </div>
 </div><script>window.onload=()=>window.print();</script></body></html>`;
     win.document.write(html);
@@ -5973,9 +5982,18 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
   .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
   @media print{body{background:#fff!important;}}
 </style></head><body><div class="page">
-<div class="header">
-  <div><div class="logo">🌿 HERBAMED®</div><div style="font-size:10px;color:#666;">Relatório de Análise — Controle de Qualidade</div></div>
-  <div style="text-align:right;"><div style="font-size:18px;font-weight:700;color:#1a7a3c;">${a.num}</div><div style="font-size:11px;color:#666;">${fmt(a.dataAnalise)}</div></div>
+<div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <img src="https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <div>
+      <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
+      <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
+    </div>
+  </div>
+  <div style="text-align:right;">
+    <div style="color:#fff;font-size:13px;font-weight:bold;">Relatório de Análise</div>
+    <div style="color:#9fd4b2;font-size:11px;">N° ${a.num} · ${fmt(a.dataAnalise)}</div>
+  </div>
 </div>
 <div class="section">
   <div class="stitle">Identificação</div>
@@ -6017,9 +6035,9 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
-<div class="footer">
-  <div>Herbamed® · Controle de Qualidade · ${a.num}</div>
-  <div>Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+<div style="padding:10px 24px;background:#f5f5f5;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#888;">
+  <span>Herbamed Laboratório Nutracêutico LTDA · CNPJ: 14.829.598/0001-30</span>
+  <span>Av Irene Meneghetti Longhini, 500 · Assis/SP - Brasil · CEP: 19816-370</span>
 </div>
 </div><script>window.onload=()=>window.print();</script></body></html>`;
     win.document.write(html); win.document.close();
