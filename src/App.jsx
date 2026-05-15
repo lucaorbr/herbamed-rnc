@@ -640,7 +640,8 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
   const addExtra = () => { if (!extra.includes("@")) return; setTo(p => [...new Set([...p, extra])]); setExtra(""); };
 
   const send = async () => {
-    if (!to.length) { setErr("Selecione ao menos um destinatário."); return; }
+    const validTo = to.filter(e => e && e.includes("@"));
+    if (!validTo.length) { setErr("Nenhum destinatário com e-mail válido selecionado."); return; }
     setSending(true); setErr("");
     try {
       // Envia um e-mail para cada destinatário via EmailJS
@@ -648,7 +649,7 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
       const EMAILJS_TEMPLATE = "template_4jl73wq";
       const EMAILJS_KEY      = "z2VxJ1dYjwrRp8Nh4";
 
-      for (const email of to) {
+      for (const email of validTo) {
         const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -671,7 +672,7 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
           throw new Error(`Erro ao enviar para ${email}: ${txt}`);
         }
       }
-      onSent(`E-mail enviado para ${to.length} destinatário(s)!`);
+      onSent(`E-mail enviado para ${validTo.length} destinatário(s)!`);
     } catch (e) { setErr("Erro: " + e.message); }
     setSending(false);
   };
