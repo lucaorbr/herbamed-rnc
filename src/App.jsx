@@ -1011,41 +1011,42 @@ function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
 
 function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
   const GRUPOS = [
-    { id:"principal", icon:"🏠", label:"Principal", items:[
-      { id:"home",  icon:"🏠", label:"Home" },
+    { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
       ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
     ]},
-    ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Qualidade", items:[
+    ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
       { id:"5w2h",     icon:"📌", label:"5W2H" },
       { id:"eficacia", icon:"✅", label:"Eficácia" },
       { id:"fmea",     icon:"⚠️", label:"FMEA" },
     ]}]:[]),
-    { id:"analise", icon:"📊", label:"Análise & Dados", items:[
+    { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
+      { id:"cq-materiais", icon:"🧪", label:"Entrada de Materiais" },
+      { id:"cq-analises",  icon:"📋", label:"Análises" },
+      { id:"cq-dashboard", icon:"📈", label:"Dashboard CQ" },
+      { id:"nqa",          icon:"📐", label:"NQA / AQL" },
+    ]},
+    { id:"producao", icon:"🏗️", label:"Produção", items:[
+      { id:"producao-processos", icon:"🏗️", label:"Controle de Processos" },
+      { id:"ipc",                icon:"🏭", label:"Controle de Processo IPC" },
+      { id:"ipc-produtos",       icon:"📦", label:"Produtos IPC" },
+    ]},
+    { id:"analise", icon:"📊", label:"Indicadores", items:[
       { id:"dashboard",  icon:"📊", label:"Dashboard" },
       { id:"cep",        icon:"📉", label:"CEP" },
       { id:"relatorios", icon:"📑", label:"Relatórios" },
     ]},
-    { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
-      { id:"cq-materiais", icon:"🧪", label:"CQ — Materiais" },
-      { id:"cq-analises",  icon:"📋", label:"CQ — Análises" },
-      { id:"cq-dashboard", icon:"📈", label:"CQ — Dashboard" },
-      { id:"nqa",          icon:"📐", label:"NQA / AQL" },
-      { id:"ipc",          icon:"🏭", label:"Controle de Processo" },
-      { id:"ipc-produtos",   icon:"📦", label:"IPC — Produtos" },
-    ]},
-    { id:"producao", icon:"🏗️", label:"Produção", items:[
-      { id:"producao-processos", icon:"🏗️", label:"Controle de Processos" },
-    ]},
-    { id:"gestao", icon:"🏭", label:"Gestão", items:[
+    { id:"cadastros", icon:"🏢", label:"Cadastros", items:[
       { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
-      { id:"auditorias",   icon:"🔍", label:"Auditorias" },
-      { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
       { id:"clientes",     icon:"🏢", label:"Clientes Terceiros" },
+      { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
+    ]},
+    { id:"gestao", icon:"🗂️", label:"Documentos & Gestão", items:[
       { id:"gestao-docs",  icon:"🗂️", label:"Gestão de Docs" },
+      { id:"auditorias",   icon:"🔍", label:"Auditorias" },
       ...(isAdmin?[{ id:"audit-log", icon:"🛡️", label:"Trilha de Auditoria" }]:[]),
-      ...(isAdmin?[{ id:"admin", icon:"⚙️", label:"Administração" }]:[]),
+      ...(isAdmin?[{ id:"admin",     icon:"⚙️", label:"Administração" }]:[]),
     ]},
   ];
 
@@ -1422,7 +1423,7 @@ export default function App() {
             <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
               {sidebarOpen ? "◀" : "▶"}
             </button>
-            <div style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center" }}>
+            <div onClick={() => setTab("home")} style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center", cursor:"pointer" }} title="Ir para Home">
               <HerbamedLogo height={24} white={false} />
             </div>
             <div style={{ display:"flex", flexDirection:"column" }}>
