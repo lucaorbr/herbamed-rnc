@@ -645,7 +645,7 @@ function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
     setSending(true); setErr("");
     try {
       // Envia um e-mail para cada destinatário via EmailJS
-      const EMAILJS_SERVICE  = "service_ls3923k";
+      const EMAILJS_SERVICE  = "service_gxhicii";
       const EMAILJS_TEMPLATE = "template_4jl73wq";
       const EMAILJS_KEY      = "z2VxJ1dYjwrRp8Nh4";
 
@@ -1190,7 +1190,7 @@ export default function App() {
           fetch("https://api.emailjs.com/api/v1.0/email/send", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              service_id: "service_ls3923k", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
+              service_id: "service_gxhicii", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
               template_params: {
                 to_email: user.email, to_name: user.name,
                 from_name: "SGQ Herbamed® · Alertas Automáticos",
@@ -3254,7 +3254,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
     try {
       const res = await fetch("https://api.emailjs.com/api/v1.0/email/send",{
         method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ service_id:"service_ls3923k", template_id:"template_4jl73wq", user_id:"z2VxJ1dYjwrRp8Nh4",
+        body:JSON.stringify({ service_id:"service_gxhicii", template_id:"template_4jl73wq", user_id:"z2VxJ1dYjwrRp8Nh4",
           template_params:{ to_email:emailDest, to_name:emailDest, from_name:`${user.name} · Herbamed® SGQ`,
             subject:`📊 Relatório SGQ — ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
             message:corpo, reply_to:user.email }})
