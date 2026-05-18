@@ -137,7 +137,7 @@ const MENU_SVG_ICONS = {
 const tod = () => new Date().toISOString().split("T")[0];
 const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
 const past = d => d && d < tod();
-const genNum = c => `RNC-${new Date().getFullYear()}-${String(c).padStart(3, "0")}`;
+const genNum = c => String(c);
 
 const applyMask = (tipo, val) => {
   const d = (val || "").replace(/\D/g, "");

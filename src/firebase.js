@@ -63,10 +63,16 @@ export const getCounter = async () => {
   return snap.exists() ? snap.data().value : 0;
 };
 export const incrementCounter = async () => {
-  const current = await getCounter();
-  const next = current + 1;
-  await setDoc(doc(db, "meta", "counter"), { value: next });
-  return next;
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const key = `counter_${dd}${mm}${yy}`;
+  const ref = doc(db, "meta", key);
+  const snap = await getDoc(ref);
+  const next = snap.exists() ? snap.data().value + 1 : 1;
+  await setDoc(ref, { value: next });
+  return `${dd}${mm}${yy}${next}`;
 };
 
 // ─── GENERIC COLLECTIONS ──────────────────────────────────────────────────────
