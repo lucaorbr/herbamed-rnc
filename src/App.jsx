@@ -1153,7 +1153,10 @@ export default function App() {
           setUser({ ...ud, uid: fbUser.uid });
           // Grava ultimo acesso silenciosamente
           try { await saveUser(fbUser.uid, { ultimoAcesso: agora, online: true }); } catch(e) {}
-        } else setUser(null);
+        } else {
+          // Firestore não retornou perfil — usa dados do Auth como fallback
+          setUser({ uid: fbUser.uid, name: fbUser.displayName || fbUser.email, email: fbUser.email, role: "user" });
+        }
       } else {
         // Marca offline ao sair
         if (auth.currentUser) {

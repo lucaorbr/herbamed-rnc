@@ -9,6 +9,10 @@ import {
 } from "firebase/auth";
 import firebaseConfig from "./firebaseConfig";
 
+// Remove undefined values para evitar erros do Firestore
+const sanitize = (obj) =>
+  JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
+
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
@@ -32,8 +36,8 @@ export const getUser = async (uid) => {
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 };
-export const saveUser = (uid, data) => setDoc(doc(db, "users", uid), data, { merge: true });
-export const updateUser = (uid, data) => updateDoc(doc(db, "users", uid), data);
+export const saveUser = (uid, data) => setDoc(doc(db, "users", uid), sanitize(data), { merge: true });
+export const updateUser = (uid, data) => updateDoc(doc(db, "users", uid), sanitize(data));
 export const deleteUser = (uid) => deleteDoc(doc(db, "users", uid));
 export const getAllUsers = async () => {
   const snap = await getDocs(collection(db, "users"));
@@ -41,8 +45,8 @@ export const getAllUsers = async () => {
 };
 
 // ─── RNCS ─────────────────────────────────────────────────────────────────────
-export const saveRNC = (id, data) => setDoc(doc(db, "rncs", String(id)), { ...data, updatedAt: serverTimestamp() });
-export const updateRNC = (id, data) => updateDoc(doc(db, "rncs", String(id)), { ...data, updatedAt: serverTimestamp() });
+export const saveRNC = (id, data) => setDoc(doc(db, "rncs", String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
+export const updateRNC = (id, data) => updateDoc(doc(db, "rncs", String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
 export const deleteRNC = (id) => deleteDoc(doc(db, "rncs", String(id)));
 export const getAllRNCs = async () => {
   const snap = await getDocs(collection(db, "rncs"));
@@ -67,7 +71,7 @@ export const incrementCounter = async () => {
 
 // ─── GENERIC COLLECTIONS ──────────────────────────────────────────────────────
 export const saveCollection = (colName, id, data) =>
-  setDoc(doc(db, colName, String(id)), { ...data, updatedAt: serverTimestamp() });
+  setDoc(doc(db, colName, String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
 
 export const deleteFromCollection = (colName, id) =>
   deleteDoc(doc(db, colName, String(id)));
