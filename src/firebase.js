@@ -74,6 +74,16 @@ export const incrementCounter = async () => {
   await setDoc(ref, { value: next });
   return `${dd}${mm}${yy}${next}`;
 };
+export const peekDailyCounter = async () => {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const key = `counter_${dd}${mm}${yy}`;
+  const snap = await getDoc(doc(db, "meta", key));
+  const next = snap.exists() ? snap.data().value + 1 : 1;
+  return `${dd}${mm}${yy}${next}`;
+};
 
 // ─── GENERIC COLLECTIONS ──────────────────────────────────────────────────────
 export const saveCollection = (colName, id, data) =>

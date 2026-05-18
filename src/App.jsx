@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip as RcTooltip, ResponsiveContainer,
 import { auth, loginUser, logoutUser, getUser, saveUser, createAuthUser,
          deleteUser as fbDeleteUser, updateUser, getAllUsers,
          saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs,
-         incrementCounter, saveCollection, deleteFromCollection,
+         incrementCounter, peekDailyCounter, saveCollection, deleteFromCollection,
          subscribeCollection } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -2380,6 +2380,11 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
   const [w2h, setW2h] = useState([]);
   const [fornSearch, setFornSearch] = useState("");
   const [fornOpen, setFornOpen] = useState(false);
+  const [numPreview, setNumPreview] = useState("...");
+
+  useEffect(() => {
+    peekDailyCounter().then(n => setNumPreview(n)).catch(() => setNumPreview("—"));
+  }, []);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const fornAtivos = fornecedores.filter(x => x.status !== "Inativo" && x.status !== "Bloqueado");
@@ -2424,7 +2429,12 @@ function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = []
   return (
     <div>
       <div style={{ ...s.card }}>
-        <SecTitle icon="🪪" ch="Identificação" />
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+          <SecTitle icon="🪪" ch="Identificação" />
+          <span style={{ fontSize:13, fontWeight:600, color:"#6366f1", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:8, padding:"4px 12px" }}>
+            Nº previsto: {numPreview}
+          </span>
+        </div>
         <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>
           <F lbl="Tipo de não conformidade" tip="Classifique a origem da NC. Ex: Matéria-prima (insumo fora do padrão), Processo (falha na fabricação), Produto acabado (produto final com desvio)." ch={
