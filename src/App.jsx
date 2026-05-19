@@ -5948,18 +5948,18 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
       if(!confirma) return;
     }
     const reprovado = ncs.length > 0;
-    const isEditando = sel?._editando === true;
-    const num = isEditando ? (sel.num || `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`) : `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
+    const isEditando = selAnalise?._editando === true;
+    const num = isEditando ? (selAnalise.num || `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`) : `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
     const analise = {
-      id: isEditando ? sel.id : Date.now(), num,
+      id: isEditando ? selAnalise.id : Date.now(), num,
       materialId: matSel.id, materialNome: matSel.nome, materialTipo: matSel.tipo,
       ...form, resultados, coa,
       conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
-      criadoPor: isEditando ? sel.criadoPor : user.name, criadoEm: isEditando ? sel.criadoEm : tod(), criadoTs: isEditando ? sel.criadoTs : Date.now(),
+      criadoPor: isEditando ? selAnalise.criadoPor : user.name, criadoEm: isEditando ? selAnalise.criadoEm : tod(), criadoTs: isEditando ? selAnalise.criadoTs : Date.now(),
       atualizadoPor: isEditando ? user.name : undefined, atualizadoEm: isEditando ? tod() : undefined,
     };
     await saveCollection("cq_analises", String(analise.id), analise);
-    await auditLog(isEditando ? "Editou Análise CQ" : "Criou Análise CQ", "cq_analises", String(analise.id), `${num} — ${analise.materialNome}`, isEditando ? sel : null, { num, material: analise.materialNome, conclusao: analise.conclusao, lote: analise.lote, editadoPor: user.name });
+    await auditLog(isEditando ? "Editou Análise CQ" : "Criou Análise CQ", "cq_analises", String(analise.id), `${num} — ${analise.materialNome}`, isEditando ? selAnalise : null, { num, material: analise.materialNome, conclusao: analise.conclusao, lote: analise.lote, editadoPor: user.name });
     toast_(`${num} salva!`, "green");
     if(reprovado && window.confirm("Material REPROVADO! Deseja abrir uma RNC automaticamente?")) {
       setTab("nova");
