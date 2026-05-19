@@ -8639,6 +8639,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   const [analises, setAnalises] = useState([]);
   const [docs, setDocs] = useState([]);
   const [clock, setClock] = useState(new Date());
+  const [mesSel, setMesSel] = useState(null); // { key: "2026-05", label: "mai. de 26" }
 
   useEffect(() => {
     const unsub1 = subscribeCollection("cq_analises", list => setAnalises(list));
@@ -8669,11 +8670,16 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
     const d = new Date(); d.setMonth(d.getMonth() - i);
     mesesLabels.push(d.toISOString().slice(0, 7));
   }
-  const rncsPorMes = mesesLabels.map(m => ({
-    mes: new Date(m + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-    Abertas:  rncs.filter(r => r.data && r.data.startsWith(m)).length,
-    Eficazes: rncs.filter(r => r.data && r.data.startsWith(m) && r.status === "Eficaz").length,
-  }));
+  const rncsPorMes = mesesLabels.map(m => {
+    const [ano, mes_] = m.split("-").map(Number);
+    const label = new Date(ano, mes_ - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+    return {
+      _key: m,
+      mes: label,
+      Abertas:  rncs.filter(r => r.data && r.data.startsWith(m)).length,
+      Eficazes: rncs.filter(r => r.data && r.data.startsWith(m) && r.status === "Eficaz").length,
+    };
+  });
 
   // ── Gráfico 2: Top 5 fornecedores com mais RNCs ──
   const fornMap = {};
@@ -8726,9 +8732,52 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
     );
   };
 
+  // RNCs do mês selecionado
+  const rncsMesSel = mesSel ? rncs.filter(r => r.data && r.data.startsWith(mesSel.key)) : [];
+  const STATUS_COR = { "Aberta":"#ff4f6a","Em Análise":"#ffd166","Aguardando AC":"#ff8c42","AC Implementada":"#4fc3f7","Eficaz":"#2ab84a","Ineficaz":"#ff4f6a" };
+
   return (
     <div style={{ background: C.bg, height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'DM Sans', system-ui, sans-serif", color: C.text, overflow: "hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+      {/* ── MODAL RNCs do mês ── */}
+      {mesSel && (
+        <div onClick={() => setMesSel(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:C.card, border:`1px solid ${C.border2}`, borderRadius:18, width:"min(580px,92vw)", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
+            {/* Header modal */}
+            <div style={{ padding:"18px 22px 14px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.text }}>📊 RNCs — {mesSel.label.charAt(0).toUpperCase() + mesSel.label.slice(1)}</div>
+                <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{rncsMesSel.length} registro(s) encontrado(s)</div>
+              </div>
+              <button onClick={() => setMesSel(null)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.text2, cursor:"pointer", fontSize:13, padding:"4px 12px", fontFamily:"inherit" }}>✕ Fechar</button>
+            </div>
+            {/* Lista */}
+            <div style={{ overflowY:"auto", padding:"12px 22px 18px" }}>
+              {rncsMesSel.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"2rem", color:C.text3 }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>📭</div>
+                  <div>Nenhuma RNC registrada neste mês.</div>
+                </div>
+              ) : rncsMesSel.map(r => (
+                <div key={r.id} style={{ background:C.surf, border:`1px solid ${C.border}`, borderLeft:`3px solid ${STATUS_COR[r.status]||C.text3}`, borderRadius:10, padding:"10px 14px", marginBottom:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:11, fontWeight:700, color:C.text }}>{r.num || r.id}</span>
+                    <span style={{ fontSize:10, padding:"2px 8px", borderRadius:20, background:(STATUS_COR[r.status]||C.text3)+"22", color:STATUS_COR[r.status]||C.text3, fontWeight:600 }}>{r.status}</span>
+                    {r.tipo && <span style={{ fontSize:10, color:C.text3 }}>{r.tipo}</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:C.text2, marginBottom:3 }}>{r.desc || r.descricao || "—"}</div>
+                  <div style={{ display:"flex", gap:14, fontSize:10, color:C.text3 }}>
+                    {r.resp && <span>👤 {r.resp}</span>}
+                    {r.fornecedor && <span>🏭 {r.fornecedor}</span>}
+                    {r.data && <span>📅 {r.data}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── HEADER ── */}
       <div style={{ background: `linear-gradient(135deg,${C.surf},${C.card})`, borderBottom: `1px solid ${C.border2}`, padding: "0 2rem", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -8777,7 +8826,15 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
             <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Últimos 6 meses</div>
             <div style={{ flex: 1, minHeight: 160 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rncsPorMes} barCategoryGap="30%">
+                <BarChart data={rncsPorMes} barCategoryGap="30%"
+                  onClick={e => {
+                    if (e && e.activePayload && e.activePayload[0]) {
+                      const d = e.activePayload[0].payload;
+                      if (d._key) setMesSel({ key: d._key, label: d.mes });
+                    }
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="mes" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -8787,12 +8844,13 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 16, marginTop: 8, alignItems: "center" }}>
               {[["Abertas", C.red], ["Eficazes", C.accent]].map(([l, c]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.text2 }}>
                   <div style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{l}
                 </div>
               ))}
+              <div style={{ marginLeft: "auto", fontSize: 10, color: C.text3 }}>Clique no mês para ver detalhes</div>
             </div>
           </div>
 
