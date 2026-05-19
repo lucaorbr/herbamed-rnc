@@ -8826,21 +8826,23 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
             <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Últimos 6 meses</div>
             <div style={{ flex: 1, minHeight: 160 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={rncsPorMes} barCategoryGap="30%"
-                  onClick={e => {
-                    if (e && e.activePayload && e.activePayload[0]) {
-                      const d = e.activePayload[0].payload;
-                      if (d._key) setMesSel({ key: d._key, label: d.mes });
-                    }
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
+                <BarChart data={rncsPorMes} barCategoryGap="30%" style={{ cursor: "pointer" }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="mes" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false}
+                    onClick={(data) => {
+                      const entry = rncsPorMes.find(m => m.mes === data.value);
+                      if (entry) setMesSel({ key: entry._key, label: entry.mes });
+                    }}
+                    style={{ cursor: "pointer" }}
+                  />
                   <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
-                  <Bar dataKey="Abertas"  fill={C.red}    radius={[5,5,0,0]} />
-                  <Bar dataKey="Eficazes" fill={C.accent} radius={[5,5,0,0]} />
+                  <Bar dataKey="Abertas"  fill={C.red}    radius={[5,5,0,0]}
+                    onClick={(data) => { if (data._key) setMesSel({ key: data._key, label: data.mes }); }}
+                  />
+                  <Bar dataKey="Eficazes" fill={C.accent} radius={[5,5,0,0]}
+                    onClick={(data) => { if (data._key) setMesSel({ key: data._key, label: data.mes }); }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
