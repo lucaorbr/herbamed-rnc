@@ -1125,7 +1125,8 @@ export default function App() {
         }, 1000);
       }, WARNING);
 
-      logoutTimer = setTimeout(() => {
+      logoutTimer = setTimeout(async () => {
+        try { await auditLog("Logout por Inatividade","usuarios",user?.uid||"—",user?.name||"—",null,null); } catch(e){}
         logoutUser();
         setUser(null);
         setSessionWarning(false);
@@ -1153,6 +1154,16 @@ export default function App() {
           setUser({ ...ud, uid: fbUser.uid });
           // Grava ultimo acesso silenciosamente
           try { await saveUser(fbUser.uid, { ultimoAcesso: agora, online: true }); } catch(e) {}
+          // Audit: registra login
+          try {
+            await saveCollection("audit_log", String(Date.now()), {
+              id: Date.now(), ts: Date.now(), data: agora,
+              usuario: ud.name || "—", email: ud.email || "—", userId: fbUser.uid,
+              acao: "Login", colecao: "usuarios", docId: fbUser.uid,
+              docNome: ud.name || ud.email || "—",
+              dadosAntes: null, dadosDepois: null,
+            });
+          } catch(e) {}
         } else {
           // Firestore não retornou perfil — usa dados do Auth como fallback
           setUser({ uid: fbUser.uid, name: fbUser.displayName || fbUser.email, email: fbUser.email, role: "user" });
@@ -1508,7 +1519,7 @@ export default function App() {
                       ⚙️ Administração
                     </button>
                   )}
-                  <button onClick={()=>{logoutUser();setUser(null);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.red, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8, borderTop:`1px solid ${T.border}` }}>
+                  <button onClick={async()=>{ try { await auditLog("Logout Manual","usuarios",user?.uid||"—",user?.name||"—",null,null); } catch(e){} logoutUser();setUser(null);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.red, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8, borderTop:`1px solid ${T.border}` }}>
                     🚪 Sair do sistema
                   </button>
                 </div>
@@ -1556,25 +1567,25 @@ export default function App() {
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
-              {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} />}
+              {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
-              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} />}
+              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
               {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
-              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} />}
-              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} />}
+              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
+              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
-              {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} />}
-              {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} />}
+              {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
+              {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
               {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} />}
             </div>
           </div>
         </div>
@@ -3955,7 +3966,7 @@ function exportFMEAPDF(items) {
 }
 
 /* ─── FMEA TAB ───────────────────────────────────────────────────────────────── */
-function FMEATab({ user, toast_ }) {
+function FMEATab({ user, toast_, auditLog }) {
   const T = useTheme(); const s = useS();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3976,16 +3987,27 @@ function FMEATab({ user, toast_ }) {
     try {
     const novo = { id: Date.now(), processo: "", modoFalha: "", efeito: "", causa: "", S: 1, O: 1, D: 1, acao: "", resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name };
     await saveCollection("fmea", String(novo.id), novo);
+    await auditLog("Criou item FMEA", "fmea", String(novo.id), novo.processo || String(novo.id), null, { processo: novo.processo, modoFalha: novo.modoFalha });
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
     }
   };
 
+  const fmeaDebounceRef = useRef({});
   const upd = async (id, k, v) => {
     try {
     const item = items.find(x => String(x.id) === String(id));
-    if (item) await saveCollection("fmea", String(id), { ...item, [k]: v });
+    if (item) {
+      await saveCollection("fmea", String(id), { ...item, [k]: v });
+      // Debounce: agrupa edições do mesmo item em 2s para não poluir log
+      const key = String(id);
+      if (fmeaDebounceRef.current[key]) clearTimeout(fmeaDebounceRef.current[key]);
+      fmeaDebounceRef.current[key] = setTimeout(async () => {
+        await auditLog("Editou item FMEA", "fmea", String(id), item.processo || String(id), null, { [k]: v });
+        delete fmeaDebounceRef.current[key];
+      }, 2000);
+    }
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -3995,7 +4017,9 @@ function FMEATab({ user, toast_ }) {
   const del = async (id) => {
     try {
     if (!confirm("Remover este item?")) return;
+    const antes = items.find(x => String(x.id) === String(id));
     await deleteFromCollection("fmea", String(id));
+    await auditLog("Excluiu item FMEA", "fmea", String(id), antes?.processo || String(id), antes, null);
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -4033,6 +4057,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
       const parsed = JSON.parse(clean);
       const novos = parsed.map(p => ({ id: Date.now() + Math.round(Math.random()*1000), resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name, ...p, S: Number(p.S)||5, O: Number(p.O)||3, D: Number(p.D)||3 }));
       for (const item of novos) await saveCollection("fmea", String(item.id), item);
+      await auditLog("Gerou FMEA por IA", "fmea", "lote", processo, null, { quantidade: novos.length, processo });
       toast_("FMEA gerado pela IA!", "green");
     } catch { toast_("Erro ao gerar. Tente novamente.", "red"); }
     setAiLoading(false);
@@ -4315,7 +4340,7 @@ function CEPTab({ rncs }) {
 }
 
 /* ─── FORNECEDORES TAB ───────────────────────────────────────────────────────── */
-function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, isAdmin }) {
+function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, isAdmin, auditLog }) {
   const T = useTheme(); const s = useS();
   const [sel, setSel] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -4334,6 +4359,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
     const id = String(Date.now());
     const novo = { ...novoForn, id, criadoEm: tod(), criadoPor: user.name };
     await saveCollection("fornecedores", id, novo);
+    await auditLog("Criou Fornecedor", "fornecedores", id, novo.nome, null, { nome: novo.nome, cnpj: novo.cnpj, categoria: novo.categoria, status: novo.status });
     setNovoForn({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", cep:"", endereco:"", status:"Ativo", obs:"" });
     setShowNovo(false);
     toast_("Fornecedor cadastrado!", "green");
@@ -4346,6 +4372,7 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
   const saveEdit = async () => {
     try {
     await saveCollection("fornecedores", String(sel.id), { ...sel, ...editData });
+    await auditLog("Editou Fornecedor", "fornecedores", String(sel.id), sel.nome, sel, { ...sel, ...editData });
     setSel(p => ({ ...p, ...editData }));
     setEditMode(false);
     toast_("Fornecedor atualizado!", "green");
@@ -4358,7 +4385,9 @@ function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, is
   const delForn = async (id) => {
     try {
     if (!confirm("Excluir este fornecedor?")) return;
+    const antesF = fornecedores.find(f => String(f.id) === String(id));
     await deleteFromCollection("fornecedores", String(id));
+    await auditLog("Excluiu Fornecedor", "fornecedores", String(id), antesF?.nome || String(id), antesF, null);
     setSel(null); toast_("Fornecedor removido.", "red");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -5457,7 +5486,7 @@ const ENSAIOS_SUGERIDOS = {
 };
 
 /* ─── CQ MATERIAIS TAB ───────────────────────────────────────────────────────── */
-function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
+function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -5597,6 +5626,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
         atualizadoEm: tod(),
       };
       await saveCollection("cq_materiais", id, material);
+      await auditLog(sel ? "Editou Material CQ" : "Criou Material CQ", "cq_materiais", id, material.nome, sel || null, { nome: material.nome, tipo: material.tipo, fornecedorPadrao: material.fornecedorPadrao });
       toast_(sel?"Material atualizado!":"Material cadastrado!", "green");
       setView("lista"); setSel(null);
       setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
@@ -5619,7 +5649,9 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
   const delMaterial = async (id) => {
     try {
     if(!confirm("Excluir este material e todos os seus ensaios?")) return;
+    const antesM = materiais.find(m => String(m.id) === String(id));
     await deleteFromCollection("cq_materiais", String(id));
+    await auditLog("Excluiu Material CQ", "cq_materiais", String(id), antesM?.nome || String(id), antesM, null);
     toast_("Material excluído.", "red");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -5841,7 +5873,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm }) {
 }
 
 /* ─── CQ ANALISES TAB ────────────────────────────────────────────────────────── */
-function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
+function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -5916,15 +5948,18 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
       if(!confirma) return;
     }
     const reprovado = ncs.length > 0;
-    const num = `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
+    const isEditando = sel?._editando === true;
+    const num = isEditando ? (sel.num || `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`) : `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
     const analise = {
-      id: Date.now(), num,
+      id: isEditando ? sel.id : Date.now(), num,
       materialId: matSel.id, materialNome: matSel.nome, materialTipo: matSel.tipo,
       ...form, resultados, coa,
       conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
-      criadoPor: user.name, criadoEm: tod(), criadoTs: Date.now()
+      criadoPor: isEditando ? sel.criadoPor : user.name, criadoEm: isEditando ? sel.criadoEm : tod(), criadoTs: isEditando ? sel.criadoTs : Date.now(),
+      atualizadoPor: isEditando ? user.name : undefined, atualizadoEm: isEditando ? tod() : undefined,
     };
     await saveCollection("cq_analises", String(analise.id), analise);
+    await auditLog(isEditando ? "Editou Análise CQ" : "Criou Análise CQ", "cq_analises", String(analise.id), `${num} — ${analise.materialNome}`, isEditando ? sel : null, { num, material: analise.materialNome, conclusao: analise.conclusao, lote: analise.lote, editadoPor: user.name });
     toast_(`${num} salva!`, "green");
     if(reprovado && window.confirm("Material REPROVADO! Deseja abrir uma RNC automaticamente?")) {
       setTab("nova");
@@ -5966,7 +6001,9 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm }) {
   const delAnalise = async (id) => {
     try {
     if(!confirm("Excluir esta análise?")) return;
+    const antesA = analises.find(a => String(a.id) === String(id));
     await deleteFromCollection("cq_analises", String(id));
+    await auditLog("Excluiu Análise CQ", "cq_analises", String(id), antesA?.num || String(id), antesA, null);
     setSelAnalise(null); toast_("Análise excluída.", "red");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -7095,7 +7132,7 @@ const HERBAMED_INFO = {
   cep: "19816-370",
 };
 
-function LaudosTab({ user, toast_, users }) {
+function LaudosTab({ user, toast_, users, auditLog }) {
   const T = useTheme(); const s = useS();
   const [laudos, setLaudos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -7182,6 +7219,7 @@ function LaudosTab({ user, toast_, users }) {
     const id = sel ? sel.id : Date.now();
     const laudo = { id, numLaudo, ...form, status, assinaturaAnalista:null, assinaturaRT:null, criadoPor:user.name, criadoEm:tod(), criadoTs:sel?sel.criadoTs:Date.now(), atualizadoEm:tod() };
     await saveCollection("laudos", String(id), laudo);
+    await auditLog(sel ? "Editou Laudo" : "Criou Laudo", "laudos", String(id), `${numLaudo} — ${laudo.produto}`, sel || null, { numLaudo, produto: laudo.produto, status: laudo.status, cliente: laudo.clienteId });
     toast_(sel?"Laudo atualizado!":"Laudo criado!", "green");
     setView("lista"); setSel(null);
     setForm({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
@@ -7195,7 +7233,9 @@ function LaudosTab({ user, toast_, users }) {
   const assinarAnalista = async (laudo) => {
     try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
-    await saveCollection("laudos", String(laudo.id), { ...laudo, assinaturaAnalista:{ nome:user.name, cargo:user.role==="rt"?"Responsável Técnico":"Analista de CQ", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
+    const assSig = { nome:user.name, cargo:user.role==="rt"?"Responsável Técnico":"Analista de CQ", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` };
+    await saveCollection("laudos", String(laudo.id), { ...laudo, assinaturaAnalista: assSig });
+    await auditLog("Assinou Laudo (Analista)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, null, { assinante: user.name, cargo: assSig.cargo });
     toast_("Laudo assinado!", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -7207,7 +7247,9 @@ function LaudosTab({ user, toast_, users }) {
     try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const novoStatus = calcStatus(laudo.ensaios) === "Aprovado" ? "Finalizado" : calcStatus(laudo.ensaios);
-    await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT:{ nome:user.name, cargo:"Responsável Técnico", crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` }});
+    const assRT = { nome:user.name, cargo:"Responsável Técnico", crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` };
+    await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT: assRT });
+    await auditLog("Assinou Laudo (RT)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, { status: laudo.status }, { status: novoStatus, assinante: user.name });
     toast_("Laudo assinado como RT!", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -7218,7 +7260,9 @@ function LaudosTab({ user, toast_, users }) {
   const deletar = async (id) => {
     try {
     if (!confirm("Excluir este laudo?")) return;
+    const antesL = laudos.find(l => String(l.id) === String(id));
     await deleteFromCollection("laudos", String(id));
+    await auditLog("Excluiu Laudo", "laudos", String(id), antesL?.numLaudo ? `${antesL.numLaudo} — ${antesL.produto}` : String(id), antesL, null);
     setView("lista"); setSel(null);
     toast_("Laudo excluído.", "red");
     } catch(e) {
@@ -7599,7 +7643,7 @@ function exportAuditoriaPDF(a) {
 }
 
 /* ─── AUDITORIAS TAB ─────────────────────────────────────────────────────────── */
-function AuditoriasTab({ user, toast_, users, rncs }) {
+function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
   const T = useTheme(); const s = useS();
   const [auditorias, setAuditorias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -7628,6 +7672,7 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
     const id = sel ? String(sel.id) : String(Date.now());
     const aud = { id, ...form, achados, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     await saveCollection("auditorias", id, aud);
+    await auditLog(sel ? "Editou Auditoria" : "Criou Auditoria", "auditorias", id, aud.titulo, sel || null, { titulo: aud.titulo, tipo: aud.tipo, status: aud.status, area: aud.area });
     toast_(sel?"Auditoria atualizada!":"Auditoria criada!", "green");
     setView("lista"); setSel(null);
     setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" });
@@ -7641,7 +7686,9 @@ function AuditoriasTab({ user, toast_, users, rncs }) {
   const del = async (id) => {
     try {
     if(!confirm("Excluir esta auditoria?")) return;
+    const antesAud = auditorias.find(a => String(a.id) === String(id));
     await deleteFromCollection("auditorias", String(id));
+    await auditLog("Excluiu Auditoria", "auditorias", String(id), antesAud?.titulo || String(id), antesAud, null);
     setSel(null); toast_("Auditoria excluída.", "red");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -8837,7 +8884,7 @@ function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
 }
 
 /* ─── ADMIN TAB ──────────────────────────────────────────────────────────────── */
-function AdminTab({ users, setUsers, toast_, currentUser }) {
+function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
   const T = useTheme(); const s = useS();
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
@@ -8869,6 +8916,7 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
       const cred = await createAuthUser(nu.email, nu.pw);
       const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", permissoes:nuPermissoes, ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
       await saveUser(cred.user.uid, userData);
+      await auditLog("Criou Usuário", "usuarios", cred.user.uid, `${userData.name} (${userData.email})`, null, { name: userData.name, email: userData.email, role: userData.role, setor: userData.setor });
       setUsers([...users, { ...userData, id:cred.user.uid }]);
       setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
@@ -8886,7 +8934,9 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
   const saveEdit = async (uid) => {
     try {
     const data = { ...editData, ...(editAssinatura?{assinatura:editAssinatura}:{assinatura:null}) };
+    const antesU = users.find(u => u.id === uid);
     await updateUser(uid, data);
+    await auditLog("Editou Usuário", "usuarios", uid, `${data.name || antesU?.name} (${antesU?.email || uid})`, antesU ? { name: antesU.name, role: antesU.role, setor: antesU.setor } : null, { name: data.name, role: data.role, setor: data.setor });
     setUsers(users.map(u=>u.id===uid?{...u,...data}:u));
     setEditing(null);
     toast_("Usuário atualizado!", "green");
@@ -8899,6 +8949,8 @@ function AdminTab({ users, setUsers, toast_, currentUser }) {
   const delUser = async (uid) => {
     if(uid===currentUser.uid) { alert("Você não pode excluir seu próprio usuário."); return; }
     if(!confirm("Remover este usuário do sistema?")) return;
+    const antesD = users.find(u => u.id === uid);
+    await auditLog("Excluiu Usuário", "usuarios", uid, antesD ? `${antesD.name} (${antesD.email})` : uid, antesD, null);
     await fbDeleteUser(uid);
     setUsers(users.filter(u=>u.id!==uid));
     toast_("Usuário removido.", "red");
@@ -10166,6 +10218,23 @@ function AuditLogTab({ user }) {
     "Assinou como Aprovador":  "#2ab84a",
     "Nova Revisão":        "#ff8c42", "Marcou como Obsoleto": "#ff4f6a",
     "Registrou Treinamento": "#5dd4b0",
+    // CQ Análises
+    "Criou Análise CQ":    "#2ab84a", "Editou Análise CQ":    "#4fc3f7", "Excluiu Análise CQ":    "#ff4f6a",
+    // CQ Materiais
+    "Criou Material CQ":   "#2ab84a", "Editou Material CQ":   "#4fc3f7", "Excluiu Material CQ":   "#ff4f6a",
+    // Fornecedores
+    "Criou Fornecedor":    "#2ab84a", "Editou Fornecedor":    "#4fc3f7", "Excluiu Fornecedor":    "#ff4f6a",
+    // Auditorias
+    "Criou Auditoria":     "#2ab84a", "Editou Auditoria":     "#4fc3f7", "Excluiu Auditoria":     "#ff4f6a",
+    // FMEA
+    "Criou item FMEA":     "#2ab84a", "Editou item FMEA":     "#4fc3f7", "Excluiu item FMEA":     "#ff4f6a",
+    "Gerou FMEA por IA":   "#a78bfa",
+    // Laudos
+    "Criou Laudo":         "#2ab84a", "Editou Laudo":         "#4fc3f7", "Excluiu Laudo":         "#ff4f6a",
+    "Assinou Laudo (Analista)": "#a78bfa", "Assinou Laudo (RT)": "#ffd166",
+    // Usuários / Sessões
+    "Criou Usuário":       "#2ab84a", "Editou Usuário":       "#4fc3f7", "Excluiu Usuário":       "#ff4f6a",
+    "Login":               "#5dd4b0", "Logout Manual":        "#ff8c42", "Logout por Inatividade": "#ffd166",
   };
 
   const corAcao = (acao) => {
@@ -10187,7 +10256,7 @@ function AuditLogTab({ user }) {
     const header = ["Data/Hora","Usuário","E-mail","Ação","Coleção","Documento","ID"];
     const rows = filtrados.map(l => [
       fmtDataHora(l.data), l.usuario, l.email, l.acao,
-      l.colecao === "rncs" ? "RNCs" : "Gestão de Docs",
+      l.colecao === "rncs" ? "RNCs" : l.colecao === "gestao_docs" ? "Gestão de Docs" : l.colecao === "cq_analises" ? "CQ Análises" : l.colecao === "cq_materiais" ? "CQ Materiais" : l.colecao === "fornecedores" ? "Fornecedores" : l.colecao === "auditorias" ? "Auditorias" : l.colecao === "fmea" ? "FMEA" : l.colecao === "laudos" ? "Laudos" : l.colecao === "usuarios" ? "Usuários" : l.colecao || "—",
       l.docNome, l.docId
     ]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -10211,7 +10280,7 @@ function AuditLogTab({ user }) {
             ["Usuário",    sel.usuario],
             ["E-mail",     sel.email],
             ["Ação",       sel.acao],
-            ["Coleção",    sel.colecao === "rncs" ? "RNCs" : "Gestão de Docs"],
+            ["Coleção",    sel.colecao === "rncs" ? "RNCs" : sel.colecao === "gestao_docs" ? "Gestão de Docs" : sel.colecao === "cq_analises" ? "CQ Análises" : sel.colecao === "cq_materiais" ? "CQ Materiais" : sel.colecao === "fornecedores" ? "Fornecedores" : sel.colecao === "auditorias" ? "Auditorias" : sel.colecao === "fmea" ? "FMEA" : sel.colecao === "laudos" ? "Laudos" : sel.colecao === "usuarios" ? "Usuários / Sessões" : sel.colecao || "—"],
             ["Documento",  sel.docNome],
             ["ID",         sel.docId],
           ].map(([k,v]) => (
@@ -10250,8 +10319,9 @@ function AuditLogTab({ user }) {
         {[
           { label:"Total",         value:logs.length,                                    icon:"📋", color:T.text2 },
           { label:"RNCs",          value:logs.filter(l=>l.colecao==="rncs").length,      icon:"🔴", color:"#ff4f6a" },
-          { label:"Documentos",    value:logs.filter(l=>l.colecao==="gestao_docs").length,icon:"🗂️", color:T.accent },
+          { label:"CQ Análises",   value:logs.filter(l=>l.colecao==="cq_analises").length,icon:"🧪", color:"#5dd4b0" },
           { label:"Exclusões",     value:logs.filter(l=>l.acao?.includes("Excluiu")).length,icon:"🗑️", color:"#ff8c42" },
+          { label:"Sessões",       value:logs.filter(l=>l.colecao==="usuarios" && (l.acao==="Login"||l.acao?.includes("Logout"))).length, icon:"🔐", color:"#a78bfa" },
           { label:"Hoje",          value:logs.filter(l=>l.data?.startsWith(new Date().toISOString().split("T")[0])).length, icon:"📅", color:T.blue||"#4fc3f7" },
         ].map(stat => (
           <div key={stat.label} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", textAlign:"center" }}>
@@ -10272,6 +10342,13 @@ function AuditLogTab({ user }) {
           <option value="todos">Todas as coleções</option>
           <option value="rncs">RNCs</option>
           <option value="gestao_docs">Gestão de Docs</option>
+          <option value="cq_analises">CQ Análises</option>
+          <option value="cq_materiais">CQ Materiais</option>
+          <option value="fornecedores">Fornecedores</option>
+          <option value="auditorias">Auditorias</option>
+          <option value="fmea">FMEA</option>
+          <option value="laudos">Laudos</option>
+          <option value="usuarios">Usuários / Sessões</option>
         </Sel>
         <Sel value={filtroAcao} onChange={e=>setFiltroAcao(e.target.value)}>
           <option value="todos">Todas as ações</option>
@@ -10304,7 +10381,7 @@ function AuditLogTab({ user }) {
           <div key={l.id} onClick={()=>setSel(l)} className="rnc-row"
             style={{ background:T.card, border:`1px solid ${T.border}`, borderLeft:`3px solid ${corAcao(l.acao)}`, borderRadius:10, padding:"10px 14px", marginBottom:6, cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
             <div style={{ width:36, height:36, borderRadius:8, background:corAcao(l.acao)+"20", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
-              {l.colecao==="rncs" ? "🔴" : "🗂️"}
+              {l.colecao==="rncs" ? "🔴" : l.colecao==="gestao_docs" ? "🗂️" : l.colecao==="cq_analises" ? "🧪" : l.colecao==="cq_materiais" ? "📦" : l.colecao==="fornecedores" ? "🏭" : l.colecao==="auditorias" ? "🔍" : l.colecao==="fmea" ? "⚠️" : l.colecao==="laudos" ? "📋" : l.colecao==="usuarios" ? "👤" : "📌"}
             </div>
             <div style={{ flex:1, minWidth:150 }}>
               <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
