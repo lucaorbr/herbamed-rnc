@@ -4888,14 +4888,17 @@ const ENSAIOS_PADRAO = {
     { nome:"Desintegração",        metodo:"Desintegrador",   unidade:"min", tipo:"numero",   espec:"≤ 15 min",    min:0,   max:15 },
   ],
   "Produto acabado": [
-    { nome:"Aspecto",              metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Conforme padrão" },
-    { nome:"Peso médio",           metodo:"Balança analítica",unidade:"mg", tipo:"numero",   espec:"Conforme EI", min:null,max:null },
-    { nome:"Variação de peso",     metodo:"Balança analítica",unidade:"%",  tipo:"numero",   espec:"≤ 5,0%",      min:0,   max:5.0 },
-    { nome:"Desintegração",        metodo:"Desintegrador",   unidade:"min", tipo:"numero",   espec:"≤ 30 min",    min:0,   max:30 },
-    { nome:"Dureza",               metodo:"Durômetro",       unidade:"N",   tipo:"numero",   espec:"Conforme EI", min:null,max:null },
-    { nome:"Friabilidade",         metodo:"Friabilômetro",   unidade:"%",   tipo:"numero",   espec:"≤ 1,0%",      min:0,   max:1.0 },
-    { nome:"Identificação (HPLC)", metodo:"HPLC",            unidade:"—",   tipo:"conforme", espec:"Positivo" },
-    { nome:"Doseamento (HPLC)",    metodo:"HPLC",            unidade:"%",   tipo:"numero",   espec:"90,0 – 110,0",min:90,  max:110 },
+    { nome:"Aspecto",                   metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Conforme padrão" },
+    { nome:"Peso médio",                metodo:"Balança analítica",unidade:"mg", tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Variação de peso",          metodo:"Balança analítica",unidade:"%",  tipo:"numero",   espec:"≤ 5,0%",      min:0,   max:5.0 },
+    { nome:"Desintegração",             metodo:"Desintegrador",   unidade:"min", tipo:"numero",   espec:"≤ 30 min",    min:0,   max:30 },
+    { nome:"Dureza",                    metodo:"Durômetro",       unidade:"N",   tipo:"numero",   espec:"Conforme EI", min:null,max:null },
+    { nome:"Friabilidade",              metodo:"Friabilômetro",   unidade:"%",   tipo:"numero",   espec:"≤ 1,0%",      min:0,   max:1.0 },
+    { nome:"Identificação (HPLC)",      metodo:"HPLC",            unidade:"—",   tipo:"conforme", espec:"Positivo" },
+    { nome:"Doseamento (HPLC)",         metodo:"HPLC",            unidade:"%",   tipo:"numero",   espec:"90,0 – 110,0",min:90,  max:110 },
+    { nome:"Impressão lote e validade", metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"De acordo com O.F, legível e ausente de manchas" },
+    { nome:"Lacre de segurança",        metodo:"Visual",          unidade:"—",   tipo:"conforme", espec:"Lacrado, ausente de aberturas" },
+    { nome:"Conteúdo",                  metodo:"Contagem",        unidade:"un",  tipo:"conforme", espec:"Conforme rótulo" },
   ],
 };
 
@@ -7163,6 +7166,44 @@ const HERBAMED_INFO = {
   cep: "19816-370",
 };
 
+// Categorias de ensaios para laudos (estilo do sistema: primeira maiúscula)
+const CATEGORIAS_LAUDO = ["Premix", "Encapsulado", "Produto acabado", "Ativo", "Embalagem", "Microbiológico", "Físico-químico", "Geral"];
+
+// Biblioteca de ensaios pré-definidos por categoria
+const BIBLIOTECA_ENSAIOS = [
+  // Premix
+  { label:"Densidade aparente",        unidade:"g/cm³", especificacao:"Informativo",                    categoria:"Premix" },
+  { label:"Densidade compactada",      unidade:"g/cm³", especificacao:"Informativo",                    categoria:"Premix" },
+  { label:"Umidade",                   unidade:"%",     especificacao:"≤ 5,0%",                         categoria:"Premix" },
+  { label:"Aspecto",                   unidade:"—",     especificacao:"Pó fino amorfo",                 categoria:"Premix" },
+  { label:"Cor",                       unidade:"—",     especificacao:"Conforme padrão",                categoria:"Premix" },
+  { label:"Granulometria",             unidade:"%",     especificacao:"Conforme EI",                    categoria:"Premix" },
+  { label:"pH (solução 1%)",           unidade:"pH",    especificacao:"5,0 – 7,0",                      categoria:"Premix" },
+  // Encapsulado
+  { label:"Peso médio",                unidade:"mg",    especificacao:"Conforme EI",                    categoria:"Encapsulado" },
+  { label:"Aspecto / Cor",             unidade:"—",     especificacao:"Cápsula sem manchas, amassados ou telescopia", categoria:"Encapsulado" },
+  { label:"Desintegração",             unidade:"min",   especificacao:"≤ 30 min",                       categoria:"Encapsulado" },
+  { label:"Variação de peso",          unidade:"%",     especificacao:"≤ 5,0%",                         categoria:"Encapsulado" },
+  // Produto acabado
+  { label:"Impressão lote e validade", unidade:"—",     especificacao:"De acordo com O.F, legível e ausente de manchas", categoria:"Produto acabado" },
+  { label:"Lacre de segurança",        unidade:"—",     especificacao:"Lacrado, ausente de aberturas",  categoria:"Produto acabado" },
+  { label:"Conteúdo",                  unidade:"un",    especificacao:"Conforme rótulo",                categoria:"Produto acabado" },
+  { label:"Aspecto",                   unidade:"—",     especificacao:"Conforme padrão",                categoria:"Produto acabado" },
+  // Ativo
+  { label:"Identificação (HPLC)",      unidade:"—",     especificacao:"Positivo",                       categoria:"Ativo" },
+  { label:"Doseamento (HPLC)",         unidade:"%",     especificacao:"90,0 – 110,0",                   categoria:"Ativo" },
+  { label:"Identificação (CCD)",       unidade:"—",     especificacao:"Positivo",                       categoria:"Ativo" },
+  // Microbiológico
+  { label:"Contagem total bactérias",  unidade:"UFC/g", especificacao:"≤ 10⁴",                          categoria:"Microbiológico" },
+  { label:"Bolores e leveduras",       unidade:"UFC/g", especificacao:"≤ 10³",                          categoria:"Microbiológico" },
+  { label:"Salmonella sp.",            unidade:"/25g",  especificacao:"Ausência",                       categoria:"Microbiológico" },
+  { label:"E. coli",                   unidade:"/g",    especificacao:"Ausência",                       categoria:"Microbiológico" },
+  // Embalagem
+  { label:"Aspecto visual",            unidade:"—",     especificacao:"Sem defeitos",                   categoria:"Embalagem" },
+  { label:"Vedação / fechamento",      unidade:"—",     especificacao:"Sem vazamento",                  categoria:"Embalagem" },
+  { label:"Código de barras",          unidade:"—",     especificacao:"Leitura correta",                categoria:"Embalagem" },
+];
+
 function LaudosTab({ user, toast_, users, auditLog }) {
   const T = useTheme(); const s = useS();
   const [laudos, setLaudos] = useState([]);
@@ -7177,6 +7218,11 @@ function LaudosTab({ user, toast_, users, auditLog }) {
 • Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [busca, setBusca] = useState("");
+  // Modal biblioteca de ensaios
+  const [bibOpen, setBibOpen] = useState(false);
+  const [bibBusca, setBibBusca] = useState("");
+  const [bibCat, setBibCat] = useState("todas");
+  const [bibSel, setBibSel] = useState({});
 
   const isRT = user?.role === "rt" || user?.role === "admin";
   const rtUsers = users?.filter(u => u.role === "rt") || [];
@@ -7211,23 +7257,29 @@ function LaudosTab({ user, toast_, users, auditLog }) {
 
   const clienteSel = clientes.find(c=>String(c.id)===String(form.clienteId));
 
+  const inferirCategoria = (nome) => {
+    if (!nome) return "Geral";
+    const match = BIBLIOTECA_ENSAIOS.find(b => b.label.toLowerCase() === nome.toLowerCase());
+    return match?.categoria || "Geral";
+  };
+
   const importarEnsaios = () => {
     if (form.tipo === "processo") {
       const reg = ipcRegs.find(r => r.op === form.op || r.produto === form.produto);
       if (reg?.resultados?.length) {
-        setF("ensaios", reg.resultados.map(r=>({ label:r.label, unidade:r.unidade||"", especificacao:"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
+        setF("ensaios", reg.resultados.map(r=>({ label:r.label, categoria: inferirCategoria(r.label), unidade:r.unidade||"", especificacao:"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
         toast_("Ensaios importados do IPC!", "green");
       } else toast_("Nenhum registro IPC encontrado para essa OP/produto.", "red");
     } else {
       const analise = analises.find(a => a.lote === form.lote || a.op === form.op);
       if (analise?.resultados?.length) {
-        setF("ensaios", analise.resultados.map(r=>({ label:r.ensaio||r.label||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
+        setF("ensaios", analise.resultados.map(r=>({ label:r.ensaio||r.label||"", categoria: inferirCategoria(r.ensaio||r.label||""), unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
         toast_("Ensaios importados do CQ!", "green");
       } else toast_("Nenhuma análise CQ encontrada para esse lote/OP.", "red");
     }
   };
 
-  const addEnsaio = () => setF("ensaios", [...(form.ensaios||[]), { label:"", unidade:"", especificacao:"", resultado:"", conforme:null, obs:"" }]);
+  const addEnsaio = () => setF("ensaios", [...(form.ensaios||[]), { label:"", categoria:"Geral", unidade:"", especificacao:"", resultado:"", conforme:null, obs:"" }]);
   const setEnsaio = (i,k,v) => setF("ensaios", form.ensaios.map((e,idx)=>idx===i?{...e,[k]:v}:e));
   const delEnsaio = (i) => setF("ensaios", form.ensaios.filter((_,idx)=>idx!==i));
 
@@ -7309,14 +7361,27 @@ function LaudosTab({ user, toast_, users, auditLog }) {
     const statusBg = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "#eaf3de" : laudo.status==="Reprovado" ? "#ffebee" : "#f5f5f5";
     const statusTxt = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "APROVADO — Produto em conformidade com as especificações" : laudo.status==="Reprovado" ? "REPROVADO — Um ou mais ensaios fora das especificações" : "RASCUNHO — Laudo em elaboração";
 
-    const ensaiosHTML = (laudo.ensaios||[]).map((e,i)=>`
-      <tr style="background:${i%2===0?"#fff":"#f9f9f9"}">
-        <td style="padding:7px 10px;font-weight:600">${e.label||"—"}</td>
-        <td style="padding:7px 10px;color:#666">${e.unidade||"—"}</td>
-        <td style="padding:7px 10px;color:#666">${e.especificacao||"—"}</td>
-        <td style="padding:7px 10px">${e.resultado||"—"}</td>
-        <td style="padding:7px 10px;text-align:center"><span style="background:${e.conforme===true?"#eaf3de":e.conforme===false?"#ffebee":"#f5f5f5"};color:${e.conforme===true?"#3b6d11":e.conforme===false?"#b71c1c":"#666"};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${e.conforme===true?"Conforme":e.conforme===false?"Não conforme":"—"}</span></td>
-      </tr>`).join("");
+    // Agrupar ensaios por categoria
+    const grupos = {};
+    const ordemCats = [];
+    (laudo.ensaios||[]).forEach(e => {
+      const cat = e.categoria || "Geral";
+      if (!grupos[cat]) { grupos[cat] = []; ordemCats.push(cat); }
+      grupos[cat].push(e);
+    });
+    const ensaiosHTML = ordemCats.map(cat => {
+      const linhas = grupos[cat].map((e,i)=>`
+        <tr style="background:${i%2===0?"#fff":"#f9f9f9"}">
+          <td style="padding:7px 10px;font-weight:600">${e.label||"—"}</td>
+          <td style="padding:7px 10px;color:#666">${e.unidade||"—"}</td>
+          <td style="padding:7px 10px;color:#666">${e.especificacao||"—"}</td>
+          <td style="padding:7px 10px">${e.resultado||"—"}</td>
+          <td style="padding:7px 10px;text-align:center"><span style="background:${e.conforme===true?"#eaf3de":e.conforme===false?"#ffebee":"#f5f5f5"};color:${e.conforme===true?"#3b6d11":e.conforme===false?"#b71c1c":"#666"};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${e.conforme===true?"Conforme":e.conforme===false?"Não conforme":"—"}</span></td>
+        </tr>`).join("");
+      return `
+        <tr><td colspan="5" style="background:#2d5016;color:#fff;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">${cat}</td></tr>
+        ${linhas}`;
+    }).join("");
 
     const assinaturaAnalistaHTML = laudo.assinaturaAnalista ? `
       <div style="text-align:center">
@@ -7422,6 +7487,7 @@ function LaudosTab({ user, toast_, users, auditLog }) {
           <SecTitle icon="🔬" ch="Ensaios" />
           <div style={{ display:"flex", gap:8 }}>
             <button style={{ ...s.btn, fontSize:11 }} onClick={importarEnsaios}>📥 Importar do {form.tipo==="processo"?"IPC":"CQ"}</button>
+            <button style={{ ...s.btn, fontSize:11 }} onClick={()=>{ setBibSel({}); setBibBusca(""); setBibCat("todas"); setBibOpen(true); }}>📚 Biblioteca</button>
             <button style={{ ...s.btnA, fontSize:11 }} onClick={addEnsaio}><span className="btn-emoji">+ </span>Adicionar ensaio</button>
           </div>
         </div>
@@ -7432,7 +7498,7 @@ function LaudosTab({ user, toast_, users, auditLog }) {
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:T.surf }}>
-                  {["Ensaio","Unidade","Especificação","Resultado","Conforme?","Obs",""].map(h=>(
+                  {["Categoria","Ensaio","Unidade","Especificação","Resultado","Conforme?","Obs",""].map(h=>(
                     <th key={h} style={{ padding:"7px 8px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}` }}>{h}</th>
                   ))}
                 </tr>
@@ -7440,6 +7506,11 @@ function LaudosTab({ user, toast_, users, auditLog }) {
               <tbody>
                 {form.ensaios.map((e,i)=>(
                   <tr key={i} style={{ background:i%2===0?T.card:T.surf, borderLeft:e.conforme===false?`3px solid ${T.red}`:e.conforme===true?`3px solid ${T.accent}`:"3px solid transparent" }}>
+                    <td style={{ padding:"6px 8px" }}>
+                      <Sel value={e.categoria||"Geral"} onChange={ev=>setEnsaio(i,"categoria",ev.target.value)} sx={{ fontSize:11, padding:"4px 6px", minWidth:120 }}>
+                        {CATEGORIAS_LAUDO.map(c=><option key={c} value={c}>{c}</option>)}
+                      </Sel>
+                    </td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.label} onChange={ev=>setEnsaio(i,"label",ev.target.value)} placeholder="Nome..." sx={{ fontSize:11, padding:"4px 6px" }} /></td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.unidade} onChange={ev=>setEnsaio(i,"unidade",ev.target.value)} placeholder="g/mL..." sx={{ fontSize:11, padding:"4px 6px", width:60 }} /></td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.especificacao} onChange={ev=>setEnsaio(i,"especificacao",ev.target.value)} placeholder="Especificação..." sx={{ fontSize:11, padding:"4px 6px" }} /></td>
@@ -7465,6 +7536,79 @@ function LaudosTab({ user, toast_, users, auditLog }) {
         <button style={s.btn} onClick={()=>{setView("lista");setSel(null);}}>Cancelar</button>
         <button style={s.btnA} onClick={salvar}>Salvar laudo ✓</button>
       </div>
+
+      {/* ── MODAL BIBLIOTECA DE ENSAIOS ── */}
+      {bibOpen && (() => {
+        const filtrados = BIBLIOTECA_ENSAIOS.filter(b => {
+          const catOK = bibCat === "todas" || b.categoria === bibCat;
+          const txtOK = !bibBusca.trim() || (b.label + " " + b.especificacao).toLowerCase().includes(bibBusca.toLowerCase());
+          return catOK && txtOK;
+        });
+        const porCategoria = {};
+        filtrados.forEach(b => { (porCategoria[b.categoria] = porCategoria[b.categoria] || []).push(b); });
+        const totalSel = Object.values(bibSel).filter(Boolean).length;
+        const chave = b => `${b.categoria}|${b.label}`;
+        const adicionar = () => {
+          const novos = filtrados.filter(b => bibSel[chave(b)]).map(b => ({
+            label: b.label, categoria: b.categoria, unidade: b.unidade, especificacao: b.especificacao,
+            resultado: "", conforme: null, obs: ""
+          }));
+          if (novos.length === 0) { toast_("Nenhum ensaio selecionado.", "red"); return; }
+          setF("ensaios", [...(form.ensaios||[]), ...novos]);
+          setBibOpen(false); setBibSel({});
+          toast_(`${novos.length} ensaio(s) adicionado(s) da biblioteca.`, "green");
+        };
+        return (
+          <div onClick={()=>setBibOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, width:"min(720px, 96vw)", maxHeight:"86vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
+              {/* Header */}
+              <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color:T.text }}>📚 Biblioteca de Ensaios</div>
+                  <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>{filtrados.length} ensaio(s) · {totalSel} selecionado(s)</div>
+                </div>
+                <button onClick={()=>setBibOpen(false)} style={{ background:"none", border:`1px solid ${T.border}`, borderRadius:8, color:T.text2, cursor:"pointer", fontSize:13, padding:"4px 12px", fontFamily:"inherit" }}>✕</button>
+              </div>
+              {/* Filtros */}
+              <div style={{ padding:"12px 20px", borderBottom:`1px solid ${T.border}`, display:"flex", gap:8, flexWrap:"wrap" }}>
+                <Inp placeholder="🔎 Buscar ensaio..." value={bibBusca} onChange={e=>setBibBusca(e.target.value)} sx={{ fontSize:12, padding:"6px 10px", flex:"1 1 200px" }} />
+                <Sel value={bibCat} onChange={e=>setBibCat(e.target.value)} sx={{ fontSize:12, padding:"6px 10px", minWidth:160 }}>
+                  <option value="todas">Todas as categorias</option>
+                  {CATEGORIAS_LAUDO.map(c=><option key={c} value={c}>{c}</option>)}
+                </Sel>
+              </div>
+              {/* Lista */}
+              <div style={{ overflowY:"auto", padding:"8px 20px 16px", flex:1 }}>
+                {Object.keys(porCategoria).length === 0 ? (
+                  <div style={{ textAlign:"center", padding:"2rem", color:T.text3, fontSize:12 }}>Nenhum ensaio encontrado.</div>
+                ) : Object.entries(porCategoria).map(([cat, itens]) => (
+                  <div key={cat} style={{ marginTop:12 }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:0.5, marginBottom:6, paddingBottom:4, borderBottom:`1px solid ${T.border}` }}>{cat} · {itens.length}</div>
+                    {itens.map(b => {
+                      const k = chave(b);
+                      const checked = !!bibSel[k];
+                      return (
+                        <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 6px", cursor:"pointer", borderRadius:6, background: checked ? T.accent+"15" : "transparent" }}>
+                          <input type="checkbox" checked={checked} onChange={e=>setBibSel(p=>({...p,[k]:e.target.checked}))} style={{ cursor:"pointer", accentColor:T.accent }} />
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{b.label} {b.unidade && b.unidade!=="—" && <span style={{ fontSize:10, color:T.text3, fontWeight:400 }}>({b.unidade})</span>}</div>
+                            <div style={{ fontSize:11, color:T.text2, marginTop:1 }}>{b.especificacao}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              {/* Footer */}
+              <div style={{ padding:"12px 20px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}>
+                <button onClick={()=>setBibOpen(false)} style={s.btn}>Cancelar</button>
+                <button onClick={adicionar} style={s.btnA}>+ Adicionar {totalSel > 0 ? `(${totalSel})` : ""}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -7515,16 +7659,28 @@ function LaudosTab({ user, toast_, users, auditLog }) {
                 </tr>
               </thead>
               <tbody>
-                {(lSel.ensaios||[]).map((e,i)=>(
-                  <tr key={i} style={{ background:i%2===0?T.card:T.surf, borderLeft:e.conforme===false?`3px solid ${T.red}`:e.conforme===true?`3px solid ${T.accent}`:"3px solid transparent" }}>
-                    <td style={{ padding:"8px 10px", fontWeight:600 }}>{e.label||"—"}</td>
-                    <td style={{ padding:"8px 10px", color:T.text3 }}>{e.unidade||"—"}</td>
-                    <td style={{ padding:"8px 10px", color:T.text2 }}>{e.especificacao||"—"}</td>
-                    <td style={{ padding:"8px 10px" }}>{e.resultado||"—"}</td>
-                    <td style={{ padding:"8px 10px" }}>{e.conforme===true?<span style={{ color:T.accent, fontWeight:700 }}>✓ Conforme</span>:e.conforme===false?<span style={{ color:T.red, fontWeight:700 }}>✗ N.C.</span>:<span style={{ color:T.text3 }}>—</span>}</td>
-                    <td style={{ padding:"8px 10px", color:T.text2 }}>{e.obs||"—"}</td>
-                  </tr>
-                ))}
+                {(() => {
+                  const grupos = {};
+                  const ordem = [];
+                  (lSel.ensaios||[]).forEach(e => {
+                    const cat = e.categoria || "Geral";
+                    if (!grupos[cat]) { grupos[cat] = []; ordem.push(cat); }
+                    grupos[cat].push(e);
+                  });
+                  return ordem.flatMap(cat => [
+                    <tr key={`cat-${cat}`}><td colSpan={6} style={{ background:T.accent+"22", color:T.accent, padding:"6px 10px", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>{cat}</td></tr>,
+                    ...grupos[cat].map((e,i) => (
+                      <tr key={`${cat}-${i}`} style={{ background:i%2===0?T.card:T.surf, borderLeft:e.conforme===false?`3px solid ${T.red}`:e.conforme===true?`3px solid ${T.accent}`:"3px solid transparent" }}>
+                        <td style={{ padding:"8px 10px", fontWeight:600 }}>{e.label||"—"}</td>
+                        <td style={{ padding:"8px 10px", color:T.text3 }}>{e.unidade||"—"}</td>
+                        <td style={{ padding:"8px 10px", color:T.text2 }}>{e.especificacao||"—"}</td>
+                        <td style={{ padding:"8px 10px" }}>{e.resultado||"—"}</td>
+                        <td style={{ padding:"8px 10px" }}>{e.conforme===true?<span style={{ color:T.accent, fontWeight:700 }}>✓ Conforme</span>:e.conforme===false?<span style={{ color:T.red, fontWeight:700 }}>✗ N.C.</span>:<span style={{ color:T.text3 }}>—</span>}</td>
+                        <td style={{ padding:"8px 10px", color:T.text2 }}>{e.obs||"—"}</td>
+                      </tr>
+                    ))
+                  ]);
+                })()}
               </tbody>
             </table>
           </div>
