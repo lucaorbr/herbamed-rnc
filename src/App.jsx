@@ -5969,7 +5969,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
     setResultados([]); setCoa(null);
     } catch(e) {
-      toast_(fbErr(e), "red");
+      toast_(e.message, "red");
       console.error(e);
     }
   };
@@ -6006,7 +6006,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     await auditLog("Excluiu Análise CQ", "cq_analises", String(id), antesA?.num || String(id), antesA, null);
     setSelAnalise(null); toast_("Análise excluída.", "red");
     } catch(e) {
-      toast_(fbErr(e), "red");
+      toast_(e.message, "red");
       console.error(e);
     }
   };
