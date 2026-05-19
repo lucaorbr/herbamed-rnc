@@ -135,6 +135,20 @@ const MENU_SVG_ICONS = {
 
 /* ─── UTILS ─────────────────────────────────────────────────────────────────── */
 const tod = () => new Date().toISOString().split("T")[0];
+const UNIDADES_RECEBIMENTO = ["kg","g","mg","ton","L","mL","un","cx","saco","fardo","pallet"];
+const parseQtd = (str) => {
+  if (!str) return { valor: "", unidade: "kg" };
+  const m = String(str).trim().match(/^([\d.,]+)\s*(.*)$/);
+  if (!m) return { valor: "", unidade: "kg" };
+  const u = (m[2]||"").trim();
+  const matchU = UNIDADES_RECEBIMENTO.find(x => x.toLowerCase() === u.toLowerCase());
+  return { valor: m[1].replace(",","."), unidade: matchU || (u || "kg") };
+};
+const fmtQtd = (valor, unidade) => {
+  if (!valor && !unidade) return "";
+  if (!valor) return unidade || "";
+  return `${valor} ${unidade||""}`.trim();
+};
 const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
 const past = d => d && d < tod();
 const genNum = c => String(c);
@@ -4893,7 +4907,7 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
   const [view, setView] = useState("lista");
   const [selFicha, setSelFicha] = useState(null);
 
-  const [form, setForm] = useState({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
+  const [form, setForm] = useState({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
   const [ensaios, setEnsaios] = useState([]);
   const [coa, setCoa] = useState(null);
   const [coaUploading, setCoaUploading] = useState(false);
@@ -4973,7 +4987,7 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     if(!form.material.trim()) { alert("Informe o material."); return; }
     const conc = conclusao();
     const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
-    const ficha = { id:Date.now(), num, ...form, ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     // Record edit history if editing existing analysis
     if (sel?._editando) {
       const hist = sel.historicoEdicoes || [];
@@ -4987,7 +5001,7 @@ function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
       }
     }
     setView("lista");
-    setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
+    setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name });
     setEnsaios([]); setCoa(null);
   };
 
@@ -5116,7 +5130,14 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
             }/>
             {form.fornecedor==="__outro" && <F lbl="Nome do fornecedor" ch={<Inp value={form.fornecedorManual||""} onChange={e=>setF("fornecedorManual",e.target.value)} />} />}
             <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
-            <F lbl="Qtd. recebida" ch={<Inp placeholder="Ex: 25 kg" value={form.qtdRecebida} onChange={e=>setF("qtdRecebida",e.target.value)} />} />
+            <F lbl="Qtd. recebida" ch={
+              <div style={{ display:"flex", gap:6 }}>
+                <Inp type="number" step="any" min="0" placeholder="Ex: 25" sx={{ flex:2 }} value={form.qtdRecebidaValor} onChange={e=>setF("qtdRecebidaValor",e.target.value)} />
+                <Sel sx={{ flex:1, minWidth:80 }} value={form.qtdRecebidaUnidade} onChange={e=>setF("qtdRecebidaUnidade",e.target.value)}>
+                  {UNIDADES_RECEBIMENTO.map(u => <option key={u} value={u}>{u}</option>)}
+                </Sel>
+              </div>
+            } />
             <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
             <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
             <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
@@ -5274,7 +5295,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
     <div>
       <div style={{ display:"flex", gap:10, marginBottom:"1rem", alignItems:"center" }}>
         <div style={{ fontSize:13, color:T.text2, flex:1 }}>{fichas.length} ficha(s) de análise registrada(s)</div>
-        <button style={s.btnA} onClick={()=>{ setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name }); aplicarEnsaiosPadrao("Matéria-prima (pó)"); setView("nova"); }}>+ Nova Ficha de Análise</button>
+        <button style={s.btnA} onClick={()=>{ setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name }); aplicarEnsaiosPadrao("Matéria-prima (pó)"); setView("nova"); }}>+ Nova Ficha de Análise</button>
       </div>
 
       {fichas.length === 0 ? (
@@ -5883,7 +5904,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
 
   // Form
   const [matSel, setMatSel] = useState(null);
-  const [form, setForm] = useState({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
+  const [form, setForm] = useState({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
   const [filtroTipo, setFiltroTipo] = useState("Todos");
   const [filtroTexto, setFiltroTexto] = useState("");
   const [filtroConc, setFiltroConc] = useState("Todos");
@@ -5953,7 +5974,9 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     const analise = {
       id: isEditando ? selAnalise.id : Date.now(), num,
       materialId: matSel.id, materialNome: matSel.nome, materialTipo: matSel.tipo,
-      ...form, resultados, coa,
+      ...form,
+      qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade),
+      resultados, coa,
       conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
       criadoPor: isEditando ? selAnalise.criadoPor : user.name, criadoEm: isEditando ? selAnalise.criadoEm : tod(), criadoTs: isEditando ? selAnalise.criadoTs : Date.now(),
       atualizadoPor: isEditando ? user.name : undefined, atualizadoEm: isEditando ? tod() : undefined,
@@ -5966,7 +5989,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     }
     setView("lista");
     setMatSel(null);
-    setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
+    setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
     setResultados([]); setCoa(null);
     } catch(e) {
       toast_(e.message, "red");
@@ -5990,7 +6013,8 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     } else {
       setEnsaios((a.resultados||[]).map((r,i)=>({ ...r, id:i })));
     }
-    setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataAnalise:a.dataAnalise||tod(), analista:a.analista||a.resp||user.name, obs:a.obs||"" });
+    const _q = parseQtd(a.qtdRecebida);
+    setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebidaValor: a.qtdRecebidaValor || _q.valor, qtdRecebidaUnidade: a.qtdRecebidaUnidade || _q.unidade, qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataAnalise:a.dataAnalise||tod(), analista:a.analista||a.resp||user.name, obs:a.obs||"" });
     setCoa(a.coa||null);
     setSel({ ...a, _editando: true });
     setView("novo");
@@ -6158,7 +6182,14 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               </Sel>
             }/>
             <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
-            <F lbl="Qtd. recebida" ch={<Inp placeholder="Ex: 25 kg" value={form.qtdRecebida} onChange={e=>setF("qtdRecebida",e.target.value)} />} />
+            <F lbl="Qtd. recebida" ch={
+              <div style={{ display:"flex", gap:6 }}>
+                <Inp type="number" step="any" min="0" placeholder="Ex: 25" sx={{ flex:2 }} value={form.qtdRecebidaValor} onChange={e=>setF("qtdRecebidaValor",e.target.value)} />
+                <Sel sx={{ flex:1, minWidth:80 }} value={form.qtdRecebidaUnidade} onChange={e=>setF("qtdRecebidaUnidade",e.target.value)}>
+                  {UNIDADES_RECEBIMENTO.map(u => <option key={u} value={u}>{u}</option>)}
+                </Sel>
+              </div>
+            } />
             <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
             <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
             <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
@@ -6302,7 +6333,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{analiseFiltradas.length} de {analises.length} análise(s)</div>
-        <button style={s.btnA} onClick={()=>{ setMatSel(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+        <button style={s.btnA} onClick={()=>{ setMatSel(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
       </div>
 
       {/* Filtros */}
