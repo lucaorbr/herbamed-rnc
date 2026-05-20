@@ -5909,6 +5909,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
   const [matSel, setMatSel] = useState(null);
   const [form, setForm] = useState({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
   const [filtroTipo, setFiltroTipo] = useState("Todos");
+  const [buscaMat, setBuscaMat] = useState("");
   const [filtroTexto, setFiltroTexto] = useState("");
   const [filtroConc, setFiltroConc] = useState("Todos");
   const [resultados, setResultados] = useState([]);
@@ -6149,14 +6150,29 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
           </div>
         ) : ((() => {
           const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
-          const matFiltrados = filtroTipo==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipo);
+          const termo = buscaMat.trim().toLowerCase();
+          const matFiltrados = materiais
+            .filter(m => filtroTipo==="Todos" || (m.tipo||"Outros")===filtroTipo)
+            .filter(m => !termo || (m.nome||"").toLowerCase().includes(termo));
           return (
             <>
+              <div style={{ position:"relative", marginBottom:12 }}>
+                <Inp
+                  value={buscaMat}
+                  onChange={e=>setBuscaMat(e.target.value)}
+                  placeholder={`🔍 Buscar entre ${materiais.length} materiais (digite parte do nome)...`}
+                  sx={{ width:"100%", paddingRight:buscaMat?34:12 }}
+                />
+                {buscaMat && (
+                  <button onClick={()=>setBuscaMat("")} title="Limpar" style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:T.text3, fontSize:16, cursor:"pointer", lineHeight:1 }}>×</button>
+                )}
+              </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
                 {tiposUnicos.map(t=>(
                   <button key={t} onClick={()=>setFiltroTipo(t)} style={{ padding:"4px 12px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipo===t?T.accent:T.border}`, background:filtroTipo===t?T.accentDim:"transparent", color:filtroTipo===t?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t}</button>
                 ))}
               </div>
+              {termo && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{matFiltrados.length} resultado{matFiltrados.length!==1?"s":""} para "{buscaMat}"</div>}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
                 {matFiltrados.map(m=>(
                   <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
@@ -6165,7 +6181,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                     <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{m.ensaios?.length||0} ensaios</div>
                   </div>
                 ))}
-                {matFiltrados.length===0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:T.text3, fontSize:13, padding:"1rem" }}>Nenhum material nesta categoria.</div>}
+                {matFiltrados.length===0 && <div style={{ gridColumn:"1/-1", textAlign:"center", color:T.text3, fontSize:13, padding:"1rem" }}>{termo ? `Nenhum material encontrado para "${buscaMat}".` : "Nenhum material nesta categoria."}</div>}
               </div>
             </>
           );
