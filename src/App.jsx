@@ -5523,6 +5523,8 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const [form, setForm] = useState(EMPTY_MAT);
   const [ensaios, setEnsaios] = useState([]);
   const [templateSel, setTemplateSel] = useState("");
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaConfirmada, setIaConfirmada] = useState(false);
   const [fichasTecnicas, setFichasTecnicas] = useState([]);
   const [ftUploading, setFtUploading] = useState(null);
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
@@ -5622,6 +5624,52 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   };
 
   const addEnsaio = () => setEnsaios(p=>[...p, { id:Date.now(), nome:"", espec:"", unidade:"", ref:"", tipo:"numero", casas:2, multiplos:false }]);
+
+  // Rascunho de ensaios + limites via IA — TODOS marcados para verificação na fonte
+  const sugerirEnsaiosIA = async () => {
+    if(!form.nomeBase.trim()) { alert("Preencha o nome base do material primeiro."); return; }
+    setIaLoading(true);
+    try {
+      const prompt = `Você é especialista em controle de qualidade farmacêutico/nutracêutico (BPF, ANVISA, compêndios oficiais).
+Material: "${form.nomeBase.trim()}"
+Tipo: "${form.tipo}"
+
+Gere um RASCUNHO da ficha de ensaios de controle de qualidade típica para esse material, com base em compêndios aceitos pela ANVISA (Farmacopeia Brasileira, USP, EP/BP, etc.).
+
+REGRAS OBRIGATÓRIAS:
+- Inclua apenas ensaios compendiais que você reconhece como usuais para esse material. Se não tiver certeza do material, retorne lista vazia [].
+- Os limites são um RASCUNHO de partida e SERÃO verificados por um humano na monografia oficial. NÃO invente números de monografia, página ou edição específicos se não tiver certeza.
+- No campo "ref", indique o compêndio provável de forma genérica e SEMPRE com aviso de verificação. Ex: "Farmacopeia Brasileira (verificar monografia e edição vigente)".
+- Se um limite for incerto, use o campo "espec" com a faixa usual e mantenha o aviso.
+
+Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no formato:
+[{"nome":"Doseamento","espec":"90,0 – 110,0","unidade":"%","ref":"USP (verificar monografia vigente)"}]`;
+      const txt = await askClaude(prompt);
+      const limpo = (txt||"").replace(/```json|```/g,"").trim();
+      let arr = [];
+      try { arr = JSON.parse(limpo); } catch { arr = []; }
+      if(!Array.isArray(arr) || arr.length===0){
+        alert("A IA não retornou sugestões para este material. Adicione os ensaios manualmente.");
+        return;
+      }
+      const novos = arr.map((e,i)=>({
+        id: Date.now()+i,
+        nome: e.nome||"",
+        espec: e.espec||"",
+        unidade: e.unidade||"",
+        ref: e.ref||"(verificar na fonte)",
+        tipo: "numero", casas: 2, multiplos: false,
+        _ia: true,
+      }));
+      setEnsaios(p=>[...p, ...novos]);
+      setIaConfirmada(false);
+    } catch(err) {
+      alert("Erro ao consultar a IA: " + err.message);
+    } finally {
+      setIaLoading(false);
+    }
+  };
+
   const updEnsaio = (id,k,v) => setEnsaios(p=>p.map(e=>e.id===id?{...e,[k]:v}:e));
   const delEnsaio = (id) => setEnsaios(p=>p.filter(e=>e.id!==id));
 
@@ -5647,6 +5695,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
     if(!form.nomeBase.trim()) { alert("Nome base é obrigatório."); return; }
     if(form.origem==="Própria" && !form.linha) { alert("Selecione a linha."); return; }
     if(form.origem==="Terceiro" && !form.clienteId) { alert("Selecione o cliente terceiro."); return; }
+    if(ensaios.some(e=>e._ia) && !iaConfirmada) { alert("Há ensaios com limites gerados por IA. Confirme que você verificou os limites e referências na fonte oficial antes de salvar."); return; }
     if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
     try {
       const id = sel ? String(sel.id) : String(Date.now());
@@ -5686,6 +5735,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
       setForm(EMPTY_MAT);
       setEnsaios([]);
       setFichasTecnicas([]);
+      setIaConfirmada(false);
     } catch(e) {
       alert("Erro ao salvar: " + e.message);
       console.error(e);
@@ -5695,6 +5745,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const editarMaterial = (m) => {
     setSel(m);
     setForm({ nome:m.nome||"", nomeBase:m.nomeBase||m.nome||"", apresentacao:m.apresentacao||"", origem:m.origem||"", linha:m.linha||"", clienteId:m.clienteId||"", tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
+    setIaConfirmada(false);
     setEnsaios((m.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e })));
     setFichasTecnicas((m.fichasTecnicas||[]).map(f=>({ id:Date.now()+Math.random(), ...f })));
     setView("editar");
@@ -5721,7 +5772,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) {filtroTipoLista!=="Todos"?`em "${filtroTipoLista}"`:"cadastrado(s)"}</div>
-        <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
+        <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setIaConfirmada(false); setView("novo"); }}>+ Novo Material</button>
       </div>
 
       {materiais.length===0 ? (
@@ -5859,9 +5910,23 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
           <SecTitle icon="🔬" ch={`Ensaios (${ensaios.length})`} />
           <div style={{ display:"flex", gap:8 }}>
             <button style={s.btn} onClick={()=>aplicarSugestoes(form.tipo)}>↺ Recarregar sugestões</button>
+            <button style={{ ...s.btn, opacity: iaLoading?0.6:1, cursor: iaLoading?"wait":"pointer" }} disabled={iaLoading} onClick={sugerirEnsaiosIA}>{iaLoading ? "⏳ Gerando rascunho..." : "✨ Rascunho IA (ensaios + limites)"}</button>
             <button style={s.btnA} onClick={addEnsaio}><span className="btn-emoji">+ </span>Adicionar ensaio</button>
           </div>
         </div>
+
+        {ensaios.some(e=>e._ia) && (
+          <div style={{ marginBottom:12, padding:"10px 12px", background:T.yellow+"18", border:`1px solid ${T.yellow}66`, borderRadius:8 }}>
+            <div style={{ fontSize:12, color:T.text, fontWeight:600, marginBottom:6 }}>⚠ Limites e referências gerados por IA — rascunho não verificado</div>
+            <div style={{ fontSize:11, color:T.text2, marginBottom:8, lineHeight:1.5 }}>
+              A IA pode errar limites e citar referências inexistentes. Confira cada ensaio marcado contra a monografia oficial vigente (Farmacopeia Brasileira, USP, etc.) e corrija o campo Especificação e Referência antes de salvar.
+            </div>
+            <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:T.text, cursor:"pointer" }}>
+              <input type="checkbox" checked={iaConfirmada} onChange={e=>setIaConfirmada(e.target.checked)} />
+              Confirmo que verifiquei os limites e referências sugeridos na fonte oficial.
+            </label>
+          </div>
+        )}
 
         {ensaios.length===0 ? (
           <div style={{ textAlign:"center", padding:"2rem", color:T.text3, fontSize:13 }}>
@@ -5874,7 +5939,8 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
               <span>Ensaio *</span><span>Especificação</span><span>Unidade</span><span>Referência</span><span>Tipo de resultado</span><span>Casas dec.</span><span></span>
             </div>
             {ensaios.map((e,i)=>(
-              <div key={e.id} style={{ marginBottom:8, background:T.surf, borderRadius:8, border:`1px solid ${T.border}`, padding:"8px" }}>
+              <div key={e.id} style={{ marginBottom:8, background:T.surf, borderRadius:8, border:`1px solid ${e._ia?T.yellow+"88":T.border}`, borderLeft:e._ia?`3px solid ${T.yellow}`:`1px solid ${T.border}`, padding:"8px" }}>
+                {e._ia && <div style={{ fontSize:10, color:T.yellow, fontWeight:700, marginBottom:4 }}>⚠ Rascunho IA — verificar na monografia</div>}
                 <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, alignItems:"center" }}>
                   <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev=>updEnsaio(e.id,"nome",ev.target.value)} sx={{ fontSize:12 }}/>
                   <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
