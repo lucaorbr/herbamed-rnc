@@ -5517,7 +5517,10 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("lista"); // lista | novo | editar
   const [sel, setSel] = useState(null);
-  const [form, setForm] = useState({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
+  const [clientes, setClientes] = useState([]);
+  const LINHAS = ["Supra","Verde","Beauty","Especial"];
+  const EMPTY_MAT = { nome:"", nomeBase:"", apresentacao:"", origem:"", linha:"", clienteId:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" };
+  const [form, setForm] = useState(EMPTY_MAT);
   const [ensaios, setEnsaios] = useState([]);
   const [templateSel, setTemplateSel] = useState("");
   const [fichasTecnicas, setFichasTecnicas] = useState([]);
@@ -5531,6 +5534,23 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const matPg = matFiltrados.slice((safePgMat-1)*PER_PAGE_MAT, safePgMat*PER_PAGE_MAT);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
+  // Monta o nome de exibição a partir dos campos estruturados
+  const montarNome = (f) => {
+    const base = (f.nomeBase||"").trim();
+    if(!base) return "";
+    const partes = [base];
+    if((f.apresentacao||"").trim()) partes.push(f.apresentacao.trim());
+    let sufixo = "";
+    if(f.origem==="Própria" && f.linha) sufixo = f.linha;
+    else if(f.origem==="Terceiro" && f.clienteId){
+      const c = clientes.find(x=>String(x.id)===String(f.clienteId));
+      sufixo = c?.nome || "";
+    }
+    let nome = partes.join(" ");
+    if(sufixo) nome += " — " + sufixo;
+    return nome;
+  };
+
   useEffect(()=>{
     const unsub = subscribeCollection("cq_materiais", list=>{
       setMateriais(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
@@ -5539,8 +5559,11 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
     const unsubT = subscribeCollection("cq_templates", list=>{
       setTemplates(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
     });
+    const unsubC = subscribeCollection("clientes_terceiros", list=>{
+      setClientes(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")));
+    });
     const t = setTimeout(()=>setLoading(false), 3000);
-    return ()=>{ unsub(); unsubT(); clearTimeout(t); };
+    return ()=>{ unsub(); unsubT(); unsubC(); clearTimeout(t); };
   },[]);
 
   const carregarTemplate = (tplId) => {
@@ -5621,7 +5644,9 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   };
 
   const salvar = async () => {
-    if(!form.nome.trim()) { alert("Nome é obrigatório."); return; }
+    if(!form.nomeBase.trim()) { alert("Nome base é obrigatório."); return; }
+    if(form.origem==="Própria" && !form.linha) { alert("Selecione a linha."); return; }
+    if(form.origem==="Terceiro" && !form.clienteId) { alert("Selecione o cliente terceiro."); return; }
     if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
     try {
       const id = sel ? String(sel.id) : String(Date.now());
@@ -5638,7 +5663,12 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
       }));
       const material = {
         id,
-        nome: form.nome,
+        nome: montarNome(form) || form.nomeBase.trim(),
+        nomeBase: form.nomeBase.trim(),
+        apresentacao: form.apresentacao||"",
+        origem: form.origem||"",
+        linha: form.origem==="Própria" ? (form.linha||"") : "",
+        clienteId: form.origem==="Terceiro" ? (form.clienteId||"") : "",
         tipo: form.tipo,
         fornecedorPadrao: form.fornecedorPadrao||"",
         ref: form.ref||"",
@@ -5653,7 +5683,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
       await auditLog(sel ? "Editou Material CQ" : "Criou Material CQ", "cq_materiais", id, material.nome, sel || null, { nome: material.nome, tipo: material.tipo, fornecedorPadrao: material.fornecedorPadrao });
       toast_(sel?"Material atualizado!":"Material cadastrado!", "green");
       setView("lista"); setSel(null);
-      setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" });
+      setForm(EMPTY_MAT);
       setEnsaios([]);
       setFichasTecnicas([]);
     } catch(e) {
@@ -5664,7 +5694,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
 
   const editarMaterial = (m) => {
     setSel(m);
-    setForm({ nome:m.nome, tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
+    setForm({ nome:m.nome||"", nomeBase:m.nomeBase||m.nome||"", apresentacao:m.apresentacao||"", origem:m.origem||"", linha:m.linha||"", clienteId:m.clienteId||"", tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
     setEnsaios((m.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e })));
     setFichasTecnicas((m.fichasTecnicas||[]).map(f=>({ id:Date.now()+Math.random(), ...f })));
     setView("editar");
@@ -5691,7 +5721,7 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) {filtroTipoLista!=="Todos"?`em "${filtroTipoLista}"`:"cadastrado(s)"}</div>
-        <button style={s.btnA} onClick={()=>{ setForm({ nome:"", tipo:"Matéria-prima (pó/granulado)", fornecedorPadrao:"", ref:"", obs:"" }); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
+        <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setView("novo"); }}>+ Novo Material</button>
       </div>
 
       {materiais.length===0 ? (
@@ -5776,12 +5806,36 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
       <div style={s.card}>
         <SecTitle icon="📦" ch="Dados do material" />
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <F lbl="Nome do material *" ch={<Inp placeholder="Ex: Psyllium em pó" value={form.nome} onChange={e=>setF("nome",e.target.value)} />} />
+          <F lbl="Nome base *" tip="Só o que identifica o material, sem linha, quantidade ou fornecedor. Ex: Vitamina C, Celulose Microcristalina." ch={<Inp placeholder="Ex: Vitamina C" value={form.nomeBase} onChange={e=>setF("nomeBase",e.target.value)} />} />
+          <F lbl="Apresentação" tip="Quantidade e forma, quando aplicável. Ex: 30 Cápsulas, 60 Comprimidos. Deixe vazio para matéria-prima." ch={<Inp placeholder="Ex: 30 Cápsulas" value={form.apresentacao} onChange={e=>setF("apresentacao",e.target.value)} />} />
           <F lbl="Tipo de material" ch={
             <Sel value={form.tipo} onChange={e=>{ setF("tipo",e.target.value); if(!sel) aplicarSugestoes(e.target.value); }}>
               {Object.keys(ENSAIOS_SUGERIDOS).map(t=><option key={t}>{t}</option>)}
             </Sel>
           }/>
+          <F lbl="Origem" tip="Marca própria (Beauty, Verde, etc.) ou produto de cliente terceiro. Deixe em branco para matéria-prima e itens sem linha." ch={
+            <Sel value={form.origem} onChange={e=>setF("origem", e.target.value)}>
+              <option value="">— (sem linha)</option>
+              <option value="Própria">Linha própria</option>
+              <option value="Terceiro">Cliente terceiro</option>
+            </Sel>
+          }/>
+          {form.origem==="Própria" && (
+            <F lbl="Linha *" ch={
+              <Sel value={form.linha} onChange={e=>setF("linha", e.target.value)}>
+                <option value="">Selecionar linha...</option>
+                {LINHAS.map(l=><option key={l} value={l}>{l}</option>)}
+              </Sel>
+            }/>
+          )}
+          {form.origem==="Terceiro" && (
+            <F lbl="Cliente terceiro *" ch={
+              <Sel value={form.clienteId} onChange={e=>setF("clienteId", e.target.value)}>
+                <option value="">Selecionar cliente...</option>
+                {clientes.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
+              </Sel>
+            }/>
+          )}
           <F lbl="Fornecedor padrão" ch={
             <Sel value={form.fornecedorPadrao} onChange={e=>setF("fornecedorPadrao",e.target.value)}>
               <option value="">Selecionar...</option>
@@ -5791,6 +5845,11 @@ function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
           }/>
           <F lbl="Referência / Especificação interna" ch={<Inp placeholder="Ex: EI-MP-001, Farmacopeia Brasileira" value={form.ref} onChange={e=>setF("ref",e.target.value)} />} />
         </div>
+        {form.nomeBase.trim() && (
+          <div style={{ marginTop:10, padding:"8px 12px", background:T.accentDim, border:`1px solid ${T.accent}44`, borderRadius:8, fontSize:12, color:T.text2 }}>
+            Nome que será salvo: <strong style={{ color:T.accent }}>{montarNome(form)||form.nomeBase.trim()}</strong>
+          </div>
+        )}
         <F lbl="Observações" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Informações adicionais sobre o material..." />} />
       </div>
 
