@@ -6006,7 +6006,7 @@ function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
     const canEdit = isOwner || ["admin","keyuser","rt"].includes(user?.role) || (perm && perm("editarAnalise"));
     if (!canEdit) { alert("Você não tem permissão para editar esta análise."); return; }
     // Load the material to get ensaio definitions
-    const mat = materiais.find(m => m.id === a.matId || m.nome === a.materialNome);
+    const mat = materiais.find(m => (a.materialId != null && String(m.id) === String(a.materialId)) || m.nome === a.materialNome);
     if (mat) {
       setMatSel(mat);
       const lista = mat.ensaios || [];
