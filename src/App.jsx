@@ -9779,6 +9779,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const [treinamentos, setTreinamentos] = useState([]);
   const [novoTreino,   setNovoTreino]   = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
+  const [verSnapshot, setVerSnapshot] = useState(null);
   const [novoMat, setNovoMat] = useState("");
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
@@ -9876,6 +9877,9 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     const motivo      = window.prompt("Motivo da revisão:", "") || "";
     const descricao   = window.prompt("Descrição das alterações realizadas:", "") || "";
     const aprovador   = window.prompt("Aprovador desta revisão:", "") || "";
+    // Snapshot do conteúdo completo da versão que está sendo arquivada (rastreabilidade BPF).
+    const snapshotConteudo = { titulo: doc.titulo, etapas: doc.etapas||[], materiais: doc.materiais||[] };
+    CAPITULOS_GD.filter(c=>!c.special).forEach(c=>{ snapshotConteudo[c.id] = doc[c.id] ?? ""; });
     const historico   = [...(doc.historicoRevisoes||[]), {
       versao: versaoAtual,
       status: doc.status,
@@ -9884,6 +9888,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       motivo,
       descricao,
       aprovador,
+      conteudo: snapshotConteudo,
     }];
     const updated = { ...doc, versao:novaVersao, status:"Em Revisão", assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
@@ -10095,7 +10100,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{background:T.surf}}>
-                {["Versão","Data","Motivo","Descrição das alterações","Responsável","Aprovador","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>)}
+                {["Versão","Data","Motivo","Descrição das alterações","Responsável","Aprovador","Status","Conteúdo"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {d.historicoRevisoes.map((h,i)=>(
@@ -10107,6 +10112,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.responsavel||"—"}</td>
                     <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.aprovador||"—"}</td>
                     <td style={{padding:"8px 10px"}}>{h.status?<BadgeStatusGD status={h.status}/>:<span style={{color:T.text3,fontSize:11}}>—</span>}</td>
+                    <td style={{padding:"8px 10px",whiteSpace:"nowrap"}}>{h.conteudo ? <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>👁️ Ver conteúdo</button> : <span style={{color:T.text3,fontSize:10}}>indisponível</span>}</td>
                   </tr>
                 ))}
                 <tr style={{background:T.accentDim}}>
@@ -10115,9 +10121,56 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                   <td style={{padding:"8px 10px",color:T.text3}} colSpan={3}>—</td>
                   <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{d.atualizadoPor}</td>
                   <td style={{padding:"8px 10px"}}><BadgeStatusGD status={d.status}/></td>
+                  <td style={{padding:"8px 10px",color:T.text3,fontSize:10}}>(versão atual abaixo)</td>
                 </tr>
               </tbody>
             </table>
+            </div>
+          </div>
+        )}
+        {verSnapshot && (
+          <div onClick={()=>setVerSnapshot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,maxWidth:760,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:15,fontWeight:700,color:T.text}}>📄 Conteúdo arquivado — Rev.{verSnapshot.versao}</div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setVerSnapshot(null)}>✕ Fechar</button>
+              </div>
+              <div style={{fontSize:11,color:T.text3,marginBottom:16}}>{fmt(verSnapshot.data)} · {verSnapshot.responsavel||"—"}{verSnapshot.conteudo?.titulo?` · ${verSnapshot.conteudo.titulo}`:""}</div>
+              {verSnapshot.conteudo ? (<>
+                {CAPITULOS_GD.filter(cap=>!cap.special).map(cap=>(
+                  <div key={cap.id} style={{marginBottom:14}}>
+                    <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
+                    <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:T.text,lineHeight:1.7}}
+                      dangerouslySetInnerHTML={{__html: verSnapshot.conteudo[cap.id]||"<em>N/A</em>"}} />
+                  </div>
+                ))}
+                {verSnapshot.conteudo.etapas?.length>0 && (
+                  <div style={{marginBottom:14}}>
+                    <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>Etapas</div>
+                    {verSnapshot.conteudo.etapas.map((e,i)=>(
+                      <div key={e.id||i} style={{display:"flex",gap:10,marginBottom:8,alignItems:"flex-start"}}>
+                        <div style={{width:24,height:24,borderRadius:"50%",background:T.accent,color:"#fff",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                        <div style={{flex:1,background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px"}}>
+                          {e.titulo&&<div style={{fontSize:12,fontWeight:600,color:T.text,marginBottom:2}}>{e.titulo}</div>}
+                          <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>{typeof e==="string"?e:e.descricao}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {verSnapshot.conteudo.materiais?.length>0 && (
+                  <div style={{marginBottom:4}}>
+                    <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>Materiais</div>
+                    <ul style={{margin:0,paddingLeft:18,fontSize:13,color:T.text,lineHeight:1.7}}>
+                      {verSnapshot.conteudo.materiais.map((m,i)=><li key={i}>{typeof m==="string"?m:(m?.nome||m?.descricao||JSON.stringify(m))}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </>) : (
+                <div style={{padding:"14px",background:T.surf,borderRadius:8,fontSize:13,color:T.text3,lineHeight:1.6}}>
+                  Esta revisão foi arquivada antes da atualização que passou a guardar o conteúdo completo. Apenas os metadados (motivo, descrição, responsável) estão disponíveis.
+                </div>
+              )}
             </div>
           </div>
         )}
