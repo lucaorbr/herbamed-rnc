@@ -9780,6 +9780,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const [novoTreino,   setNovoTreino]   = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
+  const [assinarGD, setAssinarGD] = useState(null);
   const [novoMat, setNovoMat] = useState("");
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
@@ -9846,13 +9847,19 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     }
   };
 
-  const assinar = async (doc, papel) => {
+  const confirmarAssinatura = async (doc, papel, assin) => {
     try {
     const campo = papel==="elaborador" ? "assinaturaElaborador" : papel==="revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
     const cargo = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
-    if (!user?.assinatura) { alert("Você não possui assinatura cadastrada."); return; }
-    if (!window.confirm(`Confirma assinatura como ${cargo}?`)) return;
-    const updated = { ...doc, [campo]: { nome:user.name, cargo, crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` } };
+    // Segregação de funções: o mesmo usuário não pode assinar mais de um papel no mesmo documento.
+    const conflito = ["assinaturaElaborador","assinaturaRevisor","assinaturaAprovador"].find(k => k!==campo && doc[k] && ((doc[k].email && assin.email && doc[k].email===assin.email) || (!doc[k].email && doc[k].nome===assin.nome)));
+    if (conflito) {
+      const papelConf = conflito==="assinaturaElaborador"?"Elaborador":conflito==="assinaturaRevisor"?"Revisor":"Aprovador";
+      alert(`Segregação de funções: você já assinou este documento como ${papelConf}.\n\nElaboração, revisão e aprovação devem ser feitas por pessoas diferentes.`);
+      setAssinarGD(null);
+      return;
+    }
+    const updated = { ...doc, [campo]: { nome:assin.nome, cargo:assin.cargo||cargo, email:assin.email||user?.email||"", crf:user?.crf||"", img:assin.assinaturaImg||user?.assinatura||null, dataHora:`${assin.data} ${assin.hora}`, timestamp:assin.timestamp } };
     const temE = papel==="elaborador" || !!doc.assinaturaElaborador;
     const temR = papel==="revisor"    || !!doc.assinaturaRevisor;
     const temA = papel==="aprovador"  || !!doc.assinaturaAprovador;
@@ -9863,9 +9870,11 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     await auditLog(`Assinou como ${cargo}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: updated.status, [campo]: updated[campo] });
     toast_(`Assinado como ${cargo}!`, "green");
     setSel(updated);
+    setAssinarGD(null);
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
+      setAssinarGD(null);
     }
   };
 
@@ -10001,9 +10010,10 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     const tipo  = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
     const depto = DEPARTAMENTOS_GD.find(x=>x.id===d.depto);
     const diasRev = diasParaRevisaoGD(d.proximaRevisao);
+    const mesmoAssinante = (ass) => !!ass && ((ass.email && user?.email && ass.email===user.email) || (!ass.email && ass.nome===user?.name));
     const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor===user?.name);
-    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && isAdmin;
-    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && isAdmin;
+    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && isAdmin && !mesmoAssinante(d.assinaturaElaborador);
+    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && isAdmin && !mesmoAssinante(d.assinaturaElaborador) && !mesmoAssinante(d.assinaturaRevisor);
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
@@ -10013,9 +10023,9 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {podeAssElab  && <button style={{...s.btnA,fontSize:11}} onClick={()=>assinar(d,"elaborador")}>✍️ Elaborador</button>}
-            {podeAssRev   && <button style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7"}} onClick={()=>assinar(d,"revisor")}>🔎 Revisor</button>}
-            {podeAssAprov && <button style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800"}} onClick={()=>assinar(d,"aprovador")}>✅ Aprovador</button>}
+            {podeAssElab  && <button style={{...s.btnA,fontSize:11}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
+            {podeAssRev   && <button style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7"}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
+            {podeAssAprov && <button style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800"}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ PDF</button>
@@ -10173,6 +10183,14 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
               )}
             </div>
           </div>
+        )}
+        {assinarGD && (
+          <AssinaturaModal
+            user={user}
+            titulo={`${assinarGD.doc.codigo} · Rev.${assinarGD.doc.versao} — assinatura como ${assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}`}
+            onClose={()=>setAssinarGD(null)}
+            onConfirm={(assin)=>confirmarAssinatura(assinarGD.doc, assinarGD.papel, assin)}
+          />
         )}
         {d.treinamentoObrigatorio && (
           <div style={s.card}>
