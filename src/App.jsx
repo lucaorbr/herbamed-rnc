@@ -1183,9 +1183,10 @@ export default function App() {
           setUser({ uid: fbUser.uid, name: fbUser.displayName || fbUser.email, email: fbUser.email, role: "user" });
         }
       } else {
-        // Marca offline ao sair
+        // Marca offline ao sair — updateUser NUNCA cria documento (ao contrario de saveUser/merge),
+        // evitando o nascimento de cadastro-lixo sem nome para uid sem perfil.
         if (auth.currentUser) {
-          try { await saveUser(auth.currentUser.uid, { online: false }); } catch(e) {}
+          try { await updateUser(auth.currentUser.uid, { online: false }); } catch(e) {}
         }
         setUser(null);
       }
@@ -1244,7 +1245,7 @@ export default function App() {
     update();
     const interval = setInterval(update, 2 * 60 * 1000);
     const handleUnload = () => {
-      try { saveUser(user.uid, { online: false }); } catch(e) {}
+      try { updateUser(user.uid, { online: false }); } catch(e) {}
     };
     window.addEventListener("beforeunload", handleUnload);
     return () => {
@@ -9392,10 +9393,10 @@ function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
             ) : (
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px" }}>
                 <div style={{ display:"flex", gap:14, alignItems:"center" }}>
-                  <div style={{ width:40, height:40, borderRadius:"50%", background:u.role==="admin"?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:u.role==="admin"?"#fff":T.text2, flexShrink:0 }}>{u.name?.[0]||"?"}</div>
+                  <div style={{ width:40, height:40, borderRadius:"50%", background:u.role==="admin"?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:u.role==="admin"?"#fff":T.text2, flexShrink:0 }}>{(u.name||u.email)?.[0]?.toUpperCase()||"?"}</div>
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{u.name}</div>
+                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{u.name||u.email||"(sem nome)"}</div>
                       {u.assinatura && <span style={{ fontSize:10, color:T.accent, background:T.accentDim, padding:"1px 8px", borderRadius:20 }}>✓ Assinatura</span>}
 
                       {(() => {
