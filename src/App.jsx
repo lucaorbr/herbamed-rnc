@@ -150,6 +150,21 @@ const fmtQtd = (valor, unidade) => {
   return `${valor} ${unidade||""}`.trim();
 };
 const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+// Codigo de verificacao deterministico para o selo de assinatura eletronica.
+// Reproduzivel a partir dos dados da assinatura — serve como identificador/conferencia.
+// (Nao e criptografico; vira evidencia forte de integridade quando combinado com a
+//  trava de alteracao de documento assinado nas regras do Firestore.)
+const sigCodigo = (ass, ctx = "") => {
+  if (!ass) return "";
+  const base = `${ass.email || ass.nome || ""}|${ass.cargo || ""}|${ass.timestamp || ass.dataHora || ""}|${ctx}`;
+  const fnv = (seed) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < base.length; i++) { h ^= base.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  };
+  const full = (fnv(0x811c9dc5) + fnv(0x9e3779b1)).slice(0, 12);
+  return `${full.slice(0, 4)}-${full.slice(4, 8)}-${full.slice(8, 12)}`;
+};
 const past = d => d && d < tod();
 const genNum = c => String(c);
 
@@ -9987,7 +10002,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     const tipo  = TIPOS_DOC_GD.find(t=>t.id===doc.tipo);
     const cor   = tipo?.cor || "#2ab84a";
     const assHTML = (ass,label) => ass
-      ? `<div style="text-align:center;padding:10px;border:1px solid #eee;border-radius:6px;"><div style="font-size:9px;color:#888;text-transform:uppercase;margin-bottom:4px;">${label}</div><img src="${ass.img}" style="height:36px;max-width:130px;object-fit:contain;display:block;margin:0 auto 4px;"/><div style="font-size:11px;font-weight:bold;">${ass.nome}</div>${ass.crf?`<div style="font-size:10px;color:#666;">${ass.crf}</div>`:""}<div style="font-size:9px;color:${cor};">✓ ${ass.dataHora}</div></div>`
+      ? `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${label}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome||"—"}</div>${ass.cargo?`<div style="font-size:10px;color:#555;">${ass.cargo}</div>`:""}${ass.crf?`<div style="font-size:9px;color:#777;">CRF ${ass.crf}</div>`:""}${ass.email?`<div style="font-size:9px;color:#777;">${ass.email}</div>`:""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${ass.timestamp?new Date(ass.timestamp).toLocaleString("pt-BR"):ass.dataHora||""}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, `${doc.codigo}|R${doc.versao}`)}</div></div>`
       : `<div style="text-align:center;padding:10px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${label}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando</div></div>`;
     const caps = CAPITULOS_GD.filter(cap=>!cap.special).map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
     const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;"><div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div><div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div><div style="padding:0 22px;">${caps}</div><div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div><div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · CÓPIA NÃO CONTROLADA</span></div></div>`;
@@ -10099,10 +10114,13 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
               <div key={label} style={{textAlign:"center",padding:"1rem",background:T.surf,borderRadius:10,border:`1px solid ${T.border}`}}>
                 <div style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase",marginBottom:10}}>{label}</div>
                 {campo?(<>
-                  <img src={campo.img} alt="" style={{height:44,maxWidth:160,objectFit:"contain",display:"block",margin:"0 auto 6px"}}/>
-                  <div style={{fontSize:12,fontWeight:600,color:T.text}}>{campo.nome}</div>
-                  {campo.crf&&<div style={{fontSize:11,color:T.text2}}>{campo.crf}</div>}
-                  <div style={{fontSize:10,color:T.accent,marginTop:4}}>✓ {campo.dataHora}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
+                  {campo.cargo&&<div style={{fontSize:11,color:T.text2}}>{campo.cargo}</div>}
+                  {campo.crf&&<div style={{fontSize:10,color:T.text3}}>CRF {campo.crf}</div>}
+                  {campo.email&&<div style={{fontSize:10,color:T.text3}}>{campo.email}</div>}
+                  <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
+                  <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
+                  <div style={{fontSize:9,color:T.text3,marginTop:3,fontFamily:"monospace"}}>Cód.: {sigCodigo(campo, `${d.codigo}|R${d.versao}`)}</div>
                 </>):(
                   <div style={{fontSize:12,color:T.text3,padding:"1rem 0"}}>Aguardando</div>
                 )}
