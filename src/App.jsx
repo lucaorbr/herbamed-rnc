@@ -1163,7 +1163,7 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async fbUser => {
       if (fbUser) {
         const ud = await getUser(fbUser.uid);
-        if (ud) {
+        if (ud && (ud.name || ud.email)) {
           const agora = new Date().toISOString();
           setUser({ ...ud, uid: fbUser.uid });
           // Grava ultimo acesso silenciosamente
@@ -1178,6 +1178,11 @@ export default function App() {
               dadosAntes: null, dadosDepois: null,
             });
           } catch(e) {}
+        } else if (ud) {
+          // Perfil-lixo (sem nome E sem email): nao loga como usuario vazio.
+          // Encerra a sessao e manda pro login, evitando o estado "(sem nome)".
+          try { await logoutUser(); } catch(e) {}
+          setUser(null);
         } else {
           // Firestore não retornou perfil — usa dados do Auth como fallback
           setUser({ uid: fbUser.uid, name: fbUser.displayName || fbUser.email, email: fbUser.email, role: "user" });
