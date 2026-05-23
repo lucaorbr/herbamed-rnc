@@ -156,7 +156,7 @@ const fmt = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "�
 //  trava de alteracao de documento assinado nas regras do Firestore.)
 const sigCodigo = (ass, ctx = "") => {
   if (!ass) return "";
-  const base = `${ass.email || ass.nome || ""}|${ass.cargo || ""}|${ass.timestamp || ass.dataHora || ""}|${ctx}`;
+  const base = `${ass.email || ass.nome || ""}|${ass.cargo || ""}|${ass.timestamp || ass.dataHora || (ass.data ? `${ass.data} ${ass.hora || ""}` : "")}|${ctx}`;
   const fnv = (seed) => {
     let h = seed >>> 0;
     for (let i = 0; i < base.length; i++) { h ^= base.charCodeAt(i); h = Math.imul(h, 0x01000193); }
@@ -164,6 +164,12 @@ const sigCodigo = (ass, ctx = "") => {
   };
   const full = (fnv(0x811c9dc5) + fnv(0x9e3779b1)).slice(0, 12);
   return `${full.slice(0, 4)}-${full.slice(4, 8)}-${full.slice(8, 12)}`;
+};
+// Selo de assinatura eletronica para PDFs (digitado, sem imagem). cor = cor de acento.
+const seloAssHTML = (ass, papel, cor = "#1a4a2e", ctx = "") => {
+  if (!ass) return `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${papel}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando assinatura</div></div>`;
+  const quando = ass.timestamp ? new Date(ass.timestamp).toLocaleString("pt-BR") : (ass.dataHora || (ass.data ? `${ass.data}${ass.hora ? " às " + ass.hora : ""}` : ""));
+  return `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;text-align:left;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${papel}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome || "—"}</div>${ass.cargo ? `<div style="font-size:10px;color:#555;">${ass.cargo}</div>` : ""}${ass.crf ? `<div style="font-size:9px;color:#777;">CRF ${ass.crf}</div>` : ""}${ass.email ? `<div style="font-size:9px;color:#777;">${ass.email}</div>` : ""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${quando}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, ctx)}</div></div>`;
 };
 const past = d => d && d < tod();
 const genNum = c => String(c);
@@ -2258,9 +2264,10 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                     <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · ${sel.assinaturaRT.crf}` : ""} · {sel.assinaturaRT.dataHora}</div>
+                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · CRF ${sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
+                      <div style={{ fontSize:10, color:T.text3 }}>✔ Assinado eletronicamente em {sel.assinaturaRT.timestamp?new Date(sel.assinaturaRT.timestamp).toLocaleString("pt-BR"):sel.assinaturaRT.dataHora}</div>
+                      <div style={{ fontSize:9, color:T.text3, fontFamily:"monospace", marginTop:2 }}>Cód.: {sigCodigo(sel.assinaturaRT, `RNC|${sel.num||sel.id||""}`)}</div>
                     </div>
-                    {sel.assinaturaRT.img && <img src={sel.assinaturaRT.img} alt="Assinatura RT" style={{ height:36, maxWidth:120, objectFit:"contain", background:"#fff", padding:4, borderRadius:4 }} />}
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
@@ -3906,11 +3913,12 @@ function exportRNCPDF(rnc, assinatura = null) {
   <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
     <div style="flex:1;text-align:center;">
       ${assinatura ? `
-        ${assinatura.assinaturaImg ? `<img src="${assinatura.assinaturaImg}" alt="Assinatura" style="height:56px;max-width:200px;object-fit:contain;display:block;margin:0 auto 4px;"/>` : `<div style="height:56px;"></div>`}
-        <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;">
+        <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:left;">
           <strong>${assinatura.nome}</strong><br/>
           ${assinatura.cargo}<br/>
-          <span style="color:#666;font-size:10px;">Assinado eletronicamente em ${assinatura.data} às ${assinatura.hora}</span>
+          ${assinatura.email?`<span style="color:#777;font-size:10px;">${assinatura.email}</span><br/>`:""}
+          <span style="color:#666;font-size:10px;">✔ Assinado eletronicamente em ${assinatura.data} às ${assinatura.hora}</span><br/>
+          <span style="color:#999;font-size:9px;font-family:monospace;">Cód. verificação: ${sigCodigo(assinatura, `RNC|${rnc.num||rnc.id||""}`)}</span>
         </div>
       ` : `<div style="border-top:1px solid #333;padding-top:6px;margin-top:56px;font-size:11px;">______________________<br/>Responsável pela análise</div>`}
     </div>
@@ -3926,11 +3934,11 @@ function exportRNCPDF(rnc, assinatura = null) {
   <div style="margin-top:16px;padding:12px 16px;border:1px solid #2ab84a33;border-radius:8px;background:#f6fff8;display:flex;align-items:center;gap:16px;">
     <div style="flex:1;">
       <div style="font-size:10px;color:#2ab84a;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">✅ Aprovado pelo Responsável Técnico</div>
-      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · " + rnc.assinaturaRT.crf : ""}</div>
-      <div style="font-size:11px;color:#666;">Assinado em ${rnc.assinaturaRT.dataHora}</div>
-    </div>
-    ${rnc.assinaturaRT.img ? `<img src="${rnc.assinaturaRT.img}" style="height:44px;max-width:140px;object-fit:contain;"/>` : ""}
-  </div>` : rnc.sev === "Crítica" ? `
+      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · CRF " + rnc.assinaturaRT.crf : ""}</div>
+      ${rnc.assinaturaRT.email?`<div style="font-size:10px;color:#777;">${rnc.assinaturaRT.email}</div>`:""}
+      <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
+      <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
+    </div>` : rnc.sev === "Crítica" ? `
   <div style="margin-top:12px;padding:10px 14px;border:1px solid #ffd16633;border-radius:8px;background:#fffbf0;font-size:11px;color:#b8860b;">
     ⏳ RNC Crítica — Aprovação do Responsável Técnico pendente
   </div>` : ""}
@@ -7545,26 +7553,9 @@ function LaudosTab({ user, toast_, users, auditLog }) {
         ${linhas}`;
     }).join("");
 
-    const assinaturaAnalistaHTML = laudo.assinaturaAnalista ? `
-      <div style="text-align:center">
-        <img src="${laudo.assinaturaAnalista.img}" style="height:50px;max-width:180px;object-fit:contain;display:block;margin:0 auto 4px"/>
-        <div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">
-          <strong>${laudo.assinaturaAnalista.nome}</strong><br/>
-          ${laudo.assinaturaAnalista.cargo}<br/>
-          <span style="color:#888;font-size:10px">Assinado eletronicamente em ${laudo.assinaturaAnalista.dataHora}</span>
-        </div>
-      </div>` : `<div style="text-align:center"><div style="height:50px"></div><div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">${laudo.criadoPor}<br/>Analista de CQ<br/><span style="color:#bbb;font-size:10px">Aguardando assinatura</span></div></div>`;
+    const assinaturaAnalistaHTML = seloAssHTML(laudo.assinaturaAnalista, "Analista — Controle de Qualidade", "#2d5016", `LAUDO|${laudo.num||laudo.id||""}`);
 
-    const assinaturaRTHTML = laudo.assinaturaRT ? `
-      <div style="text-align:center">
-        <img src="${laudo.assinaturaRT.img}" style="height:50px;max-width:180px;object-fit:contain;display:block;margin:0 auto 4px"/>
-        <div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">
-          <strong>${laudo.assinaturaRT.nome}</strong><br/>
-          Responsável Técnico<br/>
-          ${laudo.assinaturaRT.crf?`<span style="color:#555;font-size:11px">${laudo.assinaturaRT.crf}</span><br/>`:""}
-          <span style="color:#888;font-size:10px">Assinado eletronicamente em ${laudo.assinaturaRT.dataHora}</span>
-        </div>
-      </div>` : `<div style="text-align:center"><div style="height:50px;display:flex;align-items:flex-end;justify-content:center"><div style="border-bottom:1px solid #333;width:160px"></div></div><div style="border-top:1px solid #ccc;padding-top:6px;font-size:11px">Responsável Técnico<br/><span style="color:#bbb;font-size:10px">Aguardando assinatura</span></div></div>`;
+    const assinaturaRTHTML = seloAssHTML(laudo.assinaturaRT, "Responsável Técnico", "#2d5016", `LAUDO|${laudo.num||laudo.id||""}`);
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto">
@@ -7853,23 +7844,27 @@ function LaudosTab({ user, toast_, users, auditLog }) {
         <div style={s.card}>
           <SecTitle icon="✍️" ch="Assinaturas" />
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
-            <div style={{ textAlign:"center", padding:"1rem", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
+            <div style={{ textAlign:"left", padding:"1rem", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
               <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:"uppercase", marginBottom:12 }}>Analista de CQ</div>
               {lSel.assinaturaAnalista ? (<>
-                <img src={lSel.assinaturaAnalista.img} alt="Assinatura" style={{ height:50, maxWidth:180, objectFit:"contain", display:"block", margin:"0 auto 8px" }} />
-                <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{lSel.assinaturaAnalista.nome}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{lSel.assinaturaAnalista.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaAnalista.cargo}</div>
-                <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Assinado em {lSel.assinaturaAnalista.dataHora}</div>
+                {lSel.assinaturaAnalista.email && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaAnalista.email}</div>}
+                <div style={{ fontSize:10, color:T.accent, marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}` }}>✔ Assinado eletronicamente</div>
+                <div style={{ fontSize:10, color:T.text2 }}>{lSel.assinaturaAnalista.timestamp?new Date(lSel.assinaturaAnalista.timestamp).toLocaleString("pt-BR"):lSel.assinaturaAnalista.dataHora}</div>
+                <div style={{ fontSize:9, color:T.text3, marginTop:3, fontFamily:"monospace" }}>Cód.: {sigCodigo(lSel.assinaturaAnalista, `LAUDO|${lSel.num||lSel.id||""}`)}</div>
               </>) : <div style={{ fontSize:12, color:T.text3, padding:"1rem" }}>Aguardando assinatura</div>}
             </div>
-            <div style={{ textAlign:"center", padding:"1rem", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
+            <div style={{ textAlign:"left", padding:"1rem", background:T.surf, borderRadius:10, border:`1px solid ${T.border}` }}>
               <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:"uppercase", marginBottom:12 }}>Responsável Técnico</div>
               {lSel.assinaturaRT ? (<>
-                <img src={lSel.assinaturaRT.img} alt="Assinatura" style={{ height:50, maxWidth:180, objectFit:"contain", display:"block", margin:"0 auto 8px" }} />
-                <div style={{ fontSize:12, fontWeight:600, color:T.text }}>{lSel.assinaturaRT.nome}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{lSel.assinaturaRT.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>Responsável Técnico</div>
-                {lSel.assinaturaRT.crf && <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaRT.crf}</div>}
-                <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Assinado em {lSel.assinaturaRT.dataHora}</div>
+                {lSel.assinaturaRT.crf && <div style={{ fontSize:10, color:T.text3 }}>CRF {lSel.assinaturaRT.crf}</div>}
+                {lSel.assinaturaRT.email && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaRT.email}</div>}
+                <div style={{ fontSize:10, color:T.accent, marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}` }}>✔ Assinado eletronicamente</div>
+                <div style={{ fontSize:10, color:T.text2 }}>{lSel.assinaturaRT.timestamp?new Date(lSel.assinaturaRT.timestamp).toLocaleString("pt-BR"):lSel.assinaturaRT.dataHora}</div>
+                <div style={{ fontSize:9, color:T.text3, marginTop:3, fontFamily:"monospace" }}>Cód.: {sigCodigo(lSel.assinaturaRT, `LAUDO|${lSel.num||lSel.id||""}`)}</div>
               </>) : <div style={{ fontSize:12, color:T.text3, padding:"1rem" }}>Aguardando assinatura do RT</div>}
             </div>
           </div>
