@@ -169,7 +169,7 @@ const sigCodigo = (ass, ctx = "") => {
 const seloAssHTML = (ass, papel, cor = "#1a4a2e", ctx = "") => {
   if (!ass) return `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${papel}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando assinatura</div></div>`;
   const quando = ass.timestamp ? new Date(ass.timestamp).toLocaleString("pt-BR") : (ass.dataHora || (ass.data ? `${ass.data}${ass.hora ? " às " + ass.hora : ""}` : ""));
-  return `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;text-align:left;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${papel}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome || "—"}</div>${ass.cargo ? `<div style="font-size:10px;color:#555;">${ass.cargo}</div>` : ""}${ass.crf ? `<div style="font-size:9px;color:#777;">CRF ${ass.crf}</div>` : ""}${ass.email ? `<div style="font-size:9px;color:#777;">${ass.email}</div>` : ""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${quando}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, ctx)}</div></div>`;
+  return `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;text-align:left;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${papel}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome || "—"}</div>${ass.cargo ? `<div style="font-size:10px;color:#555;">${ass.cargo}</div>` : ""}${ass.crf ? `<div style="font-size:9px;color:#777;">${ass.crf}</div>` : ""}${ass.email ? `<div style="font-size:9px;color:#777;">${ass.email}</div>` : ""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${quando}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, ctx)}</div></div>`;
 };
 const past = d => d && d < tod();
 const genNum = c => String(c);
@@ -2264,7 +2264,7 @@ function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, d
                     <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · CRF ${sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
+                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · ${sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
                       <div style={{ fontSize:10, color:T.text3 }}>✔ Assinado eletronicamente em {sel.assinaturaRT.timestamp?new Date(sel.assinaturaRT.timestamp).toLocaleString("pt-BR"):sel.assinaturaRT.dataHora}</div>
                       <div style={{ fontSize:9, color:T.text3, fontFamily:"monospace", marginTop:2 }}>Cód.: {sigCodigo(sel.assinaturaRT, `RNC|${sel.num||sel.id||""}`)}</div>
                     </div>
@@ -3934,7 +3934,7 @@ function exportRNCPDF(rnc, assinatura = null) {
   <div style="margin-top:16px;padding:12px 16px;border:1px solid #2ab84a33;border-radius:8px;background:#f6fff8;display:flex;align-items:center;gap:16px;">
     <div style="flex:1;">
       <div style="font-size:10px;color:#2ab84a;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">✅ Aprovado pelo Responsável Técnico</div>
-      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · CRF " + rnc.assinaturaRT.crf : ""}</div>
+      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · " + rnc.assinaturaRT.crf : ""}</div>
       ${rnc.assinaturaRT.email?`<div style="font-size:10px;color:#777;">${rnc.assinaturaRT.email}</div>`:""}
       <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
@@ -7858,7 +7858,7 @@ function LaudosTab({ user, toast_, users, auditLog }) {
               {lSel.assinaturaRT ? (<>
                 <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{lSel.assinaturaRT.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>Responsável Técnico</div>
-                {lSel.assinaturaRT.crf && <div style={{ fontSize:10, color:T.text3 }}>CRF {lSel.assinaturaRT.crf}</div>}
+                {lSel.assinaturaRT.crf && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaRT.crf}</div>}
                 {lSel.assinaturaRT.email && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaRT.email}</div>}
                 <div style={{ fontSize:10, color:T.accent, marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}` }}>✔ Assinado eletronicamente</div>
                 <div style={{ fontSize:10, color:T.text2 }}>{lSel.assinaturaRT.timestamp?new Date(lSel.assinaturaRT.timestamp).toLocaleString("pt-BR"):lSel.assinaturaRT.dataHora}</div>
@@ -9370,7 +9370,7 @@ function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
                 <G3 ch={<>
                   <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
                   <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
-                  {editData.role === "rt" && <F lbl="CRF" ch={<Inp placeholder="Ex: CRF-SP 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />}
+                  <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />
                   <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
                     <option value="admin">Admin — acesso total</option>
                     <option value="user">Usuário — cria e edita suas RNCs</option>
@@ -9459,7 +9459,7 @@ function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
           <F lbl="E-mail" ch={<Inp type="email" placeholder="ana@herbamed.com" value={nu.email} onChange={e=>set("email",e.target.value)} />} />
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
-          {nu.role === "rt" && <F lbl="CRF" ch={<Inp placeholder="Ex: CRF-SP 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />}
+          <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />
           <F lbl="Perfil de acesso" tip="Selecione o perfil base — as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
             <option value="user">Usuário — cria e edita suas RNCs</option>
             <option value="admin">Admin — acesso total</option>
@@ -9995,7 +9995,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     const tipo  = TIPOS_DOC_GD.find(t=>t.id===doc.tipo);
     const cor   = tipo?.cor || "#2ab84a";
     const assHTML = (ass,label) => ass
-      ? `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${label}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome||"—"}</div>${ass.cargo?`<div style="font-size:10px;color:#555;">${ass.cargo}</div>`:""}${ass.crf?`<div style="font-size:9px;color:#777;">CRF ${ass.crf}</div>`:""}${ass.email?`<div style="font-size:9px;color:#777;">${ass.email}</div>`:""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${ass.timestamp?new Date(ass.timestamp).toLocaleString("pt-BR"):ass.dataHora||""}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, `${doc.codigo}|R${doc.versao}`)}</div></div>`
+      ? `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${label}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome||"—"}</div>${ass.cargo?`<div style="font-size:10px;color:#555;">${ass.cargo}</div>`:""}${ass.crf?`<div style="font-size:9px;color:#777;">${ass.crf}</div>`:""}${ass.email?`<div style="font-size:9px;color:#777;">${ass.email}</div>`:""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${ass.timestamp?new Date(ass.timestamp).toLocaleString("pt-BR"):ass.dataHora||""}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, `${doc.codigo}|R${doc.versao}`)}</div></div>`
       : `<div style="text-align:center;padding:10px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${label}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando</div></div>`;
     const caps = CAPITULOS_GD.filter(cap=>!cap.special).map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
     const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;"><div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div><div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div><div style="padding:0 22px;">${caps}</div><div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div><div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · CÓPIA NÃO CONTROLADA</span></div></div>`;
@@ -10109,7 +10109,7 @@ function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 {campo?(<>
                   <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
                   {campo.cargo&&<div style={{fontSize:11,color:T.text2}}>{campo.cargo}</div>}
-                  {campo.crf&&<div style={{fontSize:10,color:T.text3}}>CRF {campo.crf}</div>}
+                  {campo.crf&&<div style={{fontSize:10,color:T.text3}}>{campo.crf}</div>}
                   {campo.email&&<div style={{fontSize:10,color:T.text3}}>{campo.email}</div>}
                   <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
                   <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
