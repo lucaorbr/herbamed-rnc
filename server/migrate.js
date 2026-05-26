@@ -108,6 +108,25 @@ async function migrate() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS areco_materiais (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      codigo text NOT NULL UNIQUE,
+      nome text NOT NULL,
+      tipo text NOT NULL DEFAULT 'Outros',
+      unidade text,
+      ativo boolean NOT NULL DEFAULT true,
+      payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+      imported_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_areco_materiais_tipo_nome
+    ON areco_materiais (tipo, nome)
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS areco_sync_state (
       source text PRIMARY KEY,
       last_success_at timestamptz,

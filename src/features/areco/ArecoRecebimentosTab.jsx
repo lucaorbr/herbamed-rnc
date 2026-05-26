@@ -11,6 +11,39 @@ function receiptDate(value) {
   return value ? new Date(value).toISOString().slice(0, 10) : today();
 }
 
+function inferMaterialType(item) {
+  const text = `${item.produto_nome || ""} ${item.produto_codigo || ""}`.toLowerCase();
+  if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
+  if (text.includes("rotulo") || text.includes("etiqueta")) return "Rotulo";
+  if (text.includes("extrato") || text.includes("insumo") || text.includes("ativo") || text.includes("materia")) return "Materia-prima";
+  return "Outros";
+}
+
+function buildMaterialFromReceipt(item) {
+  const codigo = item.produto_codigo || item.id;
+  const nome = item.produto_nome || item.produto_codigo || "Material Areco";
+  return {
+    id: `areco-${codigo}`,
+    origem: "Areco",
+    codigoAreco: codigo,
+    nome,
+    nomeBase: nome,
+    apresentacao: "",
+    linha: "",
+    clienteId: "",
+    tipo: inferMaterialType(item),
+    fornecedorPadrao: item.fornecedor_nome || "",
+    unidadePadrao: item.unidade || "",
+    ref: "Importado automaticamente do Areco",
+    obs: "Material criado automaticamente a partir de um recebimento do Areco. Complete os ensaios e especificacoes no SGQ quando necessario.",
+    ensaios: [],
+    fichasTecnicas: [],
+    criadoPor: "Recebimento Areco",
+    criadoEm: today(),
+    atualizadoEm: today(),
+  };
+}
+
 export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   const T = useTheme();
   const s = useS();
@@ -47,7 +80,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
     setSyncing(true);
     try {
       const result = await runArecoSync();
-      toast_(`Sincronizacao concluida: ${result.imported || 0} item(ns).`, "green");
+      toast_(`Sincronizacao concluida: ${result.imported || 0} recebimento(s), ${result.importedMateriais || 0} material(is).`, "green");
       await load();
     } catch (error) {
       toast_(error.message || "Erro na sincronizacao Areco.", "red");
@@ -66,6 +99,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   const iniciarAnalise = async (item) => {
     try {
       const id = Date.now();
+      const material = buildMaterialFromReceipt(item);
       const quantidade = item.quantidade != null ? String(item.quantidade) : "";
       const unidade = item.unidade || "un";
       const analise = {
@@ -73,9 +107,9 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
         num: `RA-ARECO-${item.nf_numero || id}`,
         origem: "areco",
         arecoRecebimentoId: item.id,
-        materialId: item.produto_codigo || null,
-        materialNome: item.produto_nome || item.produto_codigo || "Material Areco",
-        materialTipo: "Areco",
+        materialId: material.id,
+        materialNome: material.nome,
+        materialTipo: material.tipo,
         fornecedor: item.fornecedor_nome || item.fornecedor_codigo || "",
         lote: item.lote || "",
         qtdRecebidaValor: quantidade,
@@ -93,6 +127,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
         criadoTs: id,
       };
 
+      await saveCollection("cq_materiais", String(material.id), material);
       await saveCollection("cq_analises", String(id), analise);
       await updateArecoRecebimento(item.id, { status: "em_analise", cq_analise_id: String(id) });
       toast_(`Analise ${analise.num} criada a partir do recebimento Areco.`, "green");

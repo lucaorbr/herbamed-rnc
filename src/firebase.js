@@ -168,6 +168,11 @@ export const getArecoRecebimentos = (status = "pendente_analise") =>
 export const updateArecoRecebimento = (id, data) =>
   api(`/api/areco/recebimentos/${encodeURIComponent(id)}`, { method: "PATCH", body: data });
 
+export const getArecoMateriais = (params = {}) => {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, value]) => value));
+  return api(`/api/areco/materiais${qs.toString() ? `?${qs}` : ""}`);
+};
+
 export const getArecoSyncStatus = () =>
   api("/api/areco/sync/status");
 

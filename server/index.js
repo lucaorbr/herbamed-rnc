@@ -323,6 +323,29 @@ async function handleCollections(req, res, pathname) {
 }
 
 async function handleAreco(req, res, pathname, url) {
+  if (pathname === "/api/areco/materiais" && req.method === "GET") {
+    await requireUser(req);
+    const q = url.searchParams.get("q") || "";
+    const tipo = url.searchParams.get("tipo") || "";
+    const params = [];
+    const where = [];
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(`(codigo ILIKE $${params.length} OR nome ILIKE $${params.length})`);
+    }
+    if (tipo) {
+      params.push(tipo);
+      where.push(`tipo = $${params.length}`);
+    }
+    const result = await query(`
+      SELECT * FROM areco_materiais
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY nome
+      LIMIT 500
+    `, params);
+    return sendJson(res, 200, result.rows);
+  }
+
   if (pathname === "/api/areco/recebimentos" && req.method === "GET") {
     await requireUser(req);
     const status = url.searchParams.get("status");

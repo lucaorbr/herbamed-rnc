@@ -67,6 +67,103 @@ WHERE en.dt_EntregaMerc >= DATEADD(day, -7, GETDATE())
 ORDER BY en.dt_EntregaMerc DESC
 `;
 
+const defaultMateriaisQuery = `
+SELECT TOP (1000)
+  CAST(v.id_Produto AS varchar(80)) AS codigo,
+  CAST(MAX(v.ds_Prod) AS varchar(255)) AS nome,
+  CAST(NULL AS varchar(30)) AS unidade,
+  CAST(NULL AS varchar(120)) AS grupo
+FROM ViewConsultaProdutos v
+WHERE v.id_Produto IS NOT NULL
+GROUP BY v.id_Produto
+ORDER BY MAX(v.ds_Prod)
+`;
+
+function inferMaterialType(row) {
+  const text = `${row.tipo || ""} ${row.grupo || ""} ${row.nome || ""}`.toLowerCase();
+  if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
+  if (text.includes("rotulo") || text.includes("etiqueta") || text.includes("label")) return "Rotulo";
+  if (text.includes("materia") || text.includes("extrato") || text.includes("ativo") || text.includes("insumo")) return "Materia-prima";
+  return row.tipo || row.grupo || "Outros";
+}
+
+function materialDoc(row) {
+  const codigo = String(row.codigo || row.produto_codigo || "").trim();
+  const nome = String(row.nome || row.produto_nome || codigo || "Material Areco").trim();
+  const tipo = inferMaterialType({ ...row, nome });
+  return {
+    id: `areco-${codigo}`,
+    origem: "Areco",
+    codigoAreco: codigo,
+    nome,
+    nomeBase: nome,
+    apresentacao: "",
+    linha: "",
+    clienteId: "",
+    tipo,
+    fornecedorPadrao: "",
+    unidadePadrao: row.unidade || "",
+    ref: "Importado automaticamente do Areco",
+    obs: "Material sincronizado do Areco. Complete os ensaios e especificacoes no SGQ quando necessario.",
+    ensaios: [],
+    fichasTecnicas: [],
+    criadoPor: "Sync Areco",
+    criadoEm: new Date().toISOString().slice(0, 10),
+    atualizadoEm: new Date().toISOString().slice(0, 10),
+  };
+}
+
+async function upsertMaterial(row) {
+  const codigo = String(row.codigo || row.produto_codigo || "").trim();
+  if (!codigo) return false;
+  const nome = String(row.nome || row.produto_nome || codigo).trim();
+  const tipo = inferMaterialType({ ...row, nome });
+  const doc = materialDoc({ ...row, codigo, nome, tipo });
+
+  await query(`
+    INSERT INTO areco_materiais (codigo, nome, tipo, unidade, payload, updated_at)
+    VALUES ($1,$2,$3,$4,$5::jsonb,now())
+    ON CONFLICT (codigo) DO UPDATE SET
+      nome = EXCLUDED.nome,
+      tipo = EXCLUDED.tipo,
+      unidade = EXCLUDED.unidade,
+      payload = EXCLUDED.payload,
+      updated_at = now()
+  `, [codigo, nome, tipo, row.unidade || null, JSON.stringify(row)]);
+
+  await query(`
+    INSERT INTO generic_documents (collection, id, data, updated_at)
+    VALUES ('cq_materiais', $1, $2::jsonb, now())
+    ON CONFLICT (collection, id) DO UPDATE SET
+      data = generic_documents.data || EXCLUDED.data || jsonb_build_object('ensaios', COALESCE(generic_documents.data->'ensaios', '[]'::jsonb)),
+      updated_at = now()
+  `, [doc.id, JSON.stringify(doc)]);
+
+  return true;
+}
+
+async function syncMateriais(pool) {
+  const source = "areco_materiais";
+  const result = await pool.request().query(process.env.ARECO_MATERIAIS_QUERY || defaultMateriaisQuery);
+  let imported = 0;
+
+  for (const row of result.recordset || []) {
+    if (await upsertMaterial(row)) imported += 1;
+  }
+
+  await query(`
+    INSERT INTO areco_sync_state (source, last_success_at, last_cursor, last_error, updated_at)
+    VALUES ($1, now(), $2, null, now())
+    ON CONFLICT (source) DO UPDATE SET
+      last_success_at = EXCLUDED.last_success_at,
+      last_cursor = EXCLUDED.last_cursor,
+      last_error = null,
+      updated_at = now()
+  `, [source, String(imported)]);
+
+  return imported;
+}
+
 async function runArecoSync() {
   if (!enabled()) return { skipped: true, reason: "ARECO_SYNC_ENABLED=false" };
   if (!configReady()) return { skipped: true, reason: "credenciais Areco ausentes" };
@@ -78,6 +175,7 @@ async function runArecoSync() {
     const request = pool.request();
     const result = await request.query(process.env.ARECO_RECEBIMENTOS_QUERY || defaultQuery);
     let imported = 0;
+    let importedMateriais = 0;
 
     for (const row of result.recordset || []) {
       const externalKey = [
@@ -124,8 +222,15 @@ async function runArecoSync() {
         row.data_entrada,
         JSON.stringify(row),
       ]);
+      if (await upsertMaterial({
+        codigo: row.produto_codigo,
+        nome: row.produto_nome,
+        unidade: row.unidade,
+      })) importedMateriais += 1;
       imported += 1;
     }
+
+    importedMateriais += await syncMateriais(pool);
 
     await query(`
       INSERT INTO areco_sync_state (source, last_success_at, last_cursor, last_error, updated_at)
@@ -137,7 +242,7 @@ async function runArecoSync() {
         updated_at = now()
     `, [source, String(imported)]);
 
-    return { imported };
+    return { imported, importedMateriais };
   } catch (error) {
     await query(`
       INSERT INTO areco_sync_state (source, last_error, updated_at)
