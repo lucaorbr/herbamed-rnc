@@ -29,8 +29,15 @@ cp .env.example .env
 ```env
 POSTGRES_PASSWORD=uma_senha_forte
 JWT_SECRET=um_segredo_forte
-INITIAL_ADMIN_EMAIL=seu_admin@herbamed.com.br
-INITIAL_ADMIN_PASSWORD=uma_senha_forte
+INITIAL_ADMIN_EMAIL=admin
+INITIAL_ADMIN_PASSWORD=Herba@123
+```
+
+Conta padrao para testes:
+
+```text
+Usuario: admin
+Senha:   Herba@123
 ```
 
 4. Suba a aplicacao:

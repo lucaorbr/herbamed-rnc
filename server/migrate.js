@@ -121,22 +121,26 @@ async function migrate() {
 }
 
 async function seedAdmin() {
-  const email = process.env.INITIAL_ADMIN_EMAIL;
-  const password = process.env.INITIAL_ADMIN_PASSWORD;
+  const email = process.env.INITIAL_ADMIN_EMAIL || "admin";
+  const password = process.env.INITIAL_ADMIN_PASSWORD || "Herba@123";
   const name = process.env.INITIAL_ADMIN_NAME || "Administrador SGQ";
 
   if (!email || !password) return;
-
-  const existing = await query("SELECT id FROM users WHERE lower(email) = lower($1)", [email]);
-  if (existing.rowCount > 0) return;
 
   const passwordHash = await bcrypt.hash(password, 12);
   await query(`
     INSERT INTO users (name, email, password_hash, role, setor, data)
     VALUES ($1, lower($2), $3, 'admin', 'Qualidade', $4::jsonb)
+    ON CONFLICT (email) DO UPDATE SET
+      name = EXCLUDED.name,
+      password_hash = EXCLUDED.password_hash,
+      role = 'admin',
+      setor = EXCLUDED.setor,
+      data = EXCLUDED.data,
+      updated_at = now()
   `, [name, email, passwordHash, JSON.stringify({ name, email, role: "admin", setor: "Qualidade" })]);
 
-  console.log(`Usuario admin inicial criado: ${email}`);
+  console.log(`Usuario admin padrao garantido: ${email}`);
 }
 
 module.exports = { migrate };

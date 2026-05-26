@@ -32,8 +32,15 @@ POSTGRES_DB=sgqherbamed
 POSTGRES_USER=sgqherbamed
 POSTGRES_PASSWORD=troque_esta_senha
 JWT_SECRET=troque_este_segredo
-INITIAL_ADMIN_EMAIL=admin@herbamed.local
-INITIAL_ADMIN_PASSWORD=troque_esta_senha_admin
+INITIAL_ADMIN_EMAIL=admin
+INITIAL_ADMIN_PASSWORD=Herba@123
+```
+
+Conta padrao para testes:
+
+```text
+Usuario: admin
+Senha:   Herba@123
 ```
 
 Para ativar a consulta automatica ao Areco a cada 3 minutos:

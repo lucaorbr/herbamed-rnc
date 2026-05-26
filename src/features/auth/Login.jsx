@@ -12,14 +12,14 @@ export function Login({ onLogin }) {
   const [showPw, setShowPw] = useState(false);
 
   const login = async () => {
-    if (!email || !pw) { setErr("Preencha e-mail e senha."); return; }
+    if (!email || !pw) { setErr("Preencha usuario/e-mail e senha."); return; }
     setLoading(true); setErr("");
     try {
       const cred = await loginUser(email, pw);
       const userData = await getUser(cred.user.uid);
       if (userData) onLogin({ ...userData, uid: cred.user.uid });
       else setErr("Usuário não encontrado no sistema.");
-    } catch { setErr("E-mail ou senha incorretos."); }
+    } catch { setErr("Usuario/e-mail ou senha incorretos."); }
     setLoading(false);
   };
 
@@ -86,10 +86,10 @@ export function Login({ onLogin }) {
           {/* Campos */}
           <div style={{ animation:"fadeUp .4s ease .1s both" }}>
             <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:700, textTransform:"uppercase", letterSpacing:".08em", display:"block", marginBottom:8 }}>E-mail corporativo</label>
+              <label style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:700, textTransform:"uppercase", letterSpacing:".08em", display:"block", marginBottom:8 }}>Usuario ou e-mail</label>
               <input
                 className="login-inp"
-                type="email" placeholder="seu@herbamed.com.br" value={email}
+                type="text" placeholder="admin ou seu@herbamed.com.br" value={email}
                 onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}
                 style={{ width:"100%", padding:"13px 16px", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, color:"#fff", fontFamily:"inherit", fontSize:14, outline:"none", transition:"all .2s", boxSizing:"border-box" }}
               />
