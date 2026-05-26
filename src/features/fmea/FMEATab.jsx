@@ -18,7 +18,7 @@ export function FMEATab({ user, toast_, auditLog }) {
       setItems(list.sort((a,b) => (b.id||0) - (a.id||0)));
       setLoading(false);
     });
-    // Safety timeout — show empty if Firestore takes too long
+    // Safety timeout para liberar a tela se a API demorar
     const t = setTimeout(() => setLoading(false), 3000);
     return () => { unsub(); clearTimeout(t); };
   }, []);

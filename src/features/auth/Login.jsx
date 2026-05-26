@@ -134,7 +134,7 @@ export function Login({ onLogin }) {
 
           {/* Security badges */}
           <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
-            {[["🔒","Firebase Auth"],["☁️","Cloud Seguro"],["🔐","Criptografado"]].map(([icon,label])=>(
+            {[["🔒","Login local"],["☁️","Servidor interno"],["🔐","Criptografado"]].map(([icon,label])=>(
               <div key={label} style={{ display:"flex", alignItems:"center", gap:5, padding:"5px 10px", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:20 }}>
                 <span style={{ fontSize:11 }}>{icon}</span>
                 <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", fontWeight:500 }}>{label}</span>

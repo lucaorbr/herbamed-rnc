@@ -22,7 +22,7 @@ banco:    localhost:5487 -> container:5432
 
 ## Variaveis de ambiente
 
-O frontend usa a configuracao Firebase existente em `src/firebaseConfig.js`.
+O SGQ usa o PostgreSQL do proprio Docker como banco oficial. O banco do Areco e usado apenas para consulta/leitura quando a sincronizacao estiver ativada.
 
 Para habilitar os recursos de IA que chamam `/api/claude`, defina:
 
@@ -31,7 +31,24 @@ ANTHROPIC_API_KEY=sua_chave
 POSTGRES_DB=sgqherbamed
 POSTGRES_USER=sgqherbamed
 POSTGRES_PASSWORD=troque_esta_senha
+JWT_SECRET=troque_este_segredo
+INITIAL_ADMIN_EMAIL=admin@herbamed.local
+INITIAL_ADMIN_PASSWORD=troque_esta_senha_admin
 ```
+
+Para ativar a consulta automatica ao Areco a cada 3 minutos:
+
+```bash
+ARECO_SYNC_ENABLED=true
+ARECO_SYNC_INTERVAL_MS=180000
+ARECO_SQLSERVER_HOST=10.0.242.230
+ARECO_SQLSERVER_PORT=5327
+ARECO_SQLSERVER_DATABASE=VSatHerbamed
+ARECO_SQLSERVER_USER=usuario_somente_leitura
+ARECO_SQLSERVER_PASSWORD=senha
+```
+
+Importante: a integracao Areco e somente leitura. O SGQ nao cria, altera ou remove dados no banco do ERP.
 
 No Windows PowerShell:
 
@@ -59,4 +76,5 @@ src/features         Modulos por dominio/tela
 src/services         Clientes de integracoes externas
 server               Backend Node para healthcheck e API /api/claude
 nginx                Configuracao do frontend e proxy /api para o backend
+docs                 Documentacao tecnica de migracao e integracao
 ```

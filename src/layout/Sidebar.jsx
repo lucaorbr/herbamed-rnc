@@ -48,7 +48,8 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmi
       { id:"fmea",     icon:"⚠️", label:"FMEA" },
     ]}]:[]),
     { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
-      { id:"cq-materiais", icon:"🧪", label:"Entrada de Materiais" },
+      { id:"recebimentos-areco", icon:"IN", label:"Recebimentos Areco" },
+{ id:"cq-materiais", icon:"🧪", label:"Entrada de Materiais" },
       { id:"cq-analises",  icon:"📋", label:"Análises" },
       { id:"cq-dashboard", icon:"📈", label:"Dashboard CQ" },
       { id:"nqa",          icon:"📐", label:"NQA / AQL" },

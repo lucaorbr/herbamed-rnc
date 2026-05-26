@@ -28,7 +28,26 @@ services:
     environment:
       NODE_ENV: production
       PORT: 9028
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sgqherbamed}
+      POSTGRES_USER: ${POSTGRES_USER:-sgqherbamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgqherbamed_change_me}
+      JWT_SECRET: ${JWT_SECRET:-troque_este_jwt_secret}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@herbamed.local}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Herbamed@2025}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrador SGQ}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ARECO_SYNC_ENABLED: ${ARECO_SYNC_ENABLED:-false}
+      ARECO_SYNC_INTERVAL_MS: ${ARECO_SYNC_INTERVAL_MS:-180000}
+      ARECO_SQLSERVER_HOST: ${ARECO_SQLSERVER_HOST:-}
+      ARECO_SQLSERVER_PORT: ${ARECO_SQLSERVER_PORT:-}
+      ARECO_SQLSERVER_DATABASE: ${ARECO_SQLSERVER_DATABASE:-}
+      ARECO_SQLSERVER_USER: ${ARECO_SQLSERVER_USER:-}
+      ARECO_SQLSERVER_PASSWORD: ${ARECO_SQLSERVER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9028/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

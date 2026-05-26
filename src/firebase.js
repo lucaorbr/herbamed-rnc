@@ -1,105 +1,195 @@
-import { initializeApp, deleteApp } from "firebase/app";
-import {
-  getFirestore, collection, doc, getDoc, getDocs,
-  setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp
-} from "firebase/firestore";
-import {
-  getAuth, signInWithEmailAndPassword, signOut,
-  createUserWithEmailAndPassword, updatePassword
-} from "firebase/auth";
-import firebaseConfig from "./firebaseConfig";
+const API_BASE = process.env.REACT_APP_API_BASE_URL || "";
+const TOKEN_KEY = "sgq_token";
 
-// Remove undefined values para evitar erros do Firestore
-const sanitize = (obj) =>
-  JSON.parse(JSON.stringify(obj, (_, v) => (v === undefined ? null : v)));
-
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
-
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-export const loginUser = (email, pw) => signInWithEmailAndPassword(auth, email, pw);
-export const logoutUser = () => signOut(auth);
-export const createAuthUser = async (email, pw) => {
-  const secondaryApp = initializeApp(firebaseConfig, "secondary_" + Date.now());
-  const secondaryAuth = getAuth(secondaryApp);
-  try {
-    const result = await createUserWithEmailAndPassword(secondaryAuth, email, pw);
-    return result;
-  } finally {
-    await deleteApp(secondaryApp);
-  }
+export const auth = {
+  currentUser: null,
 };
 
-// ─── USERS ────────────────────────────────────────────────────────────────────
-export const getUser = async (uid) => {
-  const snap = await getDoc(doc(db, "users", uid));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-};
-export const saveUser = (uid, data) => setDoc(doc(db, "users", uid), sanitize(data), { merge: true });
-export const updateUser = (uid, data) => updateDoc(doc(db, "users", uid), sanitize(data));
-export const deleteUser = (uid) => deleteDoc(doc(db, "users", uid));
-export const getAllUsers = async () => {
-  const snap = await getDocs(collection(db, "users"));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-};
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
 
-// ─── RNCS ─────────────────────────────────────────────────────────────────────
-export const saveRNC = (id, data) => setDoc(doc(db, "rncs", String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
-export const updateRNC = (id, data) => updateDoc(doc(db, "rncs", String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
-export const deleteRNC = (id) => deleteDoc(doc(db, "rncs", String(id)));
-export const getAllRNCs = async () => {
-  const snap = await getDocs(collection(db, "rncs"));
-  return snap.docs.map(d => ({ ...d.data() })).sort((a, b) => (a.num || "").localeCompare(b.num || ""));
-};
-export const subscribeRNCs = (cb) =>
-  onSnapshot(collection(db, "rncs"), snap => {
-    cb(snap.docs.map(d => d.data()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+async function api(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    ...options,
+    headers,
+    body: options.body && typeof options.body !== "string" ? JSON.stringify(options.body) : options.body,
   });
 
-// ─── COUNTER ──────────────────────────────────────────────────────────────────
-export const getCounter = async () => {
-  const snap = await getDoc(doc(db, "meta", "counter"));
-  return snap.exists() ? snap.data().value : 0;
-};
-export const incrementCounter = async () => {
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yy = String(now.getFullYear()).slice(-2);
-  const key = `counter_${dd}${mm}${yy}`;
-  const ref = doc(db, "meta", key);
-  const snap = await getDoc(ref);
-  const next = snap.exists() ? snap.data().value + 1 : 1;
-  await setDoc(ref, { value: next });
-  return `${dd}${mm}${yy}${next}`;
-};
-export const peekDailyCounter = async () => {
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yy = String(now.getFullYear()).slice(-2);
-  const key = `counter_${dd}${mm}${yy}`;
-  const snap = await getDoc(doc(db, "meta", key));
-  const next = snap.exists() ? snap.data().value + 1 : 1;
-  return `${dd}${mm}${yy}${next}`;
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const error = new Error(data?.error || "Erro de comunicacao com o servidor");
+    error.code = response.status === 401 ? "unauthenticated" : response.status === 403 ? "permission-denied" : "server-error";
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  return {
+    ...user,
+    uid: user.uid || user.id,
+  };
+}
+
+function notifyAuth(user) {
+  auth.currentUser = user ? { uid: user.uid || user.id, email: user.email } : null;
+  authListeners.forEach(listener => listener(auth.currentUser));
+}
+
+const authListeners = new Set();
+
+export function onAuthStateChanged(_auth, cb) {
+  let active = true;
+  authListeners.add(cb);
+  api("/api/auth/me")
+    .then(({ user }) => {
+      if (!active) return;
+      const normalized = normalizeUser(user);
+      auth.currentUser = normalized ? { uid: normalized.uid, email: normalized.email } : null;
+      cb(normalized ? { uid: normalized.uid, email: normalized.email } : null);
+    })
+    .catch(() => {
+      if (!active) return;
+      auth.currentUser = null;
+      cb(null);
+    });
+
+  return () => {
+    active = false;
+    authListeners.delete(cb);
+  };
+}
+
+export const loginUser = async (email, pw) => {
+  const { user, token } = await api("/api/auth/login", { method: "POST", body: { email, password: pw } });
+  setToken(token);
+  const normalized = normalizeUser(user);
+  notifyAuth(normalized);
+  return { user: { uid: normalized.uid, email: normalized.email } };
 };
 
-// ─── GENERIC COLLECTIONS ──────────────────────────────────────────────────────
+export const logoutUser = async () => {
+  try { await api("/api/auth/logout", { method: "POST", body: {} }); } catch {}
+  setToken(null);
+  notifyAuth(null);
+};
+
+export const createAuthUser = async (email, pw) => {
+  auth.pendingPassword = auth.pendingPassword || {};
+  auth.pendingPassword[email] = pw;
+  return { user: { uid: `pending:${email}`, email, password: pw } };
+};
+
+export const getUser = async (uid) => {
+  if (!uid) return null;
+  const user = await api(`/api/users/${encodeURIComponent(uid)}`);
+  return normalizeUser(user);
+};
+
+export const saveUser = async (uid, data) => {
+  if (String(uid).startsWith("pending:")) {
+    const email = String(uid).slice("pending:".length);
+    const user = await api("/api/users", { method: "POST", body: { ...data, email, password: auth.pendingPassword?.[email] } });
+    if (auth.pendingPassword) delete auth.pendingPassword[email];
+    return normalizeUser(user);
+  }
+  const user = await api(`/api/users/${encodeURIComponent(uid)}`, { method: "PATCH", body: data });
+  return normalizeUser(user);
+};
+
+export const updateUser = saveUser;
+
+export const deleteUser = (uid) =>
+  api(`/api/users/${encodeURIComponent(uid)}`, { method: "DELETE" });
+
+export const getAllUsers = async () => {
+  const users = await api("/api/users");
+  return users.map(normalizeUser);
+};
+
+export const saveRNC = (id, data) =>
+  api(`/api/rncs/${encodeURIComponent(id)}`, { method: "PUT", body: data });
+
+export const updateRNC = (id, data) =>
+  api(`/api/rncs/${encodeURIComponent(id)}`, { method: "PATCH", body: data });
+
+export const deleteRNC = (id) =>
+  api(`/api/rncs/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+export const getAllRNCs = () => api("/api/rncs");
+
+export const subscribeRNCs = (cb) => poll(() => getAllRNCs().then(cb));
+
+export const incrementCounter = async () => {
+  const { value } = await api("/api/counters/increment-daily", { method: "POST", body: {} });
+  return value;
+};
+
+export const peekDailyCounter = async () => {
+  const { value } = await api("/api/counters/peek-daily");
+  return value;
+};
+
 export const saveCollection = (colName, id, data) =>
-  setDoc(doc(db, colName, String(id)), sanitize({ ...data, updatedAt: serverTimestamp() }));
+  api(`/api/collections/${encodeURIComponent(colName)}/${encodeURIComponent(id)}`, { method: "PUT", body: data });
 
 export const deleteFromCollection = (colName, id) =>
-  deleteDoc(doc(db, colName, String(id)));
+  api(`/api/collections/${encodeURIComponent(colName)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+export const getCollection = (colName) =>
+  api(`/api/collections/${encodeURIComponent(colName)}`);
 
 export const subscribeCollection = (colName, cb, onErr) =>
-  onSnapshot(
-    collection(db, colName),
-    snap => { cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))); },
-    err  => { console.warn(`[subscribeCollection:${colName}]`, err?.code); onErr && onErr(err); }
-  );
+  poll(() => getCollection(colName).then(cb), onErr);
 
-export const getCollection = async (colName) => {
-  const snap = await getDocs(collection(db, colName));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-};
+export const verifyCurrentUserPassword = (password) =>
+  api("/api/auth/verify-password", { method: "POST", body: { password } });
+
+export const getArecoRecebimentos = (status = "pendente_analise") =>
+  api(`/api/areco/recebimentos${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+
+export const getArecoSyncStatus = () =>
+  api("/api/areco/sync/status");
+
+export const runArecoSync = () =>
+  api("/api/areco/sync/run", { method: "POST", body: {} });
+
+function poll(fn, onErr, intervalMs = 5000) {
+  let alive = true;
+  let timer = null;
+
+  const run = async () => {
+    if (!alive) return;
+    try {
+      await fn();
+    } catch (error) {
+      if (onErr) onErr(error);
+      else console.warn("[poll]", error?.message || error);
+    } finally {
+      if (alive) timer = setTimeout(run, intervalMs);
+    }
+  };
+
+  run();
+  return () => {
+    alive = false;
+    if (timer) clearTimeout(timer);
+  };
+}

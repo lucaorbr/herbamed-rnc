@@ -39,9 +39,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
     try {
       const cred = await createAuthUser(nu.email, nu.pw);
       const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", permissoes:nuPermissoes, ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
-      await saveUser(cred.user.uid, userData);
+      const savedUser = await saveUser(cred.user.uid, userData);
       await auditLog("Criou Usuário", "usuarios", cred.user.uid, `${userData.name} (${userData.email})`, null, { name: userData.name, email: userData.email, role: userData.role, setor: userData.setor });
-      setUsers([...users, { ...userData, id:cred.user.uid }]);
+      setUsers([...users, savedUser]);
       setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
       setNuAssinatura(null);

@@ -851,7 +851,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     if(ensaios.length===0) { alert("Adicione ao menos um ensaio."); return; }
     try {
       const id = sel ? String(sel.id) : String(Date.now());
-      // Limpar ensaios para garantir compatibilidade com Firestore
+      // Limpar ensaios para manter o payload simples no banco local
       const ensaiosLimpos = ensaios.map((e,i) => ({
         id: i+1,
         nome: e.nome||"",

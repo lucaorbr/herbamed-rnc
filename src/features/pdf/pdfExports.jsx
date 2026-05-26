@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { auth } from "../../firebase";
+import { verifyCurrentUserPassword } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -53,9 +53,7 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo }) {
     if (!senha.trim()) { setErr("Digite sua senha para assinar."); return; }
     setLoading(true); setErr("");
     try {
-      const { signInWithEmailAndPassword } = await import("firebase/auth");
-      const { auth } = await import("../../firebase");
-      await signInWithEmailAndPassword(auth, user.email, senha);
+      await verifyCurrentUserPassword(senha);
       onConfirm({
         nome: user.name,
         cargo,

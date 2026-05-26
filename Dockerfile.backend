@@ -4,6 +4,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=9028
 
+COPY package*.json ./
+RUN npm install -g npm@11.6.2
+RUN npm ci --omit=dev
 COPY server ./server
 
 EXPOSE 9028

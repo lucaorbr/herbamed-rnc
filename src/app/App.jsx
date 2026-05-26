@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection } from "../firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged } from "../firebase";
 import { FormalCtx, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
+import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
 import { AuditLogTab } from "../features/audit/AuditLogTab";
 import { AuditoriasTab } from "../features/auditorias/AuditoriasTab";
 import { Login } from "../features/auth/Login";
@@ -117,7 +117,7 @@ export default function App() {
           try { await logoutUser(); } catch(e) {}
           setUser(null);
         } else {
-          // Firestore não retornou perfil — usa dados do Auth como fallback
+          // Backend não retornou perfil — usa dados da sessão como fallback.
           setUser({ uid: fbUser.uid, name: fbUser.displayName || fbUser.email, email: fbUser.email, role: "user" });
         }
       } else {
@@ -218,7 +218,7 @@ export default function App() {
   }, [user?.name, user?.email, user?.uid, user?.id]);
 
   // ── Verificação de permissões customizadas ───────────────────────────
-  // Para usuários com permissoes salvas no Firestore, usa elas.
+  // Para usuários com permissoes salvas no banco local, usa elas.
   // Para usuários antigos sem permissoes, cai no papel (role) como antes.
   const perm = (key) => {
     if (!user) return false;
@@ -229,7 +229,7 @@ export default function App() {
   };
 
   const fbErr = (e) => {
-    console.error("[Firebase]", e?.code, e?.message);
+    console.error("[API]", e?.code, e?.message);
     const codes = {
       "unavailable":        "Sem conexao com o servidor. Verifique sua internet.",
       "permission-denied":  "Sem permissao para esta operacao.",
@@ -321,6 +321,7 @@ export default function App() {
     cep: "CEP — Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
     nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
+    "recebimentos-areco": "Recebimentos Areco",
     "cq-materiais": "CQ — Cadastro de Materiais",
     "cq-analises": "CQ — Fichas de Análise",
     "cq-dashboard": "CQ — Dashboard de Qualidade",
@@ -527,6 +528,7 @@ export default function App() {
               {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
               {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} />}
+              {tab==="recebimentos-areco" && <ArecoRecebimentosTab user={user} toast_={toast_} setTab={setTab} />}
               {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
               {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
