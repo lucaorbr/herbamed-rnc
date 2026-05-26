@@ -1,0 +1,59 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgqherbamed-frontend
+    restart: unless-stopped
+    ports:
+      - "9027:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sgqherbamed-backend
+    restart: unless-stopped
+    ports:
+      - "9028:9028"
+    environment:
+      NODE_ENV: production
+      PORT: 9028
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9028/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    container_name: sgqherbamed-db
+    restart: unless-stopped
+    ports:
+      - "5487:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sgqherbamed}
+      POSTGRES_USER: ${POSTGRES_USER:-sgqherbamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgqherbamed_change_me}
+    volumes:
+      - sgqherbamed-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sgqherbamed-db-data:

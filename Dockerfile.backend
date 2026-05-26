@@ -1,0 +1,10 @@
+FROM node:20-alpine
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=9028
+
+COPY server ./server
+
+EXPOSE 9028
+CMD ["node", "server/index.js"]
