@@ -67,8 +67,14 @@ WHERE en.dt_EntregaMerc >= DATEADD(day, -7, GETDATE())
 ORDER BY en.dt_EntregaMerc DESC
 `;
 
-const defaultMateriaisQuery = `
-SELECT TOP (1000)
+function materiaisLimitClause() {
+  const limit = Number(process.env.ARECO_MATERIAIS_LIMIT || 0);
+  return limit > 0 ? `TOP (${limit})` : "";
+}
+
+function defaultMateriaisQuery() {
+  return `
+SELECT ${materiaisLimitClause()}
   CAST(v.id_Produto AS varchar(80)) AS codigo,
   CAST(MAX(v.ds_Prod) AS varchar(255)) AS nome,
   CAST(NULL AS varchar(30)) AS unidade,
@@ -78,6 +84,7 @@ WHERE v.id_Produto IS NOT NULL
 GROUP BY v.id_Produto
 ORDER BY MAX(v.ds_Prod)
 `;
+}
 
 function inferMaterialType(row) {
   const text = `${row.tipo || ""} ${row.grupo || ""} ${row.nome || ""}`.toLowerCase();
@@ -144,7 +151,7 @@ async function upsertMaterial(row) {
 
 async function syncMateriais(pool) {
   const source = "areco_materiais";
-  const result = await pool.request().query(process.env.ARECO_MATERIAIS_QUERY || defaultMateriaisQuery);
+  const result = await pool.request().query(process.env.ARECO_MATERIAIS_QUERY || defaultMateriaisQuery());
   let imported = 0;
 
   for (const row of result.recordset || []) {

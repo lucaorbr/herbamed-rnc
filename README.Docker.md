@@ -57,6 +57,8 @@ ARECO_SQLSERVER_PASSWORD=senha
 
 O sync importa recebimentos e tambem materiais/produtos do Areco para o cadastro `CQ - Materiais`. Se a estrutura do Areco variar no servidor, as consultas podem ser sobrescritas pelas variaveis `ARECO_RECEBIMENTOS_QUERY` e `ARECO_MATERIAIS_QUERY`.
 
+Por padrao, a carga de materiais tenta importar todos os produtos encontrados no Areco. Para limitar a carga inicial, defina `ARECO_MATERIAIS_LIMIT` com um numero maior que zero.
+
 Importante: a integracao Areco e somente leitura. O SGQ nao cria, altera ou remove dados no banco do ERP.
 
 No Windows PowerShell:

@@ -147,7 +147,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
             <button style={s.btn} onClick={load} disabled={loading}>Atualizar</button>
             {user?.role === "admin" && (
               <button style={{ ...s.btnA, opacity:syncing ? .7 : 1 }} onClick={doSync} disabled={syncing}>
-                {syncing ? "Sincronizando..." : "Sincronizar agora"}
+                {syncing ? "Sincronizando..." : "Sincronizar recebimentos e materiais"}
               </button>
             )}
           </div>
