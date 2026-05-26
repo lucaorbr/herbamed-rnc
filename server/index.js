@@ -341,6 +341,26 @@ async function handleAreco(req, res, pathname, url) {
     return sendJson(res, 200, result.rows);
   }
 
+  const recebimentoMatch = pathname.match(/^\/api\/areco\/recebimentos\/([^/]+)$/);
+  if (recebimentoMatch && (req.method === "PATCH" || req.method === "PUT")) {
+    await requireUser(req);
+    const id = decodeURIComponent(recebimentoMatch[1]);
+    const data = sanitize(await readBody(req));
+    const allowed = new Set(["pendente_analise", "em_analise", "concluido"]);
+    const status = allowed.has(data.status) ? data.status : null;
+
+    const result = await query(`
+      UPDATE areco_recebimentos SET
+        status = COALESCE($2, status),
+        cq_analise_id = COALESCE($3, cq_analise_id),
+        updated_at = now()
+      WHERE id = $1
+      RETURNING *
+    `, [id, status, data.cq_analise_id || data.cqAnaliseId || null]);
+
+    return sendJson(res, result.rowCount ? 200 : 404, result.rowCount ? result.rows[0] : { error: "Recebimento Areco nao encontrado" });
+  }
+
   if (pathname === "/api/areco/sync/status" && req.method === "GET") {
     await requireUser(req);
     const result = await query("SELECT * FROM areco_sync_state ORDER BY source");

@@ -165,6 +165,9 @@ export const verifyCurrentUserPassword = (password) =>
 export const getArecoRecebimentos = (status = "pendente_analise") =>
   api(`/api/areco/recebimentos${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 
+export const updateArecoRecebimento = (id, data) =>
+  api(`/api/areco/recebimentos/${encodeURIComponent(id)}`, { method: "PATCH", body: data });
+
 export const getArecoSyncStatus = () =>
   api("/api/areco/sync/status");
 

@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { getArecoRecebimentos, getArecoSyncStatus, runArecoSync } from "../../firebase";
+import { getArecoRecebimentos, getArecoSyncStatus, runArecoSync, saveCollection, updateArecoRecebimento } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle, Sel } from "../../shared/ui";
 
 const fmtDate = value => value ? new Date(value).toLocaleDateString("pt-BR") : "-";
+const today = () => new Date().toISOString().slice(0, 10);
+
+function receiptDate(value) {
+  return value ? new Date(value).toISOString().slice(0, 10) : today();
+}
 
 export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   const T = useTheme();
@@ -57,6 +62,46 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   });
 
   const lastSync = syncStatus.find(s => s.source === "areco_recebimentos");
+
+  const iniciarAnalise = async (item) => {
+    try {
+      const id = Date.now();
+      const quantidade = item.quantidade != null ? String(item.quantidade) : "";
+      const unidade = item.unidade || "un";
+      const analise = {
+        id,
+        num: `RA-ARECO-${item.nf_numero || id}`,
+        origem: "areco",
+        arecoRecebimentoId: item.id,
+        materialId: item.produto_codigo || null,
+        materialNome: item.produto_nome || item.produto_codigo || "Material Areco",
+        materialTipo: "Areco",
+        fornecedor: item.fornecedor_nome || item.fornecedor_codigo || "",
+        lote: item.lote || "",
+        qtdRecebidaValor: quantidade,
+        qtdRecebidaUnidade: unidade,
+        qtdRecebida: quantidade ? `${quantidade} ${unidade}` : "",
+        nf: item.nf_numero || "",
+        dataRecebimento: receiptDate(item.data_entrada),
+        dataAnalise: today(),
+        resp: user?.name || "",
+        obs: `Analise iniciada a partir do recebimento Areco ${item.external_key || item.id}.`,
+        resultados: [],
+        conclusao: "Pendente",
+        criadoPor: user?.name || "",
+        criadoEm: today(),
+        criadoTs: id,
+      };
+
+      await saveCollection("cq_analises", String(id), analise);
+      await updateArecoRecebimento(item.id, { status: "em_analise", cq_analise_id: String(id) });
+      toast_(`Analise ${analise.num} criada a partir do recebimento Areco.`, "green");
+      await load();
+      setTab && setTab("cq-analises");
+    } catch (error) {
+      toast_(error.message || "Erro ao iniciar analise.", "red");
+    }
+  };
 
   return (
     <div>
@@ -130,7 +175,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
                       <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, borderRadius:20, padding:"3px 9px" }}>{item.status}</span>
                     </td>
                     <td style={{ padding:"10px" }}>
-                      <button style={s.btnA} onClick={() => { toast_("Proxima etapa: associar este recebimento a uma analise CQ.", "blue"); setTab && setTab("cq-analises"); }}>
+                      <button style={s.btnA} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
                         Iniciar analise
                       </button>
                     </td>
