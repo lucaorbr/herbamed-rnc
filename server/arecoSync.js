@@ -47,8 +47,19 @@ function getConfig() {
   };
 }
 
-const defaultQuery = `
-SELECT TOP (200)
+function recebimentosLimitClause() {
+  const limit = Number(process.env.ARECO_RECEBIMENTOS_LIMIT || 1000);
+  return limit > 0 ? `TOP (${limit})` : "";
+}
+
+function recebimentosDaysBack() {
+  const days = Number(process.env.ARECO_RECEBIMENTOS_DAYS || 30);
+  return Number.isFinite(days) && days > 0 ? days : 30;
+}
+
+function defaultRecebimentosQuery() {
+  return `
+SELECT ${recebimentosLimitClause()}
   CAST(det.id_ItemNotaFiscalEntrada AS varchar(80)) AS areco_id,
   CAST(en.cd_NotaFiscal AS varchar(80)) AS nf_numero,
   CAST(en.SerieNF AS varchar(30)) AS nf_serie,
@@ -79,9 +90,9 @@ OUTER APPLY (
     COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)), ''), NULLIF(LTRIM(RTRIM(v.ds_CatProdT440)), ''), CAST(det.id_Produto AS varchar(80))) AS produto_descricao,
     LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)) AS produto_subgrupo,
     LTRIM(RTRIM(v.ds_CatProdT440)) AS produto_categoria
-  FROM ViewConsultaProdutos v
-  LEFT JOIN Materiais m ON m.id_Produto = v.id_Produto
-  WHERE v.id_Produto = det.id_Produto
+  FROM (VALUES (det.id_Produto)) p(id_Produto)
+  LEFT JOIN Materiais m ON m.id_Produto = p.id_Produto
+  LEFT JOIN ViewConsultaProdutos v ON v.id_Produto = p.id_Produto
 ) prod
 OUTER APPLY (
   SELECT TOP 1 cl.Nro_lote
@@ -90,9 +101,10 @@ OUTER APPLY (
     AND (cl.id_Forn = en.id_Forn OR cl.id_Forn IS NULL)
   ORDER BY cl.id_LoteMercEntradaSaida DESC
 ) lote
-WHERE en.dt_EntregaMerc >= DATEADD(day, -7, GETDATE())
+WHERE en.dt_EntregaMerc >= DATEADD(day, -${recebimentosDaysBack()}, GETDATE())
 ORDER BY en.dt_EntregaMerc DESC
 `;
+}
 
 function materiaisLimitClause() {
   const limit = Number(process.env.ARECO_MATERIAIS_LIMIT || 0);
@@ -102,18 +114,22 @@ function materiaisLimitClause() {
 function defaultMateriaisQuery() {
   return `
 SELECT ${materiaisLimitClause()}
-  CAST(v.id_Produto AS varchar(80)) AS codigo,
-  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.cd_Referencia)), ''), NULLIF(LTRIM(RTRIM(v.cd_Referencia)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(80)) AS referencia,
-  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)), ''), NULLIF(LTRIM(RTRIM(v.ds_CatProdT440)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(255)) AS nome,
-  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(255)) AS descricao,
+  CAST(p.id_Produto AS varchar(80)) AS codigo,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.cd_Referencia)), ''), NULLIF(LTRIM(RTRIM(v.cd_Referencia)), ''), CAST(p.id_Produto AS varchar(80)))) AS varchar(80)) AS referencia,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)), ''), NULLIF(LTRIM(RTRIM(v.ds_CatProdT440)), ''), CAST(p.id_Produto AS varchar(80)))) AS varchar(255)) AS nome,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(p.id_Produto AS varchar(80)))) AS varchar(255)) AS descricao,
   CAST(NULL AS varchar(30)) AS unidade,
   CAST(MAX(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090))) AS varchar(120)) AS grupo,
   CAST(MAX(LTRIM(RTRIM(v.ds_CatProdT440))) AS varchar(120)) AS categoria
-FROM ViewConsultaProdutos v
-LEFT JOIN Materiais m ON m.id_Produto = v.id_Produto
-WHERE v.id_Produto IS NOT NULL
-GROUP BY v.id_Produto
-ORDER BY MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(v.id_Produto AS varchar(80))))
+FROM (
+  SELECT id_Produto FROM ViewConsultaProdutos WHERE id_Produto IS NOT NULL
+  UNION
+  SELECT id_Produto FROM Materiais WHERE id_Produto IS NOT NULL
+) p
+LEFT JOIN ViewConsultaProdutos v ON v.id_Produto = p.id_Produto
+LEFT JOIN Materiais m ON m.id_Produto = p.id_Produto
+GROUP BY p.id_Produto
+ORDER BY MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(p.id_Produto AS varchar(80))))
 `;
 }
 
@@ -353,7 +369,7 @@ async function runArecoSync() {
   try {
     pool = await sql.connect(getConfig());
     const request = pool.request();
-    const result = await request.query(process.env.ARECO_RECEBIMENTOS_QUERY || defaultQuery);
+    const result = await request.query(process.env.ARECO_RECEBIMENTOS_QUERY || defaultRecebimentosQuery());
     let imported = 0;
     let importedMateriais = 0;
 
