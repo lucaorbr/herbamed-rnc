@@ -83,7 +83,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
     setSyncing(true);
     try {
       const result = await runArecoSync();
-      toast_(`Sincronizacao concluida: ${result.imported || 0} recebimento(s), ${result.importedMateriais || 0} material(is).`, "green");
+      toast_(`Sincronizacao concluida: ${result.imported || 0} recebimento(s), ${result.importedMateriais || 0} material(is), ${result.importedFornecedores || 0} fornecedor(es).`, "green");
       await load();
     } catch (error) {
       toast_(error.message || "Erro na sincronizacao Areco.", "red");

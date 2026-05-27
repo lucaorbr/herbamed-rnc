@@ -20,7 +20,7 @@ function missingConfig() {
 }
 
 async function recordSyncError(message) {
-  for (const source of ["areco_recebimentos", "areco_materiais"]) {
+  for (const source of ["areco_recebimentos", "areco_materiais", "areco_fornecedores"]) {
     await query(`
       INSERT INTO areco_sync_state (source, last_error, updated_at)
       VALUES ($1, $2, now())
@@ -130,6 +130,36 @@ LEFT JOIN ViewConsultaProdutos v ON v.id_Produto = p.id_Produto
 LEFT JOIN Materiais m ON m.id_Produto = p.id_Produto
 GROUP BY p.id_Produto
 ORDER BY MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(p.id_Produto AS varchar(80))))
+`;
+}
+
+function fornecedoresLimitClause() {
+  const limit = Number(process.env.ARECO_FORNECEDORES_LIMIT || 5000);
+  return limit > 0 ? `TOP (${limit})` : "";
+}
+
+function fornecedoresYearsBack() {
+  const years = Number(process.env.ARECO_FORNECEDORES_YEARS || 5);
+  return Number.isFinite(years) && years > 0 ? years : 5;
+}
+
+function defaultFornecedoresQuery() {
+  return `
+SELECT ${fornecedoresLimitClause()}
+  CAST(en.id_Forn AS varchar(80)) AS fornecedor_codigo,
+  CAST(LTRIM(RTRIM(ent.Nome)) AS varchar(255)) AS fornecedor_nome,
+  CAST(LTRIM(RTRIM(COALESCE(pj.CNPJ, pj.CNPJNormalizado, pf.CPF, pf.CPFNormalizado))) AS varchar(30)) AS fornecedor_documento,
+  CAST(MAX(en.dt_EntregaMerc) AS datetime2) AS ultima_entrada,
+  CAST(COUNT(DISTINCT en.id_NotaFiscalEntrada) AS int) AS total_notas
+FROM Entradas_Notas en
+LEFT JOIN Entidade ent ON ent.Id_Ent = en.id_Forn
+LEFT JOIN Entid_PessoasJur pj ON pj.Id_Ent = ent.Id_Ent
+LEFT JOIN Entid_PessoasFis pf ON pf.Id_Ent = ent.Id_Ent
+WHERE en.id_Forn IS NOT NULL
+  AND NULLIF(LTRIM(RTRIM(ent.Nome)), '') IS NOT NULL
+  AND en.dt_EntregaMerc >= DATEADD(year, -${fornecedoresYearsBack()}, GETDATE())
+GROUP BY en.id_Forn, ent.Nome, pj.CNPJ, pj.CNPJNormalizado, pf.CPF, pf.CPFNormalizado
+ORDER BY MAX(en.dt_EntregaMerc) DESC, ent.Nome
 `;
 }
 
@@ -304,8 +334,15 @@ async function upsertFornecedor(row) {
   const nome = String(row.fornecedor_nome || "").trim();
   if (!codigo || !nome) return false;
 
-  const doc = {
-    id: `areco-forn-${codigo}`,
+  const id = `areco-forn-${codigo}`;
+  const existing = await query(
+    "SELECT data FROM generic_documents WHERE collection = 'fornecedores' AND id = $1",
+    [id]
+  );
+  const current = existing.rows[0]?.data || {};
+  const today = new Date().toISOString().slice(0, 10);
+  const imported = {
+    id,
     origem: "Areco",
     codigoAreco: codigo,
     nome,
@@ -319,19 +356,59 @@ async function upsertFornecedor(row) {
     status: "Ativo",
     obs: "Fornecedor importado automaticamente do Areco.",
     criadoPor: "Sync Areco",
-    criadoEm: new Date().toISOString().slice(0, 10),
-    atualizadoEm: new Date().toISOString().slice(0, 10),
+    criadoEm: today,
+    atualizadoEm: today,
+    ultimaEntradaAreco: row.ultima_entrada || row.data_entrada || null,
+    totalNotasAreco: row.total_notas || null,
+  };
+  const doc = {
+    ...imported,
+    ...current,
+    id,
+    origem: "Areco",
+    codigoAreco: codigo,
+    nome,
+    cnpj: imported.cnpj || current.cnpj || "",
+    categoria: current.categoria || imported.categoria,
+    status: current.status || imported.status,
+    criadoPor: current.criadoPor || imported.criadoPor,
+    criadoEm: current.criadoEm || imported.criadoEm,
+    atualizadoEm: today,
+    ultimaEntradaAreco: imported.ultimaEntradaAreco || current.ultimaEntradaAreco || null,
+    totalNotasAreco: imported.totalNotasAreco || current.totalNotasAreco || null,
   };
 
   await query(`
     INSERT INTO generic_documents (collection, id, data, updated_at)
     VALUES ('fornecedores', $1, $2::jsonb, now())
     ON CONFLICT (collection, id) DO UPDATE SET
-      data = generic_documents.data || EXCLUDED.data,
+      data = EXCLUDED.data,
       updated_at = now()
   `, [doc.id, JSON.stringify(doc)]);
 
   return true;
+}
+
+async function syncFornecedores(pool) {
+  const source = "areco_fornecedores";
+  const result = await pool.request().query(process.env.ARECO_FORNECEDORES_QUERY || defaultFornecedoresQuery());
+  let imported = 0;
+
+  for (const row of result.recordset || []) {
+    if (await upsertFornecedor(row)) imported += 1;
+  }
+
+  await query(`
+    INSERT INTO areco_sync_state (source, last_success_at, last_cursor, last_error, updated_at)
+    VALUES ($1, now(), $2, null, now())
+    ON CONFLICT (source) DO UPDATE SET
+      last_success_at = EXCLUDED.last_success_at,
+      last_cursor = EXCLUDED.last_cursor,
+      last_error = null,
+      updated_at = now()
+  `, [source, String(imported)]);
+
+  return imported;
 }
 
 async function syncMateriais(pool) {
@@ -372,6 +449,7 @@ async function runArecoSync() {
     const result = await request.query(process.env.ARECO_RECEBIMENTOS_QUERY || defaultRecebimentosQuery());
     let imported = 0;
     let importedMateriais = 0;
+    let importedFornecedores = 0;
 
     for (const row of result.recordset || []) {
       const scope = classifyQualityScope(row);
@@ -452,11 +530,12 @@ async function runArecoSync() {
         categoria: row.produto_categoria,
         unidade: row.unidade,
       })) importedMateriais += 1;
-      await upsertFornecedor(row);
+      if (await upsertFornecedor(row)) importedFornecedores += 1;
       imported += 1;
     }
 
     importedMateriais += await syncMateriais(pool);
+    importedFornecedores += await syncFornecedores(pool);
 
     await query(`
       INSERT INTO areco_sync_state (source, last_success_at, last_cursor, last_error, updated_at)
@@ -468,7 +547,7 @@ async function runArecoSync() {
         updated_at = now()
     `, [source, String(imported)]);
 
-    return { imported, importedMateriais };
+    return { imported, importedMateriais, importedFornecedores };
   } catch (error) {
     await query(`
       INSERT INTO areco_sync_state (source, last_error, updated_at)
