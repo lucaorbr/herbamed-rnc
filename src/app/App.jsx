@@ -339,7 +339,7 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={T}>
     <FormalCtx.Provider value={formalMode}>
-      <div data-formal={formalMode ? "true" : "false"} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, minHeight: "100vh", fontSize: 14, display: "flex", flexDirection: "column" }}>
+      <div data-formal={formalMode ? "true" : "false"} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, height: "100vh", overflow:"hidden", fontSize: 14, display: "flex", flexDirection: "column" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
@@ -483,7 +483,7 @@ export default function App() {
         </div>
 
         {/* ── BODY: sidebar + content ── */}
-        <div style={{ display:"flex", flex:1, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
+        <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
           {/* Mobile overlay */}
           {mobileMenuOpen && (
@@ -491,12 +491,12 @@ export default function App() {
           )}
 
           {/* SIDEBAR */}
-          <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, left:0, bottom:0, height:"calc(100vh - 60px)", zIndex:"auto" }}>
+          <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
             <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
           </div>
 
           {/* MAIN CONTENT */}
-          <div style={{ flex:1, overflowY:"auto", minWidth:0 }}>
+          <div style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
             {/* Page header — hidden on home */}
             {tab !== "home" && (
               <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>

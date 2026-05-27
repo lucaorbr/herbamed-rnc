@@ -78,7 +78,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmi
   ];
 
   return (
-    <div style={{ width:sidebarOpen?220:60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", position:"sticky", top:60, height:"calc(100vh - 60px)" }}>
+    <div style={{ width:"100%", height:"100%", flexShrink:0, background:T.surf, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden" }}>
       <div style={{ padding:"6px 6px", flex:1, overflowY:"auto" }}>
         {GRUPOS.map(grupo=>(
           <SidebarGrupo

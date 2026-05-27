@@ -662,6 +662,49 @@ export const ENSAIOS_SUGERIDOS = {
   ],
 };
 
+const CQ_TIPO_FILTROS = [
+  { id: "Todos", label: "Todos" },
+  { id: "materia-prima", label: "Matéria-prima" },
+  { id: "embalagem", label: "Embalagens" },
+  { id: "rotulo", label: "Rótulos" },
+];
+
+function normalizeCQText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function materialBucket(material) {
+  const text = normalizeCQText([
+    material?.tipo,
+    material?.nome,
+    material?.nomeBase,
+    material?.ref,
+  ].filter(Boolean).join(" "));
+
+  if (text.includes("rotulo") || text.includes("etiqueta") || text.includes("label")) return "rotulo";
+  if (text.includes("embal") || text.includes("frasco") || text.includes("pote") || text.includes("tampa") || text.includes("caixa") || text.includes("cartucho") || text.includes("blister") || text.includes("bisnaga") || text.includes("sache") || text.includes("saco")) return "embalagem";
+  if (text.includes("materia-prima") || text.includes("materia prima") || text.includes("extrato") || text.includes("insumo") || text.includes("ativo") || text.includes("oleo")) return "materia-prima";
+  return "outros";
+}
+
+function matchesMaterialSearch(material, term) {
+  const text = normalizeCQText([
+    material?.nome,
+    material?.nomeBase,
+    material?.tipo,
+    material?.fornecedorPadrao,
+    material?.ref,
+    material?.codigoAreco,
+    material?.referenciaAreco,
+    material?.descricao,
+    material?.obs,
+  ].filter(Boolean).join(" "));
+  return !term || text.includes(normalizeCQText(term));
+}
+
 export function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
@@ -680,9 +723,12 @@ export function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const [fichasTecnicas, setFichasTecnicas] = useState([]);
   const [ftUploading, setFtUploading] = useState(null);
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
+  const [buscaMatLista, setBuscaMatLista] = useState("");
   const [pgMat, setPgMat] = useState(1);
   const PER_PAGE_MAT = 15;
-  const matFiltrados = filtroTipoLista==="Todos" ? materiais : materiais.filter(m=>(m.tipo||"Outros")===filtroTipoLista);
+  const matFiltrados = materiais
+    .filter(m => filtroTipoLista==="Todos" || materialBucket(m)===filtroTipoLista)
+    .filter(m => matchesMaterialSearch(m, buscaMatLista));
   const totMatPg = Math.ceil(matFiltrados.length / PER_PAGE_MAT) || 1;
   const safePgMat = Math.min(pgMat, totMatPg);
   const matPg = matFiltrados.slice((safePgMat-1)*PER_PAGE_MAT, safePgMat*PER_PAGE_MAT);
@@ -919,11 +965,10 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
   if(view==="lista") {
-    const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
     return (
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
-        <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) {filtroTipoLista!=="Todos"?`em "${filtroTipoLista}"`:"cadastrado(s)"}</div>
+        <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) encontrado(s)</div>
         <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setIaConfirmada(false); setView("novo"); }}>+ Novo Material</button>
       </div>
 
@@ -935,10 +980,22 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
         </div>
       ) : (
         <>
+          <div style={{ position:"relative", marginBottom:12 }}>
+            <Inp
+              value={buscaMatLista}
+              onChange={e=>{ setBuscaMatLista(e.target.value); setPgMat(1); }}
+              placeholder={`🔍 Buscar entre ${materiais.length} materiais por nome, referência, fornecedor ou código...`}
+              sx={{ width:"100%", paddingRight:buscaMatLista?34:12 }}
+            />
+            {buscaMatLista && (
+              <button onClick={()=>{ setBuscaMatLista(""); setPgMat(1); }} title="Limpar busca" style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:T.text3, fontSize:16, cursor:"pointer", lineHeight:1 }}>×</button>
+            )}
+          </div>
+
           {/* Filtro por tipo */}
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
-            {tiposUnicos.map(t=>(
-              <button key={t} onClick={()=>{ setFiltroTipoLista(t); setPgMat(1); }} style={{ padding:"4px 14px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipoLista===t?T.accent:T.border}`, background:filtroTipoLista===t?T.accentDim:"transparent", color:filtroTipoLista===t?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t}</button>
+            {CQ_TIPO_FILTROS.map(t=>(
+              <button key={t.id} onClick={()=>{ setFiltroTipoLista(t.id); setPgMat(1); }} style={{ padding:"4px 14px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipoLista===t.id?T.accent:T.border}`, background:filtroTipoLista===t.id?T.accentDim:"transparent", color:filtroTipoLista===t.id?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t.label}</button>
             ))}
           </div>
 
@@ -951,7 +1008,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
               </tr></thead>
               <tbody>
                 {matPg.length===0 ? (
-                  <tr><td colSpan={6} style={{ padding:"2rem", textAlign:"center", color:T.text3, fontSize:13 }}>Nenhum material nesta categoria.</td></tr>
+                  <tr><td colSpan={6} style={{ padding:"2rem", textAlign:"center", color:T.text3, fontSize:13 }}>{buscaMatLista ? `Nenhum material encontrado para "${buscaMatLista}".` : "Nenhum material nesta categoria."}</td></tr>
                 ) : matPg.map((m,i)=>(
                   <tr key={m.id} style={{ background:i%2===0?T.card:T.surf }}>
                     <td style={{ padding:"10px 12px", fontSize:13, fontWeight:600, color:T.text }}>{m.nome}</td>
@@ -1424,11 +1481,10 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             Nenhum material cadastrado. Cadastre um material em <strong>CQ — Materiais</strong> primeiro.
           </div>
         ) : ((() => {
-          const tiposUnicos = ["Todos", ...Array.from(new Set(materiais.map(m=>m.tipo||"Outros"))).sort()];
-          const termo = buscaMat.trim().toLowerCase();
+          const termo = buscaMat.trim();
           const matFiltrados = materiais
-            .filter(m => filtroTipo==="Todos" || (m.tipo||"Outros")===filtroTipo)
-            .filter(m => !termo || (m.nome||"").toLowerCase().includes(termo));
+            .filter(m => filtroTipo==="Todos" || materialBucket(m)===filtroTipo)
+            .filter(m => matchesMaterialSearch(m, termo));
           return (
             <>
               <div style={{ position:"relative", marginBottom:12 }}>
@@ -1443,8 +1499,8 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 )}
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
-                {tiposUnicos.map(t=>(
-                  <button key={t} onClick={()=>setFiltroTipo(t)} style={{ padding:"4px 12px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipo===t?T.accent:T.border}`, background:filtroTipo===t?T.accentDim:"transparent", color:filtroTipo===t?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t}</button>
+                {CQ_TIPO_FILTROS.map(t=>(
+                  <button key={t.id} onClick={()=>setFiltroTipo(t.id)} style={{ padding:"4px 12px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipo===t.id?T.accent:T.border}`, background:filtroTipo===t.id?T.accentDim:"transparent", color:filtroTipo===t.id?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t.label}</button>
                 ))}
               </div>
               {termo && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{matFiltrados.length} resultado{matFiltrados.length!==1?"s":""} para "{buscaMat}"</div>}
