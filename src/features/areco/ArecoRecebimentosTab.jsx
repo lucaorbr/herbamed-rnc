@@ -4,11 +4,19 @@ import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle, Sel } from "../../shared/ui";
 
-const fmtDateTime = value => value ? new Date(value).toLocaleString("pt-BR", { dateStyle:"short", timeStyle:"short" }) : "-";
+const fmtDateTime = value => value ? new Date(value).toLocaleString("pt-BR", { dateStyle:"short", timeStyle:"short", timeZone:"America/Sao_Paulo" }) : "-";
 const today = () => new Date().toISOString().slice(0, 10);
 
 function receiptDate(value) {
-  return value ? new Date(value).toISOString().slice(0, 10) : today();
+  if (!value) return today();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const get = type => parts.find(part => part.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 function inferMaterialType(item) {
@@ -168,7 +176,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
           </div>
           <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"10px 12px" }}>
             <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Ultima sincronizacao</div>
-            <div style={{ fontSize:13, color:T.text, fontWeight:700 }}>{lastSync?.last_success_at ? new Date(lastSync.last_success_at).toLocaleString("pt-BR") : "Ainda nao executada"}</div>
+            <div style={{ fontSize:13, color:T.text, fontWeight:700 }}>{lastSync?.last_success_at ? fmtDateTime(lastSync.last_success_at) : "Ainda nao executada"}</div>
           </div>
           <div style={{ background:T.surf, border:`1px solid ${lastSync?.last_error ? T.red : T.border}`, borderRadius:8, padding:"10px 12px" }}>
             <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Status Areco</div>

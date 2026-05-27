@@ -163,6 +163,16 @@ ORDER BY MAX(en.dt_EntregaMerc) DESC, ent.Nome
 `;
 }
 
+function arecoLocalDateTime(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  // The MSSQL driver returns Areco datetime values as UTC instants, but the
+  // ERP stores them as local Sao Paulo wall-clock time. Shift them to the
+  // equivalent UTC instant so Postgres timestamptz renders the same local time.
+  return new Date(date.getTime() + 3 * 60 * 60 * 1000);
+}
+
 function normalizeText(value) {
   return String(value || "")
     .normalize("NFD")
@@ -358,7 +368,7 @@ async function upsertFornecedor(row) {
     criadoPor: "Sync Areco",
     criadoEm: today,
     atualizadoEm: today,
-    ultimaEntradaAreco: row.ultima_entrada || row.data_entrada || null,
+    ultimaEntradaAreco: arecoLocalDateTime(row.ultima_entrada || row.data_entrada),
     totalNotasAreco: row.total_notas || null,
   };
   const doc = {
@@ -452,7 +462,9 @@ async function runArecoSync() {
     let importedFornecedores = 0;
 
     for (const row of result.recordset || []) {
+      const dataEntrada = arecoLocalDateTime(row.data_entrada);
       const scope = classifyQualityScope(row);
+      const payload = { ...row, data_entrada: dataEntrada, tipo_material: scope.tipo, escopo_qualidade: scope.escopo, motivo_filtro: scope.motivo };
       const externalKey = [
         "areco",
         row.areco_id,
@@ -517,9 +529,9 @@ async function runArecoSync() {
         row.quantidade,
         row.unidade,
         row.data_emissao,
-        row.data_entrada,
+        dataEntrada,
         scope.escopo ? "pendente_analise" : "fora_escopo",
-        JSON.stringify({ ...row, tipo_material: scope.tipo, escopo_qualidade: scope.escopo, motivo_filtro: scope.motivo }),
+        JSON.stringify(payload),
       ]);
       if (await upsertMaterial({
         codigo: row.produto_id_areco || row.produto_codigo,
