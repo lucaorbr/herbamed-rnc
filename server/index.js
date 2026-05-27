@@ -369,7 +369,7 @@ async function handleAreco(req, res, pathname, url) {
     await requireUser(req);
     const id = decodeURIComponent(recebimentoMatch[1]);
     const data = sanitize(await readBody(req));
-    const allowed = new Set(["pendente_analise", "em_analise", "concluido"]);
+    const allowed = new Set(["pendente_analise", "em_analise", "concluido", "fora_escopo"]);
     const status = allowed.has(data.status) ? data.status : null;
 
     const result = await query(`

@@ -12,6 +12,7 @@ function receiptDate(value) {
 }
 
 function inferMaterialType(item) {
+  if (item.tipo_material) return item.tipo_material;
   const text = `${item.produto_nome || ""} ${item.produto_descricao || ""} ${item.produto_subgrupo || ""} ${item.produto_categoria || ""} ${item.produto_codigo || ""}`.toLowerCase();
   if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
   if (text.includes("rotulo") || text.includes("etiqueta")) return "Rotulo";
@@ -92,13 +93,18 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   };
 
   const filtered = items.filter(item => {
-    const hay = `${item.nf_numero || ""} ${item.fornecedor_nome || ""} ${item.fornecedor_documento || ""} ${item.produto_codigo || ""} ${item.produto_referencia || ""} ${item.produto_descricao || ""} ${item.produto_nome || ""} ${item.lote || ""}`.toLowerCase();
+    const hay = `${item.nf_numero || ""} ${item.fornecedor_nome || ""} ${item.fornecedor_documento || ""} ${item.produto_codigo || ""} ${item.produto_referencia || ""} ${item.produto_descricao || ""} ${item.produto_nome || ""} ${item.tipo_material || ""} ${item.motivo_filtro || ""} ${item.lote || ""}`.toLowerCase();
     return hay.includes(busca.toLowerCase());
   });
 
   const lastSync = syncStatus.find(s => s.source === "areco_recebimentos");
 
   const iniciarAnalise = async (item) => {
+    if (item.status === "fora_escopo" || item.escopo_qualidade === false) {
+      toast_("Esse recebimento esta fora do escopo da qualidade.", "red");
+      return;
+    }
+
     try {
       const id = Date.now();
       const material = buildMaterialFromReceipt(item);
@@ -178,6 +184,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
           <option value="">Todos</option>
           <option value="em_analise">Em analise</option>
           <option value="concluido">Concluido</option>
+          <option value="fora_escopo">Fora de escopo</option>
         </Sel>
       </div>
 
@@ -188,10 +195,10 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
           <div style={{ color:T.text3, padding:"2rem", textAlign:"center" }}>Nenhum recebimento encontrado.</div>
         ) : (
           <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1220 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1320 }}>
               <thead>
                 <tr>
-                  {["NF","Recebimento","Fornecedor","Referencia Areco","Descricao do item","Lote","Quantidade","Status","Acao"].map(h => (
+                  {["NF","Recebimento","Fornecedor","Referencia Areco","Descricao do item","Tipo","Lote","Quantidade","Status","Acao"].map(h => (
                     <th key={h} style={{ textAlign:"left", fontSize:11, color:T.text3, borderBottom:`1px solid ${T.border}`, padding:"8px 10px" }}>{h}</th>
                   ))}
                 </tr>
@@ -213,15 +220,23 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
                       <div style={{ fontWeight:700, color:T.text }}>{item.produto_descricao || item.produto_nome || "-"}</div>
                       <div style={{ fontSize:11, color:T.text3 }}>{[item.produto_subgrupo, item.produto_categoria].filter(Boolean).join(" / ")}</div>
                     </td>
+                    <td style={{ padding:"10px", color:T.text2 }}>
+                      <div style={{ fontWeight:700, color:item.escopo_qualidade === false ? T.red : T.text }}>{item.tipo_material || inferMaterialType(item)}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>{item.motivo_filtro || ""}</div>
+                    </td>
                     <td style={{ padding:"10px", color:T.text2 }}>{item.lote || "-"}</td>
                     <td style={{ padding:"10px", color:T.text2 }}>{item.quantidade || "-"} {item.unidade || ""}</td>
                     <td style={{ padding:"10px" }}>
                       <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, borderRadius:20, padding:"3px 9px" }}>{item.status}</span>
                     </td>
                     <td style={{ padding:"10px" }}>
-                      <button style={s.btnA} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
-                        Iniciar analise
-                      </button>
+                      {item.status === "fora_escopo" || item.escopo_qualidade === false ? (
+                        <span style={{ color:T.text3, fontSize:12, fontWeight:700 }}>Fora do CQ</span>
+                      ) : (
+                        <button style={s.btnA} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
+                          Iniciar analise
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

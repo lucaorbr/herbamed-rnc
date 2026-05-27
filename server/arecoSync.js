@@ -117,12 +117,106 @@ ORDER BY MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.
 `;
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function rowSearchText(row) {
+  return normalizeText([
+    row.tipo,
+    row.grupo,
+    row.categoria,
+    row.nome,
+    row.descricao,
+    row.produto_nome,
+    row.produto_descricao,
+    row.produto_subgrupo,
+    row.produto_categoria,
+    row.produto_codigo,
+    row.produto_referencia,
+  ].filter(Boolean).join(" "));
+}
+
+function hasAny(text, terms) {
+  return terms.some(term => text.includes(term));
+}
+
+function classifyQualityScope(row) {
+  const text = rowSearchText(row);
+  const excludedTerms = [
+    "frete",
+    "servico",
+    "servicos",
+    "prestacao",
+    "uso e consumo",
+    "higiene e limpeza",
+    "limpeza",
+    "epi",
+    "epis",
+    "manutencao",
+    "administrativo",
+    "imobilizado",
+    "moveis",
+    "utensilio",
+    "utensilios",
+    "material escritorio",
+    "saco de lixo",
+  ];
+
+  if (hasAny(text, excludedTerms)) {
+    return { tipo: "Fora de escopo", escopo: false, motivo: "Item classificado como frete, servico, uso/consumo ou apoio operacional." };
+  }
+
+  if (hasAny(text, ["rotulo", "etiqueta", "label", "selo"])) {
+    return { tipo: "Rotulo", escopo: true, motivo: "Rotulo ou identificacao de embalagem." };
+  }
+
+  if (hasAny(text, [
+    "embal",
+    "frasco",
+    "pote",
+    "tampa",
+    "caixa",
+    "cartucho",
+    "blister",
+    "bisnaga",
+    "sache",
+    "saco",
+    "valvula",
+    "dosador",
+    "display",
+  ])) {
+    return { tipo: "Material de embalagem", escopo: true, motivo: "Material de embalagem." };
+  }
+
+  if (hasAny(text, [
+    "materia prima",
+    "materiaprima",
+    "mp ",
+    " mp",
+    "extrato",
+    "ativo",
+    "insumo",
+    "oleo",
+    "essencia",
+    "aroma",
+    "corante",
+    "conservante",
+    "vitamina",
+    "mineral",
+  ])) {
+    return { tipo: "Materia-prima", escopo: true, motivo: "Materia-prima ou insumo produtivo." };
+  }
+
+  return { tipo: "Fora de escopo", escopo: false, motivo: "Nao identificado como materia-prima, embalagem ou rotulo." };
+}
+
 function inferMaterialType(row) {
-  const text = `${row.tipo || ""} ${row.grupo || ""} ${row.categoria || ""} ${row.nome || ""} ${row.descricao || ""}`.toLowerCase();
-  if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
-  if (text.includes("rotulo") || text.includes("etiqueta") || text.includes("label")) return "Rotulo";
-  if (text.includes("materia") || text.includes("extrato") || text.includes("ativo") || text.includes("insumo")) return "Materia-prima";
-  return row.tipo || row.grupo || "Outros";
+  const classified = classifyQualityScope(row);
+  return classified.escopo ? classified.tipo : (row.tipo || row.grupo || "Outros");
 }
 
 function materialDoc(row) {
@@ -156,9 +250,11 @@ function materialDoc(row) {
 async function upsertMaterial(row) {
   const codigo = String(row.codigo || row.produto_codigo || "").trim();
   if (!codigo) return false;
+  const scope = classifyQualityScope(row);
+  if (!scope.escopo) return false;
   const referencia = String(row.referencia || row.produto_referencia || row.produto_codigo || codigo).trim();
   const nome = String(row.nome || row.descricao || row.produto_descricao || row.produto_nome || referencia || codigo).trim();
-  const tipo = inferMaterialType({ ...row, nome });
+  const tipo = scope.tipo;
   const doc = materialDoc({ ...row, codigo, referencia, nome, tipo });
 
   await query(`
@@ -262,6 +358,7 @@ async function runArecoSync() {
     let importedMateriais = 0;
 
     for (const row of result.recordset || []) {
+      const scope = classifyQualityScope(row);
       const externalKey = [
         "areco",
         row.areco_id,
@@ -274,10 +371,10 @@ async function runArecoSync() {
         INSERT INTO areco_recebimentos (
           external_key, nf_numero, nf_serie, fornecedor_codigo, fornecedor_nome, fornecedor_documento,
           produto_id_areco, produto_referencia, produto_codigo, produto_nome, produto_descricao,
-          produto_subgrupo, produto_categoria, lote, quantidade, unidade, data_emissao,
-          data_entrada, payload, updated_at
+          produto_subgrupo, produto_categoria, tipo_material, escopo_qualidade, motivo_filtro,
+          lote, quantidade, unidade, data_emissao, data_entrada, status, payload, updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,now())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,now())
         ON CONFLICT (external_key) DO UPDATE SET
           nf_numero = EXCLUDED.nf_numero,
           nf_serie = EXCLUDED.nf_serie,
@@ -291,11 +388,18 @@ async function runArecoSync() {
           produto_descricao = EXCLUDED.produto_descricao,
           produto_subgrupo = EXCLUDED.produto_subgrupo,
           produto_categoria = EXCLUDED.produto_categoria,
+          tipo_material = EXCLUDED.tipo_material,
+          escopo_qualidade = EXCLUDED.escopo_qualidade,
+          motivo_filtro = EXCLUDED.motivo_filtro,
           lote = EXCLUDED.lote,
           quantidade = EXCLUDED.quantidade,
           unidade = EXCLUDED.unidade,
           data_emissao = EXCLUDED.data_emissao,
           data_entrada = EXCLUDED.data_entrada,
+          status = CASE
+            WHEN areco_recebimentos.status IN ('em_analise', 'concluido') THEN areco_recebimentos.status
+            ELSE EXCLUDED.status
+          END,
           payload = EXCLUDED.payload,
           updated_at = now()
       `, [
@@ -312,12 +416,16 @@ async function runArecoSync() {
         row.produto_descricao,
         row.produto_subgrupo,
         row.produto_categoria,
+        scope.tipo,
+        scope.escopo,
+        scope.motivo,
         row.lote,
         row.quantidade,
         row.unidade,
         row.data_emissao,
         row.data_entrada,
-        JSON.stringify(row),
+        scope.escopo ? "pendente_analise" : "fora_escopo",
+        JSON.stringify({ ...row, tipo_material: scope.tipo, escopo_qualidade: scope.escopo, motivo_filtro: scope.motivo }),
       ]);
       if (await upsertMaterial({
         codigo: row.produto_id_areco || row.produto_codigo,

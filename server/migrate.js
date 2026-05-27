@@ -113,6 +113,14 @@ async function migrate() {
   await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_descricao text`);
   await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_subgrupo text`);
   await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_categoria text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS tipo_material text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS escopo_qualidade boolean`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS motivo_filtro text`);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_areco_recebimentos_escopo_status
+    ON areco_recebimentos (escopo_qualidade, status, data_entrada DESC)
+  `);
 
   await query(`
     CREATE TABLE IF NOT EXISTS areco_materiais (
