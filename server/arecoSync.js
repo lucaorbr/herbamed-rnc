@@ -6,13 +6,27 @@ function enabled() {
 }
 
 function configReady() {
-  return Boolean(
-    process.env.ARECO_SQLSERVER_HOST &&
-    process.env.ARECO_SQLSERVER_PORT &&
-    process.env.ARECO_SQLSERVER_DATABASE &&
-    process.env.ARECO_SQLSERVER_USER &&
-    process.env.ARECO_SQLSERVER_PASSWORD
-  );
+  return missingConfig().length === 0;
+}
+
+function missingConfig() {
+  return [
+    "ARECO_SQLSERVER_HOST",
+    "ARECO_SQLSERVER_PORT",
+    "ARECO_SQLSERVER_DATABASE",
+    "ARECO_SQLSERVER_USER",
+    "ARECO_SQLSERVER_PASSWORD",
+  ].filter(name => !process.env[name]);
+}
+
+async function recordSyncError(message) {
+  for (const source of ["areco_recebimentos", "areco_materiais"]) {
+    await query(`
+      INSERT INTO areco_sync_state (source, last_error, updated_at)
+      VALUES ($1, $2, now())
+      ON CONFLICT (source) DO UPDATE SET last_error = EXCLUDED.last_error, updated_at = now()
+    `, [source, message]);
+  }
 }
 
 function getConfig() {
@@ -173,7 +187,11 @@ async function syncMateriais(pool) {
 
 async function runArecoSync() {
   if (!enabled()) return { skipped: true, reason: "ARECO_SYNC_ENABLED=false" };
-  if (!configReady()) return { skipped: true, reason: "credenciais Areco ausentes" };
+  if (!configReady()) {
+    const reason = `Configuracao Areco incompleta: ${missingConfig().join(", ")}`;
+    await recordSyncError(reason);
+    return { skipped: true, reason };
+  }
 
   const source = "areco_recebimentos";
   let pool;
@@ -272,7 +290,8 @@ function startArecoScheduler() {
   const tick = async () => {
     try {
       const result = await runArecoSync();
-      console.log("Sync Areco concluido:", result);
+      if (result.skipped) console.warn("Sync Areco nao executado:", result.reason);
+      else console.log("Sync Areco concluido:", result);
     } catch (error) {
       console.warn("Sync Areco falhou:", error.message);
     }
