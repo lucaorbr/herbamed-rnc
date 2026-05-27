@@ -107,6 +107,13 @@ async function migrate() {
     ON areco_recebimentos (status, data_entrada DESC)
   `);
 
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS fornecedor_documento text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_id_areco text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_referencia text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_descricao text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_subgrupo text`);
+  await query(`ALTER TABLE areco_recebimentos ADD COLUMN IF NOT EXISTS produto_categoria text`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS areco_materiais (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -125,6 +132,11 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_areco_materiais_tipo_nome
     ON areco_materiais (tipo, nome)
   `);
+
+  await query(`ALTER TABLE areco_materiais ADD COLUMN IF NOT EXISTS referencia text`);
+  await query(`ALTER TABLE areco_materiais ADD COLUMN IF NOT EXISTS descricao text`);
+  await query(`ALTER TABLE areco_materiais ADD COLUMN IF NOT EXISTS grupo text`);
+  await query(`ALTER TABLE areco_materiais ADD COLUMN IF NOT EXISTS categoria text`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS areco_sync_state (

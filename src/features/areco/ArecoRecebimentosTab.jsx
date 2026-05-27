@@ -4,7 +4,7 @@ import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle, Sel } from "../../shared/ui";
 
-const fmtDate = value => value ? new Date(value).toLocaleDateString("pt-BR") : "-";
+const fmtDateTime = value => value ? new Date(value).toLocaleString("pt-BR", { dateStyle:"short", timeStyle:"short" }) : "-";
 const today = () => new Date().toISOString().slice(0, 10);
 
 function receiptDate(value) {
@@ -12,7 +12,7 @@ function receiptDate(value) {
 }
 
 function inferMaterialType(item) {
-  const text = `${item.produto_nome || ""} ${item.produto_codigo || ""}`.toLowerCase();
+  const text = `${item.produto_nome || ""} ${item.produto_descricao || ""} ${item.produto_subgrupo || ""} ${item.produto_categoria || ""} ${item.produto_codigo || ""}`.toLowerCase();
   if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
   if (text.includes("rotulo") || text.includes("etiqueta")) return "Rotulo";
   if (text.includes("extrato") || text.includes("insumo") || text.includes("ativo") || text.includes("materia")) return "Materia-prima";
@@ -20,12 +20,14 @@ function inferMaterialType(item) {
 }
 
 function buildMaterialFromReceipt(item) {
-  const codigo = item.produto_codigo || item.id;
-  const nome = item.produto_nome || item.produto_codigo || "Material Areco";
+  const codigo = item.produto_id_areco || item.produto_codigo || item.id;
+  const referencia = item.produto_referencia || item.produto_codigo || codigo;
+  const nome = item.produto_descricao || item.produto_nome || referencia || "Material Areco";
   return {
     id: `areco-${codigo}`,
     origem: "Areco",
     codigoAreco: codigo,
+    referenciaAreco: referencia,
     nome,
     nomeBase: nome,
     apresentacao: "",
@@ -35,7 +37,7 @@ function buildMaterialFromReceipt(item) {
     fornecedorPadrao: item.fornecedor_nome || "",
     unidadePadrao: item.unidade || "",
     ref: "Importado automaticamente do Areco",
-    obs: "Material criado automaticamente a partir de um recebimento do Areco. Complete os ensaios e especificacoes no SGQ quando necessario.",
+    obs: `Material criado automaticamente a partir de um recebimento do Areco. Referencia: ${referencia}. Complete os ensaios e especificacoes no SGQ quando necessario.`,
     ensaios: [],
     fichasTecnicas: [],
     criadoPor: "Recebimento Areco",
@@ -90,7 +92,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   };
 
   const filtered = items.filter(item => {
-    const hay = `${item.nf_numero || ""} ${item.fornecedor_nome || ""} ${item.produto_codigo || ""} ${item.produto_nome || ""} ${item.lote || ""}`.toLowerCase();
+    const hay = `${item.nf_numero || ""} ${item.fornecedor_nome || ""} ${item.fornecedor_documento || ""} ${item.produto_codigo || ""} ${item.produto_referencia || ""} ${item.produto_descricao || ""} ${item.produto_nome || ""} ${item.lote || ""}`.toLowerCase();
     return hay.includes(busca.toLowerCase());
   });
 
@@ -170,7 +172,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
       </div>
 
       <div style={{ ...s.card, display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-        <Inp placeholder="Buscar NF, fornecedor, produto ou lote..." value={busca} onChange={e=>setBusca(e.target.value)} sx={{ minWidth:260, flex:1 }} />
+        <Inp placeholder="Buscar NF, fornecedor, CNPJ, referencia, descricao ou lote..." value={busca} onChange={e=>setBusca(e.target.value)} sx={{ minWidth:260, flex:1 }} />
         <Sel value={status} onChange={e=>setStatus(e.target.value)} sx={{ width:190 }}>
           <option value="pendente_analise">Pendente de analise</option>
           <option value="">Todos</option>
@@ -186,10 +188,10 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
           <div style={{ color:T.text3, padding:"2rem", textAlign:"center" }}>Nenhum recebimento encontrado.</div>
         ) : (
           <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:920 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1220 }}>
               <thead>
                 <tr>
-                  {["NF","Entrada","Fornecedor","Produto","Lote","Quantidade","Status","Acao"].map(h => (
+                  {["NF","Recebimento","Fornecedor","Referencia Areco","Descricao do item","Lote","Quantidade","Status","Acao"].map(h => (
                     <th key={h} style={{ textAlign:"left", fontSize:11, color:T.text3, borderBottom:`1px solid ${T.border}`, padding:"8px 10px" }}>{h}</th>
                   ))}
                 </tr>
@@ -198,11 +200,18 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
                 {filtered.map(item => (
                   <tr key={item.id} style={{ borderBottom:`1px solid ${T.border}` }}>
                     <td style={{ padding:"10px", color:T.text, fontWeight:700 }}>{item.nf_numero || "-"}</td>
-                    <td style={{ padding:"10px", color:T.text2 }}>{fmtDate(item.data_entrada)}</td>
-                    <td style={{ padding:"10px", color:T.text2 }}>{item.fornecedor_nome || item.fornecedor_codigo || "-"}</td>
+                    <td style={{ padding:"10px", color:T.text2 }}>{fmtDateTime(item.data_entrada)}</td>
+                    <td style={{ padding:"10px", color:T.text2 }}>
+                      <div style={{ fontWeight:700, color:T.text }}>{item.fornecedor_nome || "-"}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>{item.fornecedor_documento || item.fornecedor_codigo || ""}</div>
+                    </td>
                     <td style={{ padding:"10px", color:T.text }}>
-                      <div style={{ fontWeight:700 }}>{item.produto_nome || "-"}</div>
-                      <div style={{ fontSize:11, color:T.text3 }}>{item.produto_codigo || ""}</div>
+                      <div style={{ fontWeight:700 }}>{item.produto_referencia || item.produto_codigo || "-"}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>ID Areco: {item.produto_id_areco || item.payload?.produto_id_areco || item.produto_codigo || "-"}</div>
+                    </td>
+                    <td style={{ padding:"10px", color:T.text2 }}>
+                      <div style={{ fontWeight:700, color:T.text }}>{item.produto_descricao || item.produto_nome || "-"}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>{[item.produto_subgrupo, item.produto_categoria].filter(Boolean).join(" / ")}</div>
                     </td>
                     <td style={{ padding:"10px", color:T.text2 }}>{item.lote || "-"}</td>
                     <td style={{ padding:"10px", color:T.text2 }}>{item.quantidade || "-"} {item.unidade || ""}</td>

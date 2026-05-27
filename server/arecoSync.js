@@ -52,22 +52,35 @@ SELECT TOP (200)
   CAST(det.id_ItemNotaFiscalEntrada AS varchar(80)) AS areco_id,
   CAST(en.cd_NotaFiscal AS varchar(80)) AS nf_numero,
   CAST(en.SerieNF AS varchar(30)) AS nf_serie,
-  CAST(en.dt_EntregaMerc AS datetime2) AS data_entrada,
+  CAST(COALESCE(nfe.DataGeracao, en.dt_EntregaMerc) AS datetime2) AS data_entrada,
   CAST(en.dt_notaFiscal AS date) AS data_emissao,
-  CAST(f.id_Forn AS varchar(80)) AS fornecedor_codigo,
-  CAST(ent.Nome AS varchar(255)) AS fornecedor_nome,
-  CAST(det.id_Produto AS varchar(80)) AS produto_codigo,
-  CAST(prod.produto_nome AS varchar(255)) AS produto_nome,
+  CAST(en.id_Forn AS varchar(80)) AS fornecedor_codigo,
+  CAST(LTRIM(RTRIM(ent.Nome)) AS varchar(255)) AS fornecedor_nome,
+  CAST(LTRIM(RTRIM(COALESCE(pj.CNPJ, pj.CNPJNormalizado, pf.CPF, pf.CPFNormalizado))) AS varchar(30)) AS fornecedor_documento,
+  CAST(det.id_Produto AS varchar(80)) AS produto_id_areco,
+  CAST(prod.produto_referencia AS varchar(80)) AS produto_referencia,
+  CAST(COALESCE(NULLIF(prod.produto_referencia, ''), CAST(det.id_Produto AS varchar(80))) AS varchar(80)) AS produto_codigo,
+  CAST(prod.produto_descricao AS varchar(255)) AS produto_nome,
+  CAST(prod.produto_descricao AS varchar(255)) AS produto_descricao,
+  CAST(prod.produto_subgrupo AS varchar(120)) AS produto_subgrupo,
+  CAST(prod.produto_categoria AS varchar(120)) AS produto_categoria,
   CAST(det.qtdItem AS decimal(18,6)) AS quantidade,
   CAST(det.id_unidMed AS varchar(30)) AS unidade,
   CAST(lote.Nro_lote AS varchar(80)) AS lote
 FROM Entradas_Notas en
 JOIN Det_Entr_Notas_Fiscais det ON det.id_NotaFiscalEntrada = en.id_NotaFiscalEntrada
-LEFT JOIN Fornecedores f ON f.id_Forn = en.id_Forn
-LEFT JOIN Entidade ent ON ent.Id_Ent = f.Id_Ent
+LEFT JOIN CtrlRecebimentoNFE nfe ON nfe.id_NotaFiscalEntrada = en.id_NotaFiscalEntrada
+LEFT JOIN Entidade ent ON ent.Id_Ent = en.id_Forn
+LEFT JOIN Entid_PessoasJur pj ON pj.Id_Ent = ent.Id_Ent
+LEFT JOIN Entid_PessoasFis pf ON pf.Id_Ent = ent.Id_Ent
 OUTER APPLY (
-  SELECT TOP 1 v.ds_Prod AS produto_nome
+  SELECT TOP 1
+    COALESCE(NULLIF(LTRIM(RTRIM(m.cd_Referencia)), ''), NULLIF(LTRIM(RTRIM(v.cd_Referencia)), ''), CAST(det.id_Produto AS varchar(80))) AS produto_referencia,
+    COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)), ''), NULLIF(LTRIM(RTRIM(v.ds_CatProdT440)), ''), CAST(det.id_Produto AS varchar(80))) AS produto_descricao,
+    LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)) AS produto_subgrupo,
+    LTRIM(RTRIM(v.ds_CatProdT440)) AS produto_categoria
   FROM ViewConsultaProdutos v
+  LEFT JOIN Materiais m ON m.id_Produto = v.id_Produto
   WHERE v.id_Produto = det.id_Produto
 ) prod
 OUTER APPLY (
@@ -90,18 +103,22 @@ function defaultMateriaisQuery() {
   return `
 SELECT ${materiaisLimitClause()}
   CAST(v.id_Produto AS varchar(80)) AS codigo,
-  CAST(MAX(v.ds_Prod) AS varchar(255)) AS nome,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.cd_Referencia)), ''), NULLIF(LTRIM(RTRIM(v.cd_Referencia)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(80)) AS referencia,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090)), ''), NULLIF(LTRIM(RTRIM(v.ds_CatProdT440)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(255)) AS nome,
+  CAST(MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(v.id_Produto AS varchar(80)))) AS varchar(255)) AS descricao,
   CAST(NULL AS varchar(30)) AS unidade,
-  CAST(NULL AS varchar(120)) AS grupo
+  CAST(MAX(LTRIM(RTRIM(v.ds_SubGrupoPrdT2090))) AS varchar(120)) AS grupo,
+  CAST(MAX(LTRIM(RTRIM(v.ds_CatProdT440))) AS varchar(120)) AS categoria
 FROM ViewConsultaProdutos v
+LEFT JOIN Materiais m ON m.id_Produto = v.id_Produto
 WHERE v.id_Produto IS NOT NULL
 GROUP BY v.id_Produto
-ORDER BY MAX(v.ds_Prod)
+ORDER BY MAX(COALESCE(NULLIF(LTRIM(RTRIM(m.ds_Prod)), ''), NULLIF(LTRIM(RTRIM(m.DescrResumo)), ''), NULLIF(LTRIM(RTRIM(v.ds_Prod)), ''), CAST(v.id_Produto AS varchar(80))))
 `;
 }
 
 function inferMaterialType(row) {
-  const text = `${row.tipo || ""} ${row.grupo || ""} ${row.nome || ""}`.toLowerCase();
+  const text = `${row.tipo || ""} ${row.grupo || ""} ${row.categoria || ""} ${row.nome || ""} ${row.descricao || ""}`.toLowerCase();
   if (text.includes("embal") || text.includes("frasco") || text.includes("tampa") || text.includes("caixa")) return "Embalagem";
   if (text.includes("rotulo") || text.includes("etiqueta") || text.includes("label")) return "Rotulo";
   if (text.includes("materia") || text.includes("extrato") || text.includes("ativo") || text.includes("insumo")) return "Materia-prima";
@@ -110,12 +127,14 @@ function inferMaterialType(row) {
 
 function materialDoc(row) {
   const codigo = String(row.codigo || row.produto_codigo || "").trim();
-  const nome = String(row.nome || row.produto_nome || codigo || "Material Areco").trim();
+  const referencia = String(row.referencia || row.produto_referencia || row.produto_codigo || codigo || "").trim();
+  const nome = String(row.nome || row.descricao || row.produto_descricao || row.produto_nome || referencia || codigo || "Material Areco").trim();
   const tipo = inferMaterialType({ ...row, nome });
   return {
     id: `areco-${codigo}`,
     origem: "Areco",
     codigoAreco: codigo,
+    referenciaAreco: referencia,
     nome,
     nomeBase: nome,
     apresentacao: "",
@@ -125,7 +144,7 @@ function materialDoc(row) {
     fornecedorPadrao: "",
     unidadePadrao: row.unidade || "",
     ref: "Importado automaticamente do Areco",
-    obs: "Material sincronizado do Areco. Complete os ensaios e especificacoes no SGQ quando necessario.",
+    obs: `Material sincronizado do Areco. Referencia: ${referencia || codigo}. Complete os ensaios e especificacoes no SGQ quando necessario.`,
     ensaios: [],
     fichasTecnicas: [],
     criadoPor: "Sync Areco",
@@ -137,26 +156,66 @@ function materialDoc(row) {
 async function upsertMaterial(row) {
   const codigo = String(row.codigo || row.produto_codigo || "").trim();
   if (!codigo) return false;
-  const nome = String(row.nome || row.produto_nome || codigo).trim();
+  const referencia = String(row.referencia || row.produto_referencia || row.produto_codigo || codigo).trim();
+  const nome = String(row.nome || row.descricao || row.produto_descricao || row.produto_nome || referencia || codigo).trim();
   const tipo = inferMaterialType({ ...row, nome });
-  const doc = materialDoc({ ...row, codigo, nome, tipo });
+  const doc = materialDoc({ ...row, codigo, referencia, nome, tipo });
 
   await query(`
-    INSERT INTO areco_materiais (codigo, nome, tipo, unidade, payload, updated_at)
-    VALUES ($1,$2,$3,$4,$5::jsonb,now())
+    INSERT INTO areco_materiais (codigo, nome, tipo, unidade, referencia, descricao, grupo, categoria, payload, updated_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,now())
     ON CONFLICT (codigo) DO UPDATE SET
       nome = EXCLUDED.nome,
       tipo = EXCLUDED.tipo,
       unidade = EXCLUDED.unidade,
+      referencia = EXCLUDED.referencia,
+      descricao = EXCLUDED.descricao,
+      grupo = EXCLUDED.grupo,
+      categoria = EXCLUDED.categoria,
       payload = EXCLUDED.payload,
       updated_at = now()
-  `, [codigo, nome, tipo, row.unidade || null, JSON.stringify(row)]);
+  `, [codigo, nome, tipo, row.unidade || null, referencia, row.descricao || row.produto_descricao || nome, row.grupo || row.produto_subgrupo || null, row.categoria || row.produto_categoria || null, JSON.stringify(row)]);
 
   await query(`
     INSERT INTO generic_documents (collection, id, data, updated_at)
     VALUES ('cq_materiais', $1, $2::jsonb, now())
     ON CONFLICT (collection, id) DO UPDATE SET
       data = generic_documents.data || EXCLUDED.data || jsonb_build_object('ensaios', COALESCE(generic_documents.data->'ensaios', '[]'::jsonb)),
+      updated_at = now()
+  `, [doc.id, JSON.stringify(doc)]);
+
+  return true;
+}
+
+async function upsertFornecedor(row) {
+  const codigo = String(row.fornecedor_codigo || "").trim();
+  const nome = String(row.fornecedor_nome || "").trim();
+  if (!codigo || !nome) return false;
+
+  const doc = {
+    id: `areco-forn-${codigo}`,
+    origem: "Areco",
+    codigoAreco: codigo,
+    nome,
+    cnpj: String(row.fornecedor_documento || "").trim(),
+    categoria: "Outros",
+    contato: "",
+    email: "",
+    telefone: "",
+    cep: "",
+    endereco: "",
+    status: "Ativo",
+    obs: "Fornecedor importado automaticamente do Areco.",
+    criadoPor: "Sync Areco",
+    criadoEm: new Date().toISOString().slice(0, 10),
+    atualizadoEm: new Date().toISOString().slice(0, 10),
+  };
+
+  await query(`
+    INSERT INTO generic_documents (collection, id, data, updated_at)
+    VALUES ('fornecedores', $1, $2::jsonb, now())
+    ON CONFLICT (collection, id) DO UPDATE SET
+      data = generic_documents.data || EXCLUDED.data,
       updated_at = now()
   `, [doc.id, JSON.stringify(doc)]);
 
@@ -207,24 +266,31 @@ async function runArecoSync() {
         "areco",
         row.areco_id,
         row.nf_numero,
-        row.produto_codigo,
+        row.produto_id_areco || row.produto_codigo,
         row.lote || "",
       ].join("|");
 
       await query(`
         INSERT INTO areco_recebimentos (
-          external_key, nf_numero, nf_serie, fornecedor_codigo, fornecedor_nome,
-          produto_codigo, produto_nome, lote, quantidade, unidade, data_emissao,
+          external_key, nf_numero, nf_serie, fornecedor_codigo, fornecedor_nome, fornecedor_documento,
+          produto_id_areco, produto_referencia, produto_codigo, produto_nome, produto_descricao,
+          produto_subgrupo, produto_categoria, lote, quantidade, unidade, data_emissao,
           data_entrada, payload, updated_at
         )
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,now())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,now())
         ON CONFLICT (external_key) DO UPDATE SET
           nf_numero = EXCLUDED.nf_numero,
           nf_serie = EXCLUDED.nf_serie,
           fornecedor_codigo = EXCLUDED.fornecedor_codigo,
           fornecedor_nome = EXCLUDED.fornecedor_nome,
+          fornecedor_documento = EXCLUDED.fornecedor_documento,
+          produto_id_areco = EXCLUDED.produto_id_areco,
+          produto_referencia = EXCLUDED.produto_referencia,
           produto_codigo = EXCLUDED.produto_codigo,
           produto_nome = EXCLUDED.produto_nome,
+          produto_descricao = EXCLUDED.produto_descricao,
+          produto_subgrupo = EXCLUDED.produto_subgrupo,
+          produto_categoria = EXCLUDED.produto_categoria,
           lote = EXCLUDED.lote,
           quantidade = EXCLUDED.quantidade,
           unidade = EXCLUDED.unidade,
@@ -238,8 +304,14 @@ async function runArecoSync() {
         row.nf_serie,
         row.fornecedor_codigo,
         row.fornecedor_nome,
+        row.fornecedor_documento,
+        row.produto_id_areco,
+        row.produto_referencia,
         row.produto_codigo,
         row.produto_nome,
+        row.produto_descricao,
+        row.produto_subgrupo,
+        row.produto_categoria,
         row.lote,
         row.quantidade,
         row.unidade,
@@ -248,10 +320,15 @@ async function runArecoSync() {
         JSON.stringify(row),
       ]);
       if (await upsertMaterial({
-        codigo: row.produto_codigo,
+        codigo: row.produto_id_areco || row.produto_codigo,
+        referencia: row.produto_referencia || row.produto_codigo,
         nome: row.produto_nome,
+        descricao: row.produto_descricao,
+        grupo: row.produto_subgrupo,
+        categoria: row.produto_categoria,
         unidade: row.unidade,
       })) importedMateriais += 1;
+      await upsertFornecedor(row);
       imported += 1;
     }
 
