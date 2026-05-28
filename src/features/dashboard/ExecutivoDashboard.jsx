@@ -1,4 +1,16 @@
 import React, { useState, useEffect } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as RcTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { logoutUser, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
@@ -32,7 +44,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   const ineficaz        = rncs.filter(r => r.status === "Ineficaz").length;
   const taxaEficacia    = eficaz + ineficaz > 0 ? Math.round(eficaz / (eficaz + ineficaz) * 100) : null;
   const docsVencendo    = docs.filter(d => d.proximaRevisao && d.proximaRevisao >= hoje && d.proximaRevisao <= d30str && d.status !== "Obsoleto").length;
-  const reprovMes       = analises.filter(a => (a.conclusao === "Reprovado") && a.data && a.data.startsWith(mes)).length;
+  const reprovMes       = analises.filter(a => (a.conclusao === "Reprovado") && (a.data || a.dataAnalise || a.criadoEm || "").startsWith(mes)).length;
 
   // ── Gráfico 1: RNCs por mês (últimos 6 meses) ──
   const mesesLabels = [];
