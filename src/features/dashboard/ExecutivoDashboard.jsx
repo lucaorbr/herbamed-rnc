@@ -44,7 +44,9 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   const ineficaz        = rncs.filter(r => r.status === "Ineficaz").length;
   const taxaEficacia    = eficaz + ineficaz > 0 ? Math.round(eficaz / (eficaz + ineficaz) * 100) : null;
   const docsVencendo    = docs.filter(d => d.proximaRevisao && d.proximaRevisao >= hoje && d.proximaRevisao <= d30str && d.status !== "Obsoleto").length;
-  const reprovMes       = analises.filter(a => (a.conclusao === "Reprovado") && (a.data || a.dataAnalise || a.criadoEm || "").startsWith(mes)).length;
+  const analisesMes     = analises.filter(a => (a.data || a.dataAnalise || a.criadoEm || "").startsWith(mes));
+  const aprovadasMes    = analisesMes.filter(a => a.conclusao === "Aprovado").length;
+  const reprovMes       = analisesMes.filter(a => a.conclusao === "Reprovado").length;
 
   // ── Gráfico 1: RNCs por mês (últimos 6 meses) ──
   const mesesLabels = [];
@@ -58,20 +60,20 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
     return {
       _key: m,
       mes: label,
-      Abertas:  rncs.filter(r => r.data && r.data.startsWith(m)).length,
-      Eficazes: rncs.filter(r => r.data && r.data.startsWith(m) && r.status === "Eficaz").length,
+      Reprovadas: analises.filter(a => (a.data || a.dataAnalise || a.criadoEm || "").startsWith(m) && a.conclusao === "Reprovado").length,
+      Aprovadas: analises.filter(a => (a.data || a.dataAnalise || a.criadoEm || "").startsWith(m) && a.conclusao === "Aprovado").length,
     };
   });
 
   // ── Gráfico 2: Top 5 fornecedores com mais RNCs ──
   const fornMap = {};
-  rncs.forEach(r => {
-    if (!r.fornecedor) return;
+  analises.forEach(r => {
+    if (!r.fornecedor || r.fornecedor === "—" || r.fornecedor === "-") return;
     fornMap[r.fornecedor] = (fornMap[r.fornecedor] || 0) + 1;
   });
   const topForn = Object.entries(fornMap)
     .sort((a, b) => b[1] - a[1]).slice(0, 5)
-    .map(([nome, qty]) => ({ nome: nome.length > 18 ? nome.slice(0, 16) + "…" : nome, RNCs: qty }));
+    .map(([nome, qty]) => ({ nome: nome.length > 18 ? nome.slice(0, 16) + "…" : nome, Analises: qty }));
 
   // ── Gráfico 3: Materiais com mais reprovações ──
   const matMap = {};
@@ -192,11 +194,11 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
 
         {/* ── ROW 1: KPI CARDS ── */}
         <div style={{ display: "flex", gap: "1rem" }}>
-          <KpiCard icon="📋" label="RNCs Abertas"   value={rncsAbertas}  color={rncsAbertas > 0 ? C.red : C.accent}   sub={`${rncs.length} total no sistema`} />
+          <KpiCard icon="🧪" label="Análises CQ"   value={analisesMes.length}  color={analisesMes.length > 0 ? C.accent : C.text3}   sub={`${analises.length} total no sistema`} />
           <KpiCard icon="⚠️" label="Prazos Vencidos" value={rncsVencidas} color={rncsVencidas > 0 ? C.yellow : C.accent} sub="Ações corretivas em atraso" />
           <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz · ${ineficaz} ineficaz`} />
           <KpiCard icon="🗂️" label="Docs p/ Revisão"  value={docsVencendo}  color={docsVencendo > 0 ? C.orange : C.accent} sub="Vencendo em 30 dias" />
-          <KpiCard icon="🧪" label="Reprovações CQ"   value={reprovMes}     color={reprovMes > 0 ? C.red : C.accent}     sub="Análises reprovadas no mês" />
+          <KpiCard icon="📋" label="Resultado CQ"   value={`${aprovadasMes}/${reprovMes}`}     color={reprovMes > 0 ? C.red : C.accent}     sub="Aprovadas / reprovadas no mês" />
         </div>
 
         {/* ── ROW 2: CHARTS ── */}
@@ -204,7 +206,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
 
           {/* RNCs por mês */}
           <div style={{ flex: 2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>📊 RNCs por Mês</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>📊 Análises CQ por Mês</div>
             <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Últimos 6 meses</div>
             <div style={{ flex: 1, minHeight: 160 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -219,17 +221,17 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
                   />
                   <YAxis tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
-                  <Bar dataKey="Abertas"  fill={C.red}    radius={[5,5,0,0]}
+                  <Bar dataKey="Reprovadas"  fill={C.red}    radius={[5,5,0,0]}
                     onClick={(data) => { if (data._key) setMesSel({ key: data._key, label: data.mes }); }}
                   />
-                  <Bar dataKey="Eficazes" fill={C.accent} radius={[5,5,0,0]}
+                  <Bar dataKey="Aprovadas" fill={C.accent} radius={[5,5,0,0]}
                     onClick={(data) => { if (data._key) setMesSel({ key: data._key, label: data.mes }); }}
                   />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div style={{ display: "flex", gap: 16, marginTop: 8, alignItems: "center" }}>
-              {[["Abertas", C.red], ["Eficazes", C.accent]].map(([l, c]) => (
+              {[["Reprovadas", C.red], ["Aprovadas", C.accent]].map(([l, c]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.text2 }}>
                   <div style={{ width: 10, height: 10, borderRadius: 3, background: c }} />{l}
                 </div>
@@ -241,7 +243,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
           {/* Top Fornecedores */}
           <div style={{ flex: 1.2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>🏭 Top Fornecedores</div>
-            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Por número de RNCs</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 14 }}>Por número de análises CQ</div>
             {topForn.length === 0 ? (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text3, fontSize: 12 }}>Sem dados</div>
             ) : (
@@ -252,7 +254,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
                     <XAxis type="number" tick={{ fill: C.text2, fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <YAxis type="category" dataKey="nome" tick={{ fill: C.text2, fontSize: 11 }} axisLine={false} tickLine={false} width={100} />
                     <RcTooltip content={<CustomTooltip />} cursor={{ fill: C.accentDim }} />
-                    <Bar dataKey="RNCs" fill={C.orange} radius={[0,5,5,0]} />
+                    <Bar dataKey="Analises" fill={C.orange} radius={[0,5,5,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
