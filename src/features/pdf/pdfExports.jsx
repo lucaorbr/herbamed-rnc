@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { verifyCurrentUserPassword } from "../../firebase";
+import { createElectronicSignature } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -42,27 +42,21 @@ export function openPDFWindow(title, html) {
   win.document.close();
 }
 
-export function AssinaturaModal({ user, onConfirm, onClose, titulo }) {
+export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "", papel = "" }) {
   const T = useTheme(); const s = useS();
   const [senha, setSenha] = useState("");
-  const [cargo, setCargo] = useState(user.setor || "Analista de Controle de Qualidade");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const setor = user.setor || "Setor nao informado";
+  const registroProfissional = user.crf || "";
+  const papelAssinatura = papel || user.setor || "Assinante";
 
   const confirmar = async () => {
     if (!senha.trim()) { setErr("Digite sua senha para assinar."); return; }
     setLoading(true); setErr("");
     try {
-      await verifyCurrentUserPassword(senha);
-      onConfirm({
-        nome: user.name,
-        cargo,
-        email: user.email,
-        assinaturaImg: user.assinatura || null,
-        data: new Date().toLocaleDateString("pt-BR"),
-        hora: new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }),
-        timestamp: new Date().toISOString(),
-      });
+      const assinatura = await createElectronicSignature({ password: senha, contexto, papel: papelAssinatura });
+      onConfirm(assinatura);
     } catch { setErr("Senha incorreta. Tente novamente."); }
     setLoading(false);
   };
@@ -84,14 +78,16 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo }) {
             <img src={user.assinatura} alt="Assinatura" style={{ height:56, maxWidth:220, objectFit:"contain", background:"#fff", padding:4, borderRadius:4, display:"block", marginBottom:8 }} />
           )}
           <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{user.name}</div>
-          <div style={{ fontSize:12, color:T.text2 }}>{cargo}</div>
+          <div style={{ fontSize:12, color:T.text2 }}>{setor}</div>
+          {registroProfissional && <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Registro profissional: {registroProfissional}</div>}
+          <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Papel no documento: {papelAssinatura}</div>
           <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>
             {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
           </div>
           {!user.assinatura && <div style={{ fontSize:11, color:"#ff8c42", marginTop:6 }}>⚠ Nenhuma assinatura cadastrada — será gerado apenas com nome e data.</div>}
         </div>
 
-        <F lbl="Cargo / Função" ch={<Inp value={cargo} onChange={e=>setCargo(e.target.value)} placeholder="Ex: Analista de CQ" />} />
+        <F lbl="Dados cadastrais usados na assinatura" ch={<div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 10px", fontSize:12, color:T.text2 }}>{user.name} · {setor}{registroProfissional ? ` · ${registroProfissional}` : ""}</div>} />
         <F lbl="Confirme sua senha *" ch={<Inp type="password" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&confirmar()} />} />
 
         {err && <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#ff4f6a", marginBottom:12 }}>{err}</div>}
@@ -310,9 +306,12 @@ export function exportRNCPDF(rnc, assinatura = null) {
         <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:left;">
           <strong>${assinatura.nome}</strong><br/>
           ${assinatura.cargo}<br/>
+          ${assinatura.setor?`<span style="color:#777;font-size:10px;">Setor: ${assinatura.setor}</span><br/>`:""}
+          ${(assinatura.registroProfissional||assinatura.crf||assinatura.registro)?`<span style="color:#777;font-size:10px;">Registro profissional: ${assinatura.registroProfissional||assinatura.crf||assinatura.registro}</span><br/>`:""}
           ${assinatura.email?`<span style="color:#777;font-size:10px;">${assinatura.email}</span><br/>`:""}
           <span style="color:#666;font-size:10px;">✔ Assinado eletronicamente em ${assinatura.data} às ${assinatura.hora}</span><br/>
           <span style="color:#999;font-size:9px;font-family:monospace;">Cód. verificação: ${sigCodigo(assinatura, `RNC|${rnc.num||rnc.id||""}`)}</span>
+          ${assinatura.hash?`<br/><span style="color:#aaa;font-size:8px;font-family:monospace;">Hash: ${String(assinatura.hash).slice(0,24)}...</span>`:""}
         </div>
       ` : `<div style="border-top:1px solid #333;padding-top:6px;margin-top:56px;font-size:11px;">______________________<br/>Responsável pela análise</div>`}
     </div>
@@ -328,7 +327,8 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <div style="margin-top:16px;padding:12px 16px;border:1px solid #2ab84a33;border-radius:8px;background:#f6fff8;display:flex;align-items:center;gap:16px;">
     <div style="flex:1;">
       <div style="font-size:10px;color:#2ab84a;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">✅ Aprovado pelo Responsável Técnico</div>
-      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${rnc.assinaturaRT.crf ? " · " + rnc.assinaturaRT.crf : ""}</div>
+      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${(rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf) ? " · " + (rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf) : ""}</div>
+      ${rnc.assinaturaRT.setor?`<div style="font-size:10px;color:#777;">Setor: ${rnc.assinaturaRT.setor}</div>`:""}
       ${rnc.assinaturaRT.email?`<div style="font-size:10px;color:#777;">${rnc.assinaturaRT.email}</div>`:""}
       <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>

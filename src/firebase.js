@@ -162,6 +162,9 @@ export const subscribeCollection = (colName, cb, onErr) =>
 export const verifyCurrentUserPassword = (password) =>
   api("/api/auth/verify-password", { method: "POST", body: { password } });
 
+export const createElectronicSignature = ({ password, contexto = "", papel = "" }) =>
+  api("/api/auth/signature", { method: "POST", body: { password, contexto, papel } });
+
 export const getArecoRecebimentos = (status = "pendente_analise") =>
   api(`/api/areco/recebimentos${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 

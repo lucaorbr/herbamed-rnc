@@ -436,7 +436,7 @@ export function ProcessosProducaoTab({ user, toast_ }) {
   const validar = async (processo, assinatura) => {
     await saveCollection("producao_processos", String(processo.id), {
       ...processo, status:"Validado",
-      validacao:{ validadoPor:assinatura.nome, cargo:assinatura.cargo, email:assinatura.email, dataHora:assinatura.timestamp, obs:"" },
+      validacao:{ ...assinatura, validadoPor:assinatura.nome, cargo:assinatura.cargo, email:assinatura.email, setor:assinatura.setor, registroProfissional:assinatura.registroProfissional||assinatura.crf||"", dataHora:assinatura.timestamp, obs:"" },
     });
     toast_("Processo validado! ✓","green");
     setAssinaturaModal(null);
@@ -530,6 +530,8 @@ export function ProcessosProducaoTab({ user, toast_ }) {
       )}
       {assinaturaModal&&(
         <AssinaturaModal user={user} titulo={`Validar: ${assinaturaModal.tipo} — ${assinaturaModal.op}`}
+          contexto={`PRODUCAO|${assinaturaModal.id||assinaturaModal.op||""}`}
+          papel="Validador do processo"
           onConfirm={(assin)=>validar(assinaturaModal,assin)} onClose={()=>setAssinaturaModal(null)}/>
       )}
     </div>

@@ -1,4 +1,5 @@
 const http = require("http");
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const { migrate } = require("./migrate");
 const { query, transaction } = require("./db");
@@ -104,6 +105,52 @@ async function handleAuth(req, res, pathname) {
     const { password } = await readBody(req);
     const ok = await verifyPassword(user.id, password);
     return sendJson(res, ok ? 200 : 401, ok ? { ok: true } : { error: "Senha incorreta" });
+  }
+
+  if (pathname === "/api/auth/signature" && req.method === "POST") {
+    const user = await requireUser(req);
+    const { password, contexto = "", papel = "" } = await readBody(req);
+    const ok = await verifyPassword(user.id, password);
+    if (!ok) return sendJson(res, 401, { error: "Senha incorreta" });
+
+    const timestamp = new Date().toISOString();
+    const payload = {
+      userId: user.id,
+      nome: user.name,
+      email: user.email,
+      setor: user.setor || "",
+      registroProfissional: user.crf || "",
+      papel,
+      contexto,
+      timestamp,
+      metodoAutenticacao: "senha",
+    };
+    const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+    const hash = crypto
+      .createHmac("sha256", process.env.JWT_SECRET || "sgqherbamed_dev_secret_change_me")
+      .update(canonical)
+      .digest("hex")
+      .toUpperCase();
+    const codigoVerificacao = `${hash.slice(0, 4)}-${hash.slice(4, 8)}-${hash.slice(8, 12)}`;
+
+    return sendJson(res, 200, {
+      ...payload,
+      uid: user.id,
+      nome: user.name,
+      name: user.name,
+      cargo: papel || user.setor || "",
+      crf: user.crf || "",
+      registro: user.crf || "",
+      img: user.assinatura || null,
+      assinaturaImg: user.assinatura || null,
+      data: new Date(timestamp).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+      hora: new Date(timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }),
+      dataHora: new Date(timestamp).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+      timezone: "America/Sao_Paulo",
+      hash,
+      codigoVerificacao,
+      versaoAssinatura: "SGQ-HERBAMED-ELETRONICA-1",
+    });
   }
 
   return false;

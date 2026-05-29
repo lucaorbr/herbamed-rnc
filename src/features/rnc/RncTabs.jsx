@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
+import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
 import { SEVMETA, SMETA, TIPOC } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
@@ -264,24 +264,32 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
   const updStatus = async (id, status) => {
     const r = rncs.find(x => x.id === id);
-    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado → ${status}`, resp: user.name, tipo: "status" };
+    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado -> ${status}`, resp: user.name, tipo: "status" };
     await doUpdateRNC(id, { status, historico: [...(r?.historico || []), h] });
     setSel(p => p ? { ...p, status, historico: [...(p.historico || []), h] } : null);
+    toast_("Status atualizado!", "green");
+    const updated = { ...r, status, historico: [...(r?.historico || []), h] };
+    openEmail(updated, "status");
+  };
 
   const assinarRTRNC = async (r) => {
-    if (!user?.assinatura) { alert("Você não possui assinatura cadastrada. Solicite ao administrador."); return; }
-    if (user?.role !== "rt" && user?.role !== "admin" && user?.role !== "keyuser") { alert("Apenas o Responsável Técnico pode assinar RNCs."); return; }
+    if (!user?.assinatura) { alert("Voce nao possui assinatura cadastrada. Solicite ao administrador."); return; }
+    if (user?.role !== "rt" && user?.role !== "admin" && user?.role !== "keyuser") { alert("Apenas o Responsavel Tecnico pode assinar RNCs."); return; }
     if (!window.confirm(`Confirma assinatura como RT na RNC ${r.num}?`)) return;
-    const ass = { nome: user.name, crf: user.crf || "", img: user.assinatura, dataHora: `${tod()} ${new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}` };
+    const password = window.prompt("Confirme sua senha para assinar como RT:");
+    if (!password) return;
+    let ass;
+    try {
+      ass = await createElectronicSignature({ password, contexto:`RNC|${r.num||r.id||""}`, papel:"Responsavel Tecnico" });
+    } catch {
+      alert("Senha incorreta. Assinatura cancelada.");
+      return;
+    }
     const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "RNC aprovada pelo RT", resp: user.name, tipo: "rt" };
     const updated = { ...r, assinaturaRT: ass, historico: [...(r.historico||[]), h] };
     await doUpdateRNC(r.id, { assinaturaRT: ass, historico: updated.historico });
     setSel(updated);
     toast_("RNC aprovada pelo RT!", "green");
-  };
-    toast_("Status atualizado!", "green");
-    const updated = { ...r, status, historico: [...(r?.historico || []), h] };
-    openEmail(updated, "status");
   };
 
   const startEdit = (r) => {
@@ -603,7 +611,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.crf ? ` · ${sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
+                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{(sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf) ? ` · ${sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.setor ? ` · ${sel.assinaturaRT.setor}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
                       <div style={{ fontSize:10, color:T.text3 }}>✔ Assinado eletronicamente em {sel.assinaturaRT.timestamp?new Date(sel.assinaturaRT.timestamp).toLocaleString("pt-BR"):sel.assinaturaRT.dataHora}</div>
                       <div style={{ fontSize:9, color:T.text3, fontFamily:"monospace", marginTop:2 }}>Cód.: {sigCodigo(sel.assinaturaRT, `RNC|${sel.num||sel.id||""}`)}</div>
                     </div>
@@ -626,6 +634,8 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
         <AssinaturaModal
           user={user}
           titulo={`RNC ${assinaturaModal.num}`}
+          contexto={`RNC|${assinaturaModal.num||assinaturaModal.id||""}`}
+          papel="Responsavel pela analise"
           onClose={()=>setAssinaturaModal(null)}
           onConfirm={(ass)=>{ exportRNCPDF(assinaturaModal, ass); setAssinaturaModal(null); toast_("PDF gerado com assinatura!", "green"); }}
         />

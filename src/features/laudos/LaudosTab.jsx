@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
+import { createElectronicSignature, saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, seloAssHTML, sigCodigo, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -164,7 +164,9 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
   const assinarAnalista = async (laudo) => {
     try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
-    const assSig = { nome:user.name, cargo:user.role==="rt"?"Responsável Técnico":"Analista de CQ", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` };
+    const password = window.prompt("Confirme sua senha para assinar o laudo:");
+    if (!password) return;
+    const assSig = await createElectronicSignature({ password, contexto:`LAUDO|${laudo.numLaudo||laudo.id||""}`, papel:user.role==="rt"?"Responsavel Tecnico":"Analista de CQ" });
     await saveCollection("laudos", String(laudo.id), { ...laudo, assinaturaAnalista: assSig });
     await auditLog("Assinou Laudo (Analista)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, null, { assinante: user.name, cargo: assSig.cargo });
     toast_("Laudo assinado!", "green");
@@ -178,7 +180,9 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
     try {
     if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const novoStatus = calcStatus(laudo.ensaios) === "Aprovado" ? "Finalizado" : calcStatus(laudo.ensaios);
-    const assRT = { nome:user.name, cargo:"Responsável Técnico", crf:user.crf||"", img:user.assinatura, dataHora:`${tod()} ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` };
+    const password = window.prompt("Confirme sua senha para assinar como RT:");
+    if (!password) return;
+    const assRT = await createElectronicSignature({ password, contexto:`LAUDO|${laudo.numLaudo||laudo.id||""}`, papel:"Responsavel Tecnico" });
     await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT: assRT });
     await auditLog("Assinou Laudo (RT)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, { status: laudo.status }, { status: novoStatus, assinante: user.name });
     toast_("Laudo assinado como RT!", "green");
