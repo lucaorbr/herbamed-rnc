@@ -198,10 +198,21 @@ async function handleUsers(req, res, pathname) {
   }
 
   if (req.method === "PATCH" || req.method === "PUT") {
-    await requireUser(req);
+    const currentUser = await requireUser(req);
     const data = sanitize(await readBody(req));
-    const existing = await query("SELECT data FROM users WHERE id = $1", [id]);
+    const existing = await query("SELECT data, role FROM users WHERE id = $1", [id]);
     if (!existing.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
+
+    const isAdmin = currentUser.role === "admin";
+    if (!isAdmin) {
+      // Usuario comum so pode editar o proprio cadastro.
+      if (String(id) !== String(currentUser.id)) return sendJson(res, 403, { error: "Sem permissao" });
+      // Usuario comum nunca pode alterar o campo role (nem o proprio).
+      if (data.role !== undefined && data.role !== existing.rows[0].role) {
+        return sendJson(res, 403, { error: "Sem permissao" });
+      }
+    }
+
     const merged = { ...(existing.rows[0].data || {}), ...data };
     const result = await query(`
       UPDATE users SET
