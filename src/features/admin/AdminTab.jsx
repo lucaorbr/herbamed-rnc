@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
-import { uploadToCloudinary } from "../rnc/RncTabs";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
@@ -10,54 +9,37 @@ import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 
 export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
   const T = useTheme(); const s = useS();
-  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
+  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
-  const [nuAssinatura, setNuAssinatura] = useState(null);
-  const [nuAssinaturaUploading, setNuAssinaturaUploading] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
-  const [editAssinatura, setEditAssinatura] = useState(null);
-  const [editAssinaturaUploading, setEditAssinaturaUploading] = useState(false);
   const set = (k,v) => setNu(p=>({...p,[k]:v}));
   const setRole = (role) => { set("role", role); setNuPermissoes({ ...PERMS_PADRAO[role] }); };
   const togglePerm = (key) => setNuPermissoes(p => ({ ...p, [key]: !p[key] }));
-
-  const uploadAssinatura = async (file, setImg, setLoading) => {
-    if(!file) return;
-    setLoading(true);
-    try {
-      const result = await uploadToCloudinary(file);
-      setImg(result.url);
-      toast_("Assinatura enviada!", "green");
-    } catch { toast_("Erro ao enviar assinatura.", "red"); }
-    setLoading(false);
-  };
 
   const addUser = async () => {
     if(!nu.name||!nu.email||!nu.pw) { alert("Nome, e-mail e senha são obrigatórios."); return; }
     if(users.find(u=>u.email===nu.email)) { alert("E-mail já cadastrado."); return; }
     try {
       const cred = await createAuthUser(nu.email, nu.pw);
-      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", permissoes:nuPermissoes, ...(nuAssinatura?{assinatura:nuAssinatura}:{}) };
+      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", cargo:nu.cargo||"", permissoes:nuPermissoes };
       const savedUser = await saveUser(cred.user.uid, userData);
       await auditLog("Criou Usuário", "usuarios", cred.user.uid, `${userData.name} (${userData.email})`, null, { name: userData.name, email: userData.email, role: userData.role, setor: userData.setor });
       setUsers([...users, savedUser]);
-      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"" });
+      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
-      setNuAssinatura(null);
       toast_("Usuário criado com sucesso!", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
   };
 
   const startEdit = (u) => {
     setEditing(u.id);
-    setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"" });
-    setEditAssinatura(u.assinatura||null);
+    setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"", cargo:u.cargo||"" });
   };
 
   const saveEdit = async (uid) => {
     try {
-    const data = { ...editData, ...(editAssinatura?{assinatura:editAssinatura}:{assinatura:null}) };
+    const data = { ...editData };
     const antesU = users.find(u => u.id === uid);
     await updateUser(uid, data);
     await auditLog("Editou Usuário", "usuarios", uid, `${data.name || antesU?.name} (${antesU?.email || uid})`, antesU ? { name: antesU.name, role: antesU.role, setor: antesU.setor } : null, { name: data.name, role: data.role, setor: data.setor });
@@ -93,6 +75,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
                   <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
                   <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
                   <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />
+                  <F lbl="Cargo" ch={<Inp placeholder="Ex: Analista de Controle de Qualidade" value={editData.cargo||""} onChange={e=>setEditData(p=>({...p,cargo:e.target.value}))} />} />
                   <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
                     <option value="admin">Admin — acesso total</option>
                     <option value="user">Usuário — cria e edita suas RNCs</option>
@@ -102,23 +85,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
                     <option value="exec">Executivo — Dashboard gerencial</option>
                   </Sel>} />
                 </>} />
-
-                {/* Assinatura */}
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Assinatura (opcional)</div>
-                  {editAssinatura ? (
-                    <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.card, border:`1px solid ${T.border}`, borderRadius:8 }}>
-                      <img src={editAssinatura} alt="Assinatura" style={{ height:48, maxWidth:200, objectFit:"contain", background:"#fff", padding:4, borderRadius:4 }} />
-                      <button style={s.btnD} onClick={()=>setEditAssinatura(null)}>Remover</button>
-                    </div>
-                  ) : (
-                    <div style={{ border:`2px dashed ${T.border2}`, borderRadius:8, padding:"1rem", textAlign:"center", cursor:"pointer" }}
-                      onClick={()=>document.getElementById(`edit-ass-${u.id}`).click()}>
-                      <div style={{ fontSize:12, color:T.text3 }}>{editAssinaturaUploading?"Enviando...":"Clique para adicionar assinatura (PNG/JPG — fundo branco)"}</div>
-                      <input id={`edit-ass-${u.id}`} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>uploadAssinatura(e.target.files[0], setEditAssinatura, setEditAssinaturaUploading)} />
-                    </div>
-                  )}
-                </div>
 
                 <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                   <button style={s.btn} onClick={()=>setEditing(null)}>Cancelar</button>
@@ -182,6 +148,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
           <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />
+          <F lbl="Cargo" ch={<Inp placeholder="Ex: Analista de Controle de Qualidade" value={nu.cargo} onChange={e=>set("cargo",e.target.value)} />} />
           <F lbl="Perfil de acesso" tip="Selecione o perfil base — as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
             <option value="user">Usuário — cria e edita suas RNCs</option>
             <option value="admin">Admin — acesso total</option>
@@ -213,28 +180,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
               </div>
             </div>
           ))}
-        </div>
-
-        {/* Assinatura opcional */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Assinatura (opcional)</div>
-          <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
-            Escaneie ou fotografe a assinatura em papel branco e envie aqui. Será usada automaticamente nos PDFs gerados pelo usuário.
-          </div>
-          {nuAssinatura ? (
-            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
-              <img src={nuAssinatura} alt="Assinatura" style={{ height:56, maxWidth:220, objectFit:"contain", background:"#fff", padding:4, borderRadius:4 }} />
-              <button style={s.btnD} onClick={()=>setNuAssinatura(null)}>Remover</button>
-            </div>
-          ) : (
-            <div style={{ border:`2px dashed ${T.border2}`, borderRadius:8, padding:"1rem", textAlign:"center", cursor:"pointer" }}
-              onClick={()=>document.getElementById("nu-ass").click()}>
-              <div style={{ fontSize:28, marginBottom:6, opacity:.4 }}>🖊️</div>
-              <div style={{ fontSize:12, color:T.text2 }}>{nuAssinaturaUploading?"Enviando...":"Clique para adicionar assinatura"}</div>
-              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>PNG ou JPG — fundo branco — até 2MB</div>
-              <input id="nu-ass" type="file" accept="image/*" style={{ display:"none" }} onChange={e=>uploadAssinatura(e.target.files[0], setNuAssinatura, setNuAssinaturaUploading)} />
-            </div>
-          )}
         </div>
 
         <div style={{ textAlign:"right", marginTop:6 }}>
