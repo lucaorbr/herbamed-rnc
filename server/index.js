@@ -128,7 +128,7 @@ async function handleAuth(req, res, pathname) {
     };
     const canonical = JSON.stringify(payload, Object.keys(payload).sort());
     const hash = crypto
-      .createHmac("sha256", process.env.JWT_SECRET || "sgqherbamed_dev_secret_change_me")
+      .createHmac("sha256", process.env.JWT_SECRET)
       .update(canonical)
       .digest("hex")
       .toUpperCase();
