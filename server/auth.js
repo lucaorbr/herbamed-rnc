@@ -19,6 +19,7 @@ function publicUser(row) {
     email: row.email,
     role: row.role,
     setor: row.setor,
+    cargo: data.cargo || null,
     crf: row.crf,
     assinatura: row.assinatura,
     permissoes: row.permissoes || {},

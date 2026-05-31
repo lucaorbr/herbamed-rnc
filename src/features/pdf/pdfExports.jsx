@@ -47,9 +47,9 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const setor = user.setor || "Setor nao informado";
+  const cargo = user.cargo || "Cargo nao informado";
   const registroProfissional = user.crf || "";
-  const papelAssinatura = papel || user.setor || "Assinante";
+  const papelAssinatura = papel || "Assinante";
 
   const confirmar = async () => {
     if (!senha.trim()) { setErr("Digite sua senha para assinar."); return; }
@@ -74,20 +74,16 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
 
         <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 14px", marginBottom:"1rem" }}>
           <div style={{ fontSize:11, color:T.text3, marginBottom:6, textTransform:"uppercase", letterSpacing:".06em", fontWeight:600 }}>Será registrado no documento:</div>
-          {user.assinatura && (
-            <img src={user.assinatura} alt="Assinatura" style={{ height:56, maxWidth:220, objectFit:"contain", background:"#fff", padding:4, borderRadius:4, display:"block", marginBottom:8 }} />
-          )}
           <div style={{ fontSize:13, color:T.text, fontWeight:600 }}>{user.name}</div>
-          <div style={{ fontSize:12, color:T.text2 }}>{setor}</div>
+          <div style={{ fontSize:12, color:T.text2 }}>{cargo}</div>
           {registroProfissional && <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Registro profissional: {registroProfissional}</div>}
-          <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Papel no documento: {papelAssinatura}</div>
+          <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>Significado da assinatura: {papelAssinatura}</div>
           <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>
             {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" })}
           </div>
-          {!user.assinatura && <div style={{ fontSize:11, color:"#ff8c42", marginTop:6 }}>⚠ Nenhuma assinatura cadastrada — será gerado apenas com nome e data.</div>}
         </div>
 
-        <F lbl="Dados cadastrais usados na assinatura" ch={<div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 10px", fontSize:12, color:T.text2 }}>{user.name} · {setor}{registroProfissional ? ` · ${registroProfissional}` : ""}</div>} />
+        <F lbl="Dados cadastrais usados na assinatura" ch={<div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 10px", fontSize:12, color:T.text2 }}>{user.name} · {cargo}{registroProfissional ? ` · ${registroProfissional}` : ""}</div>} />
         <F lbl="Confirme sua senha *" ch={<Inp type="password" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&confirmar()} />} />
 
         {err && <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#ff4f6a", marginBottom:12 }}>{err}</div>}
@@ -305,10 +301,8 @@ export function exportRNCPDF(rnc, assinatura = null) {
       ${assinatura ? `
         <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:left;">
           <strong>${assinatura.nome}</strong><br/>
-          ${assinatura.cargo}<br/>
-          ${assinatura.setor?`<span style="color:#777;font-size:10px;">Setor: ${assinatura.setor}</span><br/>`:""}
+          ${assinatura.cargo?`${assinatura.cargo}<br/>`:""}
           ${(assinatura.registroProfissional||assinatura.crf||assinatura.registro)?`<span style="color:#777;font-size:10px;">Registro profissional: ${assinatura.registroProfissional||assinatura.crf||assinatura.registro}</span><br/>`:""}
-          ${assinatura.email?`<span style="color:#777;font-size:10px;">${assinatura.email}</span><br/>`:""}
           <span style="color:#666;font-size:10px;">✔ Assinado eletronicamente em ${assinatura.data} às ${assinatura.hora}</span><br/>
           <span style="color:#999;font-size:9px;font-family:monospace;">Cód. verificação: ${sigCodigo(assinatura, `RNC|${rnc.num||rnc.id||""}`)}</span>
           ${assinatura.hash?`<br/><span style="color:#aaa;font-size:8px;font-family:monospace;">Hash: ${String(assinatura.hash).slice(0,24)}...</span>`:""}
@@ -327,9 +321,9 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <div style="margin-top:16px;padding:12px 16px;border:1px solid #2ab84a33;border-radius:8px;background:#f6fff8;display:flex;align-items:center;gap:16px;">
     <div style="flex:1;">
       <div style="font-size:10px;color:#2ab84a;font-weight:bold;text-transform:uppercase;margin-bottom:4px;">✅ Aprovado pelo Responsável Técnico</div>
-      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}${(rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf) ? " · " + (rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf) : ""}</div>
-      ${rnc.assinaturaRT.setor?`<div style="font-size:10px;color:#777;">Setor: ${rnc.assinaturaRT.setor}</div>`:""}
-      ${rnc.assinaturaRT.email?`<div style="font-size:10px;color:#777;">${rnc.assinaturaRT.email}</div>`:""}
+      <div style="font-size:12px;font-weight:bold;">${rnc.assinaturaRT.nome}</div>
+      ${rnc.assinaturaRT.cargo?`<div style="font-size:10px;color:#777;">${rnc.assinaturaRT.cargo}</div>`:""}
+      ${(rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf)?`<div style="font-size:10px;color:#777;">Registro profissional: ${rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf}</div>`:""}
       <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
     </div>` : rnc.sev === "Crítica" ? `
