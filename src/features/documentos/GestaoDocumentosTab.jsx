@@ -343,7 +343,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const confirmarAssinatura = async (doc, papel, assin) => {
     try {
     const campo = papel==="elaborador" ? "assinaturaElaborador" : papel==="revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
-    const cargo = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
+    // papelLabel é o significado da assinatura (não o cargo do assinante).
+    const papelLabel = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
     // Segregação de funções: o mesmo usuário não pode assinar mais de um papel no mesmo documento.
     const conflito = ["assinaturaElaborador","assinaturaRevisor","assinaturaAprovador"].find(k => k!==campo && doc[k] && ((doc[k].email && assin.email && doc[k].email===assin.email) || (!doc[k].email && doc[k].nome===assin.nome)));
     if (conflito) {
@@ -352,7 +353,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       setAssinarGD(null);
       return;
     }
-    const updated = { ...doc, [campo]: { ...assin, cargo:assin.cargo||cargo, email:assin.email||user?.email||"", crf:assin.crf||user?.crf||"", img:assin.assinaturaImg||assin.img||user?.assinatura||null, dataHora:assin.dataHora||`${assin.data} ${assin.hora}`, timestamp:assin.timestamp } };
+    const updated = { ...doc, [campo]: { ...assin, cargo:assin.cargo||user?.cargo||"", email:assin.email||user?.email||"", crf:assin.crf||user?.crf||"", dataHora:assin.dataHora||`${assin.data} ${assin.hora}`, timestamp:assin.timestamp } };
     const temE = papel==="elaborador" || !!doc.assinaturaElaborador;
     const temR = papel==="revisor"    || !!doc.assinaturaRevisor;
     const temA = papel==="aprovador"  || !!doc.assinaturaAprovador;
@@ -360,8 +361,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     else if (temE && temR)    updated.status = "Aguardando Aprovação";
     else if (temE)            updated.status = "Em Revisão";
     await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog(`Assinou como ${cargo}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: updated.status, [campo]: updated[campo] });
-    toast_(`Assinado como ${cargo}!`, "green");
+    await auditLog(`Assinou como ${papelLabel}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: updated.status, [campo]: updated[campo] });
+    toast_(`Assinado como ${papelLabel}!`, "green");
     setSel(updated);
     setAssinarGD(null);
     } catch(e) {
@@ -588,8 +589,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 {campo?(<>
                   <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
                   {campo.cargo&&<div style={{fontSize:11,color:T.text2}}>{campo.cargo}</div>}
-                  {campo.crf&&<div style={{fontSize:10,color:T.text3}}>{campo.crf}</div>}
-                  {campo.email&&<div style={{fontSize:10,color:T.text3}}>{campo.email}</div>}
+                  {(campo.registroProfissional||campo.crf)&&<div style={{fontSize:10,color:T.text3}}>Registro profissional: {campo.registroProfissional||campo.crf}</div>}
                   <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
                   <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
                   <div style={{fontSize:9,color:T.text3,marginTop:3,fontFamily:"monospace"}}>Cód.: {sigCodigo(campo, `${d.codigo}|R${d.versao}`)}</div>

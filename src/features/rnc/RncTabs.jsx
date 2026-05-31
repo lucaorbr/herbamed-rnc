@@ -273,7 +273,6 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
   };
 
   const assinarRTRNC = async (r) => {
-    if (!user?.assinatura) { alert("Voce nao possui assinatura cadastrada. Solicite ao administrador."); return; }
     if (user?.role !== "rt" && user?.role !== "admin" && user?.role !== "keyuser") { alert("Apenas o Responsavel Tecnico pode assinar RNCs."); return; }
     if (!window.confirm(`Confirma assinatura como RT na RNC ${r.num}?`)) return;
     const password = window.prompt("Confirme sua senha para assinar como RT:");
@@ -611,7 +610,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{(sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf) ? ` · ${sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf}` : ""}{sel.assinaturaRT.setor ? ` · ${sel.assinaturaRT.setor}` : ""}{sel.assinaturaRT.email ? ` · ${sel.assinaturaRT.email}` : ""}</div>
+                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.cargo ? ` · ${sel.assinaturaRT.cargo}` : ""}{(sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf) ? ` · Registro profissional: ${sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf}` : ""}</div>
                       <div style={{ fontSize:10, color:T.text3 }}>✔ Assinado eletronicamente em {sel.assinaturaRT.timestamp?new Date(sel.assinaturaRT.timestamp).toLocaleString("pt-BR"):sel.assinaturaRT.dataHora}</div>
                       <div style={{ fontSize:9, color:T.text3, fontFamily:"monospace", marginTop:2 }}>Cód.: {sigCodigo(sel.assinaturaRT, `RNC|${sel.num||sel.id||""}`)}</div>
                     </div>

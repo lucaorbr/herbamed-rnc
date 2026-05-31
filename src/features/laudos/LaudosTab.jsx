@@ -163,7 +163,6 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
 
   const assinarAnalista = async (laudo) => {
     try {
-    if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const password = window.prompt("Confirme sua senha para assinar o laudo:");
     if (!password) return;
     const assSig = await createElectronicSignature({ password, contexto:`LAUDO|${laudo.numLaudo||laudo.id||""}`, papel:user.role==="rt"?"Responsavel Tecnico":"Analista de CQ" });
@@ -178,7 +177,6 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
 
   const assinarRT = async (laudo) => {
     try {
-    if (!user.assinatura) { toast_("Cadastre sua assinatura no perfil primeiro.", "red"); return; }
     const novoStatus = calcStatus(laudo.ensaios) === "Aprovado" ? "Finalizado" : calcStatus(laudo.ensaios);
     const password = window.prompt("Confirme sua senha para assinar como RT:");
     if (!password) return;
@@ -530,8 +528,8 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
               <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:"uppercase", marginBottom:12 }}>Analista de CQ</div>
               {lSel.assinaturaAnalista ? (<>
                 <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{lSel.assinaturaAnalista.nome}</div>
-                <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaAnalista.cargo}</div>
-                {lSel.assinaturaAnalista.email && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaAnalista.email}</div>}
+                {lSel.assinaturaAnalista.cargo && <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaAnalista.cargo}</div>}
+                {(lSel.assinaturaAnalista.registroProfissional||lSel.assinaturaAnalista.crf) && <div style={{ fontSize:10, color:T.text3 }}>Registro profissional: {lSel.assinaturaAnalista.registroProfissional||lSel.assinaturaAnalista.crf}</div>}
                 <div style={{ fontSize:10, color:T.accent, marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}` }}>✔ Assinado eletronicamente</div>
                 <div style={{ fontSize:10, color:T.text2 }}>{lSel.assinaturaAnalista.timestamp?new Date(lSel.assinaturaAnalista.timestamp).toLocaleString("pt-BR"):lSel.assinaturaAnalista.dataHora}</div>
                 <div style={{ fontSize:9, color:T.text3, marginTop:3, fontFamily:"monospace" }}>Cód.: {sigCodigo(lSel.assinaturaAnalista, `LAUDO|${lSel.num||lSel.id||""}`)}</div>
@@ -541,9 +539,8 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
               <div style={{ fontSize:11, fontWeight:700, color:T.text3, textTransform:"uppercase", marginBottom:12 }}>Responsável Técnico</div>
               {lSel.assinaturaRT ? (<>
                 <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{lSel.assinaturaRT.nome}</div>
-                <div style={{ fontSize:11, color:T.text2 }}>Responsável Técnico</div>
-                {lSel.assinaturaRT.crf && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaRT.crf}</div>}
-                {lSel.assinaturaRT.email && <div style={{ fontSize:10, color:T.text3 }}>{lSel.assinaturaRT.email}</div>}
+                {lSel.assinaturaRT.cargo && <div style={{ fontSize:11, color:T.text2 }}>{lSel.assinaturaRT.cargo}</div>}
+                {(lSel.assinaturaRT.registroProfissional||lSel.assinaturaRT.crf) && <div style={{ fontSize:10, color:T.text3 }}>Registro profissional: {lSel.assinaturaRT.registroProfissional||lSel.assinaturaRT.crf}</div>}
                 <div style={{ fontSize:10, color:T.accent, marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}` }}>✔ Assinado eletronicamente</div>
                 <div style={{ fontSize:10, color:T.text2 }}>{lSel.assinaturaRT.timestamp?new Date(lSel.assinaturaRT.timestamp).toLocaleString("pt-BR"):lSel.assinaturaRT.dataHora}</div>
                 <div style={{ fontSize:9, color:T.text3, marginTop:3, fontFamily:"monospace" }}>Cód.: {sigCodigo(lSel.assinaturaRT, `LAUDO|${lSel.num||lSel.id||""}`)}</div>
