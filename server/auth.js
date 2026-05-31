@@ -2,7 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { query } = require("./db");
 
-const JWT_SECRET = process.env.JWT_SECRET || "sgqherbamed_dev_secret_change_me";
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET nao definido — defina a variavel de ambiente antes de iniciar");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const TOKEN_MAX_AGE_SECONDS = 60 * 60 * 12;
 
 function publicUser(row) {
