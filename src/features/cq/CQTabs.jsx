@@ -48,7 +48,7 @@ function DisposicaoSecao({ T, s, registro, onAprovar }) {
         <SeloUI T={T} papel="Responsável pela análise" cor="#2d5016" ass={analista} />
         <SeloUI T={T} papel="Aprovou a disposição" cor="#1a5fb4" ass={aprov} vazioLabel="Aguardando aprovação" />
       </div>
-      {!aprov && (
+      {!aprov && (registro.conclusao === "Aprovado" || registro.conclusao === "Reprovado") && (
         <div style={{ marginTop:10, textAlign:"right" }}>
           <button style={s.btnA} onClick={onAprovar}>✅ Aprovar disposição</button>
         </div>
