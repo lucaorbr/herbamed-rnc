@@ -8,6 +8,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Repositório: https://github.com/lucaorbr/herbamed-rnc
 
 ## Protocolo de trabalho (sempre nesta ordem)
+⚠️ NUNCA commitar direto na main — sempre criar a branch antes de qualquer edição, mesmo para mudanças pequenas.
 1. Abrir sessão: git checkout main → git pull → criar branch nova (fix/ feat/ chore/)
 2. Executar a tarefa com "Aceitar edições" desligado
 3. Rodar npm run build — confirmar que compila sem erros
