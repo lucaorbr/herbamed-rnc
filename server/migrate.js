@@ -40,6 +40,24 @@ async function migrate() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS stored_files (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      original_name text NOT NULL,
+      mime_type text NOT NULL DEFAULT 'application/octet-stream',
+      size_bytes integer NOT NULL,
+      sha256 text NOT NULL,
+      data bytea NOT NULL,
+      uploaded_by uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_stored_files_created_at
+    ON stored_files (created_at DESC)
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS rncs (
       id text PRIMARY KEY,
       num text,

@@ -23,6 +23,7 @@ banco:    localhost:5487 -> container:5432
 ## Variaveis de ambiente
 
 O SGQ usa o PostgreSQL do proprio Docker como banco oficial. O banco do Areco e usado apenas para consulta/leitura quando a sincronizacao estiver ativada.
+Arquivos anexados, COAs, fichas tecnicas e documentos controlados tambem ficam no PostgreSQL local do Docker, na tabela `stored_files`. Novos uploads nao sao enviados para Cloudinary, Supabase ou outra plataforma externa.
 
 Para habilitar os recursos de IA que chamam `/api/claude`, defina:
 
@@ -34,6 +35,9 @@ POSTGRES_PASSWORD=troque_esta_senha
 JWT_SECRET=troque_este_segredo
 INITIAL_ADMIN_EMAIL=admin
 INITIAL_ADMIN_PASSWORD=Herba@123
+FILE_UPLOAD_MAX_BYTES=15728640
+BACKUP_INTERVAL_SECONDS=86400
+BACKUP_RETENTION_DAYS=30
 ```
 
 Conta padrao para testes:
@@ -61,6 +65,24 @@ Por padrao, a carga de materiais tenta importar todos os produtos encontrados no
 
 Importante: a integracao Areco e somente leitura. O SGQ nao cria, altera ou remove dados no banco do ERP.
 
+## Backups do PostgreSQL
+
+O `docker-compose.yml` inclui o servico `db-backup`, que gera backups automaticos do PostgreSQL em formato custom do `pg_dump`.
+
+Padrao:
+
+```text
+Intervalo: 1 vez por dia
+Retencao: 30 dias
+Volume:   sgqherbamed-db-backups
+```
+
+Para restaurar, copie o arquivo `.dump` desejado do volume de backup e use `pg_restore` contra o banco do SGQ. A TI deve testar periodicamente a restauracao.
+
+## HTTPS
+
+O compose publica a aplicacao em HTTP nas portas internas da empresa. Em producao, coloque um proxy reverso ou balanceador com certificado HTTPS na frente da porta `9027`.
+
 No Windows PowerShell:
 
 ```powershell
@@ -84,8 +106,8 @@ src/core             Temas, status e utilitarios puros
 src/shared           UI reutilizavel e estilos compartilhados
 src/layout           Sidebar e icones de navegacao
 src/features         Modulos por dominio/tela
-src/services         Clientes de integracoes externas
-server               Backend Node para healthcheck e API /api/claude
+src/services         Clientes auxiliares do frontend
+server               Backend Node para API, autenticacao, uploads locais e integracoes
 nginx                Configuracao do frontend e proxy /api para o backend
 docs                 Documentacao tecnica de migracao e integracao
 ```

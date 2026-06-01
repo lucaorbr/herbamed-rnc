@@ -35,7 +35,7 @@ export function Login({ onLogin }) {
       {/* ── ESQUERDA — Banner ── */}
       <div style={{ flex:1, position:"relative", overflow:"hidden", display:"flex", flexDirection:"column" }}>
         {/* Banner com overlay */}
-        <div style={{ position:"absolute", inset:0, backgroundImage:"url('https://res.cloudinary.com/dswsg9w0w/image/upload/2d2ff8b9-3439-4a2b-ab66-229769585268_dvsxdh')", backgroundSize:"cover", backgroundPosition:"center center", filter:"brightness(0.9)" }} />
+        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.jpg')", backgroundSize:"cover", backgroundPosition:"center center", filter:"brightness(0.9)" }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(5,30,15,0.2) 0%, rgba(5,20,10,0.5) 70%, rgba(5,15,8,0.85) 100%)" }} />
         <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 60%, #0a110c 100%)" }} />
 

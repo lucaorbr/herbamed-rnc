@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
+import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection, uploadLocalFile } from "../../firebase";
 import { SEVMETA, SMETA, TIPOC } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
@@ -648,25 +648,14 @@ export const CLOUD_NAME = "dswsg9w0w";
 export const UPLOAD_PRESET = "herbamed_rnc";
 
 export async function uploadToCloudinary(file) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", UPLOAD_PRESET);
-  formData.append("folder", "herbamed-rnc");
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
-    method: "POST", body: formData
-  });
-  const data = await res.json();
-  if (data.secure_url) {
-    return { url: data.secure_url, name: file.name, type: file.type, size: file.size };
-  }
-  throw new Error(data.error?.message || "Erro no upload");
+  return uploadLocalFile(file);
 }
 
-export const SUPABASE_URL = "https://zspipirhuzkwftidzrva.supabase.co";
+export const SUPABASE_URL = "";
 
-export const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzcGlwaXJodXprd2Z0aWR6cnZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5MzA0MDcsImV4cCI6MjA5MzUwNjQwN30._bm_Mfu1JccgoKFEjd-mTqH8xaoTgw02Uo2x7zkEsMI";
+export const SUPABASE_KEY = "";
 
-export const SUPABASE_BUCKET = "coa-pdfs";
+export const SUPABASE_BUCKET = "";
 
 export function openCOA(coa) {
   if (!coa?.url) return;

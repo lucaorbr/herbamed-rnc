@@ -6,7 +6,7 @@ import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 
-export const LOGO_HERBAMED = "https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li";
+export const LOGO_HERBAMED = "/logo.png";
 
 export const HERBAMED_INFO = {
   nome: "Herbamed Laboratório Nutracêutico LTDA",

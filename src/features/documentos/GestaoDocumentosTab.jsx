@@ -29,10 +29,11 @@ export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
     if (!file) return;
     setImgUploading(true);
     try {
-      const url = await uploadToCloudinary(file);
-      if (quillRef.current && url) {
+      const result = await uploadToCloudinary(file);
+      const imageUrl = typeof result === "string" ? result : result?.url;
+      if (quillRef.current && imageUrl) {
         const range = quillRef.current.getSelection(true);
-        quillRef.current.insertEmbed(range ? range.index : 0, "image", url);
+        quillRef.current.insertEmbed(range ? range.index : 0, "image", imageUrl);
         const html = quillRef.current.root.innerHTML;
         onChangeRef.current(html);
       }
@@ -159,7 +160,7 @@ export const HERBAMED_INFO_GD = {
   endereco: "Av Irene Meneghetti Longhini, 500, Água do Ayero",
   cidade: "Assis/SP - Brasil",
   cep: "19816-370",
-  logo: "https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li",
+  logo: "/logo.png",
 };
 
 export const TIPOS_DOC_GD = [

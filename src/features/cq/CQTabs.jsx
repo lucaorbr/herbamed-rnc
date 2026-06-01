@@ -273,7 +273,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
 </style></head><body><div class="page">
 <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
   <div style="display:flex;align-items:center;gap:12px;">
-    <img src="https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <img src="/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
     <div>
       <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
       <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
@@ -1500,7 +1500,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
 </style></head><body><div class="page">
 <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
   <div style="display:flex;align-items:center;gap:12px;">
-    <img src="https://res.cloudinary.com/dswsg9w0w/image/upload/484237672_1316151256653106_1151541448837719199_n1_zww2li" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <img src="/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
     <div>
       <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
       <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>

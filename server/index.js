@@ -40,9 +40,10 @@ function parseUrl(req) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
+    const maxBytes = Number(process.env.JSON_BODY_LIMIT_BYTES || 30_000_000);
     req.on("data", chunk => {
       body += chunk;
-      if (body.length > 10_000_000) {
+      if (Buffer.byteLength(body) > maxBytes) {
         req.destroy();
         reject(new Error("Payload muito grande"));
       }
@@ -57,6 +58,17 @@ function readBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+function sendBuffer(res, status, buffer, headers = {}) {
+  res.writeHead(status, {
+    "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Credentials": "true",
+    ...headers,
+  });
+  res.end(buffer);
 }
 
 async function handleClaude(req, res) {
@@ -329,6 +341,57 @@ async function handleCounters(req, res, pathname) {
   return false;
 }
 
+async function handleFiles(req, res, pathname) {
+  if (pathname === "/api/files" && req.method === "POST") {
+    const user = await requireUser(req);
+    const body = await readBody(req);
+    const name = String(body.name || "arquivo").slice(0, 255);
+    const type = String(body.type || "application/octet-stream").slice(0, 160);
+    const encoded = String(body.data || "");
+    const base64 = encoded.includes(",") ? encoded.split(",").pop() : encoded;
+    const buffer = Buffer.from(base64, "base64");
+    const maxFileBytes = Number(process.env.FILE_UPLOAD_MAX_BYTES || 15 * 1024 * 1024);
+
+    if (!buffer.length) return sendJson(res, 400, { error: "Arquivo vazio ou invalido" });
+    if (buffer.length > maxFileBytes) return sendJson(res, 413, { error: "Arquivo maior que o limite permitido" });
+
+    const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+    const result = await query(`
+      INSERT INTO stored_files (original_name, mime_type, size_bytes, sha256, data, uploaded_by)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, original_name, mime_type, size_bytes, created_at
+    `, [name, type, buffer.length, sha256, buffer, user.id]);
+
+    const file = result.rows[0];
+    return sendJson(res, 201, {
+      id: file.id,
+      url: `/api/files/${file.id}`,
+      name: file.original_name,
+      type: file.mime_type,
+      size: file.size_bytes,
+      storedAt: file.created_at,
+      storage: "postgres",
+    });
+  }
+
+  const match = pathname.match(/^\/api\/files\/([0-9a-f-]{36})$/i);
+  if (!match || req.method !== "GET") return false;
+  await requireUser(req);
+  const result = await query(
+    "SELECT original_name, mime_type, size_bytes, data FROM stored_files WHERE id = $1",
+    [match[1]]
+  );
+  if (!result.rowCount) return sendJson(res, 404, { error: "Arquivo nao encontrado" });
+
+  const file = result.rows[0];
+  return sendBuffer(res, 200, file.data, {
+    "Content-Type": file.mime_type || "application/octet-stream",
+    "Content-Length": String(file.size_bytes || file.data.length),
+    "Content-Disposition": `inline; filename="${encodeURIComponent(file.original_name)}"`,
+    "Cache-Control": "private, max-age=3600",
+  });
+}
+
 function dailyCounterKey() {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
@@ -473,7 +536,7 @@ async function route(req, res) {
 
   if (pathname.startsWith("/api/claude")) return handleClaude(req, res);
 
-  const handlers = [handleAuth, handleUsers, handleRncs, handleCounters, handleCollections];
+  const handlers = [handleAuth, handleUsers, handleRncs, handleCounters, handleFiles, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;

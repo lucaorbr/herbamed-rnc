@@ -182,6 +182,28 @@ export const getArecoSyncStatus = () =>
 export const runArecoSync = () =>
   api("/api/areco/sync/run", { method: "POST", body: {} });
 
+export const uploadLocalFile = async (file) => {
+  const data = await fileToBase64(file);
+  return api("/api/files", {
+    method: "POST",
+    body: {
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      data,
+    },
+  });
+};
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Erro ao ler arquivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function poll(fn, onErr, intervalMs = 5000) {
   let alive = true;
   let timer = null;
