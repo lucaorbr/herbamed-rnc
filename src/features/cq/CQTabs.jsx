@@ -119,7 +119,7 @@ export const ENSAIOS_PADRAO = {
   ],
 };
 
-export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
+export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill }) {
   const T = useTheme(); const s = useS();
   const CQ_KEY = "cq_fichas";
   const [fichas, setFichas] = useState([]);
@@ -225,7 +225,13 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     toast_(`${num} salva com sucesso!`, "green");
     if(conc==="Reprovado") {
       if(confirm(`Material REPROVADO! Deseja abrir uma RNC automaticamente?`)) {
-        setTab("nova");
+        const duplicata = rncs.find(r => r.origemAnalise === num);
+        if(duplicata) {
+          alert(`Já existe uma RNC para esta análise (${duplicata.num})`);
+        } else {
+          setRncPrefill({ origemAnalise: num, produto: form.material, fornecedor: form.fornecedor, lote: form.lote, detector: user.name, tipo: "Matéria-prima" });
+          setTab("nova");
+        }
       }
     }
     setView("lista");
@@ -1304,7 +1310,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
   );
 }
 
-export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog }) {
+export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -1397,7 +1403,13 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     await auditLog(isEditando ? "Editou Análise CQ" : "Criou Análise CQ", "cq_analises", String(analise.id), `${num} — ${analise.materialNome}`, isEditando ? selAnalise : null, { num, material: analise.materialNome, conclusao: analise.conclusao, lote: analise.lote, editadoPor: user.name });
     toast_(`${num} salva!`, "green");
     if(reprovado && window.confirm("Material REPROVADO! Deseja abrir uma RNC automaticamente?")) {
-      setTab("nova");
+      const duplicata = rncs.find(r => r.origemAnalise === num);
+      if(duplicata) {
+        alert(`Já existe uma RNC para esta análise (${duplicata.num})`);
+      } else {
+        setRncPrefill({ origemAnalise: num, produto: matSel?.nome || "", fornecedor: form.fornecedor, lote: form.lote, detector: user.name, tipo: "Matéria-prima" });
+        setTab("nova");
+      }
     }
     setView("lista");
     setMatSel(null);

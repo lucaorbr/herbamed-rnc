@@ -752,9 +752,9 @@ export function AnexosUpload({ anexos, setAnexos }) {
   );
 }
 
-export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = [] }) {
+export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
-  const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "" });
+  const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
@@ -765,6 +765,20 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
   useEffect(() => {
     peekDailyCounter().then(n => setNumPreview(n)).catch(() => setNumPreview("—"));
   }, []);
+
+  useEffect(() => {
+    if (!rncPrefill) return;
+    setF(p => ({ ...p,
+      produto: rncPrefill.produto || "",
+      fornecedor: rncPrefill.fornecedor || "",
+      lote: rncPrefill.lote || "",
+      detector: rncPrefill.detector || "",
+      tipo: rncPrefill.tipo || p.tipo,
+      origemAnalise: rncPrefill.origemAnalise || "",
+    }));
+    setIshikawa(p => ({ ...p, whys: ["", "", "", "", ""] }));
+    if (setRncPrefill) setRncPrefill(null);
+  }, [rncPrefill]);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
 
   const fornAtivos = fornecedores.filter(x => x.status !== "Inativo" && x.status !== "Bloqueado");
@@ -793,7 +807,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
     if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
     if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
     const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
+    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
     await doSaveRNC(rnc);
     toast_(`${rnc.num} registrada!`, "green");
     openEmail(rnc, "abertura");
