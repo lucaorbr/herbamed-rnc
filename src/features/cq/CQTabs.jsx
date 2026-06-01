@@ -219,7 +219,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     <div class="field"><div class="field-label">Nota Fiscal</div><div class="field-value">${ficha.nf||"—"}</div></div>
     <div class="field"><div class="field-label">Data Recebimento</div><div class="field-value">${fmt(ficha.dataRecebimento)}</div></div>
     <div class="field"><div class="field-label">Data Análise</div><div class="field-value">${fmt(ficha.dataAnalise)}</div></div>
-    <div class="field"><div class="field-label">Analista</div><div class="field-value">${user?.name || ""}</div></div>
+    <div class="field"><div class="field-label">Analista</div><div class="field-value">${ficha.resp || user?.name || ""}</div></div>
   </div>
 </div>
 <div class="section">
@@ -241,7 +241,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
 ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor disponível em: <a href="${ficha.coa.url}" target="_blank">${ficha.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
-    ${seloAssHTML({ nome: user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
+    ${seloAssHTML({ nome: ficha.resp || user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
@@ -1420,7 +1420,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     <div class="field"><div class="flabel">Nota Fiscal</div><div>${a.nf||"—"}</div></div>
     <div class="field"><div class="flabel">Data Recebimento</div><div>${fmt(a.dataRecebimento)}</div></div>
     <div class="field"><div class="flabel">Data Análise</div><div>${fmt(a.dataAnalise)}</div></div>
-    <div class="field"><div class="flabel">Analista</div><div>${user?.name || ""}</div></div>
+    <div class="field"><div class="flabel">Analista</div><div>${a.resp || user?.name || ""}</div></div>
   </div>
 </div>
 <div class="section">
@@ -1444,7 +1444,7 @@ ${a.obs?`<div class="section"><div class="stitle">Observações</div><p>${a.obs}
 ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laudo: <a href="${a.coa.url}" target="_blank">${a.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
-    ${seloAssHTML({ nome: user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
+    ${seloAssHTML({ nome: a.resp || user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
