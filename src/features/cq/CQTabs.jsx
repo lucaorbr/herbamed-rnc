@@ -9,6 +9,68 @@ import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 
+// Selo de assinatura para exibição na tela (versão JSX do seloAssHTML usado no PDF)
+function SeloUI({ T, papel, cor, ass, vazioLabel = "Aguardando aprovação" }) {
+  if (!ass) {
+    return (
+      <div style={{ flex:1, minWidth:220, padding:"10px 12px", border:`1px dashed ${T.border2}`, borderRadius:8, background:T.surf, textAlign:"center" }}>
+        <div style={{ fontSize:9, letterSpacing:".08em", color:T.text3, textTransform:"uppercase", fontWeight:700, marginBottom:6 }}>{papel}</div>
+        <div style={{ fontSize:11, color:T.text3, padding:"8px 0" }}>{vazioLabel}</div>
+      </div>
+    );
+  }
+  const quando = ass.dataHora || (ass.timestamp ? new Date(ass.timestamp).toLocaleString("pt-BR") : (ass.data ? fmt(ass.data) : ""));
+  return (
+    <div style={{ flex:1, minWidth:220, padding:"10px 12px", border:`1px solid ${cor}55`, borderRadius:8, background:`${cor}0d`, textAlign:"left" }}>
+      <div style={{ fontSize:9, letterSpacing:".08em", color:cor, textTransform:"uppercase", fontWeight:700, marginBottom:6 }}>{papel}</div>
+      <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{ass.nome || "—"}</div>
+      {ass.cargo ? <div style={{ fontSize:11, color:T.text2 }}>{ass.cargo}</div> : null}
+      {ass.registro ? <div style={{ fontSize:10, color:T.text3 }}>Registro profissional: {ass.registro}</div> : null}
+      {ass.conclusao ? <div style={{ fontSize:11, fontWeight:700, marginTop:4, color: ass.conclusao==="Aprovado"?"#2ab84a":ass.conclusao==="Reprovado"?"#ff4f6a":"#ffd166" }}>{ass.conclusao==="Aprovado"?"✅ Aprovado":ass.conclusao==="Reprovado"?"❌ Reprovado":"⏳ "+ass.conclusao}</div> : null}
+      <div style={{ marginTop:6, paddingTop:6, borderTop:`1px dashed ${cor}40`, fontSize:9, color:T.text3 }}>Assinado eletronicamente em {quando}</div>
+    </div>
+  );
+}
+
+// Seção "Disposição": selo do analista + selo de aprovação da disposição + botão de aprovar
+function DisposicaoSecao({ T, s, registro, onAprovar }) {
+  const analista = {
+    nome: registro.resp || registro.criadoPor,
+    cargo: registro.respCargo,
+    registro: registro.respRegistro,
+    data: registro.criadoEm || registro.dataAnalise,
+  };
+  const aprov = registro.aprovacaoDisposicao || null;
+  return (
+    <div style={{ marginTop:"1rem" }}>
+      <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", letterSpacing:".08em", marginBottom:8 }}>Assinaturas / Disposição</div>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        <SeloUI T={T} papel="Responsável pela análise" cor="#2d5016" ass={analista} />
+        <SeloUI T={T} papel="Aprovou a disposição" cor="#1a5fb4" ass={aprov} vazioLabel="Aguardando aprovação" />
+      </div>
+      {!aprov && (
+        <div style={{ marginTop:10, textAlign:"right" }}>
+          <button style={s.btnA} onClick={onAprovar}>✅ Aprovar disposição</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Monta o registro de aprovação da disposição com os dados do usuário logado
+function montarAprovacaoDisposicao(user, conclusao) {
+  const agora = Date.now();
+  return {
+    nome: user?.name || "",
+    cargo: user?.cargo || "",
+    registro: user?.crf || "",
+    timestamp: agora,
+    dataHora: new Date(agora).toLocaleString("pt-BR"),
+    data: tod(),
+    conclusao: conclusao || "",
+  };
+}
+
 export const ENSAIOS_PADRAO = {
   "Matéria-prima (pó)": [
     { nome:"Aspecto",              metodo:"Visual",          unidade:"—",   tipo:"texto",    espec:"Conforme padrão" },
@@ -99,6 +161,14 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
       toast_(fbErr(e), "red");
       console.error(e);
     }
+  };
+
+  const aprovarDisposicaoFicha = async (ficha) => {
+    if (ficha.aprovacaoDisposicao) return;
+    const atualizada = { ...ficha, aprovacaoDisposicao: montarAprovacaoDisposicao(user, ficha.conclusao) };
+    await salvarFichaDB(atualizada);
+    setSelFicha(atualizada);
+    toast_("Disposição aprovada!", "green");
   };
 
   const aplicarEnsaiosPadrao = (tipo) => {
@@ -242,6 +312,9 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
     ${seloAssHTML({ nome: ficha.resp || user?.name || "", cargo: ficha.respCargo || user?.cargo || "", registroProfissional: ficha.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
+  </div>
+  <div style="flex:1;">
+    ${ficha.aprovacaoDisposicao ? seloAssHTML({ nome: ficha.aprovacaoDisposicao.nome, cargo: ficha.aprovacaoDisposicao.cargo, registroProfissional: ficha.aprovacaoDisposicao.registro, timestamp: ficha.aprovacaoDisposicao.timestamp }, "Aprovou a disposição", "#1a5fb4", `FICHA-DISP|${ficha.num||ficha.id||""}`) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
@@ -550,6 +623,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
             <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
               {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
             </div>
+            <DisposicaoSecao T={T} s={s} registro={selFicha} onAprovar={()=>aprovarDisposicaoFicha(selFicha)} />
           </div>
         </div>
       )}
@@ -1360,6 +1434,21 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     toast_("Editando análise — salve para registrar as alterações.", "green");
   };
 
+  const aprovarDisposicaoAnalise = async (a) => {
+    try {
+    if (a.aprovacaoDisposicao) return;
+    const aprov = montarAprovacaoDisposicao(user, a.conclusao);
+    const atualizada = { ...a, aprovacaoDisposicao: aprov };
+    await saveCollection("cq_analises", String(a.id), atualizada);
+    await auditLog("Aprovou disposição CQ", "cq_analises", String(a.id), `${a.num} — ${a.materialNome}`, null, { conclusao: aprov.conclusao, aprovadoPor: aprov.nome });
+    setSelAnalise(atualizada);
+    toast_("Disposição aprovada!", "green");
+    } catch(e) {
+      toast_(e.message, "red");
+      console.error(e);
+    }
+  };
+
   const delAnalise = async (id) => {
     try {
     if(!confirm("Excluir esta análise?")) return;
@@ -1446,6 +1535,9 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
     ${seloAssHTML({ nome: a.resp || user?.name || "", cargo: a.respCargo || user?.cargo || "", registroProfissional: a.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
+  </div>
+  <div style="flex:1;">
+    ${a.aprovacaoDisposicao ? seloAssHTML({ nome: a.aprovacaoDisposicao.nome, cargo: a.aprovacaoDisposicao.cargo, registroProfissional: a.aprovacaoDisposicao.registro, timestamp: a.aprovacaoDisposicao.timestamp }, "Aprovou a disposição", "#1a5fb4", `ANALISE-DISP|${a.num||a.id||""}`) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
@@ -1810,6 +1902,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
             <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
               {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
             </div>
+            <DisposicaoSecao T={T} s={s} registro={selAnalise} onAprovar={()=>aprovarDisposicaoAnalise(selAnalise)} />
           </div>
         </div>
       )}
