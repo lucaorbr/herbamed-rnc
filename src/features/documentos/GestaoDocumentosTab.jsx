@@ -277,6 +277,14 @@ async function baixarArquivo(url, nome) {
   }
 }
 
+// Monta o nome de download "{codigo}_Rev{versao}" mantendo a extensão original do arquivo.
+function nomeDownloadDoc(codigo, versao, arquivo) {
+  const orig = arquivo?.nome || "";
+  const dot = orig.lastIndexOf(".");
+  const ext = dot >= 0 ? orig.slice(dot) : "";
+  return `${codigo || "documento"}_Rev${versao || "01"}${ext}`;
+}
+
 export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const T = useTheme();
   const s = useS();
@@ -352,6 +360,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const salvar = async () => {
     try {
     if (!form.titulo.trim()) { alert("Informe o título."); return; }
+    // Seção 18 — trava pós-Vigente: documento vigente nunca é editado, só revisado.
+    if (sel && sel.status === "Vigente") {
+      toast_("Documento Vigente não pode ser editado. Use Nova Revisão.", "red");
+      return;
+    }
     const id  = sel ? sel.id : Date.now();
     const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
     const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod());
@@ -360,6 +373,14 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       alert("Anexe o novo arquivo oficial do documento antes de salvar esta revisão.");
       return;
     }
+    // Seção 18 — integridade: editar documento já assinado (e não Vigente) invalida as assinaturas.
+    const jaAssinado = !!(sel?.assinaturaElaborador || sel?.assinaturaRevisor || sel?.assinaturaAprovador);
+    let invalidarAssinaturas = false;
+    if (sel && jaAssinado) {
+      if (!window.confirm("Este documento já tem assinaturas. Editar vai invalidá-las — elas serão removidas e o documento volta para Rascunho. Continuar?")) return;
+      invalidarAssinaturas = true;
+      status = "Rascunho";
+    }
     const doc = {
       id, codigo, ...form, status, proximaRevisao,
       arquivo: docArquivo || sel?.arquivo || null,
@@ -367,14 +388,15 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       criadoTs:  sel?.criadoTs  || Date.now(),
       criadoPor: sel?.criadoPor || user?.name,
       atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name,
-      assinaturaElaborador: sel?.assinaturaElaborador || null,
-      assinaturaRevisor:    sel?.assinaturaRevisor    || null,
-      assinaturaAprovador:  sel?.assinaturaAprovador  || null,
+      assinaturaElaborador: invalidarAssinaturas ? null : (sel?.assinaturaElaborador || null),
+      assinaturaRevisor:    invalidarAssinaturas ? null : (sel?.assinaturaRevisor    || null),
+      assinaturaAprovador:  invalidarAssinaturas ? null : (sel?.assinaturaAprovador  || null),
       historicoRevisoes:    form.historicoRevisoes?.length ? form.historicoRevisoes : (sel?.historicoRevisoes || []),
     };
     await saveCollection("gestao_docs", String(id), doc);
-    await auditLog(sel ? "Editou Documento" : "Criou Documento", "gestao_docs", id, `${codigo} — ${form.titulo}`, sel || null, doc);
-    toast_(sel ? `${codigo} atualizado!` : `${codigo} criado!`, "green");
+    const acaoLog = !sel ? "Criou Documento" : invalidarAssinaturas ? "Editou Documento (assinaturas invalidadas)" : "Editou Documento";
+    await auditLog(acaoLog, "gestao_docs", id, `${codigo} — ${form.titulo}`, sel || null, doc);
+    toast_(sel ? (invalidarAssinaturas ? `${codigo} atualizado — assinaturas invalidadas, voltou para Rascunho.` : `${codigo} atualizado!`) : `${codigo} criado!`, "green");
     setSel(doc); setView("detalhe");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -517,13 +539,37 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
   const exportPDF = (doc) => {
     const tipo  = TIPOS_DOC_GD.find(t=>t.id===doc.tipo);
     const cor   = tipo?.cor || "#2ab84a";
+    // Seção 18 — marca d'água: obsoleto em vermelho, demais "cópia não controlada" em cinza.
+    const obsoleto = doc.status === "Obsoleto";
+    const wmTexto = obsoleto ? "DOCUMENTO OBSOLETO" : "CÓPIA NÃO CONTROLADA";
+    const wmCor   = obsoleto ? "#ff4f6a" : "#888888";
+    const wmHTML  = `<div style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-family:Arial,sans-serif;font-size:72px;font-weight:bold;color:${wmCor};opacity:.13;pointer-events:none;white-space:nowrap;z-index:9999;letter-spacing:.05em;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${wmTexto}</div>`;
     const assHTML = (ass,label) => ass
       ? `<div style="padding:10px 12px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><div style="font-size:8px;letter-spacing:.08em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:6px;">${label}</div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${ass.nome||"—"}</div>${ass.cargo?`<div style="font-size:10px;color:#555;">${ass.cargo}</div>`:""}${ass.setor?`<div style="font-size:9px;color:#777;">Setor: ${ass.setor}</div>`:""}${(ass.registroProfissional||ass.crf)?`<div style="font-size:9px;color:#777;">Registro profissional: ${ass.registroProfissional||ass.crf}</div>`:""}${ass.email?`<div style="font-size:9px;color:#777;">${ass.email}</div>`:""}<div style="margin-top:6px;padding-top:6px;border-top:1px dashed ${cor}40;font-size:9px;color:#555;">✔ Assinado eletronicamente em ${ass.timestamp?new Date(ass.timestamp).toLocaleString("pt-BR"):ass.dataHora||""}</div><div style="font-size:8px;color:#999;margin-top:3px;font-family:monospace;">Cód. verificação: ${sigCodigo(ass, `${doc.codigo}|R${doc.versao}`)}</div>${ass.hash?`<div style="font-size:7px;color:#aaa;margin-top:2px;font-family:monospace;">Hash: ${String(ass.hash).slice(0,24)}...</div>`:""}</div>`
       : `<div style="text-align:center;padding:10px;border:1px dashed #ddd;border-radius:6px;background:#fafafa;"><div style="font-size:9px;color:#888;text-transform:uppercase;">${label}</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando</div></div>`;
-    const caps = CAPITULOS_GD.filter(cap=>!cap.special).map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;white-space:pre-wrap;">${doc[cap.id]||"N/A"}</div></div>`).join("");
-    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;"><div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div><div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div><div style="padding:0 22px;">${caps}</div><div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div><div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · CÓPIA NÃO CONTROLADA</span></div></div>`;
+    // Folha de rosto controlada: só renderiza capítulos com conteúdo real (docs legados).
+    const capsPreenchidos = CAPITULOS_GD.filter(cap => {
+      if (cap.special) return false;
+      const v = doc[cap.id];
+      if (!v || v === "N/A") return false;
+      return v.replace(/<[^>]*>/g, "").trim().length > 0;
+    });
+    const capsHTML = capsPreenchidos.length
+      ? `<div style="padding:14px 22px;border-top:2px solid ${cor}30;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Rascunho / Anotações (não é o documento oficial)</div>${capsPreenchidos.map(cap => `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">${cap.label}</div><div style="font-size:11px;color:#333;line-height:1.7;">${doc[cap.id]}</div></div>`).join("")}</div>`
+      : "";
+    const arquivoHTML = doc.arquivo
+      ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><span style="font-size:22px;">📄</span><div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${doc.arquivo.nome}</div><div style="font-size:10px;color:#777;">Este é o documento oficial controlado.${doc.arquivo.enviadoPor?` Enviado por ${doc.arquivo.enviadoPor}`:""}${doc.arquivo.enviadoEm?` em ${fmt(doc.arquivo.enviadoEm)}`:""}</div></div></div>`
+      : `<div style="padding:10px 14px;border:1px dashed #e0a800;border-radius:8px;background:#fff8e6;font-size:11px;color:#8a6000;">⚠️ Nenhum arquivo oficial anexado a este documento.</div>`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;">`
+      + `<div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div>`
+      + `<div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:9px;letter-spacing:.1em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">Folha de Rosto Controlada</div><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Status: ${doc.status} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div>`
+      + `<div style="padding:14px 22px;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Documento Oficial (Arquivo Controlado)</div>${arquivoHTML}</div>`
+      + `<div style="padding:0 22px 14px;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div>`
+      + capsHTML
+      + `<div style="padding:6px 22px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:9px;color:#999;"><span>${HERBAMED_INFO_GD.nome}</span><span>Impresso em ${new Date().toLocaleString("pt-BR")} · Rev.${doc.versao} · ${wmTexto}</span></div>`
+      + `</div>`;
     const win = window.open("","_blank");
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${doc.codigo}</title><style>@media print{body{margin:0}}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Folha de Rosto — ${doc.codigo}</title><style>@media print{body{margin:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}</style></head><body>${wmHTML}${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
     win.document.close();
   };
 
@@ -565,8 +611,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
             {podeAssAprov && <button style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800"}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
-            <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ PDF</button>
-            {!isViewer && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
+            <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
+            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && d.status==="Rascunho" && !d.assinaturaElaborador && !d.assinaturaRevisor && !d.assinaturaAprovador && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir rascunho</button>}
           </div>
         </div>
@@ -610,11 +656,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                   Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
                 </div>
               </div>
-              <a href={d.arquivo.url} target="_blank" rel="noopener noreferrer"
-                style={{ ...s.btn, fontSize:11, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:4 }}>
-                👁️ Abrir
-              </a>
-              <button onClick={()=>baixarArquivo(d.arquivo.url, d.arquivo.nome)}
+              <button onClick={()=>window.open(d.arquivo.url, "_blank")}
+                style={{ ...s.btn, fontSize:11, display:"inline-flex", alignItems:"center", gap:4 }}>
+                👁️ Ver
+              </button>
+              <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
                 style={{ ...s.btnA, fontSize:11 }}>
                 ⬇️ Baixar
               </button>
@@ -655,8 +701,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (<>
-                  <a href={d.arquivo.url} target="_blank" rel="noopener noreferrer" style={{...s.btn,fontSize:11,textDecoration:"none",color:T.accent}}>👁️ Abrir</a>
-                  <button onClick={()=>baixarArquivo(d.arquivo.url,d.arquivo.nome)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>window.open(d.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
                 </>) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
@@ -687,8 +733,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       {arq ? (<>
-                        <a href={arq.url} target="_blank" rel="noopener noreferrer" style={{...s.btn,fontSize:10,textDecoration:"none",color:T.accent}}>👁️ Abrir</a>
-                        <button onClick={()=>baixarArquivo(arq.url,arq.nome)} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
+                        <button onClick={()=>window.open(arq.url, "_blank")} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                        <button onClick={()=>baixarArquivo(arq.url, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
                       </>) : h.conteudo ? (
                         <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
                       ) : (
@@ -773,8 +819,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:14}}>
                   <span style={{fontSize:18}}>📄</span>
                   <div style={{flex:1,fontSize:12,color:T.text}}>{verSnapshot.conteudo.arquivo.nome}</div>
-                  <a href={verSnapshot.conteudo.arquivo.url} target="_blank" rel="noopener noreferrer" style={{...s.btn,fontSize:11,textDecoration:"none",color:T.accent}}>👁️ Abrir</a>
-                  <button onClick={()=>baixarArquivo(verSnapshot.conteudo.arquivo.url, verSnapshot.conteudo.arquivo.nome)} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>window.open(verSnapshot.conteudo.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>baixarArquivo(verSnapshot.conteudo.arquivo.url, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
                 </div>
               )}
               {verSnapshot.conteudo ? (<>
@@ -889,8 +935,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{docArquivo.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
-              <a href={docArquivo.url} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, fontSize:11, color:T.accent, textDecoration:"none" }}>👁️ Abrir</a>
-              <button onClick={()=>baixarArquivo(docArquivo.url, docArquivo.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+              <button onClick={()=>window.open(docArquivo.url, "_blank")} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
+              <button onClick={()=>baixarArquivo(docArquivo.url, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
                 <input type="file" accept=".pdf,.doc,.docx" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
