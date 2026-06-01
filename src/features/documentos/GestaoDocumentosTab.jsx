@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
-import { uploadToCloudinary } from "../rnc/RncTabs";
+import { uploadAttachment } from "../rnc/RncTabs";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
@@ -29,7 +29,7 @@ export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
     if (!file) return;
     setImgUploading(true);
     try {
-      const result = await uploadToCloudinary(file);
+      const result = await uploadAttachment(file);
       const imageUrl = typeof result === "string" ? result : result?.url;
       if (quillRef.current && imageUrl) {
         const range = quillRef.current.getSelection(true);
@@ -259,7 +259,7 @@ export function AlertaRevisaoGD({ doc }) {
 
 // Seção 17: trocar o destino do armazenamento aqui (servidor da empresa).
 async function uploadDocumentoControlado(file) {
-  return uploadToCloudinary(file);
+  return uploadAttachment(file);
 }
 
 async function baixarArquivo(url, nome) {

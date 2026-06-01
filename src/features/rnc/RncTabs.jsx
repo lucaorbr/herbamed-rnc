@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection, uploadLocalFile } from "../../firebase";
+import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
 import { SEVMETA, SMETA, TIPOC } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
 import { askClaude } from "../../services/aiClient";
+import { isExternalStorageUrl, uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA } from "../../shared/ui";
@@ -643,23 +644,17 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
   );
 }
 
-export const CLOUD_NAME = "dswsg9w0w";
-
-export const UPLOAD_PRESET = "herbamed_rnc";
-
-export async function uploadToCloudinary(file) {
-  return uploadLocalFile(file);
+export async function uploadAttachment(file) {
+  return uploadStoredFile(file);
 }
-
-export const SUPABASE_URL = "";
-
-export const SUPABASE_KEY = "";
-
-export const SUPABASE_BUCKET = "";
 
 export function openCOA(coa) {
   if (!coa?.url) return;
-  const url = coa.url.replace("/upload/fl_inline/", "/upload/");
+  if (isExternalStorageUrl(coa.url)) {
+    alert("Este arquivo ainda aponta para armazenamento externo antigo. Remova e anexe novamente para salvar no PostgreSQL local do SGQ.");
+    return;
+  }
+  const url = coa.url;
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -677,7 +672,7 @@ export function AnexosUpload({ anexos, setAnexos }) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} é maior que 10MB.`); continue; }
       setProgress(`Enviando ${i + 1}/${files.length}: ${file.name}...`);
       try {
-        const result = await uploadToCloudinary(file);
+        const result = await uploadAttachment(file);
         novos.push(result);
       } catch (e) { alert(`Erro ao enviar ${file.name}: ${e.message}`); }
     }

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { UNIDADES_RECEBIMENTO, fmt, fmtQtd, parseQtd, seloAssHTML, tod } from "../../core/utils";
-import { openCOA, uploadToCloudinary } from "../rnc/RncTabs";
+import { openCOA } from "../rnc/RncTabs";
 import { askClaude } from "../../services/aiClient";
-import { uploadPdfToSupabase } from "../../services/supabaseStorage";
+import { uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
@@ -195,8 +195,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
     if(!file) return;
     setCoaUploading(true);
     try {
-      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-      const result = isPdf ? await uploadPdfToSupabase(file) : await uploadToCloudinary(file);
+      const result = await uploadStoredFile(file);
       setCoa(result);
       toast_("COA anexado com sucesso!", "green");
     } catch { toast_("Erro ao enviar COA.", "red"); }
@@ -624,7 +623,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
                 <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
                 <button onClick={()=>document.getElementById("coa-reattach-ficha").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>
               </>)}
-              <input id="coa-reattach-ficha" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:r}); setSelFicha({...selFicha, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
+              <input id="coa-reattach-ficha" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const r=await uploadStoredFile(file); await saveCollection(CQ_KEY, String(selFicha.id), {...selFicha, coa:r}); setSelFicha({...selFicha, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
             <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
               {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
@@ -958,7 +957,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     if(!file) return;
     setFtUploading(id);
     try {
-      const result = await uploadPdfToSupabase(file);
+      const result = await uploadStoredFile(file);
       updLinhaFicha(id, "url", result.url);
       updLinhaFicha(id, "nome", result.name);
       updLinhaFicha(id, "size", result.size);
@@ -1365,8 +1364,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     if(!file) return;
     setCoaUploading(true);
     try {
-      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-      const r = isPdf ? await uploadPdfToSupabase(file) : await uploadToCloudinary(file);
+      const r = await uploadStoredFile(file);
       setCoa(r); toast_("COA anexado!", "green");
     }
     catch { toast_("Erro ao enviar COA.", "red"); }
@@ -1898,7 +1896,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
                 <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>
               </>)}
-              <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const isPdf=file.type==="application/pdf"||file.name.toLowerCase().endsWith(".pdf"); const r=isPdf?await uploadPdfToSupabase(file):await uploadToCloudinary(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
+              <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const r=await uploadStoredFile(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
             {selAnalise.obs && <div style={{ marginBottom:"1rem", padding:"10px 14px", background:T.surf, borderRadius:8, fontSize:12, color:T.text2 }}><b>Obs:</b> {selAnalise.obs}</div>}
             {selAnalise.historicoEdicoes?.length > 0 && (
