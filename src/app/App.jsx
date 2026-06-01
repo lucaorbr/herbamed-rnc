@@ -39,6 +39,7 @@ export default function App() {
   const [rncs, setRncs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
+  const [config, setConfig] = useState({ aprovadorDiferenteAnalista: false });
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -141,7 +142,10 @@ export default function App() {
     const unsubForn = subscribeCollection("fornecedores", (list) => {
       setFornecedores(list.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")));
     });
-    return () => { unsub(); unsubForn(); };
+    const unsubCfg = subscribeCollection("configuracoes", (list) => {
+      setConfig(list.find(c => c.id === "geral") || { aprovadorDiferenteAnalista: false });
+    });
+    return () => { unsub(); unsubForn(); unsubCfg(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -528,10 +532,10 @@ export default function App() {
               {tab==="cep"        && <CEPTab rncs={rncs} />}
               {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
-              {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} />}
+              {tab==="cq"           && <CQTab user={user} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="recebimentos-areco" && <ArecoRecebimentosTab user={user} toast_={toast_} setTab={setTab} />}
               {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
-              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} rncs={rncs} setRncPrefill={setRncPrefill} />}
+              {tab==="cq-analises"  && <CQAnalisesTab user={user} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
@@ -541,7 +545,7 @@ export default function App() {
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} />}
             </div>
           </div>
         </div>
