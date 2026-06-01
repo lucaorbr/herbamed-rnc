@@ -145,7 +145,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
     if(!form.material.trim()) { alert("Informe o material."); return; }
     const conc = conclusao();
     const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
-    const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, respCargo: user.cargo || "", respRegistro: user.crf || "", criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     // Record edit history if editing existing analysis
     if (sel?._editando) {
       const hist = sel.historicoEdicoes || [];
@@ -241,7 +241,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab }) {
 ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor disponível em: <a href="${ficha.coa.url}" target="_blank">${ficha.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
-    ${seloAssHTML({ nome: ficha.resp || user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
+    ${seloAssHTML({ nome: ficha.resp || user?.name || "", cargo: ficha.respCargo || user?.cargo || "", registroProfissional: ficha.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
@@ -1315,6 +1315,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
       qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade),
       resultados, coa,
       conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
+      respCargo: isEditando ? selAnalise.respCargo : (user.cargo || ""), respRegistro: isEditando ? selAnalise.respRegistro : (user.crf || ""),
       criadoPor: isEditando ? selAnalise.criadoPor : user.name, criadoEm: isEditando ? selAnalise.criadoEm : tod(), criadoTs: isEditando ? selAnalise.criadoTs : Date.now(),
       atualizadoPor: isEditando ? user.name : undefined, atualizadoEm: isEditando ? tod() : undefined,
     };
@@ -1444,7 +1445,7 @@ ${a.obs?`<div class="section"><div class="stitle">Observações</div><p>${a.obs}
 ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laudo: <a href="${a.coa.url}" target="_blank">${a.coa.name}</a></p></div>`:""}
 <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
   <div style="flex:1;">
-    ${seloAssHTML({ nome: a.resp || user?.name || "", cargo: user?.cargo || "", registroProfissional: user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
+    ${seloAssHTML({ nome: a.resp || user?.name || "", cargo: a.respCargo || user?.cargo || "", registroProfissional: a.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
   </div>
   <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
 </div>
