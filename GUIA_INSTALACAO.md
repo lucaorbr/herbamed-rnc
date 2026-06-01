@@ -19,22 +19,24 @@ git clone git@github.com:herbamedti/sgqherbamed.git
 cd sgqherbamed
 ```
 
-2. Crie o arquivo `.env` a partir do exemplo:
+2. Prepare o `.env` automaticamente:
 
 ```bash
-cp .env.example .env
+sh scripts/setup-production-env.sh
 ```
 
-3. Ajuste obrigatoriamente no `.env`:
+No Windows PowerShell:
+
+```powershell
+.\scripts\setup-production-env.ps1
+```
+
+O script cria `POSTGRES_PASSWORD` e `JWT_SECRET` fortes automaticamente. Se o arquivo `.env` ja existir, ele nao altera nada.
+
+3. Se a sincronizacao com o Areco for usada, preencha no `.env`:
 
 ```env
-POSTGRES_PASSWORD=uma_senha_forte
-JWT_SECRET=um_segredo_forte
-INITIAL_ADMIN_EMAIL=admin
-INITIAL_ADMIN_PASSWORD=Herba@123
-FILE_UPLOAD_MAX_BYTES=15728640
-BACKUP_INTERVAL_SECONDS=86400
-BACKUP_RETENTION_DAYS=30
+ARECO_SQLSERVER_PASSWORD=senha_somente_leitura
 ```
 
 Conta padrao para testes:

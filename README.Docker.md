@@ -2,6 +2,20 @@
 
 ## Subir em producao local
 
+Se o `.env` ainda nao existir, gere automaticamente:
+
+```bash
+sh scripts/setup-production-env.sh
+```
+
+No Windows PowerShell:
+
+```powershell
+.\scripts\setup-production-env.ps1
+```
+
+Depois suba:
+
 ```bash
 docker compose up --build -d
 ```
@@ -25,7 +39,7 @@ banco:    localhost:5487 -> container:5432
 O SGQ usa o PostgreSQL do proprio Docker como banco oficial. O banco do Areco e usado apenas para consulta/leitura quando a sincronizacao estiver ativada.
 Arquivos anexados, COAs, fichas tecnicas e documentos controlados tambem ficam no PostgreSQL local do Docker, na tabela `stored_files`. Novos uploads nao sao enviados para Cloudinary, Supabase ou outra plataforma externa.
 
-Para habilitar os recursos de IA que chamam `/api/claude`, defina:
+O script de setup ja gera `POSTGRES_PASSWORD` e `JWT_SECRET`. Para habilitar os recursos de IA que chamam `/api/claude`, defina:
 
 ```bash
 ANTHROPIC_API_KEY=sua_chave
