@@ -228,8 +228,8 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
     const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
     const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, respCargo: user.cargo || "", respRegistro: user.crf || "", criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     // Record edit history if editing existing analysis
-    if (sel?._editando) {
-      const hist = sel.historicoEdicoes || [];
+    if (selFicha?._editando) {
+      const hist = selFicha.historicoEdicoes || [];
       ficha.historicoEdicoes = [...hist, { data: tod(), dataHora: new Date().toLocaleString("pt-BR"), editor: user.name, obs: "Análise editada" }];
     }
     await salvarFichaDB(ficha);
@@ -284,7 +284,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
 </style></head><body><div class="page">
 <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
   <div style="display:flex;align-items:center;gap:12px;">
-    <img src="/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <img src="${window.location.origin}/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
     <div>
       <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
       <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
@@ -1023,6 +1023,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
       setView("lista"); setSel(null);
       setForm(EMPTY_MAT);
       setEnsaios([]);
+      setTemplateSel("");
       setFichasTecnicas([]);
       setIaConfirmada(false);
     } catch(e) {
@@ -1033,6 +1034,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
 
   const editarMaterial = (m) => {
     setSel(m);
+    setTemplateSel("");
     setForm({ nome:m.nome||"", nomeBase:m.nomeBase||m.nome||"", apresentacao:m.apresentacao||"", origem:m.origem||"", linha:m.linha||"", clienteId:m.clienteId||"", tipo:m.tipo, fornecedorPadrao:m.fornecedorPadrao||"", ref:m.ref||"", obs:m.obs||"" });
     setIaConfirmada(false);
     setEnsaios((m.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e })));
@@ -1423,6 +1425,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     }
     setView("lista");
     setMatSel(null);
+    setSelAnalise(null);
     setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
     setResultados([]); setCoa(null);
     } catch(e) {
@@ -1440,19 +1443,20 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     if (mat) {
       setMatSel(mat);
       const lista = mat.ensaios || [];
-      setEnsaios(lista.map((e,i) => {
+      setResultados(lista.map((e,i) => {
         const res = (a.resultados||[]).find(r => r.nome === e.nome || r.id === e.id) || {};
         return { ...e, id:i, resultado:res.resultado||"", conforme:res.conforme!=null?res.conforme:null, obs:res.obs||"", tipo:e.tipo||"numero", casas:e.casas!==undefined?e.casas:2, multiplos:e.multiplos||false };
       }));
     } else {
-      setEnsaios((a.resultados||[]).map((r,i)=>({ ...r, id:i })));
+      // Material não encontrado (ex.: excluído): material sintético para o salvar funcionar.
+      setMatSel({ id:a.materialId, nome:a.materialNome, tipo:a.materialTipo });
+      setResultados((a.resultados||[]).map((r,i)=>({ ...r, id:i })));
     }
     const _q = parseQtd(a.qtdRecebida);
-    setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebidaValor: a.qtdRecebidaValor || _q.valor, qtdRecebidaUnidade: a.qtdRecebidaUnidade || _q.unidade, qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataAnalise:a.dataAnalise||tod(), analista:a.analista||a.resp||user.name, obs:a.obs||"" });
+    setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebidaValor: a.qtdRecebidaValor || _q.valor, qtdRecebidaUnidade: a.qtdRecebidaUnidade || _q.unidade, qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataRecebimento:a.dataRecebimento||tod(), dataAnalise:a.dataAnalise||tod(), resp:a.resp||user.name, obs:a.obs||"" });
     setCoa(a.coa||null);
-    setSel({ ...a, _editando: true });
-    setView("novo");
-    setSelAnalise(null);
+    setSelAnalise({ ...a, _editando: true });
+    setView("nova");
     toast_("Editando análise — salve para registrar as alterações.", "green");
   };
 
@@ -1514,7 +1518,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
 </style></head><body><div class="page">
 <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
   <div style="display:flex;align-items:center;gap:12px;">
-    <img src="/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
+    <img src="${window.location.origin}/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
     <div>
       <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
       <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
@@ -1588,7 +1592,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   if(view==="nova") return (
     <div>
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
-        <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSelAnalise(null); }}>← Voltar</button>
         <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Nova Ficha de Análise</div>
       </div>
 
@@ -1790,7 +1794,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
         <F lbl="Observações gerais" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Observações sobre o recebimento ou análise..." />} />
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem", marginTop:"1rem" }}>
-          <button style={s.btn} onClick={()=>setView("lista")}>Cancelar</button>
+          <button style={s.btn} onClick={()=>{ setView("lista"); setSelAnalise(null); }}>Cancelar</button>
           <button style={s.btnA} onClick={salvar}>💾 Salvar análise →</button>
         </div>
       </>}
@@ -1802,7 +1806,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{analiseFiltradas.length} de {analises.length} análise(s)</div>
-        <button style={s.btnA} onClick={()=>{ setMatSel(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+        <button style={s.btnA} onClick={()=>{ setMatSel(null); setSelAnalise(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
       </div>
 
       {/* Filtros */}
