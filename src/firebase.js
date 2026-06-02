@@ -5,7 +5,7 @@ export const auth = {
   currentUser: null,
 };
 
-function getToken() {
+export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
