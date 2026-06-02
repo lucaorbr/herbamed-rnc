@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
+import { saveCollection, deleteFromCollection, subscribeCollection, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
 import { uploadAttachment } from "../rnc/RncTabs";
@@ -262,17 +262,28 @@ async function uploadDocumentoControlado(file) {
   return uploadAttachment(file);
 }
 
-async function baixarArquivo(url, nome) {
+// A rota /api/files/{uuid} exige JWT — busca o arquivo controlado com o mesmo
+// token que api() usa, transforma em blob e abre numa aba (Ver) ou força o
+// download com o nome correto (Baixar). Libera o object URL depois.
+async function abrirArquivoAutenticado(url, download = false, nome = "documento") {
   try {
-    const resp = await fetch(url);
+    const token = getToken();
+    const resp = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const blob = await resp.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+    const objUrl = URL.createObjectURL(blob);
+    if (download) {
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      window.open(objUrl, "_blank");
+    }
+    // Atraso para a aba/download conseguir consumir o blob antes de revogar.
+    setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
   } catch(e) {
     window.open(url, "_blank");
   }
@@ -657,11 +668,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                   Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
                 </div>
               </div>
-              <button onClick={()=>window.open(d.arquivo.url, "_blank")}
+              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)}
                 style={{ ...s.btn, fontSize:11, display:"inline-flex", alignItems:"center", gap:4 }}>
                 👁️ Ver
               </button>
-              <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
+              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
                 style={{ ...s.btnA, fontSize:11 }}>
                 ⬇️ Baixar
               </button>
@@ -702,8 +713,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (<>
-                  <button onClick={()=>window.open(d.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
                 </>) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
@@ -734,8 +745,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       {arq ? (<>
-                        <button onClick={()=>window.open(arq.url, "_blank")} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
-                        <button onClick={()=>baixarArquivo(arq.url, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
+                        <button onClick={()=>abrirArquivoAutenticado(arq.url)} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                        <button onClick={()=>abrirArquivoAutenticado(arq.url, true, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
                       </>) : h.conteudo ? (
                         <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
                       ) : (
@@ -820,8 +831,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:14}}>
                   <span style={{fontSize:18}}>📄</span>
                   <div style={{flex:1,fontSize:12,color:T.text}}>{verSnapshot.conteudo.arquivo.nome}</div>
-                  <button onClick={()=>window.open(verSnapshot.conteudo.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>baixarArquivo(verSnapshot.conteudo.arquivo.url, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url, true, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
                 </div>
               )}
               {verSnapshot.conteudo ? (<>
@@ -936,8 +947,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{docArquivo.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
-              <button onClick={()=>window.open(docArquivo.url, "_blank")} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
-              <button onClick={()=>baixarArquivo(docArquivo.url, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url)} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
                 <input type="file" accept=".pdf,.doc,.docx" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
