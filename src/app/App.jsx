@@ -40,6 +40,7 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [config, setConfig] = useState({ aprovadorDiferenteAnalista: false });
+  const [tiposRevisao, setTiposRevisao] = useState({});
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -144,6 +145,9 @@ export default function App() {
     });
     const unsubCfg = subscribeCollection("configuracoes", (list) => {
       setConfig(list.find(c => c.id === "geral") || { aprovadorDiferenteAnalista: false });
+      const tr = list.find(c => c.id === "tipos_revisao");
+      if (tr) { const { id, ...rest } = tr; setTiposRevisao(rest); }
+      else setTiposRevisao({});
     });
     return () => { unsub(); unsubForn(); unsubCfg(); };
   }, [user]);
@@ -540,12 +544,12 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} />}
             </div>
           </div>
         </div>

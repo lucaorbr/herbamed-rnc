@@ -164,13 +164,13 @@ export const HERBAMED_INFO_GD = {
 };
 
 export const TIPOS_DOC_GD = [
-  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a" },
-  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7" },
-  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa" },
-  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166" },
-  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42" },
-  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a" },
-  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0" },
+  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "CQ" },
+  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
 ];
 
 export const DEPARTAMENTOS_GD = [
@@ -211,11 +211,21 @@ export function gerarCodigoGD(tipo, depto, docs) {
   return `${prefix}-${String(existentes + 1).padStart(3, "0")}`;
 }
 
-export function calcProximaRevisaoGD(dataBase) {
+export function calcProximaRevisaoGD(dataBase, prazoAnos = 3) {
   if (!dataBase) return null;
+  const anos = Number(prazoAnos);
   const d = new Date(dataBase + "T12:00:00");
-  d.setFullYear(d.getFullYear() + 3);
+  d.setFullYear(d.getFullYear() + (Number.isFinite(anos) && anos > 0 ? anos : 3));
   return d.toISOString().split("T")[0];
+}
+
+// Prazo de revisão (anos) efetivo para um tipo: usa o valor configurado no admin
+// (configuracoes/tipos_revisao) e, na ausência, o padrão do tipo. Fallback: 3 anos.
+export function prazoRevisaoTipo(tipoId, tiposRevisaoCfg) {
+  const cfg = tiposRevisaoCfg && tiposRevisaoCfg[tipoId];
+  if (cfg !== undefined && cfg !== null && cfg !== "" && Number(cfg) > 0) return Number(cfg);
+  const tipo = TIPOS_DOC_GD.find(t => t.id === tipoId);
+  return tipo?.prazoRevisaoAnos ?? 3;
 }
 
 export function diasParaRevisaoGD(proximaRevisao) {
@@ -297,7 +307,7 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
   return `${codigo || "documento"}_Rev${versao || "01"}${ext}`;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {} }) {
   const T = useTheme();
   const s = useS();
 
@@ -379,7 +389,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     }
     const id  = sel ? sel.id : Date.now();
     const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
-    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod());
+    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
       alert("Anexe o novo arquivo oficial do documento antes de salvar esta revisão.");
@@ -470,7 +480,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       conteudo: snapshotConteudo,
     }];
     // Arquivo da versão anterior fica no snapshot; nova revisão exige novo upload.
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -1051,6 +1061,18 @@ ${docHtml.slice(0,9000)}`}]})
             <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
+          {form.tipo && (()=>{
+            const tp = TIPOS_DOC_GD.find(t=>t.id===form.tipo);
+            const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
+            const depResp = DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
+            return (
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
+                <span>📅 Prazo de revisão padrão: <strong style={{color:T.text2}}>{anos} {anos===1?"ano":"anos"}</strong></span>
+                <span style={{color:T.border}}>|</span>
+                <span>🏛️ Departamento responsável: <strong style={{color:T.text2}}>{depResp?.label||tp?.departamentoResponsavel||"—"}</strong></span>
+              </div>
+            );
+          })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
           {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs)}</strong></div>}
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
@@ -1360,6 +1382,11 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {d.proximaRevisao && (()=>{
+                const dr = diasParaRevisaoGD(d.proximaRevisao);
+                const cor = dr<0 ? "#ff4f6a" : dr<=30 ? "#ffd166" : T.text3;
+                return <span style={{fontSize:10,fontWeight:dr<=30?700:600,color:cor}} title={dr<0?`Revisão vencida há ${Math.abs(dr)} dias`:dr<=30?`Vence em ${dr} dias`:"Dentro do prazo"}>Próx. revisão: {fmt(d.proximaRevisao)}</span>;
+              })()}
               <AlertaRevisaoGD doc={d}/>
               {d.arquivo
                 ? <span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:T.accent+"18",color:T.accent,fontWeight:700}}>📎 Arquivo anexado</span>
