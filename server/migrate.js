@@ -175,6 +175,7 @@ async function migrate() {
   `);
 
   await seedAdmin();
+  await seedTrustedThirdPartyClients();
 }
 
 async function seedAdmin() {
@@ -198,6 +199,66 @@ async function seedAdmin() {
   `, [name, email, passwordHash, JSON.stringify({ name, email, role: "admin", setor: "Qualidade" })]);
 
   console.log(`Usuario admin padrao garantido: ${email}`);
+}
+
+async function seedTrustedThirdPartyClients() {
+  const clients = [
+    {
+      id: "areco-cliente-19583",
+      nome: "FITOPRIME PRODUTOS NUTRACEUTICOS LTDA",
+      cnpj: "43.090.339/0001-39",
+      arecoId: "19583",
+    },
+    {
+      id: "areco-cliente-20381",
+      nome: "NUTRIAGE SUPLEMENTOS LTDA",
+      cnpj: "44.034.777/0001-42",
+      arecoId: "20381",
+    },
+    {
+      id: "areco-cliente-2326",
+      nome: "QUALLYNATUS PRODUTOS NATURAIS LTDA",
+      cnpj: "23.259.284/0001-30",
+      arecoId: "2326",
+    },
+    {
+      id: "areco-cliente-11956",
+      nome: "CICLO INDUSTRIA E COMERCIO SUPPLY CHAIN LTDA",
+      cnpj: "42.587.384/0002-11",
+      arecoId: "11956",
+    },
+  ];
+
+  for (const client of clients) {
+    const existing = await query(`
+      SELECT id
+      FROM generic_documents
+      WHERE collection = 'clientes_terceiros'
+        AND regexp_replace(COALESCE(data->>'cnpj', ''), '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')
+      LIMIT 1
+    `, [client.cnpj]);
+
+    const id = existing.rows[0]?.id || client.id;
+    const data = {
+      id,
+      nome: client.nome,
+      cnpj: client.cnpj,
+      obs: "Cadastro inicial validado por correspondencia forte no Areco.",
+      origem: "areco",
+      arecoId: client.arecoId,
+      atualizadoEm: new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    };
+
+    await query(`
+      INSERT INTO generic_documents (collection, id, data, updated_at)
+      VALUES ('clientes_terceiros', $1, $2::jsonb, now())
+      ON CONFLICT (collection, id) DO UPDATE SET
+        data = EXCLUDED.data || generic_documents.data,
+        updated_at = now()
+    `, [id, JSON.stringify(data)]);
+  }
+
+  console.log("Clientes terceiros confiaveis garantidos.");
 }
 
 module.exports = { migrate };
