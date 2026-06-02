@@ -57,6 +57,14 @@ function DisposicaoSecao({ T, s, registro, onAprovar }) {
   );
 }
 
+// Verifica se o usuário logado é o mesmo analista que executou (campo resp).
+// Compara por email quando houver; senão, por nome.
+function mesmoAnalista(registro, user) {
+  const respEmail = registro?.respEmail || registro?.analistaEmail;
+  if (respEmail && user?.email) return respEmail === user.email;
+  return !!registro?.resp && registro.resp === user?.name;
+}
+
 // Monta o registro de aprovação da disposição com os dados do usuário logado
 function montarAprovacaoDisposicao(user, conclusao) {
   const agora = Date.now();
@@ -119,7 +127,7 @@ export const ENSAIOS_PADRAO = {
   ],
 };
 
-export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill }) {
+export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill, config = {} }) {
   const T = useTheme(); const s = useS();
   const CQ_KEY = "cq_fichas";
   const [fichas, setFichas] = useState([]);
@@ -165,6 +173,10 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
 
   const aprovarDisposicaoFicha = async (ficha) => {
     if (ficha.aprovacaoDisposicao) return;
+    if (config?.aprovadorDiferenteAnalista && mesmoAnalista(ficha, user)) {
+      toast_("A configuração exige que o aprovador seja diferente do analista que executou.", "red");
+      return;
+    }
     const atualizada = { ...ficha, aprovacaoDisposicao: montarAprovacaoDisposicao(user, ficha.conclusao) };
     await salvarFichaDB(atualizada);
     setSelFicha(atualizada);
@@ -1309,7 +1321,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
   );
 }
 
-export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill }) {
+export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill, config = {} }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -1447,6 +1459,10 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
   const aprovarDisposicaoAnalise = async (a) => {
     try {
     if (a.aprovacaoDisposicao) return;
+    if (config?.aprovadorDiferenteAnalista && mesmoAnalista(a, user)) {
+      toast_("A configuração exige que o aprovador seja diferente do analista que executou.", "red");
+      return;
+    }
     const aprov = montarAprovacaoDisposicao(user, a.conclusao);
     const atualizada = { ...a, aprovacaoDisposicao: aprov };
     await saveCollection("cq_analises", String(a.id), atualizada);

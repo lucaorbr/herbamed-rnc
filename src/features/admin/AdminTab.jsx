@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser } from "../../firebase";
+import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
 import { useS } from "../../shared/styles";
@@ -7,8 +7,20 @@ import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {} }) {
   const T = useTheme(); const s = useS();
+  const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
+
+  const toggleAprovadorDif = async () => {
+    if (!isAdmin) { toast_("Apenas administradores podem alterar configurações.", "red"); return; }
+    const novo = !config?.aprovadorDiferenteAnalista;
+    try {
+      const { id, ...rest } = config || {};
+      await saveCollection("configuracoes", "geral", { ...rest, aprovadorDiferenteAnalista: novo });
+      await auditLog("Alterou Configuração da Qualidade", "configuracoes", "geral", "Aprovador ≠ Analista (CQ)", { aprovadorDiferenteAnalista: !novo }, { aprovadorDiferenteAnalista: novo });
+      toast_(novo ? "Regra ativada: aprovador deve ser diferente do analista." : "Regra desativada.", "green");
+    } catch(e) { toast_("Erro ao salvar configuração.", "red"); console.error(e); }
+  };
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
@@ -184,6 +196,26 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog }) {
 
         <div style={{ textAlign:"right", marginTop:6 }}>
           <button style={s.btnA} onClick={addUser}>Criar usuário ✓</button>
+        </div>
+      </div>
+
+      <div style={s.card}>
+        <SecTitle icon="⚙️" ch="Configurações da Qualidade" />
+        <div style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text }}>Exigir que o aprovador da disposição seja diferente do analista que executou</div>
+            <div style={{ fontSize:11, color:T.text3, marginTop:3 }}>Aplica-se apenas às análises de Controle de Qualidade (CQ). A segregação de funções dos documentos continua sempre exigida.</div>
+          </div>
+          <button
+            onClick={toggleAprovadorDif}
+            disabled={!isAdmin}
+            title={config?.aprovadorDiferenteAnalista ? "Clique para desativar" : "Clique para ativar"}
+            style={{ flexShrink:0, width:52, height:28, borderRadius:20, border:"none", cursor:isAdmin?"pointer":"not-allowed", background:config?.aprovadorDiferenteAnalista?T.accent:T.border, position:"relative", transition:"background .2s", padding:0 }}>
+            <span style={{ position:"absolute", top:3, left:config?.aprovadorDiferenteAnalista?27:3, width:22, height:22, borderRadius:"50%", background:"#fff", transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+          </button>
+          <span style={{ flexShrink:0, fontSize:12, fontWeight:700, color:config?.aprovadorDiferenteAnalista?T.accent:T.text3, minWidth:64, textAlign:"left" }}>
+            {config?.aprovadorDiferenteAnalista ? "Ativado" : "Desativado"}
+          </span>
         </div>
       </div>
     </div>
