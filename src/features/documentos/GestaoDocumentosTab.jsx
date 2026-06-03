@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
+import { saveCollection, deleteFromCollection, subscribeCollection, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
 import { uploadAttachment } from "../rnc/RncTabs";
@@ -164,13 +164,13 @@ export const HERBAMED_INFO_GD = {
 };
 
 export const TIPOS_DOC_GD = [
-  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a" },
-  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7" },
-  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa" },
-  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166" },
-  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42" },
-  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a" },
-  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0" },
+  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "CQ" },
+  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
 ];
 
 export const DEPARTAMENTOS_GD = [
@@ -211,11 +211,21 @@ export function gerarCodigoGD(tipo, depto, docs) {
   return `${prefix}-${String(existentes + 1).padStart(3, "0")}`;
 }
 
-export function calcProximaRevisaoGD(dataBase) {
+export function calcProximaRevisaoGD(dataBase, prazoAnos = 3) {
   if (!dataBase) return null;
+  const anos = Number(prazoAnos);
   const d = new Date(dataBase + "T12:00:00");
-  d.setFullYear(d.getFullYear() + 3);
+  d.setFullYear(d.getFullYear() + (Number.isFinite(anos) && anos > 0 ? anos : 3));
   return d.toISOString().split("T")[0];
+}
+
+// Prazo de revisão (anos) efetivo para um tipo: usa o valor configurado no admin
+// (configuracoes/tipos_revisao) e, na ausência, o padrão do tipo. Fallback: 3 anos.
+export function prazoRevisaoTipo(tipoId, tiposRevisaoCfg) {
+  const cfg = tiposRevisaoCfg && tiposRevisaoCfg[tipoId];
+  if (cfg !== undefined && cfg !== null && cfg !== "" && Number(cfg) > 0) return Number(cfg);
+  const tipo = TIPOS_DOC_GD.find(t => t.id === tipoId);
+  return tipo?.prazoRevisaoAnos ?? 3;
 }
 
 export function diasParaRevisaoGD(proximaRevisao) {
@@ -262,17 +272,28 @@ async function uploadDocumentoControlado(file) {
   return uploadAttachment(file);
 }
 
-async function baixarArquivo(url, nome) {
+// A rota /api/files/{uuid} exige JWT — busca o arquivo controlado com o mesmo
+// token que api() usa, transforma em blob e abre numa aba (Ver) ou força o
+// download com o nome correto (Baixar). Libera o object URL depois.
+async function abrirArquivoAutenticado(url, download = false, nome = "documento") {
   try {
-    const resp = await fetch(url);
+    const token = getToken();
+    const resp = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const blob = await resp.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+    const objUrl = URL.createObjectURL(blob);
+    if (download) {
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      window.open(objUrl, "_blank");
+    }
+    // Atraso para a aba/download conseguir consumir o blob antes de revogar.
+    setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
   } catch(e) {
     window.open(url, "_blank");
   }
@@ -286,7 +307,7 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
   return `${codigo || "documento"}_Rev${versao || "01"}${ext}`;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {} }) {
   const T = useTheme();
   const s = useS();
 
@@ -368,7 +389,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
     }
     const id  = sel ? sel.id : Date.now();
     const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
-    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod());
+    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
       alert("Anexe o novo arquivo oficial do documento antes de salvar esta revisão.");
@@ -459,7 +480,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       conteudo: snapshotConteudo,
     }];
     // Arquivo da versão anterior fica no snapshot; nova revisão exige novo upload.
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod()), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -562,7 +583,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
       ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid ${cor}40;border-radius:8px;background:#fafdfb;"><span style="font-size:22px;">📄</span><div><div style="font-size:12px;font-weight:bold;color:#1a3a28;">${doc.arquivo.nome}</div><div style="font-size:10px;color:#777;">Este é o documento oficial controlado.${doc.arquivo.enviadoPor?` Enviado por ${doc.arquivo.enviadoPor}`:""}${doc.arquivo.enviadoEm?` em ${fmt(doc.arquivo.enviadoEm)}`:""}</div></div></div>`
       : `<div style="padding:10px 14px;border:1px dashed #e0a800;border-radius:8px;background:#fff8e6;font-size:11px;color:#8a6000;">⚠️ Nenhum arquivo oficial anexado a este documento.</div>`;
     const html = `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;background:#fff;">`
-      + `<div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div>`
+      + `<div style="background:linear-gradient(135deg,#1a4a2e,${cor});padding:14px 22px;display:flex;align-items:center;justify-content:space-between;"><div style="display:flex;align-items:center;gap:12px;"><img src="${window.location.origin}${HERBAMED_INFO_GD.logo}" style="width:40px;height:40px;border-radius:6px;object-fit:cover;"/><div><div style="color:#fff;font-size:13px;font-weight:bold;">${HERBAMED_INFO_GD.nome}</div><div style="color:#9fd4b2;font-size:10px;">CNPJ: ${HERBAMED_INFO_GD.cnpj}</div></div></div><div style="text-align:right;"><div style="color:#fff;font-size:12px;font-weight:bold;">${tipo?.label||doc.tipo}</div><div style="color:#9fd4b2;font-size:11px;">${doc.codigo} · Rev.${doc.versao}</div></div></div>`
       + `<div style="padding:12px 22px;border-bottom:2px solid ${cor}20;background:#f9fdf9;"><div style="font-size:9px;letter-spacing:.1em;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:4px;">Folha de Rosto Controlada</div><div style="font-size:15px;font-weight:bold;color:#1a4a2e;margin-bottom:4px;">${doc.titulo}</div><div style="font-size:11px;color:#666;">Departamento: ${doc.depto} · Status: ${doc.status} · Elaborado: ${fmt(doc.criadoEm)} · Próx. revisão: ${fmt(doc.proximaRevisao)}</div></div>`
       + `<div style="padding:14px 22px;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Documento Oficial (Arquivo Controlado)</div>${arquivoHTML}</div>`
       + `<div style="padding:0 22px 14px;"><div style="font-size:9px;color:${cor};text-transform:uppercase;font-weight:bold;margin-bottom:8px;">Assinaturas</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">${assHTML(doc.assinaturaElaborador,"Elaborador")}${assHTML(doc.assinaturaRevisor,"Revisor")}${assHTML(doc.assinaturaAprovador,"Aprovador")}</div></div>`
@@ -657,11 +678,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                   Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
                 </div>
               </div>
-              <button onClick={()=>window.open(d.arquivo.url, "_blank")}
+              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)}
                 style={{ ...s.btn, fontSize:11, display:"inline-flex", alignItems:"center", gap:4 }}>
                 👁️ Ver
               </button>
-              <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
+              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
                 style={{ ...s.btnA, fontSize:11 }}>
                 ⬇️ Baixar
               </button>
@@ -702,8 +723,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (<>
-                  <button onClick={()=>window.open(d.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>baixarArquivo(d.arquivo.url, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
                 </>) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
@@ -734,8 +755,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       {arq ? (<>
-                        <button onClick={()=>window.open(arq.url, "_blank")} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
-                        <button onClick={()=>baixarArquivo(arq.url, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
+                        <button onClick={()=>abrirArquivoAutenticado(arq.url)} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                        <button onClick={()=>abrirArquivoAutenticado(arq.url, true, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
                       </>) : h.conteudo ? (
                         <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
                       ) : (
@@ -820,8 +841,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:14}}>
                   <span style={{fontSize:18}}>📄</span>
                   <div style={{flex:1,fontSize:12,color:T.text}}>{verSnapshot.conteudo.arquivo.nome}</div>
-                  <button onClick={()=>window.open(verSnapshot.conteudo.arquivo.url, "_blank")} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>baixarArquivo(verSnapshot.conteudo.arquivo.url, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url, true, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
                 </div>
               )}
               {verSnapshot.conteudo ? (<>
@@ -936,8 +957,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm }) {
                 <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{docArquivo.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
-              <button onClick={()=>window.open(docArquivo.url, "_blank")} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
-              <button onClick={()=>baixarArquivo(docArquivo.url, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url)} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
                 <input type="file" accept=".pdf,.doc,.docx" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
@@ -1040,6 +1061,18 @@ ${docHtml.slice(0,9000)}`}]})
             <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
+          {form.tipo && (()=>{
+            const tp = TIPOS_DOC_GD.find(t=>t.id===form.tipo);
+            const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
+            const depResp = DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
+            return (
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
+                <span>📅 Prazo de revisão padrão: <strong style={{color:T.text2}}>{anos} {anos===1?"ano":"anos"}</strong></span>
+                <span style={{color:T.border}}>|</span>
+                <span>🏛️ Departamento responsável: <strong style={{color:T.text2}}>{depResp?.label||tp?.departamentoResponsavel||"—"}</strong></span>
+              </div>
+            );
+          })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
           {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs)}</strong></div>}
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
@@ -1349,6 +1382,11 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {d.proximaRevisao && (()=>{
+                const dr = diasParaRevisaoGD(d.proximaRevisao);
+                const cor = dr<0 ? "#ff4f6a" : dr<=30 ? "#ffd166" : T.text3;
+                return <span style={{fontSize:10,fontWeight:dr<=30?700:600,color:cor}} title={dr<0?`Revisão vencida há ${Math.abs(dr)} dias`:dr<=30?`Vence em ${dr} dias`:"Dentro do prazo"}>Próx. revisão: {fmt(d.proximaRevisao)}</span>;
+              })()}
               <AlertaRevisaoGD doc={d}/>
               {d.arquivo
                 ? <span style={{fontSize:10,padding:"2px 8px",borderRadius:12,background:T.accent+"18",color:T.accent,fontWeight:700}}>📎 Arquivo anexado</span>

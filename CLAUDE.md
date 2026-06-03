@@ -25,3 +25,13 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 
 ## Próximas seções
 Seções 7, 8, 9 (motor de assinatura) → 11, 12 (reprovação → RNC)
+
+## Referência de design: SE Suite (SoftExpert Suite)
+Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
+
+- **Documentos:** o documento controlado é sempre o arquivo eletrônico anexado (cofre), nunca texto digitado no sistema. Em volta dele: identificação, revisão, ciclo de vida (Rascunho → Em Revisão → Aprovação → Vigente → Obsoleto), assinaturas eletrônicas, marca d'água em cópias (CÓPIA NÃO CONTROLADA / OBSOLETO) e revisão periódica por tipo.
+- **Não conformidades (RNC):** fluxo com análise de causa (5 Porquês no início), ações corretivas e evidências.
+- **Workflow:** rotas de aprovação com responsáveis e segregação de funções (quem executa ≠ quem aprova, quando exigido).
+- **Indicadores e auditorias:** medição e registros rastreáveis e imutáveis.
+
+Quando houver dúvida de como implementar algo, siga o que o SE Suite faria.

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
@@ -6,10 +6,34 @@ import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
+import { TIPOS_DOC_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {} }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {} }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
+
+  // Prazo de revisão por tipo de documento (configuracoes/tipos_revisao)
+  const prazosFromCfg = () => Object.fromEntries(TIPOS_DOC_GD.map(t => [t.id, String(prazoRevisaoTipo(t.id, tiposRevisao))]));
+  const [prazos, setPrazos] = useState(prazosFromCfg);
+  const [savingPrazos, setSavingPrazos] = useState(false);
+  useEffect(() => { setPrazos(prazosFromCfg()); }, [tiposRevisao]);
+
+  const salvarPrazosRevisao = async () => {
+    if (!isAdmin) { toast_("Apenas administradores podem alterar configurações.", "red"); return; }
+    const payload = {};
+    for (const t of TIPOS_DOC_GD) {
+      const n = Number(prazos[t.id]);
+      if (!Number.isFinite(n) || n <= 0) { toast_(`Prazo inválido para ${t.id} — informe um número de anos maior que zero.`, "red"); return; }
+      payload[t.id] = n;
+    }
+    setSavingPrazos(true);
+    try {
+      await saveCollection("configuracoes", "tipos_revisao", payload);
+      await auditLog("Alterou Prazo de Revisão por Tipo", "configuracoes", "tipos_revisao", "Prazos de revisão por tipo de documento", tiposRevisao || {}, payload);
+      toast_("Prazos de revisão salvos!", "green");
+    } catch(e) { toast_("Erro ao salvar prazos de revisão.", "red"); console.error(e); }
+    setSavingPrazos(false);
+  };
 
   const toggleAprovadorDif = async () => {
     if (!isAdmin) { toast_("Apenas administradores podem alterar configurações.", "red"); return; }
@@ -216,6 +240,30 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <span style={{ flexShrink:0, fontSize:12, fontWeight:700, color:config?.aprovadorDiferenteAnalista?T.accent:T.text3, minWidth:64, textAlign:"left" }}>
             {config?.aprovadorDiferenteAnalista ? "Ativado" : "Desativado"}
           </span>
+        </div>
+
+        <div style={{ marginTop:18 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:3 }}>Prazo de Revisão por Tipo de Documento</div>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:12 }}>Prazo padrão de revisão periódica (em anos) aplicado ao calcular a próxima revisão de novos documentos e de novas revisões.</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))", gap:10 }}>
+            {TIPOS_DOC_GD.map(t => (
+              <div key={t.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10 }}>
+                <span style={{ fontSize:18 }}>{t.icon}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text }}>{t.id}</div>
+                  <div style={{ fontSize:10, color:T.text3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{t.label}</div>
+                </div>
+                <input type="number" min="1" step="1" value={prazos[t.id] ?? ""} disabled={!isAdmin}
+                  onChange={e=>setPrazos(p=>({ ...p, [t.id]: e.target.value }))}
+                  style={{ width:54, padding:"6px 8px", borderRadius:8, border:`1px solid ${T.border}`, background:T.card, color:T.text, fontSize:13, textAlign:"center" }} />
+                <span style={{ fontSize:11, color:T.text3 }}>anos</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={salvarPrazosRevisao} disabled={!isAdmin||savingPrazos}
+            style={{ ...s.btnA, marginTop:12, opacity:(!isAdmin||savingPrazos)?0.6:1, cursor:(!isAdmin||savingPrazos)?"not-allowed":"pointer" }}>
+            {savingPrazos ? "Salvando..." : "💾 Salvar prazos de revisão"}
+          </button>
         </div>
       </div>
     </div>
