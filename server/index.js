@@ -146,6 +146,30 @@ async function handleAuth(req, res, pathname) {
       .toUpperCase();
     const codigoVerificacao = `${hash.slice(0, 4)}-${hash.slice(4, 8)}-${hash.slice(8, 12)}`;
 
+    // Registro imutavel de conformidade (Secao 10). Nao bloqueia a assinatura:
+    // se o INSERT falhar, loga mas a assinatura segue valida no documento JSON.
+    try {
+      const ipAddress = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || null;
+      await query(`
+        INSERT INTO document_signatures
+          (contexto, papel, user_id, nome, cargo, registro_profissional, codigo_verificacao, hash, metodo_autenticacao, ip_address)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+        contexto,
+        papel,
+        user.id,
+        user.name,
+        user.cargo || null,
+        user.registroProfissional || user.crf || null,
+        codigoVerificacao,
+        hash,
+        "senha",
+        ipAddress,
+      ]);
+    } catch (error) {
+      console.error("Falha ao registrar assinatura em document_signatures:", error);
+    }
+
     return sendJson(res, 200, {
       ...payload,
       uid: user.id,
@@ -162,6 +186,21 @@ async function handleAuth(req, res, pathname) {
       codigoVerificacao,
       versaoAssinatura: "SGQ-HERBAMED-ELETRONICA-1",
     });
+  }
+
+  return false;
+}
+
+async function handleSignatures(req, res, pathname, url) {
+  if (pathname === "/api/signatures" && req.method === "GET") {
+    await requireUser(req);
+    const contexto = url.searchParams.get("contexto") || "";
+    if (!contexto) return sendJson(res, 400, { error: "Parametro contexto obrigatorio" });
+    const result = await query(
+      "SELECT * FROM document_signatures WHERE contexto = $1 ORDER BY assinado_em ASC",
+      [contexto]
+    );
+    return sendJson(res, 200, result.rows);
   }
 
   return false;
@@ -536,7 +575,7 @@ async function route(req, res) {
 
   if (pathname.startsWith("/api/claude")) return handleClaude(req, res);
 
-  const handlers = [handleAuth, handleUsers, handleRncs, handleCounters, handleFiles, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;

@@ -174,6 +174,28 @@ async function migrate() {
     )
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS document_signatures (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      contexto text NOT NULL,
+      papel text NOT NULL,
+      user_id text NOT NULL,
+      nome text NOT NULL,
+      cargo text,
+      registro_profissional text,
+      codigo_verificacao text,
+      hash text,
+      metodo_autenticacao text,
+      assinado_em timestamptz NOT NULL DEFAULT now(),
+      ip_address text
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_doc_signatures_contexto
+    ON document_signatures (contexto)
+  `);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }
