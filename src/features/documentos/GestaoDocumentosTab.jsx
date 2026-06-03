@@ -348,6 +348,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const handleDocArquivo = async (file) => {
     if (!file) return;
+    const ehPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (!ehPdf) {
+      alert("O documento controlado deve estar em PDF. Se você tem um arquivo Word, exporte para PDF antes de anexar — assim o documento fica em formato fixo e não editável, como exige um sistema de qualidade.");
+      return;
+    }
     setDocArquivoUploading(true);
     try {
       const result = await uploadDocumentoControlado(file);
@@ -428,6 +433,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const confirmarAssinatura = async (doc, papel, assin) => {
     try {
+    // Fase 1 — não se assina documento sem arquivo oficial (PDF) anexado.
+    if (!doc.arquivo) {
+      alert("Anexe o arquivo oficial (PDF) do documento antes de assinar. Não é possível assinar um documento sem conteúdo.");
+      setAssinarGD(null);
+      return;
+    }
     const campo = papel==="elaborador" ? "assinaturaElaborador" : papel==="revisor" ? "assinaturaRevisor" : "assinaturaAprovador";
     // papelLabel é o significado da assinatura (não o cargo do assinante).
     const papelLabel = papel==="elaborador" ? "Elaborador" : papel==="revisor" ? "Revisor" : "Aprovador";
@@ -628,9 +639,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {podeAssElab  && <button style={{...s.btnA,fontSize:11}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
-            {podeAssRev   && <button style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7"}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
-            {podeAssAprov && <button style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800"}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
+            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
+            {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
+            {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
@@ -942,8 +953,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
             <span style={{ fontSize:22 }}>📎</span>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Documento controlado (arquivo oficial)</div>
-              <div style={{ fontSize:11, color:T.text2 }}>Anexe o arquivo PDF ou Word — este é o documento oficial controlado</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Documento controlado (PDF oficial)</div>
+              <div style={{ fontSize:11, color:T.text2 }}>Apenas PDF. Documentos em Word devem ser exportados para PDF antes de anexar.</div>
             </div>
             {docArquivo
               ? <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.accent+"22", color:T.accent }}>📎 Arquivo anexado</span>
@@ -961,7 +972,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
               <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
-                <input type="file" accept=".pdf,.doc,.docx" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
+                <input type="file" accept=".pdf,application/pdf" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
               </label>
               <button style={{ ...s.btnD, fontSize:11 }} onClick={()=>setDocArquivo(null)}>✕</button>
             </div>
@@ -969,8 +980,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             <label style={{ display:"block", border:`2px dashed ${T.border2}`, borderRadius:10, padding:"1.5rem", textAlign:"center", cursor: docArquivoUploading ? "wait" : "pointer", opacity: docArquivoUploading ? 0.6 : 1 }}>
               <div style={{ fontSize:32, marginBottom:6 }}>📂</div>
               <div style={{ fontSize:13, color:T.text2 }}>{docArquivoUploading ? "Enviando arquivo..." : "Clique para anexar o documento oficial"}</div>
-              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>PDF, Word (.doc, .docx)</div>
-              <input type="file" accept=".pdf,.doc,.docx" style={{ display:"none" }} disabled={docArquivoUploading}
+              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>Apenas PDF</div>
+              <input type="file" accept=".pdf,application/pdf" style={{ display:"none" }} disabled={docArquivoUploading}
                 onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
             </label>
           )}
