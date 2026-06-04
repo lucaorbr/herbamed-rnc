@@ -25,6 +25,7 @@ function publicUser(row) {
     permissoes: row.permissoes || {},
     online: row.online,
     ultimoAcesso: row.ultimo_acesso,
+    senhaTemporaria: row.senha_temporaria || false,
   };
 }
 

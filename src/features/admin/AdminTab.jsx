@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection } from "../../firebase";
+import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
 import { useS } from "../../shared/styles";
@@ -102,6 +102,15 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     toast_("Usuário removido.", "red");
   };
 
+  const resetSenha = async (uid, nome) => {
+    if(!confirm(`Resetar senha de "${nome}" para Herba@123?\nO usuário precisará trocar no próximo login.`)) return;
+    try {
+      await adminResetPassword(uid);
+      await auditLog("Reset de Senha", "usuarios", uid, nome, null, { senhaTemporaria: true });
+      toast_(`Senha de ${nome} resetada para Herba@123.`, "green");
+    } catch(e) { toast_("Erro ao resetar senha: " + e.message, "red"); }
+  };
+
   const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU} = usePagination(users||[], 20);
   return (
     <div>
@@ -185,6 +194,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     {u.role==="admin"?"Admin":u.role==="viewer"?"👁️ Visualizador":u.role==="rt"?"🔬 RT":u.role==="keyuser"?"⭐ Key User":"Usuário"}
                   </span>
                   <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>startEdit(u)}><span className="btn-emoji">✏️ </span>Editar</button>
+                  {u.id!==currentUser.uid && <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>resetSenha(u.id, u.name||u.email)} title="Resetar senha para Herba@123">🔄 Resetar senha</button>}
                   {u.id!==currentUser.uid && <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>delUser(u.id)}>🗑️ Remover</button>}
                 </div>
               </div>

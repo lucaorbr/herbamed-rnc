@@ -23,6 +23,7 @@ import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab"
 import { DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
+import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
 
 export default function App() {
   const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
@@ -49,6 +50,7 @@ export default function App() {
   const [presentationMode, setPresentationMode] = useState(false);
   const [sessionWarning, setSessionWarning] = useState(false);
   const [sessionCountdown, setSessionCountdown] = useState(120);
+  const [pwModalOpen, setPwModalOpen] = useState(false);
 
   // ── AUTO-LOGOUT POR INATIVIDADE (15 minutos) ──
   useEffect(() => {
@@ -482,6 +484,9 @@ export default function App() {
                       ⚙️ Administração
                     </button>
                   )}
+                  <button onClick={()=>{setPwModalOpen(true);setAvatarOpen(false);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>
+                    🔑 Mudar senha
+                  </button>
                   <button onClick={async()=>{ try { await auditLog("Logout Manual","usuarios",user?.uid||"—",user?.name||"—",null,null); } catch(e){} logoutUser();setUser(null);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.red, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8, borderTop:`1px solid ${T.border}` }}>
                     🚪 Sair do sistema
                   </button>
@@ -556,6 +561,24 @@ export default function App() {
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+
+        {/* Modal voluntário — "Mudar senha" no avatar */}
+        {pwModalOpen && !user?.senhaTemporaria && (
+          <TrocarSenhaModal
+            forced={false}
+            onSuccess={() => { setPwModalOpen(false); toast_("Senha atualizada com sucesso!", "green"); }}
+            onClose={() => setPwModalOpen(false)}
+          />
+        )}
+
+        {/* Modal forçado — senha temporária criada pelo admin */}
+        {user?.senhaTemporaria && (
+          <TrocarSenhaModal
+            forced={true}
+            onSuccess={() => { setUser(u => ({ ...u, senhaTemporaria: false })); toast_("Senha atualizada! Bem-vindo.", "green"); }}
+            onClose={() => {}}
+          />
+        )}
 
         {/* ── MODO APRESENTAÇÃO ── */}
         {presentationMode && (

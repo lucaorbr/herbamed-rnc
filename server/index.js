@@ -121,6 +121,27 @@ async function handleAuth(req, res, pathname) {
     return sendJson(res, ok ? 200 : 401, ok ? { ok: true } : { error: "Senha incorreta" });
   }
 
+  if (pathname === "/api/auth/change-password" && req.method === "POST") {
+    const user = await requireUser(req);
+    const { senhaAtual, senhaNova } = await readBody(req);
+    if (!senhaAtual || !senhaNova) return sendJson(res, 400, { error: "senhaAtual e senhaNova obrigatorios" });
+    if (senhaNova.length < 8) return sendJson(res, 400, { error: "Nova senha deve ter no mínimo 8 caracteres" });
+    const ok = await verifyPassword(user.id, senhaAtual);
+    if (!ok) return sendJson(res, 401, { error: "Senha atual incorreta" });
+    const hash = await bcrypt.hash(senhaNova, 12);
+    await query("UPDATE users SET password_hash = $1, senha_temporaria = false, updated_at = now() WHERE id = $2", [hash, user.id]);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (pathname === "/api/auth/admin-reset-password" && req.method === "POST") {
+    await requireAdmin(req);
+    const { uid } = await readBody(req);
+    if (!uid) return sendJson(res, 400, { error: "uid obrigatorio" });
+    const hash = await bcrypt.hash("Herba@123", 12);
+    await query("UPDATE users SET password_hash = $1, senha_temporaria = true, updated_at = now() WHERE id = $2", [hash, uid]);
+    return sendJson(res, 200, { ok: true });
+  }
+
   if (pathname === "/api/auth/signature" && req.method === "POST") {
     const user = await requireUser(req);
     const { password, contexto = "", papel = "" } = await readBody(req);
