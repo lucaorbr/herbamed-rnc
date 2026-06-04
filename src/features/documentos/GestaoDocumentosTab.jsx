@@ -314,13 +314,13 @@ function renderUrl(docId, modo) {
 
 // Botões "Ver"/"Baixar" do arquivo oficial vigente, agora pela renderização
 // controlada. O modo (e a marca d'água resultante) depende do status do doc.
-function BotoesArquivoRender({ d, s, T }) {
+function BotoesArquivoRender({ d, s, T, podeBaixarCopia }) {
   const codigo = d.codigo || "documento";
   const versao = d.versao || "01";
   if (d.status === "Vigente") {
     return (<>
       <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada"), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>
+      {podeBaixarCopia && <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada"), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
     </>);
   }
   if (d.status === "Obsoleto") {
@@ -414,8 +414,14 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const isAdmin  = ["admin","keyuser","rt"].includes(user?.role) || (perm && (perm("criarDocumento")||perm("excluirDocumento")));
   const isViewer = user?.role === "viewer" && !(perm && perm("criarDocumento"));
-  // Fase 4 — o arquivo fonte (de trabalho) só é visível para quem pode criar documentos.
-  const podeCriarDoc = isAdmin || (perm && perm("criarDocumento"));
+  // Fase 5 — permissões granulares de Gestão de Documentos.
+  const podeCriarDoc                 = perm?.("criarDocumento")            ?? false;
+  const podeBaixarFonte              = perm?.("baixarArquivoFonte")        ?? false;
+  const podeConfigurar               = perm?.("configurarDocumentos")      ?? false;  // reservado para futuro painel de config
+  const podeIniciarRevisao           = perm?.("iniciarRevisao")            ?? false;
+  const podeTornarObsoleto           = perm?.("tornarObsoleto")            ?? false;
+  const podeBaixarCopiaNaoControlada = perm?.("baixarCopiaNaoControlada")  ?? false;
+  const podeVerDocumentos            = perm?.("verDocumentos")             ?? false;
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
@@ -673,6 +679,17 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const totalVencendo = docs.filter(d=>{ const dias=diasParaRevisaoGD(d.proximaRevisao); return dias!==null&&dias<=90&&d.status==="Vigente"; }).length;
   const totalObsoleto = docs.filter(d=>d.status==="Obsoleto").length;
 
+  /* ── GATE: verDocumentos ── */
+  if (!podeVerDocumentos) {
+    return (
+      <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
+        <div style={{ fontSize:40, marginBottom:12 }}>🔒</div>
+        <div style={{ fontSize:14, fontWeight:600, color:T.text }}>Acesso restrito</div>
+        <div style={{ fontSize:12, marginTop:6 }}>Você não tem permissão para acessar a Gestão de Documentos.</div>
+      </div>
+    );
+  }
+
   /* ── DETALHE ── */
   if (view==="detalhe" && sel) {
     const d = docs.find(x=>x.id===sel.id)||sel;
@@ -695,8 +712,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
             {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
-            {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
-            {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
+            {podeIniciarRevisao && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
+            {podeTornarObsoleto && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
             {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && d.status==="Rascunho" && !d.assinaturaElaborador && !d.assinaturaRevisor && !d.assinaturaAprovador && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir rascunho</button>}
@@ -743,7 +760,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 </div>
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                <BotoesArquivoRender d={d} s={s} T={T} />
+                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} />
               </div>
             </div>
           ) : (
@@ -752,8 +769,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           )}
         </div>
-        {/* ── ARQUIVO FONTE (não controlado) — Fase 4, só para quem cria documentos ── */}
-        {podeCriarDoc && (
+        {/* ── ARQUIVO FONTE (não controlado) — Fase 4/5, só para quem pode baixar fonte ── */}
+        {podeBaixarFonte && (
           <div style={{ ...s.card, border:`1px dashed ${T.border2}`, background:T.surf }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
               <SecTitle icon="🛠️" ch="Arquivo Fonte (não controlado)" />
@@ -811,7 +828,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (
-                  <BotoesArquivoRender d={d} s={s} T={T} />
+                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} />
                 ) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
@@ -1063,8 +1080,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           )}
         </div>
 
-        {/* ── UPLOAD DO ARQUIVO FONTE (editável, não controlado) — Fase 4 ── */}
-        {podeCriarDoc && (
+        {/* ── UPLOAD DO ARQUIVO FONTE (editável, não controlado) — Fase 4/5 ── */}
+        {podeBaixarFonte && (
           <div style={{ border:`2px dashed ${T.border2}`, borderRadius:14, padding:"1.25rem", marginBottom:"1rem", background:T.surf }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
               <span style={{ fontSize:22 }}>🛠️</span>
