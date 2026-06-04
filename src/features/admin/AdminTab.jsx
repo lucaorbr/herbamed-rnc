@@ -49,9 +49,11 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
+  const [editPerms, setEditPerms] = useState({});
   const set = (k,v) => setNu(p=>({...p,[k]:v}));
   const setRole = (role) => { set("role", role); setNuPermissoes({ ...PERMS_PADRAO[role] }); };
   const togglePerm = (key) => setNuPermissoes(p => ({ ...p, [key]: !p[key] }));
+  const toggleEditPerm = (key) => setEditPerms(p => ({ ...p, [key]: !p[key] }));
 
   const addUser = async () => {
     if(!nu.name||!nu.email||!nu.pw) { alert("Nome, e-mail e senha são obrigatórios."); return; }
@@ -71,11 +73,13 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const startEdit = (u) => {
     setEditing(u.id);
     setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"", cargo:u.cargo||"" });
+    // Merge: default do perfil + perms armazenadas (as armazenadas prevalecem)
+    setEditPerms({ ...(PERMS_PADRAO[u.role]||{}), ...(u.permissoes||{}) });
   };
 
   const saveEdit = async (uid) => {
     try {
-    const data = { ...editData };
+    const data = { ...editData, permissoes: editPerms };
     const antesU = users.find(u => u.id === uid);
     await updateUser(uid, data);
     await auditLog("Editou Usuário", "usuarios", uid, `${data.name || antesU?.name} (${antesU?.email || uid})`, antesU ? { name: antesU.name, role: antesU.role, setor: antesU.setor } : null, { name: data.name, role: data.role, setor: data.setor });
@@ -122,6 +126,23 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   </Sel>} />
                 </>} />
 
+                {/* Permissões do usuário editado — editáveis por admin */}
+                <div style={{ marginTop:14, marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Permissões</div>
+                  {PERMS_GRUPOS.map(grupo => (
+                    <div key={grupo.grupo} style={{ marginBottom:10 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>{grupo.grupo}</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:3 }}>
+                        {grupo.items.map(item => (
+                          <label key={item.key} style={{ display:"flex", alignItems:"center", gap:7, padding:"5px 9px", background:editPerms[item.key]?T.accentDim:T.surf, border:`1px solid ${editPerms[item.key]?T.accent+"44":T.border}`, borderRadius:6, cursor:"pointer", transition:"all .15s" }}>
+                            <input type="checkbox" checked={!!editPerms[item.key]} onChange={()=>toggleEditPerm(item.key)} style={{ accentColor:T.accent, width:13, height:13, flexShrink:0 }}/>
+                            <span style={{ fontSize:11, color:editPerms[item.key]?T.accent:T.text2, userSelect:"none" }}>{item.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                   <button style={s.btn} onClick={()=>setEditing(null)}>Cancelar</button>
                   <button style={s.btnA} onClick={()=>saveEdit(u.id)}>Salvar alterações</button>
