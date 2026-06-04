@@ -1,6 +1,7 @@
 const http = require("http");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const { PDFDocument, StandardFonts, rgb, degrees } = require("pdf-lib");
 const { migrate } = require("./migrate");
 const { query, transaction } = require("./db");
 const {
@@ -481,6 +482,248 @@ async function handleCollections(req, res, pathname) {
   return false;
 }
 
+// ── Fase 2/3 — Renderização controlada de documentos (capa + marca d'água) ──
+
+// Texto seguro para WinAnsi (StandardFonts): converte tipográficos e descarta
+// qualquer caractere fora de Latin-1, evitando que o pdf-lib lance ao desenhar.
+function pdfSafe(str) {
+  if (!str) return "";
+  return [...String(str)].map(ch => {
+    const code = ch.codePointAt(0);
+    if (code <= 255) return ch;
+    const subs = {
+      "—": "-", "–": "-",
+      "“": '"', "”": '"',
+      "‘": "'", "’": "'",
+      "…": "...",
+    };
+    return subs[ch] || "?";
+  }).join("");
+}
+
+// Porte do sigCodigo do front (core/utils) para gerar o mesmo código de
+// verificação das assinaturas no PDF renderizado.
+function sigCodigoServer(ass, ctx = "") {
+  if (!ass) return "";
+  if (ass.codigoVerificacao) return ass.codigoVerificacao;
+  if (ass.verificationCode) return ass.verificationCode;
+  const base = `${ass.email || ass.nome || ""}|${ass.userId || ass.uid || ""}|${ass.cargo || ""}|${ass.setor || ""}|${ass.registroProfissional || ass.crf || ass.registro || ""}|${ass.timestamp || ass.dataHora || (ass.data ? `${ass.data} ${ass.hora || ""}` : "")}|${ctx}`;
+  const fnv = (seed) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < base.length; i++) { h ^= base.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  };
+  const full = (fnv(0x811c9dc5) + fnv(0x9e3779b1)).slice(0, 12);
+  return `${full.slice(0, 4)}-${full.slice(4, 8)}-${full.slice(8, 12)}`;
+}
+
+const TIPOS_DOC_RENDER = {
+  PO: "Procedimento Operacional", IT: "Instrução de Trabalho", MOP: "Manual Operacional",
+  FO: "Formulário", ESP: "Especificação", MAN: "Manual", ANX: "Anexo",
+};
+const DEPTOS_DOC_RENDER = {
+  SGQ: "Sistema de Gestão da Qualidade", CQ: "Controle de Qualidade", PRD: "Produção",
+  LOG: "Logística", RH: "Recursos Humanos", COM: "Comercial", ADM: "Administrativo",
+  "P&D": "Pesquisa e Desenvolvimento",
+};
+
+const WATERMARK_MODOS = {
+  controlada:     { texto: "CÓPIA CONTROLADA",      cor: rgb(0.10, 0.50, 0.20), opacidade: 0.08 },
+  nao_controlada: { texto: "CÓPIA NÃO CONTROLADA",  cor: rgb(0.40, 0.40, 0.40), opacidade: 0.14 },
+  obsoleto:       { texto: "DOCUMENTO OBSOLETO",    cor: rgb(0.80, 0.10, 0.10), opacidade: 0.20 },
+  rascunho:       { texto: "RASCUNHO — SEM VALOR",  cor: rgb(0.80, 0.40, 0.00), opacidade: 0.14 },
+};
+
+function fmtDataBR(value) {
+  if (!value) return "—";
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(value);
+}
+
+async function handleDocumentRender(req, res, pathname, url) {
+  const match = pathname.match(/^\/api\/documents\/([^/]+)\/render$/);
+  if (!match || req.method !== "GET") return false;
+  await requireUser(req);
+
+  const docId = decodeURIComponent(match[1]);
+  const modoRaw = (url.searchParams.get("modo") || "nao_controlada").toLowerCase();
+  const modo = WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada";
+  const wm = WATERMARK_MODOS[modo];
+
+  try {
+    const docRes = await query(
+      "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
+      [docId]
+    );
+    if (!docRes.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
+    const doc = docRes.rows[0].data || {};
+
+    const arquivoUrl = doc.arquivo && doc.arquivo.url ? String(doc.arquivo.url) : "";
+    const fileId = arquivoUrl.includes("/api/files/") ? arquivoUrl.split("/api/files/").pop() : "";
+    if (!fileId) return sendJson(res, 422, { error: "Documento sem arquivo anexado" });
+
+    const fileRes = await query(
+      "SELECT data, mime_type, original_name FROM stored_files WHERE id = $1",
+      [fileId]
+    );
+    if (!fileRes.rowCount) return sendJson(res, 404, { error: "Arquivo não encontrado" });
+    const file = fileRes.rows[0];
+    if (file.mime_type !== "application/pdf") {
+      return sendJson(res, 415, { error: "Renderização aplicável apenas a PDFs" });
+    }
+
+    const codigo  = pdfSafe(doc.codigo || "—");
+    const versao  = pdfSafe(doc.versao || "01");
+    const titulo  = pdfSafe(doc.titulo || "Documento");
+    const tipoLbl = pdfSafe(TIPOS_DOC_RENDER[doc.tipo] || doc.tipo || "—");
+    const deptoLbl = pdfSafe(DEPTOS_DOC_RENDER[doc.depto] || doc.depto || "—");
+    const status  = pdfSafe(doc.status || "—");
+    const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
+    const wmTexto = pdfSafe(wm.texto);
+    const impressoEm = new Date().toLocaleString("pt-BR");
+
+    const contentPdf = await PDFDocument.load(file.data);
+    const out = await PDFDocument.create();
+    const fontB = await out.embedFont(StandardFonts.HelveticaBold);
+    const fontR = await out.embedFont(StandardFonts.Helvetica);
+
+    const draw = (page, text, x, y, size, font, color) =>
+      page.drawText(pdfSafe(text), { x, y, size, font, color });
+    const drawRight = (page, text, xRight, y, size, font, color) => {
+      const t = pdfSafe(text);
+      const w = font.widthOfTextAtSize(t, size);
+      page.drawText(t, { x: xRight - w, y, size, font, color });
+    };
+    const drawCenter = (page, text, cx, y, size, font, color) => {
+      const t = pdfSafe(text);
+      const w = font.widthOfTextAtSize(t, size);
+      page.drawText(t, { x: cx - w / 2, y, size, font, color });
+    };
+
+    const verde = rgb(0.10, 0.29, 0.18);
+    const cinza = rgb(0.42, 0.42, 0.42);
+    const cinzaC = rgb(0.30, 0.30, 0.30);
+
+    // ── CAPA (página 1) ──
+    const capa = out.addPage([595, 842]);
+    const W = 595, H = 842;
+
+    // Faixa superior verde
+    capa.drawRectangle({ x: 0, y: H - 60, width: W, height: 60, color: verde });
+    draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, H - 32, 13, fontB, rgb(1, 1, 1));
+    draw(capa, "CNPJ: 14.829.598/0001-30", 40, H - 48, 9, fontR, rgb(0.85, 0.93, 0.87));
+    drawRight(capa, tipoLbl, W - 40, H - 32, 11, fontB, rgb(1, 1, 1));
+    drawRight(capa, `${codigo} · Rev. ${versao}`, W - 40, H - 48, 10, fontR, rgb(0.85, 0.93, 0.87));
+
+    // Bloco de identificação (título grande)
+    let y = H - 110;
+    draw(capa, titulo, 40, y, 22, fontB, verde);
+    y -= 26;
+    draw(capa, `Departamento: ${deptoLbl}   ·   Status: ${status}`, 40, y, 11, fontR, cinzaC);
+    y -= 16;
+    draw(capa, `Data de elaboração: ${fmtDataBR(doc.criadoEm)}   ·   Próxima revisão: ${fmtDataBR(doc.proximaRevisao)}`, 40, y, 11, fontR, cinzaC);
+
+    // Seção "Identificação"
+    y -= 40;
+    draw(capa, "IDENTIFICAÇÃO", 40, y, 11, fontB, verde);
+    capa.drawLine({ start: { x: 40, y: y - 5 }, end: { x: W - 40, y: y - 5 }, thickness: 1, color: verde });
+    y -= 24;
+    const ident = [
+      ["Código", codigo], ["Tipo", tipoLbl],
+      ["Versão", `Rev. ${versao}`], ["Departamento", deptoLbl],
+      ["Data de elaboração", fmtDataBR(doc.criadoEm)], ["Próxima revisão", fmtDataBR(doc.proximaRevisao)],
+    ];
+    const colX = [40, 310];
+    for (let i = 0; i < ident.length; i += 2) {
+      for (let c = 0; c < 2 && i + c < ident.length; c++) {
+        const [k, v] = ident[i + c];
+        draw(capa, String(k).toUpperCase(), colX[c], y, 8, fontB, cinza);
+        draw(capa, v, colX[c], y - 13, 11, fontR, cinzaC);
+      }
+      y -= 34;
+    }
+
+    // Seção "Assinaturas Eletrônicas" — 3 caixas lado a lado
+    y -= 6;
+    draw(capa, "ASSINATURAS ELETRÔNICAS", 40, y, 11, fontB, verde);
+    capa.drawLine({ start: { x: 40, y: y - 5 }, end: { x: W - 40, y: y - 5 }, thickness: 1, color: verde });
+    y -= 18;
+
+    const boxW = (W - 80 - 24) / 3; // 3 caixas, gaps de 12
+    const boxH = 120;
+    const boxTop = y;
+    const assinaturas = [
+      ["Elaborador", doc.assinaturaElaborador],
+      ["Revisor", doc.assinaturaRevisor],
+      ["Aprovador", doc.assinaturaAprovador],
+    ];
+    assinaturas.forEach(([papel, ass], idx) => {
+      const bx = 40 + idx * (boxW + 12);
+      const by = boxTop - boxH;
+      capa.drawRectangle({ x: bx, y: by, width: boxW, height: boxH, borderColor: verde, borderWidth: 1, color: rgb(0.98, 0.99, 0.98) });
+      let ty = boxTop - 16;
+      draw(capa, papel.toUpperCase(), bx + 8, ty, 8, fontB, verde);
+      ty -= 16;
+      if (ass) {
+        draw(capa, ass.nome || "—", bx + 8, ty, 10, fontB, cinzaC); ty -= 13;
+        if (ass.cargo) { draw(capa, ass.cargo, bx + 8, ty, 8, fontR, cinza); ty -= 11; }
+        const reg = ass.registroProfissional || ass.crf || ass.registro || "";
+        if (reg) { draw(capa, `Reg.: ${reg}`, bx + 8, ty, 8, fontR, cinza); ty -= 11; }
+        const quando = ass.timestamp ? new Date(ass.timestamp).toLocaleString("pt-BR") : (ass.dataHora || "");
+        if (quando) { draw(capa, quando, bx + 8, ty, 7, fontR, cinza); ty -= 11; }
+        draw(capa, "Cód.:", bx + 8, ty, 7, fontR, cinza);
+        draw(capa, sigCodigoServer(ass, ctxAss), bx + 30, ty, 7, fontB, cinzaC);
+      } else {
+        draw(capa, "Aguardando", bx + 8, ty - 6, 10, fontR, rgb(0.7, 0.7, 0.7));
+      }
+    });
+
+    // Rodapé da capa
+    draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
+    drawCenter(capa, `Impresso em ${impressoEm}`, W / 2, 30, 8, fontR, cinza);
+    drawRight(capa, wmTexto, W - 40, 30, 8, fontB, cinza);
+
+    // ── CONTEÚDO (páginas 2+) ──
+    const indices = contentPdf.getPageIndices();
+    const copiadas = await out.copyPages(contentPdf, indices);
+    copiadas.forEach(p => out.addPage(p));
+
+    // ── Carimbar TODAS as páginas com marca d'água diagonal ──
+    const pages = out.getPages();
+    const totalConteudo = pages.length - 1;
+    pages.forEach((page, idx) => {
+      const { width, height } = page.getSize();
+      const wmSize = Math.max(36, Math.min(width, height) * 0.07);
+      const angle = (45 * Math.PI) / 180;
+      const tw = fontB.widthOfTextAtSize(wmTexto, wmSize);
+      const th = fontB.heightAtSize(wmSize);
+      const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
+      const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
+      page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
+
+      // Cabeçalho e rodapé apenas nas páginas de conteúdo (todas menos a capa)
+      if (idx === 0) return;
+      const numPag = idx; // página de conteúdo (1..N)
+      // Faixa de cabeçalho fina
+      page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
+      page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
+      // Faixa de rodapé
+      page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
+      page.drawText(pdfSafe(`${wmTexto} · ${codigo} Rev. ${versao} · Impresso em ${impressoEm} · Página ${numPag} de ${totalConteudo}`), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
+    });
+
+    const bytes = await out.save();
+    return sendBuffer(res, 200, Buffer.from(bytes), {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": "inline",
+      "Cache-Control": "no-store",
+    });
+  } catch (error) {
+    console.error("Falha ao renderizar documento:", error);
+    return sendJson(res, 422, { error: `Não foi possível renderizar o documento: ${error.message}` });
+  }
+}
+
 async function handleAreco(req, res, pathname, url) {
   if (pathname === "/api/areco/materiais" && req.method === "GET") {
     await requireUser(req);
@@ -575,7 +818,7 @@ async function route(req, res) {
 
   if (pathname.startsWith("/api/claude")) return handleClaude(req, res);
 
-  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;

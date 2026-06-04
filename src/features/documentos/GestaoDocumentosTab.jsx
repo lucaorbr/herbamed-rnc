@@ -307,6 +307,29 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
   return `${codigo || "documento"}_Rev${versao || "01"}${ext}`;
 }
 
+// Fase 2/3 — endpoint de renderização controlada (capa + marca d'água no conteúdo).
+function renderUrl(docId, modo) {
+  return `/api/documents/${docId}/render?modo=${modo}`;
+}
+
+// Botões "Ver"/"Baixar" do arquivo oficial vigente, agora pela renderização
+// controlada. O modo (e a marca d'água resultante) depende do status do doc.
+function BotoesArquivoRender({ d, s, T }) {
+  const codigo = d.codigo || "documento";
+  const versao = d.versao || "01";
+  if (d.status === "Vigente") {
+    return (<>
+      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada"), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>
+    </>);
+  }
+  if (d.status === "Obsoleto") {
+    return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>;
+  }
+  // Rascunho, Em Revisão, Aguardando Aprovação
+  return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
+}
+
 export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {} }) {
   const T = useTheme();
   const s = useS();
@@ -689,14 +712,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
                 </div>
               </div>
-              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)}
-                style={{ ...s.btn, fontSize:11, display:"inline-flex", alignItems:"center", gap:4 }}>
-                👁️ Ver
-              </button>
-              <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))}
-                style={{ ...s.btnA, fontSize:11 }}>
-                ⬇️ Baixar
-              </button>
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                <BotoesArquivoRender d={d} s={s} T={T} />
+              </div>
             </div>
           ) : (
             <div style={{ padding:"12px 16px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}`, marginTop:8, fontSize:12, color:T.text3, textAlign:"center" }}>
@@ -733,10 +751,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 </div>
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
-                {d.arquivo ? (<>
-                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>abrirArquivoAutenticado(d.arquivo.url, true, nomeDownloadDoc(d.codigo, d.versao, d.arquivo))} style={{...s.btnA,fontSize:11}}>⬇️ Baixar</button>
-                </>) : (
+                {d.arquivo ? (
+                  <BotoesArquivoRender d={d} s={s} T={T} />
+                ) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
               </div>
