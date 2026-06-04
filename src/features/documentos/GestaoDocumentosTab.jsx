@@ -349,6 +349,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [verSnapshot, setVerSnapshot] = useState(null);
   const [assinarGD, setAssinarGD] = useState(null);
   const [novoMat, setNovoMat] = useState("");
+  // Fase 6 — modal de designação de leitura obrigatória
+  const [modalDesignacao, setModalDesignacao] = useState(null); // { doc }
+  const [designados, setDesignados]           = useState([]);
+  const [filtroDesigDepto, setFiltroDesigDepto] = useState("todos");
+  const [filtroDesigRole, setFiltroDesigRole]   = useState("todos");
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
   const [editEntradaIdx, setEditEntradaIdx] = useState(null);
@@ -520,6 +525,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     toast_(`Assinado como ${papelLabel}!`, "green");
     setSel(updated);
     setAssinarGD(null);
+    // Fase 6 — ao ficar Vigente, oferecer designação de leitura obrigatória
+    if (updated.status === "Vigente") {
+      setDesignados([]);
+      setFiltroDesigDepto("todos");
+      setFiltroDesigRole("todos");
+      setModalDesignacao({ doc: updated });
+    }
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -559,6 +571,41 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       toast_(fbErr(e), "red");
       console.error(e);
     }
+  };
+
+  // Fase 6 — salva designados no documento e fecha o modal
+  const salvarDesignacao = async (doc, listaDesignados) => {
+    try {
+      const leitura = {
+        atribuido: true,
+        atribuidoEm: tod(),
+        atribuidoPor: user?.name || "",
+        designados: listaDesignados.map(u => ({ userId: u.id, userName: u.name, setor: u.setor||"", confirmou: false, confirmedoEm: null })),
+      };
+      const updated = { ...doc, leituraObrigatoria: leitura };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Designou Leitura Obrigatória", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { designados: leitura.designados.length });
+      toast_(`Leitura obrigatória atribuída a ${leitura.designados.length} pessoa(s).`, "green");
+      setSel(updated);
+      setModalDesignacao(null);
+    } catch(e) { toast_("Erro ao salvar designação.", "red"); console.error(e); }
+  };
+
+  // Fase 6 — usuário confirma "Li e entendi"
+  const confirmarLeitura = async (doc) => {
+    try {
+      const leitura = doc.leituraObrigatoria || {};
+      const designados = (leitura.designados || []).map(d =>
+        d.userId === user?.uid || d.userId === user?.id
+          ? { ...d, confirmou: true, confirmedoEm: new Date().toISOString() }
+          : d
+      );
+      const updated = { ...doc, leituraObrigatoria: { ...leitura, designados } };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Confirmou Leitura", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { userId: user?.uid||user?.id, userName: user?.name });
+      toast_("Leitura confirmada!", "green");
+      setSel(updated);
+    } catch(e) { toast_("Erro ao confirmar leitura.", "red"); console.error(e); }
   };
 
   const tornarObsoleto = async (doc) => {
@@ -987,6 +1034,54 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           </div>
         )}
+        {/* ── FASE 6: MODAL DE DESIGNAÇÃO DE LEITURA ── */}
+        {modalDesignacao && (
+          <div onClick={()=>setModalDesignacao(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:640,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div>
+                  <div style={{fontSize:16,fontWeight:700,color:T.text}}>📖 Designar leitura obrigatória</div>
+                  <div style={{fontSize:12,color:T.text2,marginTop:2}}>{modalDesignacao.doc.codigo} — {modalDesignacao.doc.titulo}</div>
+                </div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDesignacao(null)}>✕ Fechar</button>
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+                <select value={filtroDesigDepto} onChange={e=>setFiltroDesigDepto(e.target.value)} style={{...s.inp,fontSize:12,flex:1}}>
+                  <option value="todos">Todos os setores</option>
+                  {[...new Set((users||[]).map(u=>u.setor).filter(Boolean))].map(s=><option key={s} value={s}>{s}</option>)}
+                </select>
+                <select value={filtroDesigRole} onChange={e=>setFiltroDesigRole(e.target.value)} style={{...s.inp,fontSize:12,flex:1}}>
+                  <option value="todos">Todos os perfis</option>
+                  {["admin","keyuser","rt","user","viewer","exec"].map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={{maxHeight:300,overflowY:"auto",marginBottom:14,display:"flex",flexDirection:"column",gap:4}}>
+                {(users||[]).filter(u=>
+                  (filtroDesigDepto==="todos" || u.setor===filtroDesigDepto) &&
+                  (filtroDesigRole==="todos"  || u.role===filtroDesigRole)
+                ).map(u=>{
+                  const sel2 = designados.some(x=>x.id===u.id);
+                  return (
+                    <label key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:sel2?T.accentDim:T.surf,border:`1px solid ${sel2?T.accent+"44":T.border}`,borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
+                      <input type="checkbox" checked={sel2} onChange={()=>setDesignados(p=>sel2?p.filter(x=>x.id!==u.id):[...p,u])} style={{accentColor:T.accent,width:14,height:14,flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{u.name}</div>
+                        <div style={{fontSize:11,color:T.text2}}>{u.setor||"—"} · {u.role}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:12}}>{designados.length} pessoa(s) selecionada(s)</div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>setModalDesignacao(null)}>Pular (sem designar)</button>
+                <button style={{...s.btnA,opacity:designados.length===0?0.5:1}} disabled={designados.length===0} onClick={()=>salvarDesignacao(modalDesignacao.doc, designados)}>
+                  ✅ Designar leitura ✓
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {assinarGD && (
           <AssinaturaModal
             user={user}
@@ -997,6 +1092,69 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             onConfirm={(assin)=>confirmarAssinatura(assinarGD.doc, assinarGD.papel, assin)}
           />
         )}
+        {/* ── FASE 6: LEITURA OBRIGATÓRIA ── */}
+        {(()=>{
+          const leit = d.leituraObrigatoria;
+          if (!leit?.atribuido) return null;
+          const uid = user?.uid || user?.id;
+          const euNaLista = leit.designados?.some(x => x.userId === uid);
+          const podeVer = (perm?.("gerenciarTreinamento") ?? false) || euNaLista;
+          if (!podeVer) return null;
+          const total = leit.designados?.length || 0;
+          const confirmados = leit.designados?.filter(x=>x.confirmou).length || 0;
+          const euJaConfirmei = leit.designados?.find(x => x.userId === uid)?.confirmou;
+          const pct = total > 0 ? Math.round((confirmados/total)*100) : 0;
+          return (
+            <div style={{ ...s.card, border:`1px solid ${T.accent}33` }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                <SecTitle icon="📖" ch="Leitura Obrigatória" />
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontSize:12, color:T.text2 }}>{confirmados}/{total} confirmações ({pct}%)</span>
+                  <div style={{ width:120, height:8, borderRadius:8, background:T.border, overflow:"hidden" }}>
+                    <div style={{ width:`${pct}%`, height:"100%", background:pct===100?T.accent:"#ffd166", borderRadius:8, transition:"width .3s" }} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+                Atribuído por {leit.atribuidoPor} em {fmt(leit.atribuidoEm)}
+              </div>
+              {euNaLista && !euJaConfirmei && (
+                <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12 }}>
+                  <span style={{ fontSize:22 }}>📖</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Leitura obrigatória — {d.codigo}</div>
+                    <div style={{ fontSize:11, color:T.text2 }}>Você foi designado para ler este documento. Confirme após a leitura.</div>
+                  </div>
+                  <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>confirmarLeitura(d)}>✅ Li e entendi</button>
+                </div>
+              )}
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {(leit.designados||[]).map((des,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                    <div style={{ width:28, height:28, borderRadius:"50%", background:des.confirmou?T.accent:T.border, color:des.confirmou?"#fff":T.text3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
+                      {des.confirmou ? "✓" : "✗"}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{des.userName}</div>
+                      {des.setor && <div style={{ fontSize:11, color:T.text2 }}>{des.setor}</div>}
+                    </div>
+                    {des.confirmou
+                      ? <span style={{ fontSize:11, color:T.accent, fontWeight:700 }}>✓ Confirmado em {fmt(des.confirmedoEm?.split?.("T")[0] || des.confirmedoEm)}</span>
+                      : <span style={{ fontSize:11, color:T.text3 }}>Pendente</span>
+                    }
+                  </div>
+                ))}
+              </div>
+              {(perm?.("gerenciarTreinamento") ?? false) && (
+                <div style={{ textAlign:"right", marginTop:10 }}>
+                  <button style={{ ...s.btn, fontSize:11 }} onClick={()=>{ setDesignados([]); setFiltroDesigDepto("todos"); setFiltroDesigRole("todos"); setModalDesignacao({ doc: d }); }}>
+                    ✏️ Reatribuir leitura
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {d.treinamentoObrigatorio && (
           <div style={s.card}>
             <SecTitle icon="📚" ch="Controle de Treinamentos" />
