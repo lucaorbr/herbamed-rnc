@@ -540,14 +540,28 @@ function fmtDataBR(value) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(value);
 }
 
+async function handleDistributionLog(req, res, pathname, url) {
+  if (pathname !== "/api/distribution-log" || req.method !== "GET") return false;
+  await requireUser(req);
+  const docId = url.searchParams.get("docId");
+  if (!docId) return sendJson(res, 400, { error: "docId obrigatório" });
+  const result = await query(
+    `SELECT id, doc_id, doc_codigo, usuario_id, usuario_nome, data_download, modo
+     FROM distribution_log WHERE doc_id = $1 ORDER BY data_download DESC LIMIT 200`,
+    [docId]
+  );
+  return sendJson(res, 200, result.rows);
+}
+
 async function handleDocumentRender(req, res, pathname, url) {
   const match = pathname.match(/^\/api\/documents\/([^/]+)\/render$/);
   if (!match || req.method !== "GET") return false;
-  await requireUser(req);
+  const reqUser = await requireUser(req);
 
   const docId = decodeURIComponent(match[1]);
   const modoRaw = (url.searchParams.get("modo") || "nao_controlada").toLowerCase();
   const modo = WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada";
+  const userNameParam = url.searchParams.get("userName") || reqUser?.name || "";
   const wm = WATERMARK_MODOS[modo];
 
   try {
@@ -579,8 +593,12 @@ async function handleDocumentRender(req, res, pathname, url) {
     const deptoLbl = pdfSafe(DEPTOS_DOC_RENDER[doc.depto] || doc.depto || "—");
     const status  = pdfSafe(doc.status || "—");
     const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
-    const wmTexto = pdfSafe(wm.texto);
     const impressoEm = new Date().toLocaleString("pt-BR");
+    // Fase 7 — cópia não controlada leva nome do solicitante no carimbo
+    const wmTextoBase = modo === "nao_controlada" && userNameParam
+      ? `CÓPIA NÃO CONTROLADA — impresso por ${userNameParam} em ${impressoEm}`
+      : wm.texto;
+    const wmTexto = pdfSafe(wmTextoBase);
 
     const contentPdf = await PDFDocument.load(file.data);
     const out = await PDFDocument.create();
@@ -713,6 +731,16 @@ async function handleDocumentRender(req, res, pathname, url) {
     });
 
     const bytes = await out.save();
+
+    // Fase 7 — registra distribuição de cópias não controladas
+    if (modo === "nao_controlada") {
+      query(
+        `INSERT INTO distribution_log (doc_id, doc_codigo, usuario_id, usuario_nome, modo)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [docId, doc.codigo || "", reqUser?.id || "", reqUser?.name || userNameParam, modo]
+      ).catch(e => console.error("distribution_log insert failed:", e));
+    }
+
     return sendBuffer(res, 200, Buffer.from(bytes), {
       "Content-Type": "application/pdf",
       "Content-Disposition": "inline",
@@ -818,7 +846,7 @@ async function route(req, res) {
 
   if (pathname.startsWith("/api/claude")) return handleClaude(req, res);
 
-  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;
