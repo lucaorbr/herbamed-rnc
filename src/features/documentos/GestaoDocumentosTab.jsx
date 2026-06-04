@@ -671,6 +671,24 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
   };
 
+  // Fase 9 — revisão periódica sem alterações: confirma que o documento foi
+  // revisado e continua válido, reagendando a próxima revisão.
+  const revisarSemAlteracoes = async (doc) => {
+    try {
+      const obs = window.prompt("Observações da revisão (opcional):", "") || "";
+      const revisaoRegistrada = { data: tod(), responsavel: user?.name || "", obs };
+      const novaProxima = calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao));
+      const updated = { ...doc, revisaoRegistrada, proximaRevisao: novaProxima, atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Revisão sem alterações", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { proximaRevisao: doc.proximaRevisao }, { proximaRevisao: novaProxima, responsavel: revisaoRegistrada.responsavel });
+      toast_(`Revisão registrada. Próxima revisão: ${fmt(novaProxima)}.`, "green");
+      setSel(updated);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
+  };
+
   const deletar = async (id) => {
     try {
     const doc = docs.find(x => String(x.id) === String(id)) || sel;
@@ -825,8 +843,18 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           </div>
         )}
         {diasRev!==null && diasRev<=90 && d.status==="Vigente" && (
-          <div style={{background:diasRev<=0?"#ff4f6a18":"#ffd16618",border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:12,color:diasRev<=0?"#ff4f6a":"#ffd166",fontWeight:600}}>
-            {diasRev<=0?`⚠️ Revisão vencida há ${Math.abs(diasRev)} dias!`:`⏰ Revisão necessária em ${diasRev} dias (${fmt(d.proximaRevisao)})`}
+          <div style={{background:diasRev<=0?"#ff4f6a18":"#ffd16618",border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+            <span style={{fontSize:12,color:diasRev<=0?"#ff4f6a":"#ffd166",fontWeight:600}}>
+              {diasRev<=0?`⚠️ Revisão vencida há ${Math.abs(diasRev)} dias!`:`⏰ Revisão necessária em ${diasRev} dias (${fmt(d.proximaRevisao)})`}
+            </span>
+            {diasRev<=30 && podeIniciarRevisao && (
+              <button style={{...s.btnA,fontSize:11}} onClick={()=>revisarSemAlteracoes(d)}>✓ Revisar (sem alterações)</button>
+            )}
+          </div>
+        )}
+        {d.revisaoRegistrada && d.status==="Vigente" && (!diasRev || diasRev>30) && (
+          <div style={{background:T.accentDim,border:`1px solid ${T.accent}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:12,color:T.accent,fontWeight:600}}>
+            ✓ Revisão registrada em {fmt(d.revisaoRegistrada.data)}{d.revisaoRegistrada.responsavel?` por ${d.revisaoRegistrada.responsavel}`:""}{d.revisaoRegistrada.obs?` — ${d.revisaoRegistrada.obs}`:""}
           </div>
         )}
         <div style={s.card}>
