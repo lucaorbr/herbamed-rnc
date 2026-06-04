@@ -563,6 +563,7 @@ async function handleDocumentRender(req, res, pathname, url) {
   const modo = WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada";
   const userNameParam = url.searchParams.get("userName") || reqUser?.name || "";
   const wm = WATERMARK_MODOS[modo];
+  console.log(`[RENDER] docId=${docId} modoRaw=${modoRaw} modo=${modo} wmTexto=${wm.texto}`);
 
   try {
     const docRes = await query(
@@ -702,10 +703,14 @@ async function handleDocumentRender(req, res, pathname, url) {
     const copiadas = await out.copyPages(contentPdf, indices);
     copiadas.forEach(p => out.addPage(p));
 
-    // ── Carimbar TODAS as páginas com marca d'água diagonal ──
+    // ── Carimbar CONTEÚDO (páginas 2+) com marca d'água diagonal ──
+    // A capa tem seu próprio footer com a marca d'água — não carimba lá
     const pages = out.getPages();
     const totalConteudo = pages.length - 1;
     pages.forEach((page, idx) => {
+      // Pula capa para não sobrepor marca d'água diagonal com footer
+      if (idx === 0) return;
+
       const { width, height } = page.getSize();
       const wmSize = Math.max(36, Math.min(width, height) * 0.07);
       const angle = (45 * Math.PI) / 180;
@@ -715,8 +720,7 @@ async function handleDocumentRender(req, res, pathname, url) {
       const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
       page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
 
-      // Cabeçalho e rodapé apenas nas páginas de conteúdo (todas menos a capa)
-      if (idx === 0) return;
+      // Cabeçalho e rodapé nas páginas de conteúdo
       const numPag = idx; // página de conteúdo (1..N)
       // Faixa de cabeçalho fina
       page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
