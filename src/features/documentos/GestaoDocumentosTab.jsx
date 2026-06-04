@@ -308,19 +308,20 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
 }
 
 // Fase 2/3 — endpoint de renderização controlada (capa + marca d'água no conteúdo).
-function renderUrl(docId, modo) {
-  return `/api/documents/${docId}/render?modo=${modo}`;
+function renderUrl(docId, modo, userName) {
+  const base = `/api/documents/${docId}/render?modo=${modo}`;
+  return userName ? `${base}&userName=${encodeURIComponent(userName)}` : base;
 }
 
 // Botões "Ver"/"Baixar" do arquivo oficial vigente, agora pela renderização
 // controlada. O modo (e a marca d'água resultante) depende do status do doc.
-function BotoesArquivoRender({ d, s, T, podeBaixarCopia }) {
+function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName }) {
   const codigo = d.codigo || "documento";
   const versao = d.versao || "01";
   if (d.status === "Vigente") {
     return (<>
-      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-      {podeBaixarCopia && <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada"), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
+      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+      {podeBaixarCopia && <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
     </>);
   }
   if (d.status === "Obsoleto") {
@@ -354,6 +355,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [designados, setDesignados]           = useState([]);
   const [filtroDesigDepto, setFiltroDesigDepto] = useState("todos");
   const [filtroDesigRole, setFiltroDesigRole]   = useState("todos");
+  // Fase 7 — log de distribuição
+  const [distLog,     setDistLog]     = useState([]);
+  const [distLogLoading, setDistLogLoading] = useState(false);
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
   const [editEntradaIdx, setEditEntradaIdx] = useState(null);
@@ -444,6 +448,16 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       setTreinamentos(list.sort((a,b) => (b.ts||0)-(a.ts||0)));
     });
     return () => unsub && unsub();
+  }, [sel?.id]);
+
+  useEffect(() => {
+    if (!sel?.id) { setDistLog([]); return; }
+    setDistLogLoading(true);
+    fetch(`/api/distribution-log?docId=${sel.id}`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(rows => setDistLog(rows))
+      .catch(() => setDistLog([]))
+      .finally(() => setDistLogLoading(false));
   }, [sel?.id]);
 
   const salvar = async () => {
@@ -807,7 +821,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 </div>
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} />
+                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} />
               </div>
             </div>
           ) : (
@@ -846,6 +860,41 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           </div>
         )}
 
+        {/* ── FASE 7: LOG DE DISTRIBUIÇÃO ── */}
+        {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
+          <div style={s.card}>
+            <SecTitle icon="📋" ch="Log de distribuição" />
+            {distLogLoading ? (
+              <div style={{ fontSize:12, color:T.text3, padding:"8px 0" }}>Carregando...</div>
+            ) : distLog.length === 0 ? (
+              <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem 0" }}>Nenhuma cópia distribuída ainda.</div>
+            ) : (
+              <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead>
+                    <tr style={{ background:T.surf }}>
+                      {["Data/Hora","Usuário","Modo"].map(h=>(
+                        <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:T.text3, fontWeight:700, fontSize:10, textTransform:"uppercase", borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {distLog.map((row,i)=>(
+                      <tr key={row.id||i} style={{ borderBottom:`1px solid ${T.border}`, background:i%2===0?T.bg:T.surf }}>
+                        <td style={{ padding:"7px 10px", color:T.text2 }}>{row.data_download ? new Date(row.data_download).toLocaleString("pt-BR") : "—"}</td>
+                        <td style={{ padding:"7px 10px", color:T.text }}>{row.usuario_nome || "—"}</td>
+                        <td style={{ padding:"7px 10px" }}>
+                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12, background:T.border, color:T.text2 }}>{row.modo || "—"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {d.materiais?.length>0 && (
           <div style={s.card}>
             <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
@@ -875,7 +924,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (
-                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} />
+                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} />
                 ) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}

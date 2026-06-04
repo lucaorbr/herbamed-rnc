@@ -196,6 +196,23 @@ async function migrate() {
     ON document_signatures (contexto)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS distribution_log (
+      id bigserial PRIMARY KEY,
+      doc_id text NOT NULL,
+      doc_codigo text,
+      usuario_id text,
+      usuario_nome text,
+      data_download timestamptz NOT NULL DEFAULT now(),
+      modo text NOT NULL DEFAULT 'nao_controlada'
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_distribution_log_doc_id
+    ON distribution_log (doc_id, data_download DESC)
+  `);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }
