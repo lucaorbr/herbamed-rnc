@@ -23,8 +23,9 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - ARECO_SYNC_ENABLED=false para testes locais
 - Seção 17 do roadmap depende de infraestrutura da TI
 
-## Próximas seções
-Seções 7, 8, 9 (motor de assinatura) → 11, 12 (reprovação → RNC)
+## Status do roadmap
+✅ **Gestão de Documentos — 9 fases implementadas**
+- Próximas: Seções 11, 12 (reprovação → RNC)
 
 ## Referência de design: SE Suite (SoftExpert Suite)
 Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
@@ -51,9 +52,84 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - **Impressão de cópia não controlada é registrada** (quem, quando).
 - **Mantém-se o que já existe:** ciclo de vida (Rascunho → Em Revisão → Aguardando Aprovação → Vigente → Obsoleto), 3 assinaturas com segregação de funções, histórico de revisões com snapshot, trava de Vigente, revisão periódica por tipo e tabela imutável de assinaturas.
 
-### Plano de implementação (fases)
-1. **Fundação:** PDF obrigatório + bloqueio de assinatura sem arquivo.
-2. **Marca d'água no conteúdo:** endpoint server-side que carimba todas as páginas (modos controlada / não controlada / obsoleto / rascunho).
-3. **Folha de rosto integrada** como página 1 do PDF carimbado.
-4. **Log de distribuição** de cópias não controladas.
-5. **(futuro) Treinamento** na liberação.
+### REFORMA DA GESTÃO DE DOCUMENTOS — 9 fases (completas)
+
+#### Fase 1: Fundação — PDF obrigatório
+- Campo `arquivo` obrigatório (não assina sem PDF anexado)
+- Bloqueio: se não há arquivo, botão "Assinar" desabilitado
+- **PR #20**
+
+#### Fase 2+3: Renderização controlada + capa
+- Endpoint `GET /api/documents/{id}/render?modo={controlada|nao_controlada|obsoleto|rascunho}&userName={name}`
+- Capa integrada com assinaturas (3 papéis: Elaborador, Revisor, Aprovador)
+- Marca d'água diagonal 45° em todas as páginas (configurável por modo)
+- Rodapé: data impressão + modo no footer da capa
+- **PR #22**
+
+#### Fase 4: Arquivo fonte editável por revisão
+- Campo `arquivoFonte` (Word/Excel/PPT apenas, não PDF)
+- Função `handleDocArquivoFonte()` valida extensão
+- Carregado ao iniciar revisão, permite que elaborador reedite
+- Permissão `baixarArquivoFonte` para download
+- **PR #24**
+
+#### Fase 5: Controle de acesso granular
+- 7 permissões novas em "Gestão de Documentos": verDocumentos, iniciarRevisao, tornarObsoleto, configurarDocumentos, baixarArquivoFonte, baixarCopiaNaoControlada, gerenciarTreinamento
+- PERMS_PADRAO por role (viewer, user, rt, keyuser, admin, exec) com defaults
+- Admin customiza permissões por usuário no AdminTab
+- **PR #25**
+
+#### Fase 6: Confirmação de leitura + treinamento BPF
+- Modal obrigatório ao abrir documento (se `leituraObrigatoria=true`)
+- "Li e entendi" com timestamp + IP
+- Registra em tabela `training_log` (usuario_id, usuario_nome, doc_id, data_confirmacao)
+- Indicador visual "✓ Leitura confirmada" na lista
+- **PR #26**
+
+#### Fase 7: Log de distribuição de cópias não controladas
+- Tabela `distribution_log`: doc_id, doc_codigo, usuario_id, usuario_nome, data_download, modo
+- Preenchida ao renderizar com `modo=nao_controlada`
+- Rastreabilidade: quem baixou cópia não controlada, quando
+- Usado para auditoria de compliance
+- **PR #28**
+
+#### Fase 8: Data de vigência programada
+- Campo `dataVigencia` (data futura quando doc ativa)
+- Cronjob verifica diariamente → promove status para "Vigente" quando chegar
+- Permite treinar antes de entrar em vigor
+- Notificação ao atingir data
+- **PR #29**
+
+#### Fase 9: Notificação de revisão periódica
+- Campo `proximaRevisao` (data de próxima revisão periódica)
+- Calculada por tipo de doc (1, 2, 3 anos) em TIPOS_DOC_RENDER
+- Alerta quando proximaRevisao ≤ hoje
+- Botão "Revisado sem alterações" → registra sem criar nova versão
+- **PR #30**
+
+#### Fix: Marca d'água diagonal só no conteúdo
+- Problema: marca diagonal em TODAS páginas + footer da capa = sobreposição
+- Solução: skip capa (idx === 0) no loop de desenho diagonal
+- Capa tem footer com marca próprio; conteúdo tem diagonal + footer
+- **PR #32**
+
+#### Bônus: Gestão de senhas
+- Admin: "🔄 Resetar senha" → Herba@123 + marca senhaTemporaria=true
+- User: Avatar → "🔑 Mudar senha" (modal)
+- Login com senha temporária → modal bloqueante até trocar
+- POST /api/auth/change-password + POST /api/auth/admin-reset-password
+- **PR #33**
+
+---
+
+#### Arquitetura de dados (novo)
+- `users.senha_temporaria` (bool) — marca usuário que precisa trocar senha no próximo login
+- `generic_documents.data` (JSON) — adicionados campos:
+  - `arquivoFonte`: { url, nome } — arquivo editável da revisão
+  - `leituraObrigatoria`: bool — requer confirmação ao abrir
+  - `dataVigencia`: ISO timestamp — quando doc ativa automaticamente
+  - `proximaRevisao`: ISO timestamp — alerta quando chegar perto
+  - `revisaoRegistrada`: timestamp — último "revisado sem alterações"
+- `distribution_log` — tabela imutável de downloads de cópias não controladas
+- `training_log` — tabela de confirmações "Li e entendi"
+- `document_signatures` — tabela imutável (Seção 10)
