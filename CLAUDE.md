@@ -35,3 +35,25 @@ Este sistema é modelado no SE Suite, o software de referência. Ao implementar 
 - **Indicadores e auditorias:** medição e registros rastreáveis e imutáveis.
 
 Quando houver dúvida de como implementar algo, siga o que o SE Suite faria.
+
+## Gestão de Documentos — princípios de design (baseado no SE Suite)
+O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterControl, Veeva, Qualio):
+
+- **Documento controlado é sempre PDF** — formato fixo, não editável. Word é formato de autoria; quem autora exporta para PDF antes de anexar.
+- **A marca d'água é queimada em todas as páginas do conteúdo**, nunca apenas numa capa separada. O usuário quase nunca vê o documento "limpo".
+- **Estados da marca d'água conforme o acesso:**
+  - Rascunho / Em Revisão → `"RASCUNHO — SEM VALOR"`
+  - Vigente, na tela → `"CÓPIA CONTROLADA"`
+  - Vigente, baixado / impresso → `"CÓPIA NÃO CONTROLADA"`
+  - Obsoleto → `"DOCUMENTO OBSOLETO"`
+- **Renderização no servidor:** a marca d'água é estampada server-side (pdf-lib), a partir do PDF guardado no banco.
+- **Não se assina documento sem arquivo anexado.**
+- **Impressão de cópia não controlada é registrada** (quem, quando).
+- **Mantém-se o que já existe:** ciclo de vida (Rascunho → Em Revisão → Aguardando Aprovação → Vigente → Obsoleto), 3 assinaturas com segregação de funções, histórico de revisões com snapshot, trava de Vigente, revisão periódica por tipo e tabela imutável de assinaturas.
+
+### Plano de implementação (fases)
+1. **Fundação:** PDF obrigatório + bloqueio de assinatura sem arquivo.
+2. **Marca d'água no conteúdo:** endpoint server-side que carimba todas as páginas (modos controlada / não controlada / obsoleto / rascunho).
+3. **Folha de rosto integrada** como página 1 do PDF carimbado.
+4. **Log de distribuição** de cópias não controladas.
+5. **(futuro) Treinamento** na liberação.
