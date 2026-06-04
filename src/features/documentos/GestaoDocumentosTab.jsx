@@ -356,6 +356,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const [docArquivo, setDocArquivo] = useState(null);
   const [docArquivoUploading, setDocArquivoUploading] = useState(false);
+  const [docArquivoFonte, setDocArquivoFonte] = useState(null);
+  const [docArquivoFonteUploading, setDocArquivoFonteUploading] = useState(false);
   const [capitulosAberto, setCapitulosAberto] = useState(false);
 
   const formVazio = {
@@ -367,7 +369,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   };
   const [form, setForm] = useState(formVazio);
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
-  const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); setDocArquivo(null); setCapitulosAberto(false); };
+  const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); setDocArquivo(null); setDocArquivoFonte(null); setCapitulosAberto(false); };
 
   const handleDocArquivo = async (file) => {
     if (!file) return;
@@ -386,8 +388,34 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     setDocArquivoUploading(false);
   };
 
+  // Fase 4 — arquivo fonte editável (Word/Excel/PPT) por revisão. NÃO é o documento
+  // controlado: serve só para gerar futuras revisões. Não é PDF.
+  const handleDocArquivoFonte = async (file) => {
+    if (!file) return;
+    const ehPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (ehPdf) {
+      alert("O arquivo fonte deve ser o editável (Word/Excel/PPT). O PDF vai no campo 'Documento controlado'.");
+      return;
+    }
+    const ehEditavel = /\.(docx?|xlsx?|pptx?)$/i.test(file.name || "");
+    if (!ehEditavel) {
+      alert("O arquivo fonte deve ser Word, Excel ou PowerPoint (.doc, .docx, .xls, .xlsx, .ppt, .pptx).");
+      return;
+    }
+    setDocArquivoFonteUploading(true);
+    try {
+      const result = await uploadAttachment(file);
+      const url = typeof result === "string" ? result : result.url;
+      setDocArquivoFonte({ url, nome: file.name, tipo: file.type, tamanho: file.size, enviadoPor: user?.name || "", enviadoEm: tod() });
+      toast_("Arquivo fonte anexado!", "green");
+    } catch(e) { toast_("Erro ao enviar arquivo fonte.", "red"); }
+    setDocArquivoFonteUploading(false);
+  };
+
   const isAdmin  = ["admin","keyuser","rt"].includes(user?.role) || (perm && (perm("criarDocumento")||perm("excluirDocumento")));
   const isViewer = user?.role === "viewer" && !(perm && perm("criarDocumento"));
+  // Fase 4 — o arquivo fonte (de trabalho) só é visível para quem pode criar documentos.
+  const podeCriarDoc = isAdmin || (perm && perm("criarDocumento"));
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
@@ -434,6 +462,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const doc = {
       id, codigo, ...form, status, proximaRevisao,
       arquivo: docArquivo || sel?.arquivo || null,
+      arquivoFonte: docArquivoFonte || sel?.arquivoFonte || null,
       criadoEm:  sel?.criadoEm  || tod(),
       criadoTs:  sel?.criadoTs  || Date.now(),
       criadoPor: sel?.criadoPor || user?.name,
@@ -501,7 +530,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const descricao   = window.prompt("Descrição das alterações realizadas:", "") || "";
     const aprovador   = window.prompt("Aprovador desta revisão:", "") || "";
     // Snapshot do conteúdo completo da versão que está sendo arquivada (rastreabilidade BPF).
-    const snapshotConteudo = { titulo: doc.titulo, etapas: doc.etapas||[], materiais: doc.materiais||[], arquivo: doc.arquivo || null };
+    const snapshotConteudo = { titulo: doc.titulo, etapas: doc.etapas||[], materiais: doc.materiais||[], arquivo: doc.arquivo || null, arquivoFonte: doc.arquivoFonte || null };
     CAPITULOS_GD.filter(c=>!c.special).forEach(c=>{ snapshotConteudo[c.id] = doc[c.id] ?? ""; });
     const historico   = [...(doc.historicoRevisoes||[]), {
       versao: versaoAtual,
@@ -513,8 +542,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       aprovador,
       conteudo: snapshotConteudo,
     }];
-    // Arquivo da versão anterior fica no snapshot; nova revisão exige novo upload.
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    // Arquivo controlado (PDF) da versão anterior fica no snapshot; nova revisão exige novo upload.
+    // O arquivo fonte é mantido: o elaborador baixa o fonte anterior, edita e substitui.
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -668,7 +698,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {isAdmin && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {isAdmin && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
-            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
+            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && d.status==="Rascunho" && !d.assinaturaElaborador && !d.assinaturaRevisor && !d.assinaturaAprovador && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir rascunho</button>}
           </div>
         </div>
@@ -722,6 +752,35 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           )}
         </div>
+        {/* ── ARQUIVO FONTE (não controlado) — Fase 4, só para quem cria documentos ── */}
+        {podeCriarDoc && (
+          <div style={{ ...s.card, border:`1px dashed ${T.border2}`, background:T.surf }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+              <SecTitle icon="🛠️" ch="Arquivo Fonte (não controlado)" />
+              <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>ARQUIVO DE TRABALHO</span>
+            </div>
+            <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:8 }}>
+              Arquivo editável (Word/Excel/PPT) usado apenas para gerar futuras revisões. Não é o documento oficial — não é distribuído, assinado nem carimbado.
+            </div>
+            {d.arquivoFonte ? (
+              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
+                <span style={{ fontSize:24 }}>🛠️</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:T.text2 }}>{d.arquivoFonte.nome}</div>
+                  <div style={{ fontSize:11, color:T.text3 }}>
+                    {d.arquivoFonte.tamanho ? (d.arquivoFonte.tamanho/1024).toFixed(1)+" KB · " : ""}
+                    Enviado por {d.arquivoFonte.enviadoPor}{d.arquivoFonte.enviadoEm ? ` em ${fmt(d.arquivoFonte.enviadoEm)}` : ""}
+                  </div>
+                </div>
+                <button onClick={()=>abrirArquivoAutenticado(d.arquivoFonte.url, true, d.arquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar fonte</button>
+              </div>
+            ) : (
+              <div style={{ padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}`, fontSize:12, color:T.text3, textAlign:"center" }}>
+                Nenhum arquivo fonte anexado.
+              </div>
+            )}
+          </div>
+        )}
 
         {d.materiais?.length>0 && (
           <div style={s.card}>
@@ -1003,6 +1062,43 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </label>
           )}
         </div>
+
+        {/* ── UPLOAD DO ARQUIVO FONTE (editável, não controlado) — Fase 4 ── */}
+        {podeCriarDoc && (
+          <div style={{ border:`2px dashed ${T.border2}`, borderRadius:14, padding:"1.25rem", marginBottom:"1rem", background:T.surf }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:22 }}>🛠️</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text2 }}>Arquivo fonte (editável) — NÃO CONTROLADO</div>
+                <div style={{ fontSize:11, color:T.text3 }}>Word, Excel ou PowerPoint. Usado apenas para gerar futuras revisões. Não é distribuído, assinado nem carimbado.</div>
+              </div>
+              {docArquivoFonte && <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>🛠️ Fonte anexado</span>}
+            </div>
+            {docArquivoFonte ? (
+              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}`, flexWrap:"wrap" }}>
+                <span style={{ fontSize:24 }}>🛠️</span>
+                <div style={{ flex:1, minWidth:120 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:T.text2 }}>{docArquivoFonte.nome}</div>
+                  <div style={{ fontSize:11, color:T.text3 }}>{docArquivoFonte.tamanho ? (docArquivoFonte.tamanho/1024).toFixed(1)+" KB" : ""}</div>
+                </div>
+                <button onClick={()=>abrirArquivoAutenticado(docArquivoFonte.url, true, docArquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+                <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
+                  🔄 Substituir
+                  <input type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style={{ display:"none" }} onChange={e=>{ handleDocArquivoFonte(e.target.files[0]); e.target.value=""; }} />
+                </label>
+                <button style={{ ...s.btnD, fontSize:11 }} onClick={()=>setDocArquivoFonte(null)}>✕ Remover</button>
+              </div>
+            ) : (
+              <label style={{ display:"block", border:`2px dashed ${T.border2}`, borderRadius:10, padding:"1.25rem", textAlign:"center", cursor: docArquivoFonteUploading ? "wait" : "pointer", opacity: docArquivoFonteUploading ? 0.6 : 1 }}>
+                <div style={{ fontSize:28, marginBottom:6 }}>📂</div>
+                <div style={{ fontSize:13, color:T.text3 }}>{docArquivoFonteUploading ? "Enviando arquivo fonte..." : "Clique para anexar o arquivo fonte editável"}</div>
+                <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>Word, Excel ou PowerPoint (.doc, .docx, .xls, .xlsx, .ppt, .pptx)</div>
+                <input type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style={{ display:"none" }} disabled={docArquivoFonteUploading}
+                  onChange={e=>{ handleDocArquivoFonte(e.target.files[0]); e.target.value=""; }} />
+              </label>
+            )}
+          </div>
+        )}
 
         <div style={{background:`linear-gradient(135deg,${T.accentDim},${T.card2})`,border:`1px solid ${T.accent}33`,borderRadius:14,padding:"1rem",marginBottom:"1rem",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
