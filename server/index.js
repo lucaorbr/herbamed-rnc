@@ -594,11 +594,8 @@ async function handleDocumentRender(req, res, pathname, url) {
     const status  = pdfSafe(doc.status || "—");
     const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
     const impressoEm = new Date().toLocaleString("pt-BR");
-    // Fase 7 — cópia não controlada leva nome do solicitante no carimbo
-    const wmTextoBase = modo === "nao_controlada" && userNameParam
-      ? `CÓPIA NÃO CONTROLADA — impresso por ${userNameParam} em ${impressoEm}`
-      : wm.texto;
-    const wmTexto = pdfSafe(wmTextoBase);
+    // Marca d'água: sempre o texto limpo do modo — quem imprimiu fica só no distribution_log.
+    const wmTexto = pdfSafe(wm.texto);
 
     const contentPdf = await PDFDocument.load(file.data);
     const out = await PDFDocument.create();
@@ -696,10 +693,9 @@ async function handleDocumentRender(req, res, pathname, url) {
       }
     });
 
-    // Rodapé da capa
+    // Rodapé da capa: esquerda = empresa, direita = data + modo
     draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
-    drawCenter(capa, `Impresso em ${impressoEm}`, W / 2, 30, 8, fontR, cinza);
-    drawRight(capa, wmTexto, W - 40, 30, 8, fontB, cinza);
+    drawRight(capa, `Impresso em: ${impressoEm} | ${wmTexto}`, W - 40, 30, 8, fontR, cinza);
 
     // ── CONTEÚDO (páginas 2+) ──
     const indices = contentPdf.getPageIndices();
