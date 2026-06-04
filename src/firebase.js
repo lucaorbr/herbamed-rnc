@@ -162,6 +162,12 @@ export const subscribeCollection = (colName, cb, onErr) =>
 export const verifyCurrentUserPassword = (password) =>
   api("/api/auth/verify-password", { method: "POST", body: { password } });
 
+export const changePassword = (senhaAtual, senhaNova) =>
+  api("/api/auth/change-password", { method: "POST", body: { senhaAtual, senhaNova } });
+
+export const adminResetPassword = (uid) =>
+  api("/api/auth/admin-reset-password", { method: "POST", body: { uid } });
+
 export const createElectronicSignature = ({ password, contexto = "", papel = "" }) =>
   api("/api/auth/signature", { method: "POST", body: { password, contexto, papel } });
 

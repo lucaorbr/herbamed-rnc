@@ -213,6 +213,8 @@ async function migrate() {
     ON distribution_log (doc_id, data_download DESC)
   `);
 
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS senha_temporaria boolean NOT NULL DEFAULT false`);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }
