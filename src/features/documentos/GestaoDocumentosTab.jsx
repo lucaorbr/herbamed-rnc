@@ -188,6 +188,7 @@ export const STATUS_DOC_GD = {
   "Rascunho":              { c: "#7a9c7e", bg: "#7a9c7e18", icon: "✏️" },
   "Em Revisão":            { c: "#ffd166", bg: "#ffd16618", icon: "🔄" },
   "Aguardando Aprovação":  { c: "#4fc3f7", bg: "#4fc3f718", icon: "⏳" },
+  "Aguardando Vigência":   { c: "#a78bfa", bg: "#a78bfa18", icon: "📅" },
   "Vigente":               { c: "#2ab84a", bg: "#2ab84a18", icon: "✅" },
   "Obsoleto":              { c: "#ff4f6a", bg: "#ff4f6a18", icon: "🗄️" },
 };
@@ -358,6 +359,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // Fase 7 — log de distribuição
   const [distLog,     setDistLog]     = useState([]);
   const [distLogLoading, setDistLogLoading] = useState(false);
+  // Fase 8 — data de vigência agendada
+  const [modalVigencia, setModalVigencia] = useState(null); // { doc, onConfirm }
+  const [dataVigenciaInput, setDataVigenciaInput] = useState("");
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
   const [editEntradaIdx, setEditEntradaIdx] = useState(null);
@@ -374,7 +378,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
-    historicoRevisoes:[],
+    historicoRevisoes:[], dataVigencia:"",
   };
   const [form, setForm] = useState(formVazio);
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
@@ -436,6 +440,14 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const t = setTimeout(() => setLoading(false), 3000);
     const unsub = subscribeCollection("gestao_docs", list => {
       clearTimeout(t);
+      const hoje = tod();
+      // Fase 8 — promover documentos "Aguardando Vigência" cuja data chegou
+      list.forEach(async doc => {
+        if (doc.status === "Aguardando Vigência" && doc.dataVigencia && doc.dataVigencia <= hoje) {
+          const promoted = { ...doc, status: "Vigente", atualizadoEm: hoje, atualizadoTs: Date.now() };
+          try { await saveCollection("gestao_docs", String(doc.id), promoted); } catch {}
+        }
+      });
       setDocs(list.sort((a,b) => (b.criadoTs||0)-(a.criadoTs||0)));
       setLoading(false);
     });
@@ -531,21 +543,44 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const temE = papel==="elaborador" || !!doc.assinaturaElaborador;
     const temR = papel==="revisor"    || !!doc.assinaturaRevisor;
     const temA = papel==="aprovador"  || !!doc.assinaturaAprovador;
-    if (temE && temR && temA) updated.status = "Vigente";
-    else if (temE && temR)    updated.status = "Aguardando Aprovação";
-    else if (temE)            updated.status = "Em Revisão";
+    const todasAssinaturas = temE && temR && temA;
+    if (todasAssinaturas) updated.status = "Vigente"; // pode mudar abaixo
+    else if (temE && temR) updated.status = "Aguardando Aprovação";
+    else if (temE)         updated.status = "Em Revisão";
+
+    // Fase 8 — ao completar as 3 assinaturas, pergunta data de vigência
+    if (todasAssinaturas) {
+      setAssinarGD(null);
+      setDataVigenciaInput("");
+      setModalVigencia({
+        doc: { ...updated },
+        onConfirm: async (dataVig) => {
+          const hoje = tod();
+          const agendado = dataVig && dataVig > hoje;
+          const docFinal = {
+            ...updated,
+            dataVigencia: dataVig || hoje,
+            status: agendado ? "Aguardando Vigência" : "Vigente",
+          };
+          await saveCollection("gestao_docs", String(doc.id), docFinal);
+          await auditLog(`Assinou como ${papelLabel}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: docFinal.status, dataVigencia: docFinal.dataVigencia });
+          toast_(agendado ? `Documento aprovado — vigência agendada para ${fmt(dataVig)}.` : `Assinado como ${papelLabel}! Documento Vigente.`, "green");
+          setSel(docFinal);
+          setModalVigencia(null);
+          if (!agendado) {
+            setDesignados([]); setFiltroDesigDepto("todos"); setFiltroDesigRole("todos");
+            setModalDesignacao({ doc: docFinal });
+          }
+        },
+      });
+      return;
+    }
+
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Assinou como ${papelLabel}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: updated.status, [campo]: updated[campo] });
     toast_(`Assinado como ${papelLabel}!`, "green");
     setSel(updated);
     setAssinarGD(null);
-    // Fase 6 — ao ficar Vigente, oferecer designação de leitura obrigatória
-    if (updated.status === "Vigente") {
-      setDesignados([]);
-      setFiltroDesigDepto("todos");
-      setFiltroDesigRole("todos");
-      setModalDesignacao({ doc: updated });
-    }
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -773,13 +808,22 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
             {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
-            {podeIniciarRevisao && d.status==="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
-            {podeTornarObsoleto && d.status==="Vigente" && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
+            {podeIniciarRevisao && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
+            {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
-            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[]}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
+            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||""}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && d.status==="Rascunho" && !d.assinaturaElaborador && !d.assinaturaRevisor && !d.assinaturaAprovador && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir rascunho</button>}
           </div>
         </div>
+        {d.status==="Aguardando Vigência" && d.dataVigencia && (
+          <div style={{background:"#a78bfa18",border:"1px solid #a78bfa44",borderRadius:10,padding:"12px 16px",marginBottom:12,fontSize:13,color:"#a78bfa",fontWeight:700,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>📅</span>
+            <div>
+              <div>Documento aprovado — vigência agendada para <strong>{fmt(d.dataVigencia)}</strong></div>
+              <div style={{fontSize:11,fontWeight:400,marginTop:2}}>O documento ficará Vigente automaticamente nesta data.</div>
+            </div>
+          </div>
+        )}
         {diasRev!==null && diasRev<=90 && d.status==="Vigente" && (
           <div style={{background:diasRev<=0?"#ff4f6a18":"#ffd16618",border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:12,color:diasRev<=0?"#ff4f6a":"#ffd166",fontWeight:600}}>
             {diasRev<=0?`⚠️ Revisão vencida há ${Math.abs(diasRev)} dias!`:`⏰ Revisão necessária em ${diasRev} dias (${fmt(d.proximaRevisao)})`}
@@ -1080,6 +1124,30 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   Esta revisão foi arquivada antes da atualização que passou a guardar o conteúdo completo. Apenas os metadados (motivo, descrição, responsável) estão disponíveis.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {/* ── FASE 8: MODAL DE DATA DE VIGÊNCIA ── */}
+        {modalVigencia && (
+          <div onClick={()=>{}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
+            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:420,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>📅 Data de vigência</div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:16}}>
+                Quando este documento deve entrar em vigor? Deixe em branco para vigência imediata.
+              </div>
+              <input type="date" value={dataVigenciaInput} onChange={e=>setDataVigenciaInput(e.target.value)} min={tod()}
+                style={{...s.inp,width:"100%",fontSize:14,marginBottom:16,boxSizing:"border-box"}} />
+              {dataVigenciaInput && dataVigenciaInput > tod() && (
+                <div style={{background:"#a78bfa18",border:"1px solid #a78bfa44",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#a78bfa",marginBottom:16}}>
+                  📅 Documento ficará como "Aguardando Vigência" até {fmt(dataVigenciaInput)}.
+                </div>
+              )}
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>modalVigencia.onConfirm("")}>Vigência imediata</button>
+                <button style={s.btnA} onClick={()=>modalVigencia.onConfirm(dataVigenciaInput)}>
+                  {dataVigenciaInput && dataVigenciaInput > tod() ? "📅 Agendar vigência" : "✅ Confirmar"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1427,6 +1495,8 @@ ${docHtml.slice(0,9000)}`}]})
             <input type="checkbox" id="treino-gd" checked={form.treinamentoObrigatorio} onChange={e=>setF("treinamentoObrigatorio",e.target.checked)} style={{width:16,height:16,accentColor:T.accent}} />
             <label htmlFor="treino-gd" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Treinamento obrigatório antes da execução</label>
           </div>
+          <F lbl="Data de vigência (deixe em branco para entrar em vigor no dia da aprovação)"
+            ch={<Inp type="date" value={form.dataVigencia||""} onChange={e=>setF("dataVigencia",e.target.value)} />} />
         </div>
         <div style={s.card}>
           <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
