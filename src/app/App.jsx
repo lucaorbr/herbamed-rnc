@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged } from "../firebase";
-import { FormalCtx, ThemeCtx, THEMES } from "../core/theme";
+import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
@@ -31,6 +31,7 @@ export default function App() {
   const T = THEMES[themeKey];
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
   const toggleFormal = () => { const v = !formalMode; setFormalMode(v); localStorage.setItem("hm_formal", String(v)); };
+  useFormalDomScrub(formalMode);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
