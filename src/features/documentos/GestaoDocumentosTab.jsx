@@ -399,6 +399,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
   const [assinarGD, setAssinarGD] = useState(null);
+  // Lista Mestra
+  const [lmFiltroStatus, setLmFiltroStatus] = useState("todos");
+  const [lmFiltroDepto, setLmFiltroDepto] = useState("todos");
+  const [lmBusca, setLmBusca] = useState("");
   const [novoMat, setNovoMat] = useState("");
   // Fase 6 — modal de designação de leitura obrigatória
   const [modalDesignacao, setModalDesignacao] = useState(null); // { doc }
@@ -838,6 +842,40 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
     return true;
   });
+
+  const listaVigentesObsoletos = docs.filter(d => ["Vigente", "Obsoleto"].includes(d.status));
+  const lmFiltrados = listaVigentesObsoletos.filter(d => {
+    if (lmFiltroStatus !== "todos" && d.status !== lmFiltroStatus) return false;
+    if (lmFiltroDepto !== "todos" && d.depto !== lmFiltroDepto) return false;
+    if (lmBusca && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(lmBusca.toLowerCase())) return false;
+    return true;
+  });
+
+  const exportarListaMestraCSV = () => {
+    const linhas = [];
+    linhas.push(["Código", "Título", "Versão", "Departamento", "Data Última Revisão", "Próxima Revisão", "Status"].join(","));
+    lmFiltrados.forEach(d => {
+      linhas.push([
+        `"${d.codigo || ""}"`,
+        `"${(d.titulo || "").replace(/"/g, '""')}"`,
+        d.versao || "",
+        d.depto || "",
+        d.atualizadoEm || "",
+        d.proximaRevisao || "",
+        d.status || "",
+      ].join(","));
+    });
+    const csv = linhas.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `ListaMestra_${tod()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast_("Lista Mestra exportada em CSV!", "green");
+  };
   const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
 
   const totalVigente  = docs.filter(d=>d.status==="Vigente").length;
@@ -1771,6 +1809,87 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
     );
   }
 
+  /* ── LISTA MESTRA ── */
+  if (view==="lista-mestra") {
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>📋 Lista Mestra</h2>
+          <div style={{flex:1}}></div>
+          <button style={s.btnA} onClick={exportarListaMestraCSV}>⬇️ Exportar CSV</button>
+        </div>
+
+        <div style={s.card}>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            <input placeholder="Buscar código ou título..." value={lmBusca} onChange={e=>setLmBusca(e.target.value)}
+              style={{...s.inp,flex:1,minWidth:200,fontSize:12}} />
+            <select value={lmFiltroStatus} onChange={e=>setLmFiltroStatus(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todos os status</option>
+              <option value="Vigente">Vigente</option>
+              <option value="Obsoleto">Obsoleto</option>
+            </select>
+            <select value={lmFiltroDepto} onChange={e=>setLmFiltroDepto(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todos os departamentos</option>
+              {[...new Set(listaVigentesObsoletos.map(d=>d.depto))].sort().map(d=>(
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <button style={{...s.btn,fontSize:12}} onClick={()=>{setLmBusca("");setLmFiltroStatus("todos");setLmFiltroDepto("todos");}}>🔄 Limpar</button>
+          </div>
+
+          <div style={{overflowX:"auto",marginBottom:12}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:T.surf,borderBottom:`2px solid ${T.border}`}}>
+                  {["Código","Título","Versão","Depto","Data Última Revisão","Próxima Revisão","Status"].map(h=>(
+                    <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:11,textTransform:"uppercase"}}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lmFiltrados.length===0?(
+                  <tr>
+                    <td colSpan="7" style={{textAlign:"center",padding:"2rem",color:T.text3,fontSize:12}}>
+                      Nenhum documento encontrado.
+                    </td>
+                  </tr>
+                ):(
+                  lmFiltrados.map((d,i)=>{
+                    const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
+                    const dias = diasParaRevisaoGD(d.proximaRevisao);
+                    return (
+                      <tr key={d.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                        <td style={{padding:"8px 10px",color:tipo?.cor||T.accent,fontWeight:700}}>{d.codigo}</td>
+                        <td style={{padding:"8px 10px",color:T.text}}>{d.titulo}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>Rev.{d.versao}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>{d.depto}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>{fmt(d.atualizadoEm)}</td>
+                        <td style={{padding:"8px 10px",color:dias&&dias<=90?dias<=0?"#ff4f6a":"#ffd166":T.text2}}>
+                          {d.proximaRevisao?fmt(d.proximaRevisao):"—"}
+                        </td>
+                        <td style={{padding:"8px 10px"}}>
+                          <BadgeStatusGD status={d.status}/>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{fontSize:11,color:T.text3,textAlign:"right",paddingTop:8,borderTop:`1px solid ${T.border}`}}>
+            Lista Mestra atualizada em {new Date().toLocaleString("pt-BR")}
+            {lmFiltrados.length>0&&` · ${lmFiltrados.length} documento${lmFiltrados.length!==1?"s":""}`}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ── ÁRVORE ── */
   if (view==="arvore") {
     return (
@@ -1849,6 +1968,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           </Sel>
         </div>
         <div style={{display:"flex",gap:8}}>
+          <button style={s.btn} onClick={()=>setView("lista-mestra")}>📋 Lista Mestra</button>
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
           {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
