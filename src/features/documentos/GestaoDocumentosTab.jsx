@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ExcelJS from 'exceljs';
 import { saveCollection, deleteFromCollection, subscribeCollection, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
@@ -875,6 +876,83 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
     toast_("Lista Mestra exportada em CSV!", "green");
+  };
+
+  const exportarListaMestraXLSX = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Lista Mestra");
+
+      const headers = ["Código", "Título", "Versão", "Depto", "Data Última Revisão", "Próxima Revisão", "Status"];
+      const headerRow = worksheet.addRow(headers);
+
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD3D3D3" } };
+      headerRow.alignment = { horizontal: "center", vertical: "center" };
+
+      headers.forEach(h => {
+        const col = worksheet.getColumn(headers.indexOf(h) + 1);
+        col.border = { top: { style: "thin", color: { argb: "FF808080" } }, bottom: { style: "thin", color: { argb: "FF808080" } }, left: { style: "thin", color: { argb: "FF808080" } }, right: { style: "thin", color: { argb: "FF808080" } } };
+      });
+
+      lmFiltrados.forEach((d, idx) => {
+        const row = worksheet.addRow([
+          d.codigo || "",
+          d.titulo || "",
+          `Rev.${d.versao || ""}`,
+          d.depto || "",
+          fmt(d.atualizadoEm) || "",
+          fmt(d.proximaRevisao) || "",
+          d.status || "",
+        ]);
+
+        if (idx % 2 === 1) {
+          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+        }
+
+        row.eachCell((cell) => {
+          cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+          cell.alignment = { horizontal: "left", vertical: "center" };
+        });
+      });
+
+      worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      const columns = [
+        { header: "Código", key: "codigo", width: 15 },
+        { header: "Título", key: "titulo", width: 35 },
+        { header: "Versão", key: "versao", width: 10 },
+        { header: "Depto", key: "depto", width: 12 },
+        { header: "Data Última Revisão", key: "atualizadoEm", width: 18 },
+        { header: "Próxima Revisão", key: "proximaRevisao", width: 18 },
+        { header: "Status", key: "status", width: 12 },
+      ];
+
+      columns.forEach((col, idx) => {
+        worksheet.getColumn(idx + 1).width = col.width;
+      });
+
+      const footerRow = worksheet.addRow([]);
+      const currentDateTime = new Date().toLocaleString("pt-BR");
+      footerRow.getCell(1).value = `Gerado em ${currentDateTime} pelo SGQ Herbamed`;
+      footerRow.getCell(1).font = { italic: true, size: 10, color: { argb: "FF888888" } };
+      worksheet.mergeCells(`A${footerRow.number}:G${footerRow.number}`);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `Lista-Mestra-${tod()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      toast_("Lista Mestra exportada em XLSX!", "green");
+    } catch (e) {
+      toast_("Erro ao exportar XLSX.", "red");
+      console.error(e);
+    }
   };
   const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
 
@@ -1818,6 +1896,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>📋 Lista Mestra</h2>
           <div style={{flex:1}}></div>
           <button style={s.btnA} onClick={exportarListaMestraCSV}>⬇️ Exportar CSV</button>
+          <button style={s.btnA} onClick={exportarListaMestraXLSX}>⬇️ Exportar XLSX</button>
         </div>
 
         <div style={s.card}>

@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "exceljs": "^4.4.0",
     "jsonwebtoken": "^9.0.3",
     "mssql": "^12.5.4",
     "pdf-lib": "^1.17.1",
