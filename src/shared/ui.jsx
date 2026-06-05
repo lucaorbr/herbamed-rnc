@@ -177,3 +177,49 @@ export function ThemePicker({ current, onChange, formal, onToggleFormal }) {
     </div>
   );
 }
+
+// ─── Componentes reutilizáveis ───
+
+// StatusBadge: genérico para qualquer entidade (RNC, CQ, Documentos, etc.)
+// Ex: <StatusBadge status="Vigente" statusMap={STATUS_DOC_GD} />
+export function StatusBadge({ status, statusMap }) {
+  const T = useTheme();
+  const m = statusMap && statusMap[status] ? statusMap[status] : { bg: T.accentDim, c: T.accent, icon: "•" };
+  return (
+    <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: m.bg, color: m.c, whiteSpace: "nowrap" }}>
+      {m.icon ? `${m.icon} ` : ""}{status}
+    </span>
+  );
+}
+
+// DataTable: tabela genérica com alternância de cor, borders, etc.
+// Ex: <DataTable headers={["Código","Título"]} rows={[{id:1,codigo:"PO-001",...}]} columns={["codigo","titulo"]} onRowClick={(r)=>...} />
+export function DataTable({ headers, rows, columns, onRowClick, alternateColors = true }) {
+  const T = useTheme();
+  return (
+    <div style={{ overflowX: "auto", marginBottom: 12 }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: T.surf, borderBottom: `2px solid ${T.border}` }}>
+            {headers.map((h, i) => (
+              <th key={i} style={{ padding: "8px 10px", textAlign: "left", color: T.text3, fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, idx) => (
+            <tr key={r.id || idx} onClick={() => onRowClick?.(r)} style={{ borderBottom: `1px solid ${T.border}`, background: alternateColors && idx % 2 === 1 ? T.surf : T.bg, cursor: onRowClick ? "pointer" : "auto", transition: "background .15s" }}>
+              {columns.map((col, i) => (
+                <td key={i} style={{ padding: "8px 10px", color: T.text }}>
+                  {r[col] || "—"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
