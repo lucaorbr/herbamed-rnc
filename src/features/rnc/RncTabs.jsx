@@ -8,7 +8,7 @@ import { askClaude } from "../../services/aiClient";
 import { isExternalStorageUrl, uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
-import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 
