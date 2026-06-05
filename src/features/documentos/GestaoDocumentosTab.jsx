@@ -164,24 +164,42 @@ export const HERBAMED_INFO_GD = {
 };
 
 export const TIPOS_DOC_GD = [
-  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "CQ" },
-  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "PO",   label: "Procedimento Operacional",       icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "IT",   label: "Instrução de Trabalho",           icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "MOP",  label: "Manual Operacional",              icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ESP",  label: "Especificação",                   icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "MAN",  label: "Manual",                         icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ANX",  label: "Anexo",                          icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "EMP",  label: "Proc. de Embalagem",             icon: "📦", cor: "#64748b", prazoRevisaoAnos: 2, departamentoResponsavel: "PRO" },
+  { id: "EME",  label: "Proc. de Emergência",            icon: "🚨", cor: "#ef4444", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
+  { id: "EPA",  label: "Esp. de Produto Acabado",        icon: "🧴", cor: "#06b6d4", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "MTA",  label: "Método de Técnica Analítica",    icon: "🔬", cor: "#8b5cf6", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "PCAL", label: "Plano de Calibração",            icon: "📏", cor: "#f59e0b", prazoRevisaoAnos: 1, departamentoResponsavel: "TEC" },
+  { id: "EPI",  label: "Controle de EPI",                icon: "🦺", cor: "#f97316", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
 ];
 
 export const DEPARTAMENTOS_GD = [
-  { id: "SGQ", label: "Sistema de Gestão da Qualidade", cor: "#2ab84a" },
-  { id: "CQ",  label: "Controle de Qualidade",          cor: "#4fc3f7" },
-  { id: "PRD", label: "Produção",                       cor: "#ffd166" },
-  { id: "LOG", label: "Logística",                      cor: "#ff8c42" },
-  { id: "RH",  label: "Recursos Humanos",               cor: "#a78bfa" },
-  { id: "COM", label: "Comercial",                      cor: "#ff4f6a" },
-  { id: "ADM", label: "Administrativo",                 cor: "#5dd4b0" },
-  { id: "P&D", label: "Pesquisa e Desenvolvimento",     cor: "#818cf8" },
+  { id: "ADM", label: "Administrativo",                   cor: "#5dd4b0" },
+  { id: "ALM", label: "Almoxarifado",                     cor: "#818cf8" },
+  { id: "COM", label: "Comercial",                        cor: "#ff4f6a" },
+  { id: "DIR", label: "Diretoria",                        cor: "#f59e0b" },
+  { id: "EXP", label: "Expedição",                        cor: "#10b981" },
+  { id: "FIN", label: "Financeiro",                       cor: "#3b82f6" },
+  { id: "LIM", label: "Serviços Gerais / Limpeza",        cor: "#6b7280" },
+  { id: "LOG", label: "Logística",                        cor: "#ff8c42" },
+  { id: "MAN", label: "Manutenção",                       cor: "#f97316" },
+  { id: "MKT", label: "Marketing",                        cor: "#ec4899" },
+  { id: "PCP", label: "PCP — Plan. e Controle de Prod.",  cor: "#8b5cf6" },
+  { id: "PED", label: "Pedidos / Atendimento ao Cliente", cor: "#06b6d4" },
+  { id: "PRO", label: "Produção",                         cor: "#ffd166" },
+  { id: "REG", label: "Regulatório / Assuntos Reg.",      cor: "#14b8a6" },
+  { id: "REH", label: "Recursos Humanos",                 cor: "#a78bfa" },
+  { id: "SGQ", label: "Sistema de Gestão da Qualidade",   cor: "#2ab84a" },
+  { id: "SSM", label: "Segurança e Saúde no Trabalho",    cor: "#ef4444" },
+  { id: "SUP", label: "Suprimentos / Compras",            cor: "#f59e0b" },
+  { id: "TEC", label: "Tecnologia da Informação",         cor: "#60a5fa" },
+  { id: "VEN", label: "Vendas",                           cor: "#fb923c" },
 ];
 
 export const STATUS_DOC_GD = {
@@ -206,10 +224,41 @@ export const CAPITULOS_GD = [
   { id: "historicoRevisoes", label: "10. Histórico de Revisões",    placeholder: "", special: true },
 ];
 
-export function gerarCodigoGD(tipo, depto, docs) {
-  const prefix = `${tipo}-${depto}`;
-  const existentes = docs.filter(d => d.codigo && d.codigo.startsWith(prefix)).length;
-  return `${prefix}-${String(existentes + 1).padStart(3, "0")}`;
+export const TIPOS_DOC_CODIFICACAO = {
+  "PO":   { prefixo: "PO",   padrao: "PO-ABC-xxx",     descricao: "Procedimento Operacional" },
+  "FO":   { prefixo: "FO",   padrao: "FO-ABC-xxx-x",   descricao: "Formulário" },
+  "MAN":  { prefixo: "MAN",  padrao: "ABC-Abc-xxx",     descricao: "Manual" },
+  "EMP":  { prefixo: "EMP",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Matérias-Primas" },
+  "EME":  { prefixo: "EME",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Material Embalagem" },
+  "EPA":  { prefixo: "EPA",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Produto Acabado" },
+  "MTA":  { prefixo: "MTA",  padrao: "ABC-Abc-xxx",     descricao: "Métodos Analíticos" },
+  "PCAL": { prefixo: "PCAL", padrao: "ABC-Abc-xxx",     descricao: "Controle Alergênicos" },
+  "EPI":  { prefixo: "EPI",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Produto Intermediário" },
+  "ANX":  { prefixo: "A",    padrao: "A-BCD-xxx-xx",    descricao: "Anexo" },
+};
+
+export function gerarCodigoGD(tipo, depto, docs, versao = "00") {
+  const cfg = TIPOS_DOC_CODIFICACAO[tipo];
+  const prefixo = cfg ? cfg.prefixo : tipo;
+
+  if (tipo === "ANX") {
+    const prefix = `A-${depto}-`;
+    const nums = docs
+      .filter(d => d.codigo && d.codigo.startsWith(prefix))
+      .map(d => parseInt((d.codigo.split("-")[2] || "0"), 10))
+      .filter(n => Number.isFinite(n) && n > 0);
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    const rev = String(parseInt(versao, 10) || 0).padStart(2, "0");
+    return `A-${depto}-${String(next).padStart(3, "0")}-${rev}`;
+  }
+
+  const prefix = `${prefixo}-${depto}-`;
+  const nums = docs
+    .filter(d => d.codigo && d.codigo.startsWith(prefix))
+    .map(d => parseInt(d.codigo.slice(prefix.length).split("-")[0], 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return `${prefixo}-${depto}-${String(next).padStart(3, "0")}`;
 }
 
 export function calcProximaRevisaoGD(dataBase, prazoAnos = 3) {
@@ -332,7 +381,7 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName }) {
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {} }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [] }) {
   const T = useTheme();
   const s = useS();
 
@@ -373,8 +422,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [docArquivoFonteUploading, setDocArquivoFonteUploading] = useState(false);
   const [capitulosAberto, setCapitulosAberto] = useState(false);
 
+  const tiposAtivos  = catalogoTipos.length  ? catalogoTipos.filter(t  => t.ativo  !== false) : TIPOS_DOC_GD;
+  const deptosAtivos = catalogoDeptos.length ? catalogoDeptos.filter(d => d.ativo !== false) : DEPARTAMENTOS_GD;
+
   const formVazio = {
-    tipo:"PO", depto:"SGQ", titulo:"", versao:"01",
+    tipo:"PO", depto:"SGQ", titulo:"", versao:"00",
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
@@ -481,7 +533,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       return;
     }
     const id  = sel ? sel.id : Date.now();
-    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
+    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs, form.versao);
     const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
@@ -729,8 +781,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     if (!form.titulo || !form.tipo) { alert("Preencha título e tipo antes de usar a IA."); return; }
     setAiLoading(true);
     try {
-      const tipoLabel  = TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label || form.tipo;
-      const deptoLabel = DEPARTAMENTOS_GD.find(d=>d.id===form.depto)?.label || form.depto;
+      const tipoLabel  = tiposAtivos.find(t=>t.id===form.tipo)?.label || form.tipo;
+      const deptoLabel = deptosAtivos.find(d=>d.id===form.depto)?.label || form.depto;
       const prompt = `Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022, ISO 9001). Crie conteúdo completo para:\nTipo: ${tipoLabel}\nTítulo: ${form.titulo}\nDepartamento: ${deptoLabel}\nEmpresa: Herbamed Laboratório Nutracêutico LTDA\n\nResponda APENAS em JSON válido sem markdown:\n{"objetivo":"","alcance":"","responsabilidades":"","definicoes":"","procedimento":"","infComplementares":"","referencias":"","registros":"","etapas":[{"titulo":"","descricao":""}],"materiais":[""],"treinamentoObrigatorio":true}`;
       const res  = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:3000, messages:[{role:"user",content:prompt}] }) });
       const data = await res.json();
@@ -1365,7 +1417,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
               <button onClick={()=>abrirArquivoAutenticado(docArquivo.url)} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
-              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs, form.versao), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
                 <input type="file" accept=".pdf,application/pdf" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
@@ -1501,14 +1553,14 @@ ${docHtml.slice(0,9000)}`}]})
         <div style={s.card}>
           <SecTitle icon="🗂️" ch="Identificação" />
           <G3 ch={<>
-            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{TIPOS_DOC_GD.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label} ({t.id})</option>)}</Sel>} />
-            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
+            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon ? `${t.icon} ` : ""}{t.label} ({t.id})</option>)}</Sel>} />
+            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
           {form.tipo && (()=>{
-            const tp = TIPOS_DOC_GD.find(t=>t.id===form.tipo);
+            const tp = tiposAtivos.find(t=>t.id===form.tipo) || TIPOS_DOC_GD.find(t=>t.id===form.tipo);
             const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
-            const depResp = DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
+            const depResp = deptosAtivos.find(x=>x.id===tp?.departamentoResponsavel) || DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
             return (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
                 <span>📅 Prazo de revisão padrão: <strong style={{color:T.text2}}>{anos} {anos===1?"ano":"anos"}</strong></span>
@@ -1518,7 +1570,7 @@ ${docHtml.slice(0,9000)}`}]})
             );
           })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
-          {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs)}</strong></div>}
+          {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs,form.versao)}</strong></div>}
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
             <input type="checkbox" id="treino-gd" checked={form.treinamentoObrigatorio} onChange={e=>setF("treinamentoObrigatorio",e.target.checked)} style={{width:16,height:16,accentColor:T.accent}} />
             <label htmlFor="treino-gd" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Treinamento obrigatório antes da execução</label>

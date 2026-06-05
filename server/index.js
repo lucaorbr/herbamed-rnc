@@ -549,7 +549,7 @@ const DEPTOS_DOC_RENDER = {
 };
 
 const WATERMARK_MODOS = {
-  controlada:     { texto: "CÓPIA CONTROLADA",      cor: rgb(0.10, 0.50, 0.20), opacidade: 0.08 },
+  controlada:     { texto: "CÓPIA CONTROLADA",      cor: rgb(1.00, 0.00, 0.00), opacidade: 0.08 },
   nao_controlada: { texto: "CÓPIA NÃO CONTROLADA",  cor: rgb(0.40, 0.40, 0.40), opacidade: 0.14 },
   obsoleto:       { texto: "DOCUMENTO OBSOLETO",    cor: rgb(0.80, 0.10, 0.10), opacidade: 0.20 },
   rascunho:       { texto: "RASCUNHO — SEM VALOR",  cor: rgb(0.80, 0.40, 0.00), opacidade: 0.14 },
