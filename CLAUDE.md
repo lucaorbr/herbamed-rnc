@@ -57,3 +57,109 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 3. **Folha de rosto integrada** como página 1 do PDF carimbado.
 4. **Log de distribuição** de cópias não controladas.
 5. **(futuro) Treinamento** na liberação.
+
+---
+
+## ROADMAP — Próximos passos (priorizado)
+
+**Estado atual (auditoria 2026-06-05):**
+- ✅ Documentos: maduro (ciclo de vida, assinaturas, marca d'água, lista mestra)
+- ✅ Temas: Professional claro + Dark, Formal mode com cobertura 100% emojis
+- ✅ Abas: formulário de documentos com navegação por abas
+- ⚠️ RNC/CQ: gigantes (2k+ LOC), visual inconsistente, sem análise de causa estruturada
+- ⚠️ Indicadores: apenas lista, sem gráficos
+- ⚠️ Componentização: ~700 emojis em 24 arquivos, tabelas/filtros reimplementados em cada módulo
+
+### SEÇÃO 1: Design Language
+**1.1 — Padronizar RNC e CQ no estilo de Documentos**
+- Aplicar: abas para capítulos, cards estruturados, badges de status, tabelas com alternância
+- Estimativa: 2-4 dias (1-2 dias por módulo)
+- Ganho: Alto (percepção visual, usabilidade)
+
+**1.2 — Professional claro como padrão (Dark opção)**
+- Inverter ordem no seletor de temas
+- Estimativa: 2h
+- Ganho: Baixo (branding)
+
+### SEÇÃO 2: Componentização (alta prioridade)
+**2.1 — Extrair componentes → shared/ui.jsx**
+- `<StatusBadge status={...} />`
+- `<DataTable headers columns rows />`
+- `<FilterBar filters onFilter={} />`
+- `<FormTabs tabs activeTab onTabChange />`
+- Estimativa: 3 dias
+- Ganho: Alto (reduz LOC gigantes, padronização)
+
+**2.2 — Criar `<StatusSelect>`, `<TypeSelect>`, `<DepartmentSelect>`**
+- Reutilizáveis em 15+ módulos
+- Estimativa: 1 dia
+- Ganho: Médio (sincronização automática com catálogos)
+
+### SEÇÃO 3: Quebra de arquivos gigantes
+**3.1 — RncTabs.jsx → RNC/** (padrão modular)
+```
+RNC/
+  ├── RncList.jsx (lista + filtros)
+  ├── RncDetail.jsx (detalhe + assinaturas)
+  ├── RncForm.jsx (formulário + IA)
+  ├── RncTabs.jsx (orquestrador)
+  └── index.js
+```
+- Estimativa: 2 dias
+- Ganho: Manutenibilidade
+
+**3.2 — CQTabs.jsx → CQ/** (mesmo padrão)
+- Estimativa: 2 dias
+
+### SEÇÃO 4: Pilares funcionais incompletos
+**4.1 — RNC: 5 Porquês + CAPA (análise de causa)**
+- Adicionar campo "5 Porquês" obrigatório
+- Adicionar tabela de CAPA (ação, responsável, prazo, status)
+- Estimativa: 3 dias
+- Ganho: Alto (regulatório BPF)
+
+**4.2 — Indicadores: gráficos + tendência**
+- Adicionar gráfico de linha (últimos 12 meses)
+- Cálculo automático meta vs. realizado
+- Lib: recharts ou chart.js
+- Estimativa: 4 dias
+- Ganho: Alto (dashboard útil)
+
+**4.3 — Auditorias: achados estruturados + rastreamento**
+- Entidades de achado (número, descrição, nível risco, anexo)
+- Rastreamento de fechamento
+- Estimativa: 3 dias
+- Ganho: Médio (rastreabilidade BPF)
+
+### SEÇÃO 5: UX/Acessibilidade
+**5.1 — Keyboard navigation completo**
+- Tabelas, modais, filtros navegáveis por Tab/Enter/Escape
+- Estimativa: 2 dias
+- Ganho: WCAG AA
+
+**5.2 — Dark mode para Formal (variante escura sem emoji)**
+- Estimativa: 1 dia
+- Ganho: Opção para ambientes regulatórios
+
+### SEÇÃO 6: Infraestrutura
+**6.1 — Code-splitting (bundle ~557 kB → lazy load)**
+- Separar features por rota
+- Estimativa: 3 dias
+- Ganho: Performance
+
+**6.2 — Testes unitários (componentes compartilhados)**
+- Estimativa: 5 dias
+- Ganho: Confiança em refatoração
+
+---
+
+## Priorização recomendada
+
+| Ordem | Seção | Esforço | Ganho | Por quê |
+|---|---|---|---|---|
+| **1** | 2.1 (Componentizar) | 3d | Alto | Reduz LOC gigantes |
+| **2** | 1.1 (Padronizar RNC/CQ) | 2-4d | Alto | Percepção visual |
+| **3** | 3.1-3.2 (Quebra de arquivos) | 4d | Médio | Manutenibilidade |
+| **4** | 4.1 (5 Porquês em RNC) | 3d | Alto | Regulatório |
+| **5** | 1.2 (Professional padrão) | 2h | Baixo | Branding |
+| **6** | 4.2 (Indicadores gráficos) | 4d | Médio | Dashboard |
