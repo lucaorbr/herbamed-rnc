@@ -6,9 +6,9 @@ import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
-import { TIPOS_DOC_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
+import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {} }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -45,6 +45,49 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       toast_(novo ? "Regra ativada: aprovador deve ser diferente do analista." : "Regra desativada.", "green");
     } catch(e) { toast_("Erro ao salvar configuração.", "red"); console.error(e); }
   };
+  // ── Catálogos ─────────────────────────────────────────────────────────────
+  const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ id:d.id, label:d.label, ativo:true }));
+  const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ id:t.id, label:t.label, prazoRevisaoAnos:t.prazoRevisaoAnos??2, ativo:true }));
+
+  const [catAba, setCatAba] = useState("deptos");
+  const [listaDeptos, setListaDeptos] = useState(() => mkDefaultDeptos(catalogoDeptos));
+  const [editDeptoIdx, setEditDeptoIdx] = useState(null);
+  const [editDeptoData, setEditDeptoData] = useState({ id:"", label:"" });
+  const [novoDepto, setNovoDepto] = useState({ id:"", label:"" });
+  const [savingDeptos, setSavingDeptos] = useState(false);
+  const [listaTipos, setListaTipos] = useState(() => mkDefaultTipos(catalogoTipos));
+  const [editTipoIdx, setEditTipoIdx] = useState(null);
+  const [editTipoData, setEditTipoData] = useState({ id:"", label:"", prazoRevisaoAnos:"2" });
+  const [novoTipo, setNovoTipo] = useState({ id:"", label:"", prazoRevisaoAnos:"2" });
+  const [savingTipos, setSavingTipos] = useState(false);
+
+  useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
+  useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
+
+  const salvarCatDeptos = async () => {
+    if (!isAdmin) return;
+    if (listaDeptos.some(d => !d.id.trim() || !d.label.trim())) { toast_("Todos os departamentos precisam de código e nome.", "red"); return; }
+    setSavingDeptos(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_departamentos", { items: listaDeptos });
+      await auditLog("Atualizou Catálogo de Departamentos", "configuracoes", "catalogo_departamentos", "Catálogo", null, { total: listaDeptos.length });
+      toast_("Catálogo de departamentos salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingDeptos(false);
+  };
+
+  const salvarCatTipos = async () => {
+    if (!isAdmin) return;
+    if (listaTipos.some(t => !t.id.trim() || !t.label.trim())) { toast_("Todos os tipos precisam de código e descrição.", "red"); return; }
+    setSavingTipos(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_tipos_doc", { items: listaTipos });
+      await auditLog("Atualizou Catálogo de Tipos de Documento", "configuracoes", "catalogo_tipos_doc", "Catálogo", null, { total: listaTipos.length });
+      toast_("Catálogo de tipos de documento salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingTipos(false);
+  };
+
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
@@ -296,6 +339,146 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             {savingPrazos ? "Salvando..." : "💾 Salvar prazos de revisão"}
           </button>
         </div>
+      </div>
+
+      {/* ── CATÁLOGOS DE DOCUMENTOS ── */}
+      <div style={s.card}>
+        <SecTitle icon="🗂️" ch="Catálogos de Documentos" />
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setCatAba(k)}
+              style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
+                background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* ── ABA DEPARTAMENTOS ── */}
+        {catAba==="deptos" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Código (máx 5 letras maiúsculas) + nome completo. Apenas departamentos ativos aparecem nos formulários.
+          </div>
+          {/* Adicionar novo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Código (ex: SGQ)" maxLength={5} value={novoDepto.id}
+              onChange={e=>setNovoDepto(p=>({...p,id:e.target.value.toUpperCase()}))}
+              style={{ ...s.inp, width:90, fontSize:12 }} />
+            <input placeholder="Nome completo" value={novoDepto.label}
+              onChange={e=>setNovoDepto(p=>({...p,label:e.target.value}))}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button style={s.btnA} onClick={()=>{
+              if (!novoDepto.id.trim() || !novoDepto.label.trim()) return;
+              if (listaDeptos.find(d=>d.id===novoDepto.id)) { toast_("Código já existe.", "red"); return; }
+              setListaDeptos(p=>[...p, { id:novoDepto.id.trim(), label:novoDepto.label.trim(), ativo:true }]);
+              setNovoDepto({ id:"", label:"" });
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
+            {listaDeptos.map((d, i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                {editDeptoIdx===i ? (<>
+                  <input value={editDeptoData.id} maxLength={5}
+                    onChange={e=>setEditDeptoData(p=>({...p,id:e.target.value.toUpperCase()}))}
+                    style={{ ...s.inp, width:80, fontSize:12 }} />
+                  <input value={editDeptoData.label}
+                    onChange={e=>setEditDeptoData(p=>({...p,label:e.target.value}))}
+                    style={{ ...s.inp, flex:1, fontSize:12 }} />
+                  <button style={s.btnA} onClick={()=>{
+                    if (!editDeptoData.id.trim() || !editDeptoData.label.trim()) return;
+                    setListaDeptos(p=>p.map((x,j)=>j===i?{ ...x, id:editDeptoData.id.trim(), label:editDeptoData.label.trim() }:x));
+                    setEditDeptoIdx(null);
+                  }}>✓</button>
+                  <button style={s.btn} onClick={()=>setEditDeptoIdx(null)}>✕</button>
+                </>) : (<>
+                  <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:T.accentDim, color:T.accent, minWidth:44, textAlign:"center" }}>{d.id}</span>
+                  <span style={{ flex:1, fontSize:12, color:T.text }}>{d.label}</span>
+                  <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:d.ativo?T.accent+"22":"#ff4f6a22", color:d.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
+                    {d.ativo?"Ativo":"Inativo"}
+                  </span>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditDeptoIdx(i); setEditDeptoData({ id:d.id, label:d.label }); }}>✏️</button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaDeptos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
+                    {d.ativo?"🔒 Desativar":"🔓 Ativar"}
+                  </button>
+                </>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingDeptos)?0.6:1 }} disabled={!isAdmin||savingDeptos} onClick={salvarCatDeptos}>
+              {savingDeptos?"Salvando...":"💾 Salvar departamentos"}
+            </button>
+          </div>
+        </>)}
+
+        {/* ── ABA TIPOS DE DOCUMENTO ── */}
+        {catAba==="tipos" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários.
+          </div>
+          {/* Adicionar novo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+            <input placeholder="Código (ex: POP)" maxLength={6} value={novoTipo.id}
+              onChange={e=>setNovoTipo(p=>({...p,id:e.target.value.toUpperCase()}))}
+              style={{ ...s.inp, width:90, fontSize:12 }} />
+            <input placeholder="Descrição" value={novoTipo.label}
+              onChange={e=>setNovoTipo(p=>({...p,label:e.target.value}))}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <input type="number" min="1" step="1" placeholder="Prazo (anos)" value={novoTipo.prazoRevisaoAnos}
+              onChange={e=>setNovoTipo(p=>({...p,prazoRevisaoAnos:e.target.value}))}
+              style={{ ...s.inp, width:80, fontSize:12 }} />
+            <button style={s.btnA} onClick={()=>{
+              if (!novoTipo.id.trim() || !novoTipo.label.trim()) return;
+              if (listaTipos.find(t=>t.id===novoTipo.id)) { toast_("Código já existe.", "red"); return; }
+              const prazo = Number(novoTipo.prazoRevisaoAnos);
+              setListaTipos(p=>[...p, { id:novoTipo.id.trim(), label:novoTipo.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, ativo:true }]);
+              setNovoTipo({ id:"", label:"", prazoRevisaoAnos:"2" });
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
+            {listaTipos.map((t, i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                {editTipoIdx===i ? (<>
+                  <input value={editTipoData.id} maxLength={6}
+                    onChange={e=>setEditTipoData(p=>({...p,id:e.target.value.toUpperCase()}))}
+                    style={{ ...s.inp, width:80, fontSize:12 }} />
+                  <input value={editTipoData.label}
+                    onChange={e=>setEditTipoData(p=>({...p,label:e.target.value}))}
+                    style={{ ...s.inp, flex:1, fontSize:12 }} />
+                  <input type="number" min="1" step="1" value={editTipoData.prazoRevisaoAnos}
+                    onChange={e=>setEditTipoData(p=>({...p,prazoRevisaoAnos:e.target.value}))}
+                    style={{ ...s.inp, width:70, fontSize:12 }} />
+                  <button style={s.btnA} onClick={()=>{
+                    if (!editTipoData.id.trim() || !editTipoData.label.trim()) return;
+                    const prazo = Number(editTipoData.prazoRevisaoAnos);
+                    setListaTipos(p=>p.map((x,j)=>j===i?{ ...x, id:editTipoData.id.trim(), label:editTipoData.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2 }:x));
+                    setEditTipoIdx(null);
+                  }}>✓</button>
+                  <button style={s.btn} onClick={()=>setEditTipoIdx(null)}>✕</button>
+                </>) : (<>
+                  <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:T.accentDim, color:T.accent, minWidth:44, textAlign:"center" }}>{t.id}</span>
+                  <span style={{ flex:1, fontSize:12, color:T.text }}>{t.label}</span>
+                  <span style={{ fontSize:11, color:T.text3 }}>{t.prazoRevisaoAnos ?? 2} anos</span>
+                  <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
+                    {t.ativo?"Ativo":"Inativo"}
+                  </span>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTipoIdx(i); setEditTipoData({ id:t.id, label:t.label, prazoRevisaoAnos:String(t.prazoRevisaoAnos??2) }); }}>✏️</button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaTipos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
+                    {t.ativo?"🔒 Desativar":"🔓 Ativar"}
+                  </button>
+                </>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTipos)?0.6:1 }} disabled={!isAdmin||savingTipos} onClick={salvarCatTipos}>
+              {savingTipos?"Salvando...":"💾 Salvar tipos de documento"}
+            </button>
+          </div>
+        </>)}
       </div>
     </div>
   );
