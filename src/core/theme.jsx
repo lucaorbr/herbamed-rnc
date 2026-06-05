@@ -103,7 +103,11 @@ function scrubTextNodes(root) {
   let cur;
   while ((cur = walker.nextNode())) alvos.push(cur);
   alvos.forEach((n) => {
-    const limpo = n.nodeValue.replace(EMOJI_RE, "").replace(/ {2,}/g, " ");
+    // Remove emoji, collapsa espaços múltiplos e trim de espaços extras
+    const limpo = n.nodeValue
+      .replace(EMOJI_RE, "")
+      .replace(/ {2,}/g, " ")
+      .trim();
     if (limpo !== n.nodeValue) n.nodeValue = limpo;
   });
 }
