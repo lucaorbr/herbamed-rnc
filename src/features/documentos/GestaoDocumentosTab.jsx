@@ -1724,14 +1724,21 @@ ${docHtml.slice(0,9000)}`}]})
             <span style={{ fontSize:14, color:T.text3 }}>{capitulosAberto ? "▲ Recolher" : "▼ Expandir"}</span>
           </button>
           {capitulosAberto && <>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-            {CAPITULOS_GD.map(cap=>(
-              <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
-                style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${capituloAtivo===cap.id?T.accent:T.border}`,background:capituloAtivo===cap.id?T.accent:T.surf,color:capituloAtivo===cap.id?"#fff":( cap.special ? (form[cap.id]?.length>0?T.text:T.text3) : (form[cap.id]&&form[cap.id]!=="N/A"?T.text:T.text3) ),cursor:"pointer"}}>
-                {(cap.special ? form[cap.id]?.length>0 : (form[cap.id]&&form[cap.id]!=="N/A"))?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
-              </button>
-            ))}
+          {/* Navegação por abas (estilo SE Suite) — substitui as pílulas de capítulo */}
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+            {CAPITULOS_GD.map(cap=>{
+              const ativa = capituloAtivo===cap.id;
+              const preenchido = cap.special ? form[cap.id]?.length>0 : (form[cap.id]&&form[cap.id]!=="N/A");
+              return (
+                <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
+                  style={{padding:"8px 16px",borderRadius:6,border:"none",background:ativa?T.accent:T.card2,color:ativa?"#fff":T.text2,cursor:"pointer",fontSize:12,fontWeight:ativa?600:400,transition:"all 0.15s"}}>
+                  {preenchido?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
+                </button>
+              );
+            })}
           </div>
+          {/* Conteúdo da aba ativa — scroll interno (não rola a página inteira) */}
+          <div style={{minHeight:300,maxHeight:600,overflowY:"auto",paddingRight:8}}>
           {CAPITULOS_GD.map(cap=>capituloAtivo===cap.id&&(
             <div key={cap.id}>
               <div style={{fontSize:12,fontWeight:700,color:T.accent,marginBottom:8}}>{cap.label}</div>
@@ -1859,6 +1866,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               )}
             </div>
           ))}
+          </div>
           </>}
         </div>
         <div style={s.card}>
