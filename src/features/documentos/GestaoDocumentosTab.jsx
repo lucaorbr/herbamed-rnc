@@ -168,7 +168,7 @@ export const TIPOS_DOC_GD = [
   { id: "PO",   label: "Procedimento Operacional",       icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
   { id: "IT",   label: "Instrução de Trabalho",           icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
   { id: "MOP",  label: "Manual Operacional",              icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ", semCapa: true, semMarcaDagua: true },
   { id: "ESP",  label: "Especificação",                   icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
   { id: "MAN",  label: "Manual",                         icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
   { id: "ANX",  label: "Anexo",                          icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
