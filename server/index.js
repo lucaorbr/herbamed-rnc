@@ -776,6 +776,9 @@ async function handleDocumentRender(req, res, pathname, url) {
       // Faixa de cabeçalho fina
       page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
       page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
+      // Título do documento à direita (único lugar que identifica formulários sem capa)
+      const tituloHdr = titulo.length > 55 ? titulo.slice(0, 54) + "…" : titulo;
+      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 13, 7, fontB, cinza);
       // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
       const rodape = semMarcaDagua
