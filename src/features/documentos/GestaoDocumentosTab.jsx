@@ -382,7 +382,7 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName }) {
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [] }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], doSaveRNC }) {
   const T = useTheme();
   const s = useS();
 
@@ -416,6 +416,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // Fase 8 — data de vigência agendada
   const [modalVigencia, setModalVigencia] = useState(null); // { doc, onConfirm }
   const [dataVigenciaInput, setDataVigenciaInput] = useState("");
+  // Seção 11-12 — rejeição de documento com auto-RNC
+  const [rejeicaoModal, setRejeicaoModal] = useState(null); // { doc, show }
+  const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
   const [editEntradaIdx, setEditEntradaIdx] = useState(null);
@@ -746,6 +749,40 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
   };
 
+  // Seção 11-12 — rejeição de documento: muda status pra "Em Revisão" e cria RNC automaticamente
+  const rejeitarDoc = async (doc) => {
+    if (!motivoRejeicao.trim()) { toast_("Informe o motivo da rejeição.", "red"); return; }
+    try {
+      // 1. Muda status do documento pra "Em Revisão" (volta pra elaborador corrigir)
+      const updated = { ...doc, status: "Em Revisão", atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+
+      // 2. Cria RNC automaticamente com contexto do documento rejeitado
+      const prazo = new Date(); prazo.setDate(prazo.getDate() + 14); // 14 dias pra AC
+      const novaRNC = {
+        descricao: `Documento rejeitado: ${doc.codigo} Rev.${doc.versao} — ${doc.titulo}`,
+        tipo: "Não-conformidade",
+        origem: "Rejeição de Documento",
+        motivo: motivoRejeicao,
+        resp: user?.name || "",
+        prazoAC: prazo.toISOString().split("T")[0],
+        status: "Aberta",
+        evidencia: "",
+        docVinculado: { id: doc.id, codigo: doc.codigo, titulo: doc.titulo },
+      };
+      await doSaveRNC(novaRNC);
+
+      await auditLog("Rejeitou Documento — RNC Auto-criada", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { status: doc.status }, { status: "Em Revisão", motivo: motivoRejeicao });
+      toast_("Documento rejeitado. RNC criada automaticamente.", "green");
+      setRejeicaoModal(null);
+      setMotivoRejeicao("");
+      setSel(updated);
+    } catch(e) {
+      toast_(fbErr(e), "red");
+      console.error(e);
+    }
+  };
+
   const deletar = async (id) => {
     try {
     const doc = docs.find(x => String(x.id) === String(id)) || sel;
@@ -994,6 +1031,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
             {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
+            {podeAssAprov && d.status==="Aguardando Aprovação" && <button style={{...s.btnD,fontSize:11}} onClick={()=>setRejeicaoModal({doc:d,show:true})}>❌ Rejeitar</button>}
             {podeIniciarRevisao && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
@@ -2108,6 +2146,24 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
       })
       }<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/>
       </>
+      )}
+      {/* ── SEÇÃO 11-12: MODAL DE REJEIÇÃO ── */}
+      {rejeicaoModal?.show && (
+        <div onClick={()=>setRejeicaoModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:500,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+            <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>❌ Rejeitar documento</div>
+            <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{rejeicaoModal.doc?.codigo} Rev.{rejeicaoModal.doc?.versao} — {rejeicaoModal.doc?.titulo}</div>
+            <div style={{fontSize:11,color:T.text3,marginBottom:16}}>O documento voltará a "Em Revisão" para que o elaborador corrija. Uma RNC será criada automaticamente com o motivo da rejeição.</div>
+            <textarea placeholder="Motivo da rejeição (obrigatório)" value={motivoRejeicao} onChange={e=>setMotivoRejeicao(e.target.value)}
+              style={{...s.inp,width:"100%",fontSize:13,padding:"10px 12px",marginBottom:16,boxSizing:"border-box",minHeight:100,fontFamily:"inherit",color:T.text,background:T.surf,border:`1px solid ${T.border}`}} />
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button style={s.btn} onClick={()=>{setRejeicaoModal(null);setMotivoRejeicao("");}}>Cancelar</button>
+              <button style={{...s.btnD,opacity:!motivoRejeicao.trim()?0.5:1,cursor:!motivoRejeicao.trim()?"not-allowed":"pointer"}} disabled={!motivoRejeicao.trim()} onClick={()=>rejeitarDoc(rejeicaoModal.doc)}>
+                ❌ Rejeitar documento
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
