@@ -168,7 +168,7 @@ export const TIPOS_DOC_GD = [
   { id: "PO",   label: "Procedimento Operacional",       icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
   { id: "IT",   label: "Instrução de Trabalho",           icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
   { id: "MOP",  label: "Manual Operacional",              icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ", semCapa: true, semMarcaDagua: true },
   { id: "ESP",  label: "Especificação",                   icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
   { id: "MAN",  label: "Manual",                         icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
   { id: "ANX",  label: "Anexo",                          icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
@@ -290,7 +290,7 @@ export function BadgeStatusGD({ status }) {
   const T = useTheme();
   const m = STATUS_DOC_GD[status] || STATUS_DOC_GD["Rascunho"];
   return (
-    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:m.bg, color:m.c, whiteSpace:"nowrap" }}>
+    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:m.bg, color:m.c, whiteSpace:"nowrap" }} data-formal-scrubbable="true">
       {m.icon} {status}
     </span>
   );
@@ -2028,7 +2028,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
     <div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16}}>
         {[{label:"Vigentes",value:totalVigente,color:T.accent,icon:"✅"},{label:"Em Revisão",value:totalRevisao,color:T.yellow||"#ffd166",icon:"🔄"},{label:"Vencendo (90d)",value:totalVencendo,color:T.orange||"#ff8c42",icon:"⏰"},{label:"Obsoletos",value:totalObsoleto,color:T.red||"#ff4f6a",icon:"🗄️"},{label:"Total",value:docs.length,color:T.text2,icon:"📄"}].map(stat=>(
-          <div key={stat.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",textAlign:"center"}}>
+          <div key={stat.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",textAlign:"center"}} data-formal-scrubbable="true">
             <div style={{fontSize:22,marginBottom:4}}>{stat.icon}</div>
             <div style={{fontSize:22,fontWeight:800,color:stat.color}}>{stat.value}</div>
             <div style={{fontSize:10,color:T.text3,fontWeight:600,textTransform:"uppercase"}}>{stat.label}</div>

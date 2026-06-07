@@ -46,8 +46,8 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     } catch(e) { toast_("Erro ao salvar configuração.", "red"); console.error(e); }
   };
   // ── Catálogos ─────────────────────────────────────────────────────────────
-  const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ id:d.id, label:d.label, ativo:true }));
-  const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ id:t.id, label:t.label, prazoRevisaoAnos:t.prazoRevisaoAnos??2, ativo:true }));
+  const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ ...d, ativo:true }));
+  const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ ...t, prazoRevisaoAnos:t.prazoRevisaoAnos??2, semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua, ativo:true }));
 
   const [catAba, setCatAba] = useState("deptos");
   const [listaDeptos, setListaDeptos] = useState(() => mkDefaultDeptos(catalogoDeptos));
@@ -57,8 +57,8 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [savingDeptos, setSavingDeptos] = useState(false);
   const [listaTipos, setListaTipos] = useState(() => mkDefaultTipos(catalogoTipos));
   const [editTipoIdx, setEditTipoIdx] = useState(null);
-  const [editTipoData, setEditTipoData] = useState({ id:"", label:"", prazoRevisaoAnos:"2" });
-  const [novoTipo, setNovoTipo] = useState({ id:"", label:"", prazoRevisaoAnos:"2" });
+  const [editTipoData, setEditTipoData] = useState({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
+  const [novoTipo, setNovoTipo] = useState({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
   const [savingTipos, setSavingTipos] = useState(false);
 
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
@@ -402,6 +402,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaDeptos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
                     {d.ativo?"🔒 Desativar":"🔓 Ativar"}
                   </button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                    title="Excluir departamento do catálogo"
+                    onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} — ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) setListaDeptos(p=>p.filter((_,j)=>j!==i)); }}>🗑️</button>
                 </>)}
               </div>
             ))}
@@ -417,9 +420,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         {catAba==="tipos" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
             Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários.
+            <br/><strong>Modelo Formulário</strong> (sem capa + sem marca d'água): para documentos impressos/xerocados, como formulários que acompanham OPs.
           </div>
           {/* Adicionar novo */}
-          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
             <input placeholder="Código (ex: POP)" maxLength={6} value={novoTipo.id}
               onChange={e=>setNovoTipo(p=>({...p,id:e.target.value.toUpperCase()}))}
               style={{ ...s.inp, width:90, fontSize:12 }} />
@@ -433,9 +437,20 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               if (!novoTipo.id.trim() || !novoTipo.label.trim()) return;
               if (listaTipos.find(t=>t.id===novoTipo.id)) { toast_("Código já existe.", "red"); return; }
               const prazo = Number(novoTipo.prazoRevisaoAnos);
-              setListaTipos(p=>[...p, { id:novoTipo.id.trim(), label:novoTipo.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, ativo:true }]);
-              setNovoTipo({ id:"", label:"", prazoRevisaoAnos:"2" });
+              setListaTipos(p=>[...p, { id:novoTipo.id.trim(), label:novoTipo.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!novoTipo.semCapa, semMarcaDagua:!!novoTipo.semMarcaDagua, ativo:true }]);
+              setNovoTipo({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
             }}>+ Adicionar</button>
+          </div>
+          {/* Flags do modelo */}
+          <div style={{ display:"flex", gap:16, marginBottom:14, flexWrap:"wrap", alignItems:"center", paddingLeft:2 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.text2, cursor:"pointer" }}>
+              <input type="checkbox" checked={!!novoTipo.semCapa} onChange={e=>setNovoTipo(p=>({...p,semCapa:e.target.checked}))} style={{ width:15, height:15, accentColor:T.accent }} />
+              Sem capa
+            </label>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.text2, cursor:"pointer" }}>
+              <input type="checkbox" checked={!!novoTipo.semMarcaDagua} onChange={e=>setNovoTipo(p=>({...p,semMarcaDagua:e.target.checked}))} style={{ width:15, height:15, accentColor:T.accent }} />
+              Sem marca d'água
+            </label>
           </div>
           {/* Lista */}
           <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
@@ -451,24 +466,39 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <input type="number" min="1" step="1" value={editTipoData.prazoRevisaoAnos}
                     onChange={e=>setEditTipoData(p=>({...p,prazoRevisaoAnos:e.target.value}))}
                     style={{ ...s.inp, width:70, fontSize:12 }} />
+                  <label title="Sem capa" style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:T.text2, cursor:"pointer" }}>
+                    <input type="checkbox" checked={!!editTipoData.semCapa} onChange={e=>setEditTipoData(p=>({...p,semCapa:e.target.checked}))} style={{ width:14, height:14, accentColor:T.accent }} />S/capa
+                  </label>
+                  <label title="Sem marca d'água" style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:T.text2, cursor:"pointer" }}>
+                    <input type="checkbox" checked={!!editTipoData.semMarcaDagua} onChange={e=>setEditTipoData(p=>({...p,semMarcaDagua:e.target.checked}))} style={{ width:14, height:14, accentColor:T.accent }} />S/marca
+                  </label>
                   <button style={s.btnA} onClick={()=>{
                     if (!editTipoData.id.trim() || !editTipoData.label.trim()) return;
                     const prazo = Number(editTipoData.prazoRevisaoAnos);
-                    setListaTipos(p=>p.map((x,j)=>j===i?{ ...x, id:editTipoData.id.trim(), label:editTipoData.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2 }:x));
+                    setListaTipos(p=>p.map((x,j)=>j===i?{ ...x, id:editTipoData.id.trim(), label:editTipoData.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!editTipoData.semCapa, semMarcaDagua:!!editTipoData.semMarcaDagua }:x));
                     setEditTipoIdx(null);
                   }}>✓</button>
                   <button style={s.btn} onClick={()=>setEditTipoIdx(null)}>✕</button>
                 </>) : (<>
                   <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:T.accentDim, color:T.accent, minWidth:44, textAlign:"center" }}>{t.id}</span>
                   <span style={{ flex:1, fontSize:12, color:T.text }}>{t.label}</span>
+                  {(t.semCapa || t.semMarcaDagua) && (
+                    <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:"#a78bfa22", color:"#a78bfa", fontWeight:700 }}
+                      title={`${t.semCapa?"sem capa":""}${t.semCapa&&t.semMarcaDagua?" + ":""}${t.semMarcaDagua?"sem marca d'água":""}`}>
+                      📝 Formulário
+                    </span>
+                  )}
                   <span style={{ fontSize:11, color:T.text3 }}>{t.prazoRevisaoAnos ?? 2} anos</span>
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {t.ativo?"Ativo":"Inativo"}
                   </span>
-                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTipoIdx(i); setEditTipoData({ id:t.id, label:t.label, prazoRevisaoAnos:String(t.prazoRevisaoAnos??2) }); }}>✏️</button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTipoIdx(i); setEditTipoData({ id:t.id, label:t.label, prazoRevisaoAnos:String(t.prazoRevisaoAnos??2), semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua }); }}>✏️</button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaTipos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
                     {t.ativo?"🔒 Desativar":"🔓 Ativar"}
                   </button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                    title="Excluir tipo do catálogo"
+                    onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} — ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) setListaTipos(p=>p.filter((_,j)=>j!==i)); }}>🗑️</button>
                 </>)}
               </div>
             ))}

@@ -84,42 +84,44 @@ export function useFT() {
   return (str) => (formal && typeof str === "string") ? stripEmoji(str) : str;
 }
 
-// Boundary global em nível de DOM: no modo Formal, percorre todos os nós de
-// TEXTO renderizados e remove emojis — independente de qual componente os gerou.
-// Cobre 100% da tela (botões, badges, labels, cards, pickers) num só ponto, sem
-// embrulhar string por string em cada módulo. Um MutationObserver mantém o scrub
-// ativo conforme o React re-renderiza.
+// Scrub container-specific: no modo Formal, remove emojis APENAS de elementos
+// marcados com data-formal-scrubbable="true" (status badges, decoração).
+// Identidade visual (tipo, depto, tabs, botões) preservada automaticamente.
+// MutationObserver mantém sync conforme React re-renderiza.
 const EMOJI_RE = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{1F300}-\u{1FAFF}\u{FE0F}\u{20E3}]/gu;
 
-function scrubTextNodes(root) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => {
-      const p = n.parentNode;
-      if (p && (p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || p.nodeName === "TEXTAREA")) return NodeFilter.FILTER_REJECT;
-      return EMOJI_RE.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-    },
-  });
-  const alvos = [];
-  let cur;
-  while ((cur = walker.nextNode())) alvos.push(cur);
-  alvos.forEach((n) => {
-    // Remove emoji, collapsa espaços múltiplos e trim de espaços extras
-    const limpo = n.nodeValue
-      .replace(EMOJI_RE, "")
-      .replace(/ {2,}/g, " ")
-      .trim();
-    if (limpo !== n.nodeValue) n.nodeValue = limpo;
+function scrubScrubbableContainers(root) {
+  // Encontra todos os elementos com data-formal-scrubbable="true"
+  const containers = root.querySelectorAll("[data-formal-scrubbable='true']");
+  containers.forEach((container) => {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => {
+        const p = n.parentNode;
+        if (p && (p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || p.nodeName === "TEXTAREA")) return NodeFilter.FILTER_REJECT;
+        return EMOJI_RE.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const alvos = [];
+    let cur;
+    while ((cur = walker.nextNode())) alvos.push(cur);
+    alvos.forEach((n) => {
+      const limpo = n.nodeValue
+        .replace(EMOJI_RE, "")
+        .replace(/ {2,}/g, " ")
+        .trim();
+      if (limpo !== n.nodeValue) n.nodeValue = limpo;
+    });
   });
 }
 
-// Hook: liga/desliga o scrub de DOM conforme o modo Formal.
+// Hook: liga/desliga scrub container-specific conforme o modo Formal.
 export function useFormalDomScrub(formal) {
   React.useEffect(() => {
     if (!formal) return;
     let raf = 0;
-    const run = () => { raf = 0; scrubTextNodes(document.body); };
+    const run = () => { raf = 0; scrubScrubbableContainers(document.body); };
     const agendar = () => { if (!raf) raf = requestAnimationFrame(run); };
-    scrubTextNodes(document.body);
+    scrubScrubbableContainers(document.body);
     const obs = new MutationObserver(agendar);
     obs.observe(document.body, { childList: true, subtree: true, characterData: true });
     return () => { obs.disconnect(); if (raf) cancelAnimationFrame(raf); };

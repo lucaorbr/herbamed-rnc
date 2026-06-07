@@ -542,6 +542,11 @@ const TIPOS_DOC_RENDER = {
   PO: "Procedimento Operacional", IT: "Instrução de Trabalho", MOP: "Manual Operacional",
   FO: "Formulário", ESP: "Especificação", MAN: "Manual", ANX: "Anexo",
 };
+// Defaults de modelo por tipo (usados quando o catálogo configurável não traz o tipo).
+// Formulário (FO): sem capa e sem marca d'água — vai impresso/xerocado nas OPs.
+const TIPO_MODELO_DEFAULTS = {
+  FO: { semCapa: true, semMarcaDagua: true },
+};
 const DEPTOS_DOC_RENDER = {
   SGQ: "Sistema de Gestão da Qualidade", CQ: "Controle de Qualidade", PRD: "Produção",
   LOG: "Logística", RH: "Recursos Humanos", COM: "Comercial", ADM: "Administrativo",
@@ -615,6 +620,23 @@ async function handleDocumentRender(req, res, pathname, url) {
     const deptoLbl = pdfSafe(DEPTOS_DOC_RENDER[doc.depto] || doc.depto || "—");
     const status  = pdfSafe(doc.status || "—");
     const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
+
+    // Modelo do tipo: catálogo configurável (configuracoes/catalogo_tipos_doc) tem
+    // prioridade; na ausência, usa os defaults hardcoded (ex: FO = formulário).
+    let semCapa = false, semMarcaDagua = false;
+    try {
+      const catRes = await query(
+        "SELECT data FROM generic_documents WHERE collection = 'configuracoes' AND id = 'catalogo_tipos_doc'"
+      );
+      const tipoCfg = (catRes.rows[0]?.data?.items || []).find(t => t.id === doc.tipo);
+      // Default do tipo na base; flags explícitas do catálogo (se houver a chave) prevalecem.
+      const fonte = { ...(TIPO_MODELO_DEFAULTS[doc.tipo] || {}), ...(tipoCfg || {}) };
+      semCapa = !!fonte.semCapa;
+      semMarcaDagua = !!fonte.semMarcaDagua;
+    } catch (e) {
+      const def = TIPO_MODELO_DEFAULTS[doc.tipo] || {};
+      semCapa = !!def.semCapa; semMarcaDagua = !!def.semMarcaDagua;
+    }
     const impressoEm = new Date().toLocaleString("pt-BR");
     // Marca d'água: sempre o texto limpo do modo — quem imprimiu fica só no distribution_log.
     const wmTexto = pdfSafe(wm.texto);
@@ -641,7 +663,8 @@ async function handleDocumentRender(req, res, pathname, url) {
     const cinza = rgb(0.42, 0.42, 0.42);
     const cinzaC = rgb(0.30, 0.30, 0.30);
 
-    // ── CAPA (página 1) ──
+    // ── CAPA (página 1) — pulada para tipos "modelo formulário" (semCapa) ──
+    if (!semCapa) {
     const capa = out.addPage([595, 842]);
     const W = 595, H = 842;
 
@@ -718,37 +741,47 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Rodapé da capa: esquerda = empresa, direita = modo
     draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
     drawRight(capa, wmTexto, W - 40, 30, 8, fontR, cinza);
+    } // fim if(!semCapa)
 
     // ── CONTEÚDO (páginas 2+) ──
     const indices = contentPdf.getPageIndices();
     const copiadas = await out.copyPages(contentPdf, indices);
     copiadas.forEach(p => out.addPage(p));
 
-    // ── Carimbar CONTEÚDO (páginas 2+) com marca d'água diagonal ──
-    // A capa tem seu próprio footer com a marca d'água — não carimba lá
+    // ── Carimbar CONTEÚDO com marca d'água diagonal ──
+    // Quando há capa (idx 0), ela tem footer próprio e não é carimbada.
+    // Quando semCapa, todas as páginas são conteúdo.
     const pages = out.getPages();
-    const totalConteudo = pages.length - 1;
+    const capaOffset = semCapa ? 0 : 1;          // nº de páginas que não são conteúdo
+    const totalConteudo = pages.length - capaOffset;
     pages.forEach((page, idx) => {
       // Pula capa para não sobrepor marca d'água diagonal com footer
-      if (idx === 0) return;
+      if (!semCapa && idx === 0) return;
 
       const { width, height } = page.getSize();
-      const wmSize = Math.max(36, Math.min(width, height) * 0.07);
-      const angle = (45 * Math.PI) / 180;
-      const tw = fontB.widthOfTextAtSize(wmTexto, wmSize);
-      const th = fontB.heightAtSize(wmSize);
-      const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
-      const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
-      page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
+
+      // Marca d'água diagonal — omitida em tipos "modelo formulário" (xerocados)
+      if (!semMarcaDagua) {
+        const wmSize = Math.max(36, Math.min(width, height) * 0.07);
+        const angle = (45 * Math.PI) / 180;
+        const tw = fontB.widthOfTextAtSize(wmTexto, wmSize);
+        const th = fontB.heightAtSize(wmSize);
+        const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
+        const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
+        page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
+      }
 
       // Cabeçalho e rodapé nas páginas de conteúdo
-      const numPag = idx; // página de conteúdo (1..N)
+      const numPag = idx - capaOffset + 1; // página de conteúdo (1..N)
       // Faixa de cabeçalho fina
       page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
       page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
-      // Faixa de rodapé
+      // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
-      page.drawText(pdfSafe(`${wmTexto} · ${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
+      const rodape = semMarcaDagua
+        ? `${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`
+        : `${wmTexto} · ${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`;
+      page.drawText(pdfSafe(rodape), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
     });
 
     const bytes = await out.save();
