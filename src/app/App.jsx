@@ -21,6 +21,7 @@ import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
 import { DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
+import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
@@ -294,6 +295,12 @@ export default function App() {
       </div>
     </ThemeCtx.Provider>
   );
+
+  // Rota pública: fornecedor responde RNC via link com token
+  const supplierToken = new URLSearchParams(window.location.search).get("rnc_token");
+  if (supplierToken && /^[a-f0-9]{64}$/.test(supplierToken)) {
+    return <ThemeCtx.Provider value={T}><SupplierRNCPage token={supplierToken} /></ThemeCtx.Provider>;
+  }
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
 
