@@ -556,7 +556,7 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} doSaveRNC={doSaveRNC} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
