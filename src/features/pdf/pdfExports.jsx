@@ -159,7 +159,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <div class="header">
     <div class="logo-area">
       <div>
-        <div class="logo-text">🌿 HERBAMED®</div>
+        <div class="logo-text">HERBAMED®</div>
         <div class="logo-sub">Sistema de Gestão da Qualidade — SGQ</div>
       </div>
     </div>
@@ -357,7 +357,7 @@ export function exportFMEAPDF(items) {
   openPDFWindow("FMEA — Herbamed®", `
 <div class="page">
   <div class="header">
-    <div><div class="logo">🌿 HERBAMED®</div><div class="logo-sub">FMEA — Análise de Modo e Efeito de Falha</div></div>
+    <div><div class="logo">HERBAMED®</div><div class="logo-sub">FMEA — Análise de Modo e Efeito de Falha</div></div>
     <div><div class="doc-date">Gerado em ${new Date().toLocaleDateString("pt-BR")}</div></div>
   </div>
   <div class="section">
@@ -400,7 +400,7 @@ export function exportAuditoriaPDF(a) {
   openPDFWindow(`${a.titulo} — Herbamed®`, `
 <div class="page">
   <div class="header">
-    <div><div class="logo">🌿 HERBAMED®</div><div class="logo-sub">Relatório de Auditoria ${a.tipo}</div></div>
+    <div><div class="logo">HERBAMED®</div><div class="logo-sub">Relatório de Auditoria ${a.tipo}</div></div>
     <div><div class="doc-date">Planejado em ${fmt(a.dataPlano)}</div>${a.dataPrev?`<div class="doc-date">Execução: ${fmt(a.dataPrev)}</div>`:""}</div>
   </div>
   <div class="section">

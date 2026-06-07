@@ -241,7 +241,6 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
       <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto">
         <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center">
           <div style="display:flex;align-items:center;gap:12px">
-            <img src="${window.location.origin}${LOGO_HERBAMED}" style="width:44px;height:44px;border-radius:6px;object-fit:cover"/>
             <div>
               <div style="color:#fff;font-size:14px;font-weight:bold">${HERBAMED_INFO.nome}</div>
               <div style="color:#9fd4b2;font-size:10px">CNPJ: ${HERBAMED_INFO.cnpj}</div>
