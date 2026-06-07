@@ -445,13 +445,13 @@ export default function App() {
               </button>
             )}
             <div style={{ position:"relative" }}>
-              <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:notifs.length>0?"#ffd16618":"none", border:`1px solid ${notifs.length>0?"#ffd16633":T.border}`, borderRadius:8, color:notifs.length>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
+              <button data-formal-preserve="true" onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:notifs.length>0?"#ffd16618":"none", border:`1px solid ${notifs.length>0?"#ffd16633":T.border}`, borderRadius:8, color:notifs.length>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
                 🔔
                 {notifs.length>0 && <span style={{ position:"absolute", top:2, right:2, width:14, height:14, borderRadius:"50%", background:T.red, color:"#fff", fontSize:8, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${T.bg}` }}>{notifs.length}</span>}
               </button>
               {notifOpen && (
                 <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:320, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:14, boxShadow:"0 16px 48px #0008", zIndex:500, animation:"fadeIn .15s ease" }}>
-                  <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, display:"flex", justifyContent:"space-between" }}>
+                  <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, display:"flex", justifyContent:"space-between" }} data-formal-preserve="true">
                     🔔 Notificações <span style={{ color:T.text3, fontWeight:400 }}>{notifs.length} alerta(s)</span>
                   </div>
                   {notifs.length===0 ? (

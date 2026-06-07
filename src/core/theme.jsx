@@ -96,6 +96,12 @@ function scrubTextNodes(root) {
     acceptNode: (n) => {
       const p = n.parentNode;
       if (p && (p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || p.nodeName === "TEXTAREA")) return NodeFilter.FILTER_REJECT;
+      // Skip nós cujo ancestral (até 10 níveis) tem data-formal-preserve
+      let curr = p;
+      for (let i = 0; i < 10 && curr; i++) {
+        if (curr.dataset?.formalPreserve === "true") return NodeFilter.FILTER_REJECT;
+        curr = curr.parentNode;
+      }
       return EMOJI_RE.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     },
   });

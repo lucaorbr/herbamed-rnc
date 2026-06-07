@@ -1669,8 +1669,8 @@ ${docHtml.slice(0,9000)}`}]})
         <div style={s.card}>
           <SecTitle icon="🗂️" ch="Identificação" />
           <G3 ch={<>
-            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon ? `${t.icon} ` : ""}{t.label} ({t.id})</option>)}</Sel>} />
-            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
+            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)} data-formal-preserve="true">{tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon ? `${t.icon} ` : ""}{t.label} ({t.id})</option>)}</Sel>} />
+            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)} data-formal-preserve="true">{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
           {form.tipo && (()=>{
@@ -2001,7 +2001,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                   if (!dt.length) return null;
                   return (
                     <div key={tp.id} style={{marginBottom:10}}>
-                      <div style={{fontSize:12,color:T.text2,fontWeight:600,marginBottom:6}}>{tp.icon} {tp.label}</div>
+                      <div style={{fontSize:12,color:T.text2,fontWeight:600,marginBottom:6}} data-formal-preserve="true">{tp.icon} {tp.label}</div>
                       {dt.map(d=>(
                         <div key={d.id} onClick={()=>{setSel(d);setView("detalhe");}} className="rnc-row"
                           style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:4,cursor:"pointer"}}>
