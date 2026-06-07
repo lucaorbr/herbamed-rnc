@@ -64,29 +64,32 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
 
-  const salvarCatDeptos = async () => {
+  const persistDeptos = async (lista) => {
     if (!isAdmin) return;
-    if (listaDeptos.some(d => !d.id.trim() || !d.label.trim())) { toast_("Todos os departamentos precisam de código e nome.", "red"); return; }
+    if (lista.some(d => !d.id.trim() || !d.label.trim())) { toast_("Todos os departamentos precisam de código e nome.", "red"); return; }
     setSavingDeptos(true);
     try {
-      await saveCollection("configuracoes", "catalogo_departamentos", { items: listaDeptos });
-      await auditLog("Atualizou Catálogo de Departamentos", "configuracoes", "catalogo_departamentos", "Catálogo", null, { total: listaDeptos.length });
+      await saveCollection("configuracoes", "catalogo_departamentos", { items: lista });
+      await auditLog("Atualizou Catálogo de Departamentos", "configuracoes", "catalogo_departamentos", "Catálogo", null, { total: lista.length });
       toast_("Catálogo de departamentos salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingDeptos(false);
   };
+  const salvarCatDeptos = () => persistDeptos(listaDeptos);
 
-  const salvarCatTipos = async () => {
+  // Persiste a lista recebida (não a do state, que pode estar desatualizada num mesmo tick).
+  const persistTipos = async (lista) => {
     if (!isAdmin) return;
-    if (listaTipos.some(t => !t.id.trim() || !t.label.trim())) { toast_("Todos os tipos precisam de código e descrição.", "red"); return; }
+    if (lista.some(t => !t.id.trim() || !t.label.trim())) { toast_("Todos os tipos precisam de código e descrição.", "red"); return; }
     setSavingTipos(true);
     try {
-      await saveCollection("configuracoes", "catalogo_tipos_doc", { items: listaTipos });
-      await auditLog("Atualizou Catálogo de Tipos de Documento", "configuracoes", "catalogo_tipos_doc", "Catálogo", null, { total: listaTipos.length });
+      await saveCollection("configuracoes", "catalogo_tipos_doc", { items: lista });
+      await auditLog("Atualizou Catálogo de Tipos de Documento", "configuracoes", "catalogo_tipos_doc", "Catálogo", null, { total: lista.length });
       toast_("Catálogo de tipos de documento salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingTipos(false);
   };
+  const salvarCatTipos = () => persistTipos(listaTipos);
 
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
@@ -358,7 +361,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         {/* ── ABA DEPARTAMENTOS ── */}
         {catAba==="deptos" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Código (máx 5 letras maiúsculas) + nome completo. Apenas departamentos ativos aparecem nos formulários.
+            Código (máx 5 letras maiúsculas) + nome completo. Apenas departamentos ativos aparecem nos formulários. As alterações são salvas automaticamente.
           </div>
           {/* Adicionar novo */}
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
@@ -371,8 +374,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             <button style={s.btnA} onClick={()=>{
               if (!novoDepto.id.trim() || !novoDepto.label.trim()) return;
               if (listaDeptos.find(d=>d.id===novoDepto.id)) { toast_("Código já existe.", "red"); return; }
-              setListaDeptos(p=>[...p, { id:novoDepto.id.trim(), label:novoDepto.label.trim(), ativo:true }]);
+              const next = [...listaDeptos, { id:novoDepto.id.trim(), label:novoDepto.label.trim(), ativo:true }];
+              setListaDeptos(next);
               setNovoDepto({ id:"", label:"" });
+              persistDeptos(next);
             }}>+ Adicionar</button>
           </div>
           {/* Lista */}
@@ -388,8 +393,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     style={{ ...s.inp, flex:1, fontSize:12 }} />
                   <button style={s.btnA} onClick={()=>{
                     if (!editDeptoData.id.trim() || !editDeptoData.label.trim()) return;
-                    setListaDeptos(p=>p.map((x,j)=>j===i?{ ...x, id:editDeptoData.id.trim(), label:editDeptoData.label.trim() }:x));
+                    const next = listaDeptos.map((x,j)=>j===i?{ ...x, id:editDeptoData.id.trim(), label:editDeptoData.label.trim() }:x);
+                    setListaDeptos(next);
                     setEditDeptoIdx(null);
+                    persistDeptos(next);
                   }}>✓</button>
                   <button style={s.btn} onClick={()=>setEditDeptoIdx(null)}>✕</button>
                 </>) : (<>
@@ -399,12 +406,12 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     {d.ativo?"Ativo":"Inativo"}
                   </span>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditDeptoIdx(i); setEditDeptoData({ id:d.id, label:d.label }); }}>✏️</button>
-                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaDeptos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaDeptos.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x); setListaDeptos(next); persistDeptos(next); }}>
                     {d.ativo?"🔒 Desativar":"🔓 Ativar"}
                   </button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir departamento do catálogo"
-                    onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} — ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) setListaDeptos(p=>p.filter((_,j)=>j!==i)); }}>🗑️</button>
+                    onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} — ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) { const next=listaDeptos.filter((_,j)=>j!==i); setListaDeptos(next); persistDeptos(next); } }}>🗑️</button>
                 </>)}
               </div>
             ))}
@@ -419,7 +426,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         {/* ── ABA TIPOS DE DOCUMENTO ── */}
         {catAba==="tipos" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários.
+            Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários. As alterações são salvas automaticamente.
             <br/><strong>Modelo Formulário</strong> (sem capa + sem marca d'água): para documentos impressos/xerocados, como formulários que acompanham OPs.
           </div>
           {/* Adicionar novo */}
@@ -437,8 +444,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               if (!novoTipo.id.trim() || !novoTipo.label.trim()) return;
               if (listaTipos.find(t=>t.id===novoTipo.id)) { toast_("Código já existe.", "red"); return; }
               const prazo = Number(novoTipo.prazoRevisaoAnos);
-              setListaTipos(p=>[...p, { id:novoTipo.id.trim(), label:novoTipo.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!novoTipo.semCapa, semMarcaDagua:!!novoTipo.semMarcaDagua, ativo:true }]);
+              const next = [...listaTipos, { id:novoTipo.id.trim(), label:novoTipo.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!novoTipo.semCapa, semMarcaDagua:!!novoTipo.semMarcaDagua, ativo:true }];
+              setListaTipos(next);
               setNovoTipo({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
+              persistTipos(next);
             }}>+ Adicionar</button>
           </div>
           {/* Flags do modelo */}
@@ -475,8 +484,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={s.btnA} onClick={()=>{
                     if (!editTipoData.id.trim() || !editTipoData.label.trim()) return;
                     const prazo = Number(editTipoData.prazoRevisaoAnos);
-                    setListaTipos(p=>p.map((x,j)=>j===i?{ ...x, id:editTipoData.id.trim(), label:editTipoData.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!editTipoData.semCapa, semMarcaDagua:!!editTipoData.semMarcaDagua }:x));
+                    const next = listaTipos.map((x,j)=>j===i?{ ...x, id:editTipoData.id.trim(), label:editTipoData.label.trim(), prazoRevisaoAnos:Number.isFinite(prazo)&&prazo>0?prazo:2, semCapa:!!editTipoData.semCapa, semMarcaDagua:!!editTipoData.semMarcaDagua }:x);
+                    setListaTipos(next);
                     setEditTipoIdx(null);
+                    persistTipos(next);
                   }}>✓</button>
                   <button style={s.btn} onClick={()=>setEditTipoIdx(null)}>✕</button>
                 </>) : (<>
@@ -493,12 +504,12 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     {t.ativo?"Ativo":"Inativo"}
                   </span>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTipoIdx(i); setEditTipoData({ id:t.id, label:t.label, prazoRevisaoAnos:String(t.prazoRevisaoAnos??2), semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua }); }}>✏️</button>
-                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>setListaTipos(p=>p.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x))}>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaTipos.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x); setListaTipos(next); persistTipos(next); }}>
                     {t.ativo?"🔒 Desativar":"🔓 Ativar"}
                   </button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir tipo do catálogo"
-                    onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} — ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) setListaTipos(p=>p.filter((_,j)=>j!==i)); }}>🗑️</button>
+                    onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} — ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) { const next=listaTipos.filter((_,j)=>j!==i); setListaTipos(next); persistTipos(next); } }}>🗑️</button>
                 </>)}
               </div>
             ))}
