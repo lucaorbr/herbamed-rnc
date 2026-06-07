@@ -883,6 +883,128 @@ async function handleAreco(req, res, pathname, url) {
   return false;
 }
 
+// ── Seção: Link Fornecedor — endpoints públicos (sem auth) ──────────────────
+async function handleSupplierRNC(req, res, pathname) {
+  // Gerar token (requer auth interna)
+  if (pathname === "/api/rnc-supplier/gerar-token" && req.method === "POST") {
+    const reqUser = await requireUser(req);
+    const body = await readBody(req);
+    const { rncId, rncNum, diasValidade = 30 } = body;
+    if (!rncId) return sendJson(res, 400, { error: "rncId obrigatório" });
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + Number(diasValidade));
+
+    await query(
+      `INSERT INTO rnc_supplier_tokens (rnc_id, rnc_num, token, expires_at, criado_por)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [rncId, rncNum || "", token, expiresAt.toISOString(), reqUser?.name || ""]
+    );
+    return sendJson(res, 200, { token, expiresAt: expiresAt.toISOString() });
+  }
+
+  // Buscar RNC por token (público — sem auth)
+  const matchGet = pathname.match(/^\/api\/rnc-supplier\/([a-f0-9]{64})$/);
+  if (matchGet && req.method === "GET") {
+    const token = matchGet[1];
+    const tkRes = await query(
+      `SELECT * FROM rnc_supplier_tokens WHERE token = $1`,
+      [token]
+    );
+    if (!tkRes.rowCount) return sendJson(res, 404, { error: "Link inválido" });
+    const tk = tkRes.rows[0];
+    if (new Date(tk.expires_at) < new Date()) return sendJson(res, 410, { error: "Link expirado" });
+
+    // Busca dados da RNC
+    const rncRes = await query(
+      `SELECT data FROM generic_documents WHERE collection = 'rncs' AND id = $1
+       UNION ALL
+       SELECT data FROM generic_documents WHERE collection = 'rncs' AND id = $1 LIMIT 1`,
+      [tk.rnc_id]
+    );
+    // Tenta via tabela rncs
+    const rncRow = await query(`SELECT data FROM rncs WHERE id = $1`, [tk.rnc_id]);
+    const rnc = rncRow.rows[0]?.data || null;
+
+    return sendJson(res, 200, {
+      token,
+      rncId: tk.rnc_id,
+      rncNum: tk.rnc_num,
+      expiresAt: tk.expires_at,
+      respondido: !!tk.respondido_em,
+      respondidoEm: tk.respondido_em,
+      rnc,
+    });
+  }
+
+  // Submeter resposta (público — sem auth)
+  const matchPost = pathname.match(/^\/api\/rnc-supplier\/([a-f0-9]{64})\/responder$/);
+  if (matchPost && req.method === "POST") {
+    const token = matchPost[1];
+    const tkRes = await query(
+      `SELECT * FROM rnc_supplier_tokens WHERE token = $1`,
+      [token]
+    );
+    if (!tkRes.rowCount) return sendJson(res, 404, { error: "Link inválido" });
+    const tk = tkRes.rows[0];
+    if (new Date(tk.expires_at) < new Date()) return sendJson(res, 410, { error: "Link expirado" });
+    if (tk.respondido_em) return sendJson(res, 409, { error: "Este link já foi respondido" });
+
+    const body = await readBody(req);
+    const resposta = {
+      porques: body.porques || [],
+      causaRaiz: body.causaRaiz || "",
+      planoAcao: body.planoAcao || {},
+      observacoes: body.observacoes || "",
+      respondidoEm: new Date().toISOString(),
+    };
+
+    // Salva resposta no token
+    await query(
+      `UPDATE rnc_supplier_tokens SET respondido_em = now(), resposta = $2 WHERE token = $1`,
+      [token, JSON.stringify(resposta)]
+    );
+
+    // Incorpora resposta na RNC (campo respostaFornecedor)
+    const rncRow = await query(`SELECT data FROM rncs WHERE id = $1`, [tk.rnc_id]);
+    if (rncRow.rowCount) {
+      const rncData = { ...rncRow.rows[0].data, respostaFornecedor: resposta };
+      await query(
+        `UPDATE rncs SET data = $2, updated_at = now() WHERE id = $1`,
+        [tk.rnc_id, JSON.stringify(rncData)]
+      );
+    }
+
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // Buscar resposta de um token (auth interna — para visualizar no sistema)
+  const matchResp = pathname.match(/^\/api\/rnc-supplier\/token\/([a-f0-9]{64})\/resposta$/);
+  if (matchResp && req.method === "GET") {
+    await requireUser(req);
+    const token = matchResp[1];
+    const tkRes = await query(`SELECT * FROM rnc_supplier_tokens WHERE token = $1`, [token]);
+    if (!tkRes.rowCount) return sendJson(res, 404, { error: "Token não encontrado" });
+    return sendJson(res, 200, tkRes.rows[0]);
+  }
+
+  // Listar tokens de uma RNC (auth interna)
+  const matchList = pathname.match(/^\/api\/rnc-supplier\/por-rnc\/(.+)$/);
+  if (matchList && req.method === "GET") {
+    await requireUser(req);
+    const rncId = decodeURIComponent(matchList[1]);
+    const result = await query(
+      `SELECT id, token, rnc_num, expires_at, criado_por, criado_em, respondido_em
+       FROM rnc_supplier_tokens WHERE rnc_id = $1 ORDER BY criado_em DESC`,
+      [rncId]
+    );
+    return sendJson(res, 200, result.rows);
+  }
+
+  return false;
+}
+
 async function route(req, res) {
   if (req.method === "OPTIONS") return sendJson(res, 204, {});
 
@@ -899,6 +1021,10 @@ async function route(req, res) {
   }
 
   if (pathname.startsWith("/api/claude")) return handleClaude(req, res);
+
+  // Supplier link: endpoints públicos ANTES dos handlers autenticados
+  const supplierHandled = await handleSupplierRNC(req, res, pathname);
+  if (supplierHandled !== false) return supplierHandled;
 
   const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
   for (const handler of handlers) {

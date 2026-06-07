@@ -58,6 +58,20 @@ Herbamed® · Sistema de Gestão da Qualidade
   return { subject, body };
 }
 
+const API = process.env.REACT_APP_API_URL || "http://localhost:9028";
+
+async function gerarLinkFornecedor(rncId, rncNum, diasValidade = 30) {
+  const res = await fetch(`${API}/api/rnc-supplier/gerar-token`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rncId, rncNum, diasValidade }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Erro ao gerar link");
+  return data;
+}
+
 export function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
   const T = useTheme(); const s = useS();
   const tpl = buildEmail(rnc, evento);
@@ -68,6 +82,8 @@ export function EmailModal({ rnc, users, currentUser, evento, onClose, onSent })
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
   const [step, setStep] = useState(1);
+  const [linkForn, setLinkForn] = useState("");
+  const [gerandoLink, setGerandoLink] = useState(false);
 
   const toggle = email => setTo(p => p.includes(email) ? p.filter(x => x !== email) : [...p, email]);
   const addExtra = () => { if (!extra.includes("@")) return; setTo(p => [...new Set([...p, extra])]); setExtra(""); };
@@ -173,6 +189,37 @@ export function EmailModal({ rnc, users, currentUser, evento, onClose, onSent })
             <>
               <div style={{ background: T.accentDim, border: `1px solid ${T.accent}25`, borderRadius: 8, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: T.accent }}>
                 💡 Você pode enviar automaticamente <b>ou</b> copiar o conteúdo e colar no seu e-mail.
+              </div>
+
+              {/* Link para Fornecedor */}
+              <div style={{ ...s.card, padding: "1rem", marginBottom: "1rem", border: `1px solid ${T.border2}` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>🔗 Link de resposta para fornecedor (opcional)</div>
+                <div style={{ fontSize: 11, color: T.text3, marginBottom: 10 }}>
+                  Gere um link seguro para o fornecedor preencher análise de causa, 5 Porquês e plano de ação diretamente no navegador — sem login.
+                </div>
+                {!linkForn ? (
+                  <button style={{ ...s.btn, fontSize: 11, color: T.accent, borderColor: T.accent + "44" }}
+                    disabled={gerandoLink}
+                    onClick={async () => {
+                      setGerandoLink(true);
+                      try {
+                        const base = window.location.origin;
+                        const { token } = await gerarLinkFornecedor(rnc.id, rnc.num, 30);
+                        const url = `${base}?rnc_token=${token}`;
+                        setLinkForn(url);
+                        // Insere link no corpo do email
+                        setBody(prev => prev + `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔗 FORMULÁRIO DE RESPOSTA\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPreencha a análise de causa e plano de ação pelo link abaixo:\n${url}\n\n✅ Nenhum login necessário · Válido por 30 dias`);
+                      } catch(e) { setErr("Erro ao gerar link: " + e.message); }
+                      setGerandoLink(false);
+                    }}>
+                    {gerandoLink ? "⟳ Gerando..." : "🔗 Gerar link para fornecedor"}
+                  </button>
+                ) : (
+                  <div style={{ background: T.surf, border: `1px solid ${T.accent}33`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 11, color: T.accent, wordBreak: "break-all" }}>{linkForn}</span>
+                    <button style={{ ...s.btn, fontSize: 10, padding: "4px 8px" }} onClick={() => navigator.clipboard.writeText(linkForn).then(() => {})}>📋</button>
+                  </div>
+                )}
               </div>
               <div style={{ ...s.card, padding: "1rem", marginBottom: "1rem", fontSize: 12, color: T.text2 }}>
                 <span style={{ color: T.text3, fontWeight: 600 }}>Para: </span>

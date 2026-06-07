@@ -215,6 +215,25 @@ async function migrate() {
 
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS senha_temporaria boolean NOT NULL DEFAULT false`);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS rnc_supplier_tokens (
+      id bigserial PRIMARY KEY,
+      rnc_id text NOT NULL,
+      rnc_num text,
+      token text NOT NULL UNIQUE,
+      expires_at timestamptz NOT NULL,
+      criado_por text,
+      criado_em timestamptz NOT NULL DEFAULT now(),
+      respondido_em timestamptz,
+      resposta jsonb
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_rnc_supplier_tokens_token
+    ON rnc_supplier_tokens (token)
+  `);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }
