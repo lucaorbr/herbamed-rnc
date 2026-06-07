@@ -35,9 +35,7 @@ export function Login({ onLogin }) {
       {/* ── ESQUERDA — Banner ── */}
       <div style={{ flex:1, position:"relative", overflow:"hidden", display:"flex", flexDirection:"column" }}>
         {/* Banner com overlay */}
-        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.jpg')", backgroundSize:"cover", backgroundPosition:"center center", filter:"brightness(0.9)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(5,30,15,0.2) 0%, rgba(5,20,10,0.5) 70%, rgba(5,15,8,0.85) 100%)" }} />
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to right, transparent 60%, #0a110c 100%)" }} />
+        <div style={{ position:"absolute", inset:0, backgroundImage:"url('/banner.jpg')", backgroundSize:"100% 100%", backgroundPosition:"center center", filter:"brightness(1)" }} />
 
         {/* Content */}
         <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", justifyContent:"center", height:"100%", padding:"2.5rem" }}>
@@ -54,7 +52,7 @@ export function Login({ onLogin }) {
               SGQ<br /><span style={{ color:"#2ab84a" }}>Herbamed</span>
             </div>
             <div style={{ fontSize:15, color:"rgba(255,255,255,0.55)", lineHeight:1.6, maxWidth:400, marginBottom:28 }}>
-              Sistema de Gestão da Qualidade integrado com inteligência artificial para análise e resolução de não conformidades.
+              Gestão integrada de qualidade e conformidade.
             </div>
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", fontStyle:"italic" }}>
               "Fornecendo Saúde. Cultivando Qualidade de Vida."
