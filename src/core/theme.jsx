@@ -57,21 +57,13 @@ export const THEMES = {
     border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
     red: "#ff3b30", yellow: "#ff9500", blue: "#007aff", orange: "#ff6b00", purple: "#af52de",
   },
-  win2k: {
-    name: "🖥️ Windows 2000", light: true,
-    bg: "#008080", surf: "#d4d0c8", card: "#d4d0c8", card2: "#c0bdb5",
-    accent: "#000080", accent2: "#00006a", accentDim: "#00008015",
-    accentGlow: "#00008030", text: "#000000", text2: "#444444", text3: "#888888",
-    border: "rgba(0,0,0,0.25)", border2: "rgba(0,0,0,0.4)",
-    red: "#cc0000", yellow: "#ccaa00", blue: "#000080", orange: "#cc6600", purple: "#660066",
-  },
-  winxp: {
-    name: "🪟 Windows XP", light: true,
-    bg: "#236dcd", surf: "#ece9d8", card: "#ffffff", card2: "#f1efe2",
-    accent: "#0a6ed1", accent2: "#084fa0", accentDim: "#0a6ed115",
-    accentGlow: "#0a6ed130", text: "#000000", text2: "#444444", text3: "#888888",
-    border: "rgba(0,0,0,0.15)", border2: "rgba(0,0,0,0.25)",
-    red: "#cc0000", yellow: "#e6a817", blue: "#0a6ed1", orange: "#e6720a", purple: "#7b0099",
+  professional: {
+    name: "💼 Professional", light: true,
+    bg: "#f5f5f7", surf: "#ffffff", card: "#ffffff", card2: "#f9f9fb",
+    accent: "#1a7a3c", accent2: "#145c2e", accentDim: "#1a7a3c15",
+    accentGlow: "#1a7a3c30", text: "#1c1c1e", text2: "#6e6e73", text3: "#aeaeb2",
+    border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
+    red: "#d70015", yellow: "#f5a623", blue: "#0066cc", orange: "#ff6600", purple: "#7b3ff2",
   },
 };
 
@@ -90,4 +82,46 @@ export function stripEmoji(str) {
 export function useFT() {
   const formal = useFormal();
   return (str) => (formal && typeof str === "string") ? stripEmoji(str) : str;
+}
+
+// Boundary global em nível de DOM: no modo Formal, percorre todos os nós de
+// TEXTO renderizados e remove emojis — independente de qual componente os gerou.
+// Cobre 100% da tela (botões, badges, labels, cards, pickers) num só ponto, sem
+// embrulhar string por string em cada módulo. Um MutationObserver mantém o scrub
+// ativo conforme o React re-renderiza.
+const EMOJI_RE = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{1F300}-\u{1FAFF}\u{FE0F}\u{20E3}]/gu;
+
+function scrubTextNodes(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      const p = n.parentNode;
+      if (p && (p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || p.nodeName === "TEXTAREA")) return NodeFilter.FILTER_REJECT;
+      return EMOJI_RE.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const alvos = [];
+  let cur;
+  while ((cur = walker.nextNode())) alvos.push(cur);
+  alvos.forEach((n) => {
+    // Remove emoji, collapsa espaços múltiplos e trim de espaços extras
+    const limpo = n.nodeValue
+      .replace(EMOJI_RE, "")
+      .replace(/ {2,}/g, " ")
+      .trim();
+    if (limpo !== n.nodeValue) n.nodeValue = limpo;
+  });
+}
+
+// Hook: liga/desliga o scrub de DOM conforme o modo Formal.
+export function useFormalDomScrub(formal) {
+  React.useEffect(() => {
+    if (!formal) return;
+    let raf = 0;
+    const run = () => { raf = 0; scrubTextNodes(document.body); };
+    const agendar = () => { if (!raf) raf = requestAnimationFrame(run); };
+    scrubTextNodes(document.body);
+    const obs = new MutationObserver(agendar);
+    obs.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => { obs.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [formal]);
 }

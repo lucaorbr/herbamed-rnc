@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged } from "../firebase";
-import { FormalCtx, ThemeCtx, THEMES } from "../core/theme";
+import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
@@ -31,6 +31,7 @@ export default function App() {
   const T = THEMES[themeKey];
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
   const toggleFormal = () => { const v = !formalMode; setFormalMode(v); localStorage.setItem("hm_formal", String(v)); };
+  useFormalDomScrub(formalMode);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -42,6 +43,8 @@ export default function App() {
   const [fornecedores, setFornecedores] = useState([]);
   const [config, setConfig] = useState({ aprovadorDiferenteAnalista: false });
   const [tiposRevisao, setTiposRevisao] = useState({});
+  const [catalogoDeptos, setCatalogoDeptos] = useState([]);
+  const [catalogoTipos,  setCatalogoTipos]  = useState([]);
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -150,6 +153,10 @@ export default function App() {
       const tr = list.find(c => c.id === "tipos_revisao");
       if (tr) { const { id, ...rest } = tr; setTiposRevisao(rest); }
       else setTiposRevisao({});
+      const cd = list.find(c => c.id === "catalogo_departamentos");
+      setCatalogoDeptos(cd?.items || []);
+      const ct = list.find(c => c.id === "catalogo_tipos_doc");
+      setCatalogoTipos(ct?.items || []);
     });
     return () => { unsub(); unsubForn(); unsubCfg(); };
   }, [user]);
@@ -549,12 +556,12 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} />}
             </div>
           </div>
         </div>

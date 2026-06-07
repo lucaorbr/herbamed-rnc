@@ -549,7 +549,7 @@ const DEPTOS_DOC_RENDER = {
 };
 
 const WATERMARK_MODOS = {
-  controlada:     { texto: "CÓPIA CONTROLADA",      cor: rgb(0.10, 0.50, 0.20), opacidade: 0.08 },
+  controlada:     { texto: "CÓPIA CONTROLADA",      cor: rgb(1.00, 0.00, 0.00), opacidade: 0.08 },
   nao_controlada: { texto: "CÓPIA NÃO CONTROLADA",  cor: rgb(0.40, 0.40, 0.40), opacidade: 0.14 },
   obsoleto:       { texto: "DOCUMENTO OBSOLETO",    cor: rgb(0.80, 0.10, 0.10), opacidade: 0.20 },
   rascunho:       { texto: "RASCUNHO — SEM VALOR",  cor: rgb(0.80, 0.40, 0.00), opacidade: 0.14 },
@@ -715,9 +715,9 @@ async function handleDocumentRender(req, res, pathname, url) {
       }
     });
 
-    // Rodapé da capa: esquerda = empresa, direita = data + modo
+    // Rodapé da capa: esquerda = empresa, direita = modo
     draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
-    drawRight(capa, `Impresso em: ${impressoEm} | ${wmTexto}`, W - 40, 30, 8, fontR, cinza);
+    drawRight(capa, wmTexto, W - 40, 30, 8, fontR, cinza);
 
     // ── CONTEÚDO (páginas 2+) ──
     const indices = contentPdf.getPageIndices();
@@ -748,7 +748,7 @@ async function handleDocumentRender(req, res, pathname, url) {
       page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
       // Faixa de rodapé
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
-      page.drawText(pdfSafe(`${wmTexto} · ${codigo} Rev. ${versao} · Impresso em ${impressoEm} · Página ${numPag} de ${totalConteudo}`), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
+      page.drawText(pdfSafe(`${wmTexto} · ${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
     });
 
     const bytes = await out.save();

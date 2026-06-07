@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ExcelJS from 'exceljs';
 import { saveCollection, deleteFromCollection, subscribeCollection, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
@@ -164,24 +165,42 @@ export const HERBAMED_INFO_GD = {
 };
 
 export const TIPOS_DOC_GD = [
-  { id: "PO",  label: "Procedimento Operacional",  icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "IT",  label: "Instrução de Trabalho",      icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "MOP", label: "Manual Operacional",         icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "FO",  label: "Formulário",                icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "ESP", label: "Especificação",              icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "CQ" },
-  { id: "MAN", label: "Manual",                    icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "ANX", label: "Anexo",                     icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "PO",   label: "Procedimento Operacional",       icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "IT",   label: "Instrução de Trabalho",           icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
+  { id: "MOP",  label: "Manual Operacional",              icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ESP",  label: "Especificação",                   icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "MAN",  label: "Manual",                         icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "ANX",  label: "Anexo",                          icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
+  { id: "EMP",  label: "Proc. de Embalagem",             icon: "📦", cor: "#64748b", prazoRevisaoAnos: 2, departamentoResponsavel: "PRO" },
+  { id: "EME",  label: "Proc. de Emergência",            icon: "🚨", cor: "#ef4444", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
+  { id: "EPA",  label: "Esp. de Produto Acabado",        icon: "🧴", cor: "#06b6d4", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "MTA",  label: "Método de Técnica Analítica",    icon: "🔬", cor: "#8b5cf6", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
+  { id: "PCAL", label: "Plano de Calibração",            icon: "📏", cor: "#f59e0b", prazoRevisaoAnos: 1, departamentoResponsavel: "TEC" },
+  { id: "EPI",  label: "Controle de EPI",                icon: "🦺", cor: "#f97316", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
 ];
 
 export const DEPARTAMENTOS_GD = [
-  { id: "SGQ", label: "Sistema de Gestão da Qualidade", cor: "#2ab84a" },
-  { id: "CQ",  label: "Controle de Qualidade",          cor: "#4fc3f7" },
-  { id: "PRD", label: "Produção",                       cor: "#ffd166" },
-  { id: "LOG", label: "Logística",                      cor: "#ff8c42" },
-  { id: "RH",  label: "Recursos Humanos",               cor: "#a78bfa" },
-  { id: "COM", label: "Comercial",                      cor: "#ff4f6a" },
-  { id: "ADM", label: "Administrativo",                 cor: "#5dd4b0" },
-  { id: "P&D", label: "Pesquisa e Desenvolvimento",     cor: "#818cf8" },
+  { id: "ADM", label: "Administrativo",                   cor: "#5dd4b0" },
+  { id: "ALM", label: "Almoxarifado",                     cor: "#818cf8" },
+  { id: "COM", label: "Comercial",                        cor: "#ff4f6a" },
+  { id: "DIR", label: "Diretoria",                        cor: "#f59e0b" },
+  { id: "EXP", label: "Expedição",                        cor: "#10b981" },
+  { id: "FIN", label: "Financeiro",                       cor: "#3b82f6" },
+  { id: "LIM", label: "Serviços Gerais / Limpeza",        cor: "#6b7280" },
+  { id: "LOG", label: "Logística",                        cor: "#ff8c42" },
+  { id: "MAN", label: "Manutenção",                       cor: "#f97316" },
+  { id: "MKT", label: "Marketing",                        cor: "#ec4899" },
+  { id: "PCP", label: "PCP — Plan. e Controle de Prod.",  cor: "#8b5cf6" },
+  { id: "PED", label: "Pedidos / Atendimento ao Cliente", cor: "#06b6d4" },
+  { id: "PRO", label: "Produção",                         cor: "#ffd166" },
+  { id: "REG", label: "Regulatório / Assuntos Reg.",      cor: "#14b8a6" },
+  { id: "REH", label: "Recursos Humanos",                 cor: "#a78bfa" },
+  { id: "SGQ", label: "Sistema de Gestão da Qualidade",   cor: "#2ab84a" },
+  { id: "SSM", label: "Segurança e Saúde no Trabalho",    cor: "#ef4444" },
+  { id: "SUP", label: "Suprimentos / Compras",            cor: "#f59e0b" },
+  { id: "TEC", label: "Tecnologia da Informação",         cor: "#60a5fa" },
+  { id: "VEN", label: "Vendas",                           cor: "#fb923c" },
 ];
 
 export const STATUS_DOC_GD = {
@@ -206,10 +225,41 @@ export const CAPITULOS_GD = [
   { id: "historicoRevisoes", label: "10. Histórico de Revisões",    placeholder: "", special: true },
 ];
 
-export function gerarCodigoGD(tipo, depto, docs) {
-  const prefix = `${tipo}-${depto}`;
-  const existentes = docs.filter(d => d.codigo && d.codigo.startsWith(prefix)).length;
-  return `${prefix}-${String(existentes + 1).padStart(3, "0")}`;
+export const TIPOS_DOC_CODIFICACAO = {
+  "PO":   { prefixo: "PO",   padrao: "PO-ABC-xxx",     descricao: "Procedimento Operacional" },
+  "FO":   { prefixo: "FO",   padrao: "FO-ABC-xxx-x",   descricao: "Formulário" },
+  "MAN":  { prefixo: "MAN",  padrao: "ABC-Abc-xxx",     descricao: "Manual" },
+  "EMP":  { prefixo: "EMP",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Matérias-Primas" },
+  "EME":  { prefixo: "EME",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Material Embalagem" },
+  "EPA":  { prefixo: "EPA",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Produto Acabado" },
+  "MTA":  { prefixo: "MTA",  padrao: "ABC-Abc-xxx",     descricao: "Métodos Analíticos" },
+  "PCAL": { prefixo: "PCAL", padrao: "ABC-Abc-xxx",     descricao: "Controle Alergênicos" },
+  "EPI":  { prefixo: "EPI",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Produto Intermediário" },
+  "ANX":  { prefixo: "A",    padrao: "A-BCD-xxx-xx",    descricao: "Anexo" },
+};
+
+export function gerarCodigoGD(tipo, depto, docs, versao = "00") {
+  const cfg = TIPOS_DOC_CODIFICACAO[tipo];
+  const prefixo = cfg ? cfg.prefixo : tipo;
+
+  if (tipo === "ANX") {
+    const prefix = `A-${depto}-`;
+    const nums = docs
+      .filter(d => d.codigo && d.codigo.startsWith(prefix))
+      .map(d => parseInt((d.codigo.split("-")[2] || "0"), 10))
+      .filter(n => Number.isFinite(n) && n > 0);
+    const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    const rev = String(parseInt(versao, 10) || 0).padStart(2, "0");
+    return `A-${depto}-${String(next).padStart(3, "0")}-${rev}`;
+  }
+
+  const prefix = `${prefixo}-${depto}-`;
+  const nums = docs
+    .filter(d => d.codigo && d.codigo.startsWith(prefix))
+    .map(d => parseInt(d.codigo.slice(prefix.length).split("-")[0], 10))
+    .filter(n => Number.isFinite(n) && n > 0);
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  return `${prefixo}-${depto}-${String(next).padStart(3, "0")}`;
 }
 
 export function calcProximaRevisaoGD(dataBase, prazoAnos = 3) {
@@ -332,7 +382,7 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName }) {
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {} }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [] }) {
   const T = useTheme();
   const s = useS();
 
@@ -350,6 +400,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
   const [assinarGD, setAssinarGD] = useState(null);
+  // Lista Mestra
+  const [lmFiltroStatus, setLmFiltroStatus] = useState("todos");
+  const [lmFiltroDepto, setLmFiltroDepto] = useState("todos");
+  const [lmBusca, setLmBusca] = useState("");
   const [novoMat, setNovoMat] = useState("");
   // Fase 6 — modal de designação de leitura obrigatória
   const [modalDesignacao, setModalDesignacao] = useState(null); // { doc }
@@ -373,8 +427,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [docArquivoFonteUploading, setDocArquivoFonteUploading] = useState(false);
   const [capitulosAberto, setCapitulosAberto] = useState(false);
 
+  const tiposAtivos  = catalogoTipos.length  ? catalogoTipos.filter(t  => t.ativo  !== false) : TIPOS_DOC_GD;
+  const deptosAtivos = catalogoDeptos.length ? catalogoDeptos.filter(d => d.ativo !== false) : DEPARTAMENTOS_GD;
+
   const formVazio = {
-    tipo:"PO", depto:"SGQ", titulo:"", versao:"01",
+    tipo:"PO", depto:"SGQ", titulo:"", versao:"00",
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
@@ -481,7 +538,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       return;
     }
     const id  = sel ? sel.id : Date.now();
-    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs);
+    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs, form.versao);
     const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
@@ -729,8 +786,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     if (!form.titulo || !form.tipo) { alert("Preencha título e tipo antes de usar a IA."); return; }
     setAiLoading(true);
     try {
-      const tipoLabel  = TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label || form.tipo;
-      const deptoLabel = DEPARTAMENTOS_GD.find(d=>d.id===form.depto)?.label || form.depto;
+      const tipoLabel  = tiposAtivos.find(t=>t.id===form.tipo)?.label || form.tipo;
+      const deptoLabel = deptosAtivos.find(d=>d.id===form.depto)?.label || form.depto;
       const prompt = `Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022, ISO 9001). Crie conteúdo completo para:\nTipo: ${tipoLabel}\nTítulo: ${form.titulo}\nDepartamento: ${deptoLabel}\nEmpresa: Herbamed Laboratório Nutracêutico LTDA\n\nResponda APENAS em JSON válido sem markdown:\n{"objetivo":"","alcance":"","responsabilidades":"","definicoes":"","procedimento":"","infComplementares":"","referencias":"","registros":"","etapas":[{"titulo":"","descricao":""}],"materiais":[""],"treinamentoObrigatorio":true}`;
       const res  = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:3000, messages:[{role:"user",content:prompt}] }) });
       const data = await res.json();
@@ -786,6 +843,117 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     if (buscaTxt && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(buscaTxt.toLowerCase())) return false;
     return true;
   });
+
+  const listaVigentesObsoletos = docs.filter(d => ["Vigente", "Obsoleto"].includes(d.status));
+  const lmFiltrados = listaVigentesObsoletos.filter(d => {
+    if (lmFiltroStatus !== "todos" && d.status !== lmFiltroStatus) return false;
+    if (lmFiltroDepto !== "todos" && d.depto !== lmFiltroDepto) return false;
+    if (lmBusca && !`${d.codigo||""} ${d.titulo||""}`.toLowerCase().includes(lmBusca.toLowerCase())) return false;
+    return true;
+  });
+
+  const exportarListaMestraCSV = () => {
+    const linhas = [];
+    linhas.push(["Código", "Título", "Versão", "Departamento", "Data Última Revisão", "Próxima Revisão", "Status"].join(","));
+    lmFiltrados.forEach(d => {
+      linhas.push([
+        `"${d.codigo || ""}"`,
+        `"${(d.titulo || "").replace(/"/g, '""')}"`,
+        d.versao || "",
+        d.depto || "",
+        d.atualizadoEm || "",
+        d.proximaRevisao || "",
+        d.status || "",
+      ].join(","));
+    });
+    const csv = linhas.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `ListaMestra_${tod()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast_("Lista Mestra exportada em CSV!", "green");
+  };
+
+  const exportarListaMestraXLSX = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Lista Mestra");
+
+      const headers = ["Código", "Título", "Versão", "Depto", "Data Última Revisão", "Próxima Revisão", "Status"];
+      const headerRow = worksheet.addRow(headers);
+
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD3D3D3" } };
+      headerRow.alignment = { horizontal: "center", vertical: "center" };
+
+      headers.forEach(h => {
+        const col = worksheet.getColumn(headers.indexOf(h) + 1);
+        col.border = { top: { style: "thin", color: { argb: "FF808080" } }, bottom: { style: "thin", color: { argb: "FF808080" } }, left: { style: "thin", color: { argb: "FF808080" } }, right: { style: "thin", color: { argb: "FF808080" } } };
+      });
+
+      lmFiltrados.forEach((d, idx) => {
+        const row = worksheet.addRow([
+          d.codigo || "",
+          d.titulo || "",
+          `Rev.${d.versao || ""}`,
+          d.depto || "",
+          fmt(d.atualizadoEm) || "",
+          fmt(d.proximaRevisao) || "",
+          d.status || "",
+        ]);
+
+        if (idx % 2 === 1) {
+          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+        }
+
+        row.eachCell((cell) => {
+          cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+          cell.alignment = { horizontal: "left", vertical: "center" };
+        });
+      });
+
+      worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      const columns = [
+        { header: "Código", key: "codigo", width: 15 },
+        { header: "Título", key: "titulo", width: 35 },
+        { header: "Versão", key: "versao", width: 10 },
+        { header: "Depto", key: "depto", width: 12 },
+        { header: "Data Última Revisão", key: "atualizadoEm", width: 18 },
+        { header: "Próxima Revisão", key: "proximaRevisao", width: 18 },
+        { header: "Status", key: "status", width: 12 },
+      ];
+
+      columns.forEach((col, idx) => {
+        worksheet.getColumn(idx + 1).width = col.width;
+      });
+
+      const footerRow = worksheet.addRow([]);
+      const currentDateTime = new Date().toLocaleString("pt-BR");
+      footerRow.getCell(1).value = `Gerado em ${currentDateTime} pelo SGQ Herbamed`;
+      footerRow.getCell(1).font = { italic: true, size: 10, color: { argb: "FF888888" } };
+      worksheet.mergeCells(`A${footerRow.number}:G${footerRow.number}`);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `Lista-Mestra-${tod()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+
+      toast_("Lista Mestra exportada em XLSX!", "green");
+    } catch (e) {
+      toast_("Erro ao exportar XLSX.", "red");
+      console.error(e);
+    }
+  };
   const {paginated:_gds,page:_pgGD,total:_totGD,setPage:_setPgGD} = usePagination(filtrados, 20);
 
   const totalVigente  = docs.filter(d=>d.status==="Vigente").length;
@@ -1365,7 +1533,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
               <button onClick={()=>abrirArquivoAutenticado(docArquivo.url)} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
-              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs, form.versao), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir
                 <input type="file" accept=".pdf,application/pdf" style={{ display:"none" }} onChange={e=>{ handleDocArquivo(e.target.files[0]); e.target.value=""; }} />
@@ -1501,14 +1669,14 @@ ${docHtml.slice(0,9000)}`}]})
         <div style={s.card}>
           <SecTitle icon="🗂️" ch="Identificação" />
           <G3 ch={<>
-            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{TIPOS_DOC_GD.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label} ({t.id})</option>)}</Sel>} />
-            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
+            <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon ? `${t.icon} ` : ""}{t.label} ({t.id})</option>)}</Sel>} />
+            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
           {form.tipo && (()=>{
-            const tp = TIPOS_DOC_GD.find(t=>t.id===form.tipo);
+            const tp = tiposAtivos.find(t=>t.id===form.tipo) || TIPOS_DOC_GD.find(t=>t.id===form.tipo);
             const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
-            const depResp = DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
+            const depResp = deptosAtivos.find(x=>x.id===tp?.departamentoResponsavel) || DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
             return (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
                 <span>📅 Prazo de revisão padrão: <strong style={{color:T.text2}}>{anos} {anos===1?"ano":"anos"}</strong></span>
@@ -1518,7 +1686,7 @@ ${docHtml.slice(0,9000)}`}]})
             );
           })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
-          {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs)}</strong></div>}
+          {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs,form.versao)}</strong></div>}
           <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
             <input type="checkbox" id="treino-gd" checked={form.treinamentoObrigatorio} onChange={e=>setF("treinamentoObrigatorio",e.target.checked)} style={{width:16,height:16,accentColor:T.accent}} />
             <label htmlFor="treino-gd" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Treinamento obrigatório antes da execução</label>
@@ -1556,14 +1724,21 @@ ${docHtml.slice(0,9000)}`}]})
             <span style={{ fontSize:14, color:T.text3 }}>{capitulosAberto ? "▲ Recolher" : "▼ Expandir"}</span>
           </button>
           {capitulosAberto && <>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-            {CAPITULOS_GD.map(cap=>(
-              <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
-                style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,border:`1px solid ${capituloAtivo===cap.id?T.accent:T.border}`,background:capituloAtivo===cap.id?T.accent:T.surf,color:capituloAtivo===cap.id?"#fff":( cap.special ? (form[cap.id]?.length>0?T.text:T.text3) : (form[cap.id]&&form[cap.id]!=="N/A"?T.text:T.text3) ),cursor:"pointer"}}>
-                {(cap.special ? form[cap.id]?.length>0 : (form[cap.id]&&form[cap.id]!=="N/A"))?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
-              </button>
-            ))}
+          {/* Navegação por abas (estilo SE Suite) — substitui as pílulas de capítulo */}
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:16}}>
+            {CAPITULOS_GD.map(cap=>{
+              const ativa = capituloAtivo===cap.id;
+              const preenchido = cap.special ? form[cap.id]?.length>0 : (form[cap.id]&&form[cap.id]!=="N/A");
+              return (
+                <button key={cap.id} onClick={()=>setCapituloAtivo(cap.id)}
+                  style={{padding:"8px 16px",borderRadius:6,border:"none",background:ativa?T.accent:T.card2,color:ativa?"#fff":T.text2,cursor:"pointer",fontSize:12,fontWeight:ativa?600:400,transition:"all 0.15s"}}>
+                  {preenchido?"✓ ":""}{cap.label.replace(/^\d+\.\s/,"")}
+                </button>
+              );
+            })}
           </div>
+          {/* Conteúdo da aba ativa — scroll interno (não rola a página inteira) */}
+          <div style={{minHeight:300,maxHeight:600,overflowY:"auto",paddingRight:8}}>
           {CAPITULOS_GD.map(cap=>capituloAtivo===cap.id&&(
             <div key={cap.id}>
               <div style={{fontSize:12,fontWeight:700,color:T.accent,marginBottom:8}}>{cap.label}</div>
@@ -1691,6 +1866,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               )}
             </div>
           ))}
+          </div>
           </>}
         </div>
         <div style={s.card}>
@@ -1714,6 +1890,88 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
         <div style={{textAlign:"right",marginBottom:"2rem"}}>
           <button style={{...s.btn,marginRight:8}} onClick={()=>{if(sel)setView("detalhe");else{setView("lista");resetForm();}}}>Cancelar</button>
           <button style={s.btnA} onClick={salvar}>Salvar documento ✓</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── LISTA MESTRA ── */
+  if (view==="lista-mestra") {
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>📋 Lista Mestra</h2>
+          <div style={{flex:1}}></div>
+          <button style={s.btnA} onClick={exportarListaMestraCSV}>⬇️ Exportar CSV</button>
+          <button style={s.btnA} onClick={exportarListaMestraXLSX}>⬇️ Exportar XLSX</button>
+        </div>
+
+        <div style={s.card}>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            <input placeholder="Buscar código ou título..." value={lmBusca} onChange={e=>setLmBusca(e.target.value)}
+              style={{...s.inp,flex:1,minWidth:200,fontSize:12}} />
+            <select value={lmFiltroStatus} onChange={e=>setLmFiltroStatus(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todos os status</option>
+              <option value="Vigente">Vigente</option>
+              <option value="Obsoleto">Obsoleto</option>
+            </select>
+            <select value={lmFiltroDepto} onChange={e=>setLmFiltroDepto(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todos os departamentos</option>
+              {[...new Set(listaVigentesObsoletos.map(d=>d.depto))].sort().map(d=>(
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <button style={{...s.btn,fontSize:12}} onClick={()=>{setLmBusca("");setLmFiltroStatus("todos");setLmFiltroDepto("todos");}}>🔄 Limpar</button>
+          </div>
+
+          <div style={{overflowX:"auto",marginBottom:12}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:T.surf,borderBottom:`2px solid ${T.border}`}}>
+                  {["Código","Título","Versão","Depto","Data Última Revisão","Próxima Revisão","Status"].map(h=>(
+                    <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:11,textTransform:"uppercase"}}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lmFiltrados.length===0?(
+                  <tr>
+                    <td colSpan="7" style={{textAlign:"center",padding:"2rem",color:T.text3,fontSize:12}}>
+                      Nenhum documento encontrado.
+                    </td>
+                  </tr>
+                ):(
+                  lmFiltrados.map((d,i)=>{
+                    const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
+                    const dias = diasParaRevisaoGD(d.proximaRevisao);
+                    return (
+                      <tr key={d.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                        <td style={{padding:"8px 10px",color:tipo?.cor||T.accent,fontWeight:700}}>{d.codigo}</td>
+                        <td style={{padding:"8px 10px",color:T.text}}>{d.titulo}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>Rev.{d.versao}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>{d.depto}</td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>{fmt(d.atualizadoEm)}</td>
+                        <td style={{padding:"8px 10px",color:dias&&dias<=90?dias<=0?"#ff4f6a":"#ffd166":T.text2}}>
+                          {d.proximaRevisao?fmt(d.proximaRevisao):"—"}
+                        </td>
+                        <td style={{padding:"8px 10px"}}>
+                          <BadgeStatusGD status={d.status}/>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{fontSize:11,color:T.text3,textAlign:"right",paddingTop:8,borderTop:`1px solid ${T.border}`}}>
+            Lista Mestra atualizada em {new Date().toLocaleString("pt-BR")}
+            {lmFiltrados.length>0&&` · ${lmFiltrados.length} documento${lmFiltrados.length!==1?"s":""}`}
+          </div>
         </div>
       </div>
     );
@@ -1797,6 +2055,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           </Sel>
         </div>
         <div style={{display:"flex",gap:8}}>
+          <button style={s.btn} onClick={()=>setView("lista-mestra")}>📋 Lista Mestra</button>
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
           {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
