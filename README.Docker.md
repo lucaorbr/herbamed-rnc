@@ -32,6 +32,7 @@ Servicos e portas:
 frontend: http://localhost:9027
 backend:  http://localhost:9028
 banco:    localhost:5487 -> container:5432
+nginx corporativo: sgq-frontend:80 na rede herbamed_proxy
 ```
 
 ## Variaveis de ambiente
@@ -95,7 +96,13 @@ Para restaurar, copie o arquivo `.dump` desejado do volume de backup e use `pg_r
 
 ## HTTPS
 
-O compose publica a aplicacao em HTTP nas portas internas da empresa. Em producao, coloque um proxy reverso ou balanceador com certificado HTTPS na frente da porta `9027`.
+O compose publica a aplicacao em HTTP na porta `9027` para diagnostico direto. Em producao, o Nginx corporativo deve estar conectado a rede externa `herbamed_proxy` e usar o upstream interno:
+
+```nginx
+proxy_pass http://sgq-frontend:80;
+```
+
+Nao use `IP_DO_HOST:9027` no `proxy_pass` quando o alias interno estiver disponivel.
 
 No Windows PowerShell:
 

@@ -7,9 +7,16 @@ services:
     restart: unless-stopped
     ports:
       - "9027:80"
+    expose:
+      - "80"
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      default:
+      proxy:
+        aliases:
+          - sgq-frontend
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 30s
@@ -107,3 +114,8 @@ services:
 volumes:
   sgqherbamed-db-data:
   sgqherbamed-db-backups:
+
+networks:
+  proxy:
+    name: herbamed_proxy
+    external: true

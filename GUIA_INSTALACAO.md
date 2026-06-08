@@ -9,6 +9,8 @@ Arquivos anexados, COAs, fichas tecnicas e documentos controlados ficam no Postg
 - Backend/API: `9028`
 - PostgreSQL externo: `5487`
 - PostgreSQL interno no container: `5432`
+- Upstream interno para o Nginx corporativo: `sgq-frontend:80`
+- Rede Docker compartilhada do proxy: `herbamed_proxy`
 
 ## Primeiro deploy no servidor
 
@@ -49,6 +51,7 @@ Senha:   Herba@123
 4. Suba a aplicacao:
 
 ```bash
+docker network inspect herbamed_proxy >/dev/null 2>&1 || docker network create herbamed_proxy
 docker compose up --build -d
 ```
 
@@ -93,7 +96,13 @@ Como os arquivos do sistema tambem ficam no PostgreSQL, esse backup cobre regist
 
 ## HTTPS
 
-O sistema fica publicado pelo Docker na porta `9027`. Em producao, a TI deve colocar HTTPS no dominio ou proxy reverso que aponta para essa porta.
+O sistema fica publicado pelo Docker na porta `9027` para diagnostico direto. Em producao, o Nginx corporativo deve usar a rede Docker compartilhada e apontar para o alias interno:
+
+```nginx
+proxy_pass http://sgq-frontend:80;
+```
+
+Evite apontar o Nginx para `IP_DO_HOST:9027`, pois o padrao atual da infraestrutura usa a rede `herbamed_proxy`.
 
 ## Comandos uteis
 
