@@ -586,7 +586,11 @@ async function handleDocumentRender(req, res, pathname, url) {
 
   const docId = decodeURIComponent(match[1]);
   const modoRaw = (url.searchParams.get("modo") || "nao_controlada").toLowerCase();
-  const modo = WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada";
+  // Acesso restrito: usuário só pode renderizar documento Vigente, e somente em modo "cópia não controlada"
+  const acessoRestritoVigente = reqUser?.permissoes?.acessoRestritoVigente === true;
+  const modo = acessoRestritoVigente
+    ? "nao_controlada"
+    : (WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada");
   const userNameParam = url.searchParams.get("userName") || reqUser?.name || "";
   const wm = WATERMARK_MODOS[modo];
   console.log(`[RENDER] docId=${docId} modoRaw=${modoRaw} modo=${modo} wmTexto=${wm.texto}`);
@@ -598,6 +602,10 @@ async function handleDocumentRender(req, res, pathname, url) {
     );
     if (!docRes.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
     const doc = docRes.rows[0].data || {};
+
+    if (acessoRestritoVigente && doc.status !== "Vigente") {
+      return sendJson(res, 403, { error: "Acesso restrito: somente documentos vigentes podem ser visualizados." });
+    }
 
     const arquivoUrl = doc.arquivo && doc.arquivo.url ? String(doc.arquivo.url) : "";
     const fileId = arquivoUrl.includes("/api/files/") ? arquivoUrl.split("/api/files/").pop() : "";
@@ -773,12 +781,15 @@ async function handleDocumentRender(req, res, pathname, url) {
 
       // Cabeçalho e rodapé nas páginas de conteúdo
       const numPag = idx - capaOffset + 1; // página de conteúdo (1..N)
-      // Faixa de cabeçalho fina
-      page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
-      page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
-      // Título do documento à direita (único lugar que identifica formulários sem capa)
+      // Faixa de cabeçalho — mesmo padrão verde da capa, repetida nas páginas
+      // de conteúdo para que documentos sem capa (semCapa) mantenham identidade visual
+      const hdrH = 46;
+      page.drawRectangle({ x: 0, y: height - hdrH, width, height: hdrH, color: verde });
+      draw(page, "Herbamed Laboratório Nutracêutico LTDA", 16, height - 19, 10, fontB, rgb(1, 1, 1));
+      draw(page, "CNPJ: 14.829.598/0001-30", 16, height - 32, 7, fontR, rgb(0.85, 0.93, 0.87));
       const tituloHdr = titulo.length > 55 ? titulo.slice(0, 54) + "…" : titulo;
-      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 13, 7, fontB, cinza);
+      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 19, 9, fontB, rgb(1, 1, 1));
+      drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - 32, 8, fontR, rgb(0.85, 0.93, 0.87));
       // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
       const rodape = semMarcaDagua
