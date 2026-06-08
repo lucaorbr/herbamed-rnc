@@ -745,6 +745,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
   const [fornSearch, setFornSearch] = useState("");
   const [fornOpen, setFornOpen] = useState(false);
   const [numPreview, setNumPreview] = useState("...");
+  const [novaAba, setNovaAba] = useState("ident");
 
   useEffect(() => {
     peekDailyCounter().then(n => setNumPreview(n)).catch(() => setNumPreview("—"));
@@ -806,6 +807,18 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
 
   return (
     <div>
+      {/* ── Abas do formulário ── */}
+      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+        {[["ident","🪪 Identificação"],["desc","📝 Descrição"],["contencao","⚡ Contenção"],["prazos","🗓️ Prazos"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setNovaAba(k)}
+            style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
+              background:novaAba===k?T.accent:T.surf, color:novaAba===k?"#fff":T.text2, transition:"all .15s" }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {novaAba==="ident" && (
       <div style={{ ...s.card }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
           <SecTitle icon="🪪" ch="Identificação" />
@@ -861,6 +874,9 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
           } />
         </>} />
       </div>
+      )}
+
+      {novaAba==="desc" && (<>
       <div style={s.card}>
         <SecTitle icon="📝" ch="Descrição" />
         <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades." ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
@@ -873,17 +889,24 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
       {f.desc.trim().length > 20 && (
         <AIPanel rnc={rncPreview} onApply={handleAIApply} />
       )}
+      </>)}
 
+      {novaAba==="contencao" && (
       <div style={s.card}>
         <SecTitle icon="⚡" ch="Ação de contenção" />
         <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={f.contencao} onChange={e => set("contencao", e.target.value)} />} />
         <G2 ch={<><F lbl="Responsável" tip="Nome do responsável pela execução da ação de contenção." ch={<Inp value={f.respCont} onChange={e => set("respCont", e.target.value)} />} /><F lbl="Data" tip="Data em que a ação de contenção foi executada." ch={<Inp type="date" value={f.dataContencao} onChange={e => set("dataContencao", e.target.value)} />} /></>} />
       </div>
+      )}
+
+      {novaAba==="prazos" && (
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
         <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
         <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
+      )}
+
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: ".5rem" }}>
         <button style={s.btn} onClick={() => setTab("lista")}>Cancelar</button>
         <button style={s.btnA} onClick={salvar}>Salvar RNC →</button>
