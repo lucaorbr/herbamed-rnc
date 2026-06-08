@@ -49,6 +49,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ ...d, ativo:true }));
   const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ ...t, prazoRevisaoAnos:t.prazoRevisaoAnos??2, semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua, ativo:true }));
 
+  const [abaAdmin, setAbaAdmin] = useState("usuarios");
   const [catAba, setCatAba] = useState("deptos");
   const [listaDeptos, setListaDeptos] = useState(() => mkDefaultDeptos(catalogoDeptos));
   const [editDeptoIdx, setEditDeptoIdx] = useState(null);
@@ -160,6 +161,18 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU} = usePagination(users||[], 20);
   return (
     <div>
+      {/* ── Abas principais ── */}
+      <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+        {[["usuarios","👥 Usuários"],["config","⚙️ Configurações"],["catalogos","🗂️ Catálogos"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setAbaAdmin(k)}
+            style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
+              background:abaAdmin===k?T.accent:T.surf, color:abaAdmin===k?"#fff":T.text2, transition:"all .15s" }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {abaAdmin==="usuarios" && (<>
       <div style={s.card}>
         <SecTitle icon="👥" ch={`Usuários do sistema (${users.length})`} />
         {_usrs.map(u=>(
@@ -299,7 +312,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <button style={s.btnA} onClick={addUser}>Criar usuário ✓</button>
         </div>
       </div>
+      </>)}
 
+      {abaAdmin==="config" && (<>
       <div style={s.card}>
         <SecTitle icon="⚙️" ch="Configurações da Qualidade" />
         <div style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10 }}>
@@ -343,7 +358,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           </button>
         </div>
       </div>
+      </>)}
 
+      {abaAdmin==="catalogos" && (<>
       {/* ── CATÁLOGOS DE DOCUMENTOS ── */}
       <div style={s.card}>
         <SecTitle icon="🗂️" ch="Catálogos de Documentos" />
@@ -521,6 +538,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           </div>
         </>)}
       </div>
+      </>)}
     </div>
   );
 }
