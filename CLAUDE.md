@@ -23,9 +23,21 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - ARECO_SYNC_ENABLED=false para testes locais
 - Seção 17 do roadmap depende de infraestrutura da TI
 
-## Status do roadmap
-✅ **Gestão de Documentos — 9 fases implementadas**
-- Próximas: Seções 11, 12 (reprovação → RNC)
+## Status do roadmap (auditoria 2026-06-08)
+
+### ✅ Completadas
+- **Gestão de Documentos** — 9 fases + bônus (senhas)
+- **Seção 10** — Rejeição de documento com auto-RNC (PR #43)
+- **Shared Components** — StatusBadge, DataTable (PR #41)
+- **RNC** — Link público para fornecedor (PR #44)
+- **Documentos** — Catálogo de tipos configurável (PR #42)
+- **Formal Mode** — Scrub global de emojis, boundary corrigido
+- **Documentos** — Navegação por abas em formulário
+- **UI** — Banner atualizado, logo sem emoji
+
+### ⏭️ Próximas seções
+- Seções 13, 14, 15, 16 (conforme roadmap)
+- Code-splitting (bundle 561.7 kB)
 
 ## Referência de design: SE Suite (SoftExpert Suite)
 Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
@@ -133,3 +145,38 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - `distribution_log` — tabela imutável de downloads de cópias não controladas
 - `training_log` — tabela de confirmações "Li e entendi"
 - `document_signatures` — tabela imutável (Seção 10)
+
+---
+
+## ROADMAP — Próximos passos (priorizado por impacto)
+
+### Seção 11-12: Rejeição de documento + Auto-RNC ✅ (PR #43)
+- Documento pode ser rejeitado em fase de aprovação
+- Rejeição cria RNC automaticamente
+- Ligação bidirecional: Documento ↔ RNC
+
+### Seção 13: RNC — Link público para fornecedor ✅ (PR #44)
+- Fornecedor responde RNC via link compartilhável
+- Upload de evidências de correção
+- Não requer login
+
+### Seção 14: RNC — 5 Porquês + CAPA (próximo)
+- Campo obrigatório "5 Porquês" estruturado
+- Tabela CAPA com ações corretivas
+- Responsável + prazo + evidências
+
+### Seção 15: Indicadores — Gráficos + Tendência (próximo)
+- Gráfico de linha (últimos 12 meses)
+- Cálculo meta vs. realizado
+- Lib: recharts
+
+### Seção 16: Auditorias — Achados estruturados (próximo)
+- Entidades de achado (número, descrição, nível risco)
+- Rastreamento de fechamento
+- Anexo de evidências
+
+### Melhorias técnicas (paralelo)
+- **Code-splitting:** bundle 561.7 kB → lazy load por rota
+- **Testes unitários:** componentes shared
+- **Dark mode:** variante para Formal
+- **Keyboard navigation:** WCAG AA
