@@ -366,15 +366,20 @@ function renderUrl(docId, modo, userName) {
 
 // Botões "Ver"/"Baixar" do arquivo oficial vigente, agora pela renderização
 // controlada. O modo (e a marca d'água resultante) depende do status do doc.
-function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName }) {
+function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrito }) {
   const codigo = d.codigo || "documento";
   const versao = d.versao || "01";
   if (d.status === "Vigente") {
+    // Acesso restrito: usuário só pode baixar a cópia não controlada, sem ver a versão controlada na tela
+    if (acessoRestrito) {
+      return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>;
+    }
     return (<>
       <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
       {podeBaixarCopia && <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
     </>);
   }
+  if (acessoRestrito) return null; // não vê Obsoleto/Rascunho/etc.
   if (d.status === "Obsoleto") {
     return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>;
   }
@@ -495,6 +500,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const podeTornarObsoleto           = perm?.("tornarObsoleto")            ?? false;
   const podeBaixarCopiaNaoControlada = perm?.("baixarCopiaNaoControlada")  ?? false;
   const podeVerDocumentos            = perm?.("verDocumentos")             ?? false;
+  // Acesso restrito: usuário só enxerga documentos Vigentes e só pode baixar cópia não controlada
+  const acessoRestritoVigente        = perm?.("acessoRestritoVigente")     ?? false;
+  const docsVisiveis = acessoRestritoVigente ? docs.filter(d => d.status === "Vigente") : docs;
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 3000);
@@ -873,7 +881,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     win.document.close();
   };
 
-  const filtrados = docs.filter(d => {
+  const filtrados = docsVisiveis.filter(d => {
     if (filtroTipo   !== "todos" && d.tipo   !== filtroTipo)   return false;
     if (filtroDepto  !== "todos" && d.depto  !== filtroDepto)  return false;
     if (filtroStatus !== "todos" && d.status !== filtroStatus) return false;
@@ -881,7 +889,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     return true;
   });
 
-  const listaVigentesObsoletos = docs.filter(d => ["Vigente", "Obsoleto"].includes(d.status));
+  const listaVigentesObsoletos = docsVisiveis.filter(d => ["Vigente", "Obsoleto"].includes(d.status));
   const lmFiltrados = listaVigentesObsoletos.filter(d => {
     if (lmFiltroStatus !== "todos" && d.status !== lmFiltroStatus) return false;
     if (lmFiltroDepto !== "todos" && d.depto !== lmFiltroDepto) return false;
@@ -1099,7 +1107,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 </div>
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} />
+                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} />
               </div>
             </div>
           ) : (
@@ -1202,7 +1210,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (
-                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} />
+                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} />
                 ) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
