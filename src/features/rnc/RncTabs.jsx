@@ -360,7 +360,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
     return 1;
   };
 
-  const STEPS = ["Abertura", "Análise", "5W2H", "Eficácia"];
+  const STEPS = ["Abertura", "Análise", "CAPA", "Eficácia"];
 
   const thStyle = (col) => ({
     padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color: sortCol===col?T.accent:T.text3,
@@ -658,7 +658,7 @@ export function openCOA(coa) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function AnexosUpload({ anexos, setAnexos }) {
+export function AnexosUpload({ anexos, setAnexos, inputId = "anexo-input" }) {
   const T = useTheme(); const s = useS();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
@@ -706,14 +706,14 @@ export function AnexosUpload({ anexos, setAnexos }) {
         onDragLeave={e => { e.currentTarget.style.borderColor = T.border2; }}
         onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = T.border2; handleFiles(Array.from(e.dataTransfer.files)); }}
         style={{ border: `2px dashed ${T.border2}`, borderRadius: 10, padding: "1.5rem", textAlign: "center", cursor: "pointer", transition: "border-color .2s", marginBottom: 12 }}
-        onClick={() => document.getElementById("anexo-input").click()}
+        onClick={() => document.getElementById(inputId).click()}
       >
         <div style={{ fontSize: 28, marginBottom: 8 }}>📎</div>
         <div style={{ fontSize: 13, color: T.text2, fontWeight: 500 }}>
           {uploading ? <span style={{ color: T.accent }}>{progress}</span> : "Clique ou arraste arquivos aqui"}
         </div>
         <div style={{ fontSize: 11, color: T.text3, marginTop: 4 }}>Fotos, PDFs, documentos — até 10MB por arquivo</div>
-        <input id="anexo-input" type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={e => handleFiles(Array.from(e.target.files))} />
+        <input id={inputId} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={e => handleFiles(Array.from(e.target.files))} />
       </div>
 
       {/* Lista de anexos */}
@@ -1042,14 +1042,22 @@ Responda APENAS em JSON sem markdown:
   );
 }
 
-export function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
+export function CAPATab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
   const T = useTheme(); const s = useS();
   const [sid, setSid] = useState(""); const [acts, setActs] = useState([]);
   const r = rncs.find(x => x.id === sid);
-  useEffect(() => { if (!r) return; setActs(JSON.parse(JSON.stringify(r.w2h || []))); }, [sid]);
-  const add = () => setActs(p => [...p, { what: "", why: "", who: user.name, where: "", when: "", how: "", howMuch: "", status: "Pendente", evidencia: "" }]);
+
+  useEffect(() => {
+    if (!r) return;
+    const loaded = JSON.parse(JSON.stringify(r.w2h || []));
+    // migração: se ação tem evidencia (string) mas não evidencias (array), inicializa array vazio
+    setActs(loaded.map(a => ({ ...a, tipo: a.tipo || "Corretiva", evidencias: a.evidencias || [] })));
+  }, [sid]);
+
+  const add = () => setActs(p => [...p, { id: String(Date.now() + Math.random()), tipo: "Corretiva", what: "", why: "", who: user.name, where: "", when: "", how: "", howMuch: "", status: "Pendente", evidencias: [] }]);
   const upd = (i, k, v) => setActs(p => p.map((a, j) => j === i ? { ...a, [k]: v } : a));
   const del = i => setActs(p => p.filter((_, j) => j !== i));
+
   const [w2hAiLoading, setW2hAiLoading] = React.useState(false);
   const gerarW2HIA = async () => {
     if (!r) { alert("Selecione uma RNC primeiro."); return; }
@@ -1059,7 +1067,7 @@ export function W2HTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
     try {
       const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:2000,
-          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022). Crie um plano de ação corretiva 5W2H para a não conformidade abaixo.
+          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA RDC 658/2022). Crie um plano de ação corretiva CAPA (Corrective and Preventive Action) para a não conformidade abaixo.
 
 Problema: ${r.desc||""}
 Causa raiz: ${causaRaiz}
@@ -1067,60 +1075,118 @@ Produto: ${r.produto||""}
 Setor: ${r.setor||""}
 Severidade: ${r.sev||""}
 
-Responda APENAS em JSON sem markdown com array de 3 a 5 ações:
-[{"what":"o que fazer","why":"por que","who":"responsável (cargo)","where":"local","when":"prazo ex: 15 dias","how":"como executar passo a passo","howMuch":"esforço estimado","status":"Pendente","evidencia":""}]` }]})});
+Gere de 3 a 5 ações. Para cada uma, defina se é "Corretiva" (elimina a causa da NC atual) ou "Preventiva" (evita que NC potencial ocorra).
+Responda APENAS em JSON sem markdown:
+[{"tipo":"Corretiva","what":"o que fazer","why":"por que","who":"responsável (cargo)","where":"local","when":"prazo ex: 15 dias","how":"como executar passo a passo","howMuch":"esforço estimado","status":"Pendente"}]` }]})});
       const data = await res.json();
       const txt = data.content?.[0]?.text || "";
       const parsed = JSON.parse(txt.replace(/\`\`\`json|\`\`\`/g,"").trim());
-      setActs(p => [...p, ...parsed.map(a => ({ ...a, id: Date.now() + Math.random() }))]);
-      toast_("Plano de ação gerado pela IA! Revise e ajuste os responsáveis e prazos.", "green");
+      setActs(p => [...p, ...parsed.map(a => ({ ...a, id: String(Date.now() + Math.random()), evidencias: [] }))]);
+      toast_("Plano CAPA gerado pela IA! Revise e ajuste os responsáveis e prazos.", "green");
     } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
     setW2hAiLoading(false);
   };
 
-  const save = async () => { if (!r) return; await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `5W2H — ${acts.length} ação(ões)`, resp: user.name }] }); toast_("5W2H salvo!", "green"); openEmail({ ...r, w2h: acts }, "5w2h"); };
+  // trava: exige ao menos 3 dos 5 porquês preenchidos
+  const whysOk = (r?.ishikawa?.whys || []).filter(w => w?.trim()).length >= 3;
+
+  const save = async () => {
+    if (!r) return;
+    if (!whysOk) { alert("Preencha ao menos 3 dos 5 Porquês antes de salvar o plano CAPA."); return; }
+    await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `CAPA — ${acts.length} ação(ões)`, resp: user.name }] });
+    toast_("CAPA salvo!", "green");
+    openEmail({ ...r, w2h: acts }, "5w2h");
+  };
+
   const sc = { "Pendente": T.yellow, "Em andamento": T.blue, "Concluída": T.accent, "Cancelada": "#ff4f6a" };
+  const tipoColor = { "Corretiva": T.accent, "Preventiva": T.purple || "#8b5cf6" };
+  const hoje = tod();
+
+  const concluidas = acts.filter(a => a.status === "Concluída" || a.status === "Cancelada").length;
+  const total = acts.length;
+
   return (
     <div>
       <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC —</option>{rncs.map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
       {r && <div style={s.card}>
-        <SecTitle icon="📌" ch="Plano de ação 5W2H" />
-        {acts.length === 0 && <div style={{ textAlign: "center", padding: "1.5rem", color: T.text3, fontSize: 13, border: `1px dashed ${T.border2}`, borderRadius: 10 }}>Nenhuma ação. Clique em "+ Adicionar".</div>}
-        {acts.map((a, i) => (
-          <div key={i} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "1rem", marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase" }}>Ação #{i + 1}</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <select value={a.status} onChange={e => upd(i, "status", e.target.value)} style={{ ...s.inp, width: "auto", minWidth: 130, fontSize: 11, padding: "4px 8px", color: sc[a.status] || T.text }}>{["Pendente", "Em andamento", "Concluída", "Cancelada"].map(x => <option key={x}>{x}</option>)}</select>
-                <button style={s.btnD} onClick={() => del(i)}>✕ Remover</button>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+          <SecTitle icon="📋" ch="Plano CAPA — Ações Corretivas e Preventivas" />
+          {total > 0 && (
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ fontSize:12, color:T.text2 }}>{concluidas}/{total} concluídas</div>
+              <div style={{ width:120, height:6, background:T.border, borderRadius:3, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${total > 0 ? (concluidas/total)*100 : 0}%`, background: concluidas === total ? T.accent : T.blue, borderRadius:3, transition:"width .3s" }} />
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <F lbl="O quê?" tip="Descreva a ação corretiva a ser executada. Seja específico e use verbos de ação. Ex: Revisar e atualizar o PO-CQ-003 de controle de qualidade de cápsulas." ch={<Inp placeholder="Ação a executar" value={a.what} onChange={e => upd(i, "what", e.target.value)} />} />
-              <F lbl="Por quê?" tip="Justifique por que esta ação é necessária. Conecte com a causa raiz identificada no Ishikawa." ch={<Inp placeholder="Justificativa" value={a.why} onChange={e => upd(i, "why", e.target.value)} />} />
-              <F lbl="Quem?" tip="Nome do responsável pela execução desta ação. Deve ser uma pessoa específica, não um setor." ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
-              <F lbl="Onde?" tip="Local onde a ação será executada. Ex: Linha de produção 2, Laboratório de CQ, Almoxarifado." ch={<Inp value={a.where} onChange={e => upd(i, "where", e.target.value)} />} />
-              <F lbl="Quando?" tip="Data limite para conclusão desta ação. Deve ser realista e alinhada com o prazo de ação corretiva definido na RNC." ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
-              <F lbl="Custo/Esforço" tip="Estimativa de custo ou esforço necessário para executar esta ação. Ex: 4 horas de trabalho, R$ 500, sem custo adicional." ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
-              <div style={{ gridColumn: "span 2" }}><F lbl="Como?" tip="Descreva passo a passo como a ação será executada. Quanto mais detalhado, mais fácil de executar e verificar." ch={<TA rows={2} value={a.how} onChange={e => upd(i, "how", e.target.value)} />} /></div>
-              <div style={{ gridColumn: "span 2" }}>
-                <F lbl="Evidência de execução" tip="Descreva ou registre a comprovação de que esta ação foi concluída. Ex: PO-CQ-003 revisado e aprovado pelo RT em 15/05/2025, registro de treinamento anexo." ch={
-                  <div>
-                    <Inp placeholder="Descreva a evidência (ex: foto anexada, relatório nº, registro de treinamento...)" value={a.evidencia||""} onChange={e => upd(i, "evidencia", e.target.value)} />
-                    {a.evidencia && <div style={{ fontSize:10, color:T.accent, marginTop:4 }}>✓ Evidência registrada</div>}
-                    {a.status === "Concluída" && !a.evidencia && <div style={{ fontSize:10, color:"#ff4f6a", marginTop:4 }}>⚠️ Ação concluída sem evidência — recomendado registrar comprovação</div>}
-                  </div>
-                } />
-              </div>
-            </div>
+          )}
+        </div>
+
+        {/* Aviso se 5 Porquês incompletos */}
+        {!whysOk && (
+          <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a44", borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#ff4f6a" }}>
+            Para salvar o plano CAPA, complete ao menos 3 dos 5 Porquês na aba de Análise de Causa (Ishikawa).
           </div>
-        ))}
+        )}
+
+        {acts.length === 0 && <div style={{ textAlign: "center", padding: "1.5rem", color: T.text3, fontSize: 13, border: `1px dashed ${T.border2}`, borderRadius: 10 }}>Nenhuma ação. Clique em "+ Adicionar" ou use a IA.</div>}
+        {acts.map((a, i) => {
+          const vencida = a.when && a.when < hoje && a.status !== "Concluída" && a.status !== "Cancelada";
+          const evArr = Array.isArray(a.evidencias) ? a.evidencias : [];
+          return (
+            <div key={a.id || i} style={{ background: T.surf, border: `1px solid ${vencida ? "#ff4f6a88" : T.border}`, borderRadius: 8, padding: "1rem", marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, flexWrap:"wrap", gap:6 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, textTransform: "uppercase" }}>Ação #{i + 1}</span>
+                  <select value={a.tipo || "Corretiva"} onChange={e => upd(i, "tipo", e.target.value)}
+                    style={{ ...s.inp, width:"auto", fontSize:10, padding:"3px 8px", fontWeight:700, color: tipoColor[a.tipo || "Corretiva"], border:`1px solid ${tipoColor[a.tipo || "Corretiva"]}55` }}>
+                    <option>Corretiva</option>
+                    <option>Preventiva</option>
+                  </select>
+                  {vencida && <span style={{ fontSize:10, color:"#ff4f6a", fontWeight:700 }}>PRAZO VENCIDO</span>}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <select value={a.status} onChange={e => upd(i, "status", e.target.value)} style={{ ...s.inp, width: "auto", minWidth: 130, fontSize: 11, padding: "4px 8px", color: sc[a.status] || T.text }}>{["Pendente", "Em andamento", "Concluída", "Cancelada"].map(x => <option key={x}>{x}</option>)}</select>
+                  <button style={s.btnD} onClick={() => del(i)}>✕ Remover</button>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <F lbl="O quê?" tip="Descreva a ação a executar. Use verbos de ação. Ex: Revisar e atualizar o PO-CQ-003." ch={<Inp placeholder="Ação a executar" value={a.what} onChange={e => upd(i, "what", e.target.value)} />} />
+                <F lbl="Por quê?" tip="Justifique conectando com a causa raiz identificada." ch={<Inp placeholder="Justificativa" value={a.why} onChange={e => upd(i, "why", e.target.value)} />} />
+                <F lbl="Quem?" tip="Responsável pela execução — nome específico, não setor." ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
+                <F lbl="Onde?" tip="Local de execução. Ex: Linha de produção 2, Lab. CQ." ch={<Inp value={a.where} onChange={e => upd(i, "where", e.target.value)} />} />
+                <F lbl="Quando?" tip="Data limite. Alinhada com o prazo de ação corretiva da RNC." ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
+                <F lbl="Custo/Esforço" tip="Estimativa de recursos. Ex: 4h de trabalho, R$ 500." ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
+                <div style={{ gridColumn: "span 2" }}><F lbl="Como?" tip="Passo a passo de execução." ch={<TA rows={2} value={a.how} onChange={e => upd(i, "how", e.target.value)} />} /></div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <F lbl="Evidências de execução" tip="Anexe arquivos que comprovem a conclusão: foto, relatório, registro de treinamento." ch={
+                    <div>
+                      {/* legado: exibe evidencia (string) de ações antigas */}
+                      {typeof a.evidencia === "string" && a.evidencia && !evArr.length && (
+                        <div style={{ fontSize:11, color:T.text2, background:T.card2, border:`1px solid ${T.border}`, borderRadius:6, padding:"6px 10px", marginBottom:8 }}>
+                          Registro anterior: {a.evidencia}
+                        </div>
+                      )}
+                      <AnexosUpload
+                        inputId={`capa-ev-${i}`}
+                        anexos={evArr}
+                        setAnexos={novos => upd(i, "evidencias", typeof novos === "function" ? novos(evArr) : novos)}
+                      />
+                      {a.status === "Concluída" && !evArr.length && !(a.evidencia) && (
+                        <div style={{ fontSize:10, color:"#ff4f6a", marginTop:4 }}>Ação concluída — anexe ao menos um arquivo como evidência.</div>
+                      )}
+                    </div>
+                  } />
+                </div>
+              </div>
+            </div>
+          );
+        })}
         <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ width:32, height:32, borderRadius:8, background:T.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
             <div>
-              <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — 5W2H</div>
-              <div style={{ fontSize:11, color:T.text2 }}>Gera o plano de ação completo baseado na causa raiz do Ishikawa</div>
+              <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — CAPA</div>
+              <div style={{ fontSize:11, color:T.text2 }}>Gera o plano corretivo/preventivo baseado na causa raiz do Ishikawa</div>
             </div>
           </div>
           <button style={{ ...s.btnA, opacity:w2hAiLoading?.6:1, fontSize:11 }} onClick={gerarW2HIA} disabled={w2hAiLoading}>
@@ -1133,6 +1199,9 @@ Responda APENAS em JSON sem markdown com array de 3 a 5 ações:
     </div>
   );
 }
+
+// alias de retrocompatibilidade — importações antigas do W2HTab continuam funcionando
+export const W2HTab = CAPATab;
 
 export function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
   const T = useTheme(); const s = useS();
@@ -1194,8 +1263,18 @@ Responda APENAS em JSON sem markdown:
         <F lbl="Critério de verificação" tip="Defina como será verificado se a ação corretiva resolveu o problema. Ex: Ausência de reclamações do mesmo tipo nos próximos 90 dias, ou lote seguinte aprovado em 100% das análises." ch={<TA rows={3} value={f.criterio} onChange={e => set("criterio", e.target.value)} placeholder="Ex: Ausência de telescopia em 3 lotes consecutivos; Cp ≥ 1,33" />} />
         <G2 ch={<><F lbl="Data da verificação" tip="Data em que a verificação de eficácia foi ou será realizada. Deve coincidir com o prazo de eficácia definido na RNC." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Responsável" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /></>} />
         <F lbl="Evidências coletadas" tip="Descreva as evidências que comprovam que a ação foi eficaz. Ex: Análise dos lotes subsequentes sem desvios, relatório de auditoria interna, registros de treinamento." ch={<TA rows={3} value={f.evidencias} onChange={e => set("evidencias", e.target.value)} />} />
+        {/* trava: bloqueia resultado se há ações CAPA pendentes */}
+        {(() => {
+          const acoesPendentes = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
+          return acoesPendentes.length > 0 ? (
+            <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a44", borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#ff4f6a" }}>
+              Existem {acoesPendentes.length} ação(ões) CAPA ainda pendente(s) ou em andamento. Conclua ou cancele todas as ações antes de registrar o resultado de eficácia.
+              <ul style={{ margin:"6px 0 0 16px", padding:0 }}>{acoesPendentes.map((a,i) => <li key={i}>{a.what || `Ação ${i+1}`} — {a.status}</li>)}</ul>
+            </div>
+          ) : null;
+        })()}
         <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações foram suficientes. Ineficaz: o problema persistiu — uma nova RNC deverá ser aberta com análise de causa complementar." ch={
-          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", opacity: (r.w2h||[]).some(a => a.status !== "Concluída" && a.status !== "Cancelada") ? 0.4 : 1, pointerEvents: (r.w2h||[]).some(a => a.status !== "Concluída" && a.status !== "Cancelada") ? "none" : "auto" }}>
             {[["Eficaz", T.accent, "Causa raiz eliminada"], ["Ineficaz", "#ff4f6a", "NC recorreu, reabrir"], ["Pendente verificação", T.yellow, "Aguardando dados"]].map(([v, color, desc]) => (
               <label key={v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 16px", background: f.resultado === v ? `${color}18` : T.surf, border: `1px solid ${f.resultado === v ? color + "55" : T.border}`, borderRadius: 8, flex: 1, minWidth: 150 }}>
                 <input type="radio" name="efic_r" value={v} checked={f.resultado === v} onChange={() => set("resultado", v)} style={{ accentColor: color }} />
