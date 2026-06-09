@@ -168,8 +168,8 @@ export const changePassword = (senhaAtual, senhaNova) =>
 export const adminResetPassword = (uid) =>
   api("/api/auth/admin-reset-password", { method: "POST", body: { uid } });
 
-export const createElectronicSignature = ({ password, contexto = "", papel = "" }) =>
-  api("/api/auth/signature", { method: "POST", body: { password, contexto, papel } });
+export const createElectronicSignature = ({ password, contexto = "", papel = "", docId = null }) =>
+  api("/api/auth/signature", { method: "POST", body: { password, contexto, papel, docId } });
 
 export const getArecoRecebimentos = (status = "pendente_analise") =>
   api(`/api/areco/recebimentos${status ? `?status=${encodeURIComponent(status)}` : ""}`);

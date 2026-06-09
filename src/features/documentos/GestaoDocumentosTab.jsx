@@ -8,6 +8,7 @@ import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal } from "../pdf/pdfExports";
+import { userHasPerm } from "../permissions/permissions";
 
 export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
   const T = useTheme();
@@ -410,6 +411,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [lmFiltroDepto, setLmFiltroDepto] = useState("todos");
   const [lmBusca, setLmBusca] = useState("");
   const [novoMat, setNovoMat] = useState("");
+  // Rota de assinatura — Elaborador designa Revisor e Aprovador ao assinar.
+  const [modalRota, setModalRota]   = useState(null); // { doc } — escolha de revisor/aprovador antes de assinar como Elaborador
+  const [rotaForm, setRotaForm]     = useState({ revisorId:"", aprovadorId:"" });
+  const [modalTrocarRota, setModalTrocarRota] = useState(null); // { doc } — admin remaneja designados
   // Fase 6 — modal de designação de leitura obrigatória
   const [modalDesignacao, setModalDesignacao] = useState(null); // { doc }
   const [designados, setDesignados]           = useState([]);
@@ -492,6 +497,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const isAdmin  = ["admin","keyuser","rt"].includes(user?.role) || (perm && (perm("criarDocumento")||perm("excluirDocumento")));
   const isViewer = user?.role === "viewer" && !(perm && perm("criarDocumento"));
+  // Só o admin (role estrito) remaneja a rota de assinatura quando o Elaborador erra o designado.
+  const isAdminStrict = user?.role === "admin";
+  // Usuários elegíveis para Revisor/Aprovador: precisam de permissão de assinar revisor/aprovador.
+  const usuariosRevAprov = (users || []).filter(u => userHasPerm(u, "assinarRevisorAprovador"));
+  const nomeUsuario = (uid) => (users || []).find(u => String(u.id) === String(uid))?.name || "";
   // Fase 5 — permissões granulares de Gestão de Documentos.
   const podeCriarDoc                 = perm?.("criarDocumento")            ?? false;
   const podeBaixarFonte              = perm?.("baixarArquivoFonte")        ?? false;
@@ -575,6 +585,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       assinaturaElaborador: invalidarAssinaturas ? null : (sel?.assinaturaElaborador || null),
       assinaturaRevisor:    invalidarAssinaturas ? null : (sel?.assinaturaRevisor    || null),
       assinaturaAprovador:  invalidarAssinaturas ? null : (sel?.assinaturaAprovador  || null),
+      rota:                 invalidarAssinaturas ? null : (sel?.rota || null),
       historicoRevisoes:    form.historicoRevisoes?.length ? form.historicoRevisoes : (sel?.historicoRevisoes || []),
     };
     await saveCollection("gestao_docs", String(id), doc);
@@ -608,6 +619,17 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       return;
     }
     const updated = { ...doc, [campo]: { ...assin, cargo:assin.cargo||user?.cargo||"", email:assin.email||user?.email||"", crf:assin.crf||user?.crf||"", dataHora:assin.dataHora||`${assin.data} ${assin.hora}`, timestamp:assin.timestamp } };
+    // Rota de assinatura: ao assinar como Elaborador, grava os designados (Revisor e Aprovador).
+    if (papel==="elaborador") {
+      updated.rota = {
+        revisorId:    rotaForm.revisorId,
+        revisorNome:  nomeUsuario(rotaForm.revisorId),
+        aprovadorId:  rotaForm.aprovadorId,
+        aprovadorNome:nomeUsuario(rotaForm.aprovadorId),
+        definidaPor:  user?.name,
+        definidaEm:   tod(),
+      };
+    }
     const temE = papel==="elaborador" || !!doc.assinaturaElaborador;
     const temR = papel==="revisor"    || !!doc.assinaturaRevisor;
     const temA = papel==="aprovador"  || !!doc.assinaturaAprovador;
@@ -656,6 +678,57 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
   };
 
+  // Rota de assinatura — valida os designados e segue para a assinatura do Elaborador.
+  const confirmarRota = (doc) => {
+    const { revisorId, aprovadorId } = rotaForm;
+    if (!revisorId || !aprovadorId) { alert("Selecione o Revisor e o Aprovador."); return; }
+    if (String(revisorId) === String(aprovadorId)) { alert("Revisor e Aprovador devem ser pessoas diferentes."); return; }
+    if (String(revisorId) === String(user?.id) || String(aprovadorId) === String(user?.id)) {
+      alert("Segregação de funções: o Elaborador não pode ser também Revisor ou Aprovador.");
+      return;
+    }
+    setModalRota(null);
+    setAssinarGD({ doc, papel: "elaborador" });
+  };
+
+  // Apenas admin remaneja a rota. Se o papel já foi assinado, a assinatura é invalidada.
+  const trocarRota = async (doc, novo) => {
+    const rotaAtual = doc.rota || {};
+    const mudouRevisor   = String(novo.revisorId)   !== String(rotaAtual.revisorId||"");
+    const mudouAprovador = String(novo.aprovadorId) !== String(rotaAtual.aprovadorId||"");
+    if (!novo.revisorId || !novo.aprovadorId) { alert("Selecione o Revisor e o Aprovador."); return; }
+    if (String(novo.revisorId) === String(novo.aprovadorId)) { alert("Revisor e Aprovador devem ser pessoas diferentes."); return; }
+    const elabId = doc.assinaturaElaborador?.uid;
+    if (elabId && (String(novo.revisorId) === String(elabId) || String(novo.aprovadorId) === String(elabId))) {
+      alert("Segregação de funções: o Elaborador não pode ser também Revisor ou Aprovador."); return;
+    }
+    const invalidaRev   = mudouRevisor   && !!doc.assinaturaRevisor;
+    const invalidaAprov = mudouAprovador && !!doc.assinaturaAprovador;
+    if ((invalidaRev || invalidaAprov) && !window.confirm("Trocar o designado vai invalidar a assinatura já feita nesse papel — ela será removida e precisará ser reassinada. Continuar?")) return;
+    const updated = {
+      ...doc,
+      rota: {
+        ...rotaAtual,
+        revisorId: novo.revisorId,     revisorNome: nomeUsuario(novo.revisorId),
+        aprovadorId: novo.aprovadorId, aprovadorNome: nomeUsuario(novo.aprovadorId),
+        remanejadaPor: user?.name, remanejadaEm: tod(),
+      },
+    };
+    if (invalidaRev)   updated.assinaturaRevisor = null;
+    if (invalidaAprov) updated.assinaturaAprovador = null;
+    // Recalcula status se assinaturas foram invalidadas.
+    if (invalidaRev || invalidaAprov) {
+      updated.status = updated.assinaturaAprovador ? "Vigente"
+        : updated.assinaturaRevisor ? "Aguardando Aprovação"
+        : updated.assinaturaElaborador ? "Em Revisão" : "Rascunho";
+    }
+    await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog("Remanejou rota de assinatura", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { rota: rotaAtual }, { rota: updated.rota, invalidouRevisor: invalidaRev, invalidouAprovador: invalidaAprov });
+    toast_("Rota de assinatura atualizada." + (invalidaRev||invalidaAprov ? " Assinatura(s) invalidada(s)." : ""), "green");
+    setSel(updated);
+    setModalTrocarRota(null);
+  };
+
   const solicitarRevisao = async (doc) => {
     try {
     if (!window.confirm("Criar nova revisão? A versão atual será arquivada no histórico.")) return;
@@ -679,7 +752,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }];
     // Arquivo controlado (PDF) da versão anterior fica no snapshot; nova revisão exige novo upload.
     // O arquivo fonte é mantido: o elaborador baixa o fonte anterior, edita e substitui.
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -1025,8 +1098,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const diasRev = diasParaRevisaoGD(d.proximaRevisao);
     const mesmoAssinante = (ass) => !!ass && ((ass.email && user?.email && ass.email===user.email) || (!ass.email && ass.nome===user?.name));
     const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor===user?.name);
-    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && isAdmin && !mesmoAssinante(d.assinaturaElaborador);
-    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && isAdmin && !mesmoAssinante(d.assinaturaElaborador) && !mesmoAssinante(d.assinaturaRevisor);
+    // Rota de assinatura: Revisor/Aprovador travados ao designado pelo Elaborador.
+    // Admin (estrito) pode assinar como override caso necessário. Segregação sempre vale.
+    const souDesignado = (uid) => String(uid||"") === String(user?.id||"");
+    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && (souDesignado(d.rota?.revisorId) || isAdminStrict) && !mesmoAssinante(d.assinaturaElaborador);
+    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && (souDesignado(d.rota?.aprovadorId) || isAdminStrict) && !mesmoAssinante(d.assinaturaElaborador) && !mesmoAssinante(d.assinaturaRevisor);
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
@@ -1036,7 +1112,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"elaborador"})}>✍️ Elaborador</button>}
+            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
             {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
             {podeAssAprov && d.status==="Aguardando Aprovação" && <button style={{...s.btnD,fontSize:11}} onClick={()=>setRejeicaoModal({doc:d,show:true})}>❌ Rejeitar</button>}
@@ -1297,6 +1373,17 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         )}
         <div style={s.card}>
           <SecTitle icon="✍️" ch="Assinaturas" />
+          {d.rota && (
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:12}}>
+              <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>🧭 Rota</span>
+              <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>
+              <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>
+              {d.rota.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
+              {isAdminStrict && d.status!=="Vigente" && d.status!=="Obsoleto" && (
+                <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalTrocarRota({ doc:d }); }}>🔧 Trocar designados</button>
+              )}
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
             {[{campo:d.assinaturaElaborador,label:"Elaborador"},{campo:d.assinaturaRevisor,label:"Revisor"},{campo:d.assinaturaAprovador,label:"Aprovador"}].map(({campo,label})=>(
               <div key={label} style={{textAlign:"center",padding:"1rem",background:T.surf,borderRadius:10,border:`1px solid ${T.border}`}}>
@@ -1446,10 +1533,80 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             user={user}
             titulo={`${assinarGD.doc.codigo} · Rev.${assinarGD.doc.versao} — assinatura como ${assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}`}
             contexto={`${assinarGD.doc.codigo}|R${assinarGD.doc.versao}`}
+            docId={assinarGD.doc.id}
             papel={assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}
             onClose={()=>setAssinarGD(null)}
             onConfirm={(assin)=>confirmarAssinatura(assinarGD.doc, assinarGD.papel, assin)}
           />
+        )}
+        {/* ── ROTA DE ASSINATURA: Elaborador escolhe Revisor e Aprovador ── */}
+        {modalRota && (
+          <div onClick={()=>setModalRota(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:520,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>🧭 Rota de assinatura</div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalRota(null)}>✕ Fechar</button>
+              </div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalRota.doc.codigo} — {modalRota.doc.titulo}. Defina quem revisa e quem aprova. Só as pessoas escolhidas poderão assinar essas etapas.</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>🔎 Revisor</label>
+                <select value={rotaForm.revisorId} onChange={e=>setRotaForm(p=>({...p,revisorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
+                  <option value="">Selecione o revisor…</option>
+                  {usuariosRevAprov.filter(u=>String(u.id)!==String(user?.id) && String(u.id)!==String(rotaForm.aprovadorId)).map(u=>(
+                    <option key={u.id} value={u.id}>{u.name} · {u.setor||"—"}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>✅ Aprovador</label>
+                <select value={rotaForm.aprovadorId} onChange={e=>setRotaForm(p=>({...p,aprovadorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
+                  <option value="">Selecione o aprovador…</option>
+                  {usuariosRevAprov.filter(u=>String(u.id)!==String(user?.id) && String(u.id)!==String(rotaForm.revisorId)).map(u=>(
+                    <option key={u.id} value={u.id}>{u.name} · {u.setor||"—"}</option>
+                  ))}
+                </select>
+              </div>
+              {usuariosRevAprov.length<2 && <div style={{fontSize:11,color:"#ff9800",marginBottom:12}}>⚠️ Há poucos usuários com permissão de Revisor/Aprovador. Configure as permissões no Admin.</div>}
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>setModalRota(null)}>Cancelar</button>
+                <button style={s.btnA} onClick={()=>confirmarRota(modalRota.doc)}>Continuar para assinatura →</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ── ROTA DE ASSINATURA: admin remaneja designados ── */}
+        {modalTrocarRota && (
+          <div onClick={()=>setModalTrocarRota(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:520,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>🔧 Trocar designados (admin)</div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalTrocarRota(null)}>✕ Fechar</button>
+              </div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalTrocarRota.doc.codigo} — {modalTrocarRota.doc.titulo}. Trocar um designado que já assinou invalida a assinatura.</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>🔎 Revisor {modalTrocarRota.doc.assinaturaRevisor && <span style={{color:"#ff9800",fontWeight:400}}>(já assinado)</span>}</label>
+                <select value={rotaForm.revisorId} onChange={e=>setRotaForm(p=>({...p,revisorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
+                  <option value="">Selecione o revisor…</option>
+                  {usuariosRevAprov.filter(u=>String(u.id)!==String(rotaForm.aprovadorId)).map(u=>(
+                    <option key={u.id} value={u.id}>{u.name} · {u.setor||"—"}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>✅ Aprovador {modalTrocarRota.doc.assinaturaAprovador && <span style={{color:"#ff9800",fontWeight:400}}>(já assinado)</span>}</label>
+                <select value={rotaForm.aprovadorId} onChange={e=>setRotaForm(p=>({...p,aprovadorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
+                  <option value="">Selecione o aprovador…</option>
+                  {usuariosRevAprov.filter(u=>String(u.id)!==String(rotaForm.revisorId)).map(u=>(
+                    <option key={u.id} value={u.id}>{u.name} · {u.setor||"—"}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>setModalTrocarRota(null)}>Cancelar</button>
+                <button style={s.btnA} onClick={()=>trocarRota(modalTrocarRota.doc, rotaForm)}>Salvar designados</button>
+              </div>
+            </div>
+          </div>
         )}
         {/* ── FASE 6: LEITURA OBRIGATÓRIA ── */}
         {(()=>{

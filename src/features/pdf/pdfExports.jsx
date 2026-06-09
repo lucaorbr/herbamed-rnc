@@ -42,7 +42,7 @@ export function openPDFWindow(title, html) {
   win.document.close();
 }
 
-export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "", papel = "" }) {
+export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "", papel = "", docId = null }) {
   const T = useTheme(); const s = useS();
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,7 +55,7 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
     if (!senha.trim()) { setErr("Digite sua senha para assinar."); return; }
     setLoading(true); setErr("");
     try {
-      const assinatura = await createElectronicSignature({ password: senha, contexto, papel: papelAssinatura });
+      const assinatura = await createElectronicSignature({ password: senha, contexto, papel: papelAssinatura, docId });
       onConfirm(assinatura);
     } catch { setErr("Senha incorreta. Tente novamente."); }
     setLoading(false);

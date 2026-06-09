@@ -169,9 +169,25 @@ async function handleAuth(req, res, pathname) {
 
   if (pathname === "/api/auth/signature" && req.method === "POST") {
     const user = await requireUser(req);
-    const { password, contexto = "", papel = "" } = await readBody(req);
+    const { password, contexto = "", papel = "", docId = null } = await readBody(req);
     const ok = await verifyPassword(user.id, password);
     if (!ok) return sendJson(res, 401, { error: "Senha incorreta" });
+
+    // Rota de assinatura (Gestao de Documentos): Revisor e Aprovador ficam travados
+    // ao usuario designado pelo Elaborador. Apenas o designado (ou um admin) assina.
+    if (docId && (papel === "Revisor" || papel === "Aprovador")) {
+      const docRes = await query(
+        "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
+        [String(docId)]
+      );
+      const rota = docRes.rows[0]?.data?.rota || {};
+      const designadoId = papel === "Revisor" ? rota.revisorId : rota.aprovadorId;
+      if (user.role !== "admin" && designadoId && String(designadoId) !== String(user.id)) {
+        return sendJson(res, 403, {
+          error: `Apenas o ${papel.toLowerCase()} designado para este documento pode assinar.`,
+        });
+      }
+    }
 
     const timestamp = new Date().toISOString();
     const payload = {
