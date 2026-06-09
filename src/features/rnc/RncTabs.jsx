@@ -447,8 +447,8 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
       {/* MODAL */}
       {sel && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(6px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={e => e.target === e.currentTarget && setSel(null)}>
-          <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "1.75rem", maxWidth: 760, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(6px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }} onClick={e => e.target === e.currentTarget && setSel(null)}>
+          <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "2rem 2.5rem", maxWidth: 1200, width: "100%", maxHeight: "94vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
 
             {/* Header do modal */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
