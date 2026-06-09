@@ -34,9 +34,13 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Formal Mode** — Scrub global de emojis, boundary corrigido
 - **Documentos** — Navegação por abas em formulário
 - **UI** — Banner atualizado, logo sem emoji
+- **Seção 14: RNC — 5 Porquês + CAPA** — análise de causa estruturada + plano de ações corretivas
+- **Documentos** — Rota de assinatura: Elaborador designa Revisor/Aprovador (PR #55)
+- **Documentos** — Distribuição de cópias físicas + recolha por revisão (PR #56)
+- **CQ** — Fix: recebimento Areco reutiliza material e puxa ensaios parametrizados (PR #57)
 
 ### ⏭️ Próximas seções
-- Seções 13, 14, 15, 16 (conforme roadmap)
+- Seções 15, 16 (conforme roadmap)
 - Code-splitting (bundle 561.7 kB)
 
 ## Referência de design: SE Suite (SoftExpert Suite)
@@ -142,6 +146,9 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
   - `dataVigencia`: ISO timestamp — quando doc ativa automaticamente
   - `proximaRevisao`: ISO timestamp — alerta quando chegar perto
   - `revisaoRegistrada`: timestamp — último "revisado sem alterações"
+  - `rota`: { revisorId, revisorNome, aprovadorId, aprovadorNome } — rota de assinatura definida pelo Elaborador (PR #55)
+  - `distribuicaoFisica`: [{ setor, dataEntrega, entreguePor }] — cópias controladas impressas por setor (PR #56)
+  - `recolhaPendente`: [{ setor, versaoAnterior }] — cópias obsoletas a recolher após nova revisão (PR #56)
 - `distribution_log` — tabela imutável de downloads de cópias não controladas
 - `training_log` — tabela de confirmações "Li e entendi"
 - `document_signatures` — tabela imutável (Seção 10)
@@ -160,10 +167,29 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Upload de evidências de correção
 - Não requer login
 
-### Seção 14: RNC — 5 Porquês + CAPA (próximo)
-- Campo obrigatório "5 Porquês" estruturado
-- Tabela CAPA com ações corretivas
-- Responsável + prazo + evidências
+### Seção 14: RNC — 5 Porquês + CAPA ✅
+- Análise de causa: 5 Porquês estruturado com Ishikawa
+- Tabela CAPA com ações corretivas, responsável + prazo
+- Geração automática com IA (opcional)
+- Validação: no mínimo 3 dos 5 Porquês antes de salvar CAPA
+
+### Documentos — Rota de assinatura ✅ (PR #55)
+- Elaborador designa Revisor e Aprovador ao assinar (entre usuários com `assinarRevisorAprovador`)
+- Revisão/aprovação travadas aos designados — só eles (ou admin) assinam
+- Backend valida o designado em `/api/auth/signature` via `docId`
+- Admin remaneja designados; trocar papel já assinado invalida a assinatura
+- Segregação mantida: Elaborador ≠ Revisor ≠ Aprovador
+
+### Documentos — Distribuição de cópias físicas ✅ (PR #56)
+- Registro de cópias controladas impressas por setor (setor + data + quem entregou)
+- Nova revisão gera pendência de recolha das cópias obsoletas (banner + baixa por setor)
+- Lista Mestra: coluna "Cópias Físicas" + alerta de recolha; incluída em CSV/XLSX
+- Gerenciado por quem tem `iniciarRevisao` ou admin
+
+### CQ — Fix recebimento Areco ✅ (PR #57)
+- `iniciarAnalise` reutiliza o material existente (`areco-<codigo>`) sem sobrescrever
+- Análise semeada a partir dos `ensaios` parametrizados do material (paridade com fluxo manual)
+- Material só é criado quando ainda não existe
 
 ### Seção 15: Indicadores — Gráficos + Tendência (próximo)
 - Gráfico de linha (últimos 12 meses)

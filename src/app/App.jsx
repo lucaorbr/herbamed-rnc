@@ -20,7 +20,7 @@ import { LaudosTab } from "../features/laudos/LaudosTab";
 import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
-import { DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
+import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
@@ -321,7 +321,7 @@ export default function App() {
     { id: "lista",       icon: "📋", label: "Registros", badge: rncs.filter(x => x.status === "Aberta").length },
     ...(!isViewer ? [{ id: "nova",       icon: "➕", label: "Nova RNC" }] : []),
     ...(!isViewer ? [{ id: "ishikawa",   icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
-    ...(!isViewer ? [{ id: "5w2h",       icon: "📌", label: "5W2H" }] : []),
+    ...(!isViewer ? [{ id: "5w2h",       icon: "📋", label: "CAPA" }] : []),
     ...(!isViewer ? [{ id: "eficacia",   icon: "✅", label: "Eficácia" }] : []),
     ...(!isViewer ? [{ id: "fmea",       icon: "⚠️", label: "FMEA" }] : []),
     { id: "dashboard",   icon: "📊", label: "Dashboard" },
@@ -340,7 +340,7 @@ export default function App() {
   const PAGE_TITLES = {
     home: "Home", lista: "Registros de Não Conformidades",
     nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
-    "5w2h": "Plano de Ação 5W2H", eficacia: "Verificação de Eficácia",
+    "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
@@ -547,7 +547,7 @@ export default function App() {
               {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
-              {tab==="5w2h"       && !isViewer && <W2HTab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
+              {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}

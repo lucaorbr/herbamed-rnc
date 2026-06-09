@@ -75,25 +75,50 @@ function sendBuffer(res, status, buffer, headers = {}) {
 async function handleClaude(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
   await requireUser(req);
-  if (!process.env.ANTHROPIC_API_KEY) return sendJson(res, 503, { error: "ANTHROPIC_API_KEY nao configurada" });
 
   const body = await readBody(req);
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      ...body,
-      model: "claude-sonnet-4-5",
-      max_tokens: 2000,
-    }),
-  });
 
-  const data = await response.json();
-  return sendJson(res, response.ok ? 200 : response.status, data);
+  // OpenAI tem prioridade se configurada; fallback para Anthropic
+  if (process.env.OPENAI_API_KEY) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o",
+        max_tokens: body.max_tokens || 2000,
+        messages: body.messages || [],
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 429) {
+        return sendJson(res, 429, { error: "Rate limit da OpenAI atingido. Aguarde alguns segundos antes de tentar novamente." });
+      }
+      return sendJson(res, response.status, { error: data.error?.message || "Erro OpenAI" });
+    }
+    // normaliza para o formato Anthropic que o frontend espera: { content: [{ text }] }
+    const text = data.choices?.[0]?.message?.content || "";
+    return sendJson(res, 200, { content: [{ type: "text", text }] });
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ ...body, model: "claude-sonnet-4-5", max_tokens: body.max_tokens || 2000 }),
+    });
+    const data = await response.json();
+    return sendJson(res, response.ok ? 200 : response.status, data);
+  }
+
+  return sendJson(res, 503, { error: "Nenhuma chave de IA configurada (OPENAI_API_KEY ou ANTHROPIC_API_KEY)" });
 }
 
 async function handleAuth(req, res, pathname) {
@@ -144,9 +169,25 @@ async function handleAuth(req, res, pathname) {
 
   if (pathname === "/api/auth/signature" && req.method === "POST") {
     const user = await requireUser(req);
-    const { password, contexto = "", papel = "" } = await readBody(req);
+    const { password, contexto = "", papel = "", docId = null } = await readBody(req);
     const ok = await verifyPassword(user.id, password);
     if (!ok) return sendJson(res, 401, { error: "Senha incorreta" });
+
+    // Rota de assinatura (Gestao de Documentos): Revisor e Aprovador ficam travados
+    // ao usuario designado pelo Elaborador. Apenas o designado (ou um admin) assina.
+    if (docId && (papel === "Revisor" || papel === "Aprovador")) {
+      const docRes = await query(
+        "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
+        [String(docId)]
+      );
+      const rota = docRes.rows[0]?.data?.rota || {};
+      const designadoId = papel === "Revisor" ? rota.revisorId : rota.aprovadorId;
+      if (user.role !== "admin" && designadoId && String(designadoId) !== String(user.id)) {
+        return sendJson(res, 403, {
+          error: `Apenas o ${papel.toLowerCase()} designado para este documento pode assinar.`,
+        });
+      }
+    }
 
     const timestamp = new Date().toISOString();
     const payload = {
@@ -586,7 +627,11 @@ async function handleDocumentRender(req, res, pathname, url) {
 
   const docId = decodeURIComponent(match[1]);
   const modoRaw = (url.searchParams.get("modo") || "nao_controlada").toLowerCase();
-  const modo = WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada";
+  // Acesso restrito: usuário só pode renderizar documento Vigente, e somente em modo "cópia não controlada"
+  const acessoRestritoVigente = reqUser?.permissoes?.acessoRestritoVigente === true;
+  const modo = acessoRestritoVigente
+    ? "nao_controlada"
+    : (WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada");
   const userNameParam = url.searchParams.get("userName") || reqUser?.name || "";
   const wm = WATERMARK_MODOS[modo];
   console.log(`[RENDER] docId=${docId} modoRaw=${modoRaw} modo=${modo} wmTexto=${wm.texto}`);
@@ -598,6 +643,10 @@ async function handleDocumentRender(req, res, pathname, url) {
     );
     if (!docRes.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
     const doc = docRes.rows[0].data || {};
+
+    if (acessoRestritoVigente && doc.status !== "Vigente") {
+      return sendJson(res, 403, { error: "Acesso restrito: somente documentos vigentes podem ser visualizados." });
+    }
 
     const arquivoUrl = doc.arquivo && doc.arquivo.url ? String(doc.arquivo.url) : "";
     const fileId = arquivoUrl.includes("/api/files/") ? arquivoUrl.split("/api/files/").pop() : "";
@@ -773,12 +822,15 @@ async function handleDocumentRender(req, res, pathname, url) {
 
       // Cabeçalho e rodapé nas páginas de conteúdo
       const numPag = idx - capaOffset + 1; // página de conteúdo (1..N)
-      // Faixa de cabeçalho fina
-      page.drawRectangle({ x: 0, y: height - 18, width, height: 18, color: rgb(0.93, 0.95, 0.93) });
-      page.drawText(pdfSafe(`Herbamed | ${codigo} | Rev. ${versao} | ${status}`), { x: 16, y: height - 13, size: 7, font: fontR, color: cinza });
-      // Título do documento à direita (único lugar que identifica formulários sem capa)
+      // Faixa de cabeçalho — mesmo padrão verde da capa, repetida nas páginas
+      // de conteúdo para que documentos sem capa (semCapa) mantenham identidade visual
+      const hdrH = 46;
+      page.drawRectangle({ x: 0, y: height - hdrH, width, height: hdrH, color: verde });
+      draw(page, "Herbamed Laboratório Nutracêutico LTDA", 16, height - 19, 10, fontB, rgb(1, 1, 1));
+      draw(page, "CNPJ: 14.829.598/0001-30", 16, height - 32, 7, fontR, rgb(0.85, 0.93, 0.87));
       const tituloHdr = titulo.length > 55 ? titulo.slice(0, 54) + "…" : titulo;
-      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 13, 7, fontB, cinza);
+      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 19, 9, fontB, rgb(1, 1, 1));
+      drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - 32, 8, fontR, rgb(0.85, 0.93, 0.87));
       // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
       const rodape = semMarcaDagua
