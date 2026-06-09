@@ -40,6 +40,15 @@ export const PERMS_GRUPOS = [
   ]},
 ];
 
+// Resolve uma permissão para um usuário arbitrário (não só o logado).
+// Mesma lógica do `perm` do App: usa overrides salvos no usuário, senão cai no papel.
+export function userHasPerm(u, key) {
+  if (!u) return false;
+  if (u.permissoes && key in u.permissoes) return !!u.permissoes[key];
+  const role = u.role;
+  return PERMS_PADRAO[role] ? !!(PERMS_PADRAO[role][key]) : false;
+}
+
 export const PERMS_PADRAO = {
   viewer: {
     criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
