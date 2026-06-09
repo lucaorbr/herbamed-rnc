@@ -93,7 +93,12 @@ async function handleClaude(req, res) {
       }),
     });
     const data = await response.json();
-    if (!response.ok) return sendJson(res, response.status, { error: data.error?.message || "Erro OpenAI" });
+    if (!response.ok) {
+      if (response.status === 429) {
+        return sendJson(res, 429, { error: "Rate limit da OpenAI atingido. Aguarde alguns segundos antes de tentar novamente." });
+      }
+      return sendJson(res, response.status, { error: data.error?.message || "Erro OpenAI" });
+    }
     // normaliza para o formato Anthropic que o frontend espera: { content: [{ text }] }
     const text = data.choices?.[0]?.message?.content || "";
     return sendJson(res, 200, { content: [{ type: "text", text }] });

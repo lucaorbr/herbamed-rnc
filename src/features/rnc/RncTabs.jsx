@@ -617,6 +617,78 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     </div>
                   </div>
                 )}
+
+                {sel.respostaFornecedor && (
+                  <div style={{ ...s.card, background: `linear-gradient(135deg, #1a7a3c0a, #1a7a3c05)`, border: `1px solid #1a7a3c25` }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+                      <div style={{ fontSize:18 }}>🔗</div>
+                      <SecTitle ch="Resposta do Fornecedor" />
+                    </div>
+                    <div style={{ background: T.surf, borderRadius:8, padding:"12px 14px", marginBottom:12, fontSize:11, color:T.text2 }}>
+                      Respondido em {new Date(sel.respostaFornecedor.respondidoEm).toLocaleString("pt-BR")}
+                    </div>
+                    {sel.respostaFornecedor.porques?.length > 0 && (
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>5 Porquês</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {sel.respostaFornecedor.porques.map((p, i) => (
+                            <div key={i} style={{ display:"flex", gap:8, fontSize:12, color:T.text }}>
+                              <span style={{ fontWeight:700, color:T.accent, minWidth:20 }}>{i+1}.</span>
+                              <span>{p}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {sel.respostaFornecedor.causaRaiz && (
+                      <div style={{ marginBottom:12, padding:"10px 12px", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:6 }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:4 }}>Causa raiz identificada</div>
+                        <div style={{ fontSize:12, color:T.text, lineHeight:1.5 }}>{sel.respostaFornecedor.causaRaiz}</div>
+                      </div>
+                    )}
+                    {sel.respostaFornecedor.planoAcao && Object.keys(sel.respostaFornecedor.planoAcao).some(k => sel.respostaFornecedor.planoAcao[k]) && (
+                      <div style={{ marginBottom:12 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>Plano de Ação Proposto</div>
+                        <div style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:8, fontSize:11, color:T.text2 }}>
+                          {sel.respostaFornecedor.planoAcao.oQue && <>
+                            <div style={{ fontWeight:600, color:T.text }}>O quê?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.oQue}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.porQue && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Por quê?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.porQue}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.como && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Como?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.como}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.quem && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Quem?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.quem}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.onde && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Onde?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.onde}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.quando && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Quando?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.quando}</div>
+                          </>}
+                          {sel.respostaFornecedor.planoAcao.quanto && <>
+                            <div style={{ fontWeight:600, color:T.text }}>Quanto?</div>
+                            <div>{sel.respostaFornecedor.planoAcao.quanto}</div>
+                          </>}
+                        </div>
+                      </div>
+                    )}
+                    {sel.respostaFornecedor.observacoes && (
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>Observações</div>
+                        <div style={{ fontSize:12, color:T.text, lineHeight:1.5 }}>{sel.respostaFornecedor.observacoes}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
@@ -2009,6 +2081,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
                   <SevB s={r.sev}/>
                   <Badge s={r.status}/>
                   {past(r.prazoAC)&&r.status!=="Eficaz"&&<span style={{ fontSize:10, color:"#ff4f6a", fontWeight:700, background:"#ff4f6a18", padding:"2px 8px", borderRadius:20 }}>⚠ VENCIDO</span>}
+                  {r.respostaFornecedor&&<span style={{ fontSize:10, color:"#1a7a3c", fontWeight:700, background:"#1a7a3c18", padding:"2px 8px", borderRadius:20 }}>✓ RESPOSTA FORNECEDOR</span>}
                 </div>
                 <span style={{ fontSize:11, color:T.text3 }}>{fmt(r.data)}</span>
               </div>
