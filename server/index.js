@@ -75,25 +75,45 @@ function sendBuffer(res, status, buffer, headers = {}) {
 async function handleClaude(req, res) {
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
   await requireUser(req);
-  if (!process.env.ANTHROPIC_API_KEY) return sendJson(res, 503, { error: "ANTHROPIC_API_KEY nao configurada" });
 
   const body = await readBody(req);
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      ...body,
-      model: "claude-sonnet-4-5",
-      max_tokens: 2000,
-    }),
-  });
 
-  const data = await response.json();
-  return sendJson(res, response.ok ? 200 : response.status, data);
+  // OpenAI tem prioridade se configurada; fallback para Anthropic
+  if (process.env.OPENAI_API_KEY) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o",
+        max_tokens: body.max_tokens || 2000,
+        messages: body.messages || [],
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) return sendJson(res, response.status, { error: data.error?.message || "Erro OpenAI" });
+    // normaliza para o formato Anthropic que o frontend espera: { content: [{ text }] }
+    const text = data.choices?.[0]?.message?.content || "";
+    return sendJson(res, 200, { content: [{ type: "text", text }] });
+  }
+
+  if (process.env.ANTHROPIC_API_KEY) {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ ...body, model: "claude-sonnet-4-5", max_tokens: body.max_tokens || 2000 }),
+    });
+    const data = await response.json();
+    return sendJson(res, response.ok ? 200 : response.status, data);
+  }
+
+  return sendJson(res, 503, { error: "Nenhuma chave de IA configurada (OPENAI_API_KEY ou ANTHROPIC_API_KEY)" });
 }
 
 async function handleAuth(req, res, pathname) {
