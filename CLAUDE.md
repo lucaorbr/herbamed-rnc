@@ -34,9 +34,10 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Formal Mode** — Scrub global de emojis, boundary corrigido
 - **Documentos** — Navegação por abas em formulário
 - **UI** — Banner atualizado, logo sem emoji
+- **Seção 14: RNC — 5 Porquês + CAPA** — análise de causa estruturada + plano de ações corretivas
 
 ### ⏭️ Próximas seções
-- Seções 13, 14, 15, 16 (conforme roadmap)
+- Seções 15, 16 (conforme roadmap)
 - Code-splitting (bundle 561.7 kB)
 
 ## Referência de design: SE Suite (SoftExpert Suite)
@@ -160,10 +161,11 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Upload de evidências de correção
 - Não requer login
 
-### Seção 14: RNC — 5 Porquês + CAPA (próximo)
-- Campo obrigatório "5 Porquês" estruturado
-- Tabela CAPA com ações corretivas
-- Responsável + prazo + evidências
+### Seção 14: RNC — 5 Porquês + CAPA ✅
+- Análise de causa: 5 Porquês estruturado com Ishikawa
+- Tabela CAPA com ações corretivas, responsável + prazo
+- Geração automática com IA (opcional)
+- Validação: no mínimo 3 dos 5 Porquês antes de salvar CAPA
 
 ### Seção 15: Indicadores — Gráficos + Tendência (próximo)
 - Gráfico de linha (últimos 12 meses)
