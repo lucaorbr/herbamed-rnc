@@ -43,7 +43,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmi
     ]},
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
-      { id:"5w2h",     icon:"📌", label:"5W2H" },
+      { id:"5w2h",     icon:"📋", label:"CAPA" },
       { id:"eficacia", icon:"✅", label:"Eficácia" },
       { id:"fmea",     icon:"⚠️", label:"FMEA" },
     ]}]:[]),
