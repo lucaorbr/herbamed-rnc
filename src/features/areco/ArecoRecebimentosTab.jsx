@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getArecoRecebimentos, getArecoSyncStatus, runArecoSync, saveCollection, updateArecoRecebimento } from "../../firebase";
+import { getArecoRecebimentos, getArecoSyncStatus, getCollection, runArecoSync, saveCollection, updateArecoRecebimento } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle, Sel } from "../../shared/ui";
@@ -115,7 +115,18 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
 
     try {
       const id = Date.now();
-      const material = buildMaterialFromReceipt(item);
+      const novoMaterial = buildMaterialFromReceipt(item);
+      // Se o material ja existe no SGQ, reutiliza com os ensaios parametrizados.
+      // Nunca sobrescreve o material existente (preservaria a parametrizacao do CQ).
+      const materiaisExistentes = await getCollection("cq_materiais").catch(() => []);
+      const existente = (materiaisExistentes || []).find(m => String(m.id) === String(novoMaterial.id));
+      const material = existente || novoMaterial;
+      // Semeia os resultados a partir dos ensaios parametrizados do material (igual ao fluxo manual).
+      const resultados = (material.ensaios || []).map((e, i) => ({
+        tipo: "numero", casas: 2, multiplos: false, ...e,
+        id: e.id != null ? e.id : i,
+        resultado: "", conforme: null, obs: "",
+      }));
       const quantidade = item.quantidade != null ? String(item.quantidade) : "";
       const unidade = item.unidade || "un";
       const analise = {
@@ -136,14 +147,15 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
         dataAnalise: today(),
         resp: user?.name || "",
         obs: `Analise iniciada a partir do recebimento Areco ${item.external_key || item.id}.`,
-        resultados: [],
+        resultados,
         conclusao: "Pendente",
         criadoPor: user?.name || "",
         criadoEm: today(),
         criadoTs: id,
       };
 
-      await saveCollection("cq_materiais", String(material.id), material);
+      // So cria o material se ainda nao existir; existente nunca e sobrescrito.
+      if (!existente) await saveCollection("cq_materiais", String(material.id), material);
       await saveCollection("cq_analises", String(id), analise);
       await updateArecoRecebimento(item.id, { status: "em_analise", cq_analise_id: String(id) });
       toast_(`Analise ${analise.num} criada a partir do recebimento Areco.`, "green");
