@@ -411,6 +411,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [lmFiltroDepto, setLmFiltroDepto] = useState("todos");
   const [lmBusca, setLmBusca] = useState("");
   const [novoMat, setNovoMat] = useState("");
+  // Distribuição física — cópias controladas impressas entregues aos setores.
+  const [modalDistribuir, setModalDistribuir] = useState(null); // { doc }
+  const [distribForm, setDistribForm] = useState({ setor:"", entreguePor:"" });
   // Rota de assinatura — Elaborador designa Revisor e Aprovador ao assinar.
   const [modalRota, setModalRota]   = useState(null); // { doc } — escolha de revisor/aprovador antes de assinar como Elaborador
   const [rotaForm, setRotaForm]     = useState({ revisorId:"", aprovadorId:"" });
@@ -507,6 +510,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const podeBaixarFonte              = perm?.("baixarArquivoFonte")        ?? false;
   const podeConfigurar               = perm?.("configurarDocumentos")      ?? false;  // reservado para futuro painel de config
   const podeIniciarRevisao           = perm?.("iniciarRevisao")            ?? false;
+  // Controle de distribuição de cópias físicas: tarefa de controle de documentos.
+  const podeDistribuir               = (perm?.("iniciarRevisao") ?? false) || isAdmin;
   const podeTornarObsoleto           = perm?.("tornarObsoleto")            ?? false;
   const podeBaixarCopiaNaoControlada = perm?.("baixarCopiaNaoControlada")  ?? false;
   const podeVerDocumentos            = perm?.("verDocumentos")             ?? false;
@@ -729,6 +734,41 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     setModalTrocarRota(null);
   };
 
+  // Distribuição física — registra entrega de cópia controlada impressa a um setor.
+  const registrarDistribuicao = async (doc) => {
+    const setor = distribForm.setor;
+    if (!setor) { alert("Selecione o setor que recebeu a cópia."); return; }
+    const lista = doc.distribuicaoFisica || [];
+    if (lista.some(x => x.setor === setor)) { alert("Este setor já tem cópia controlada registrada."); return; }
+    const nova = { setor, dataEntrega: tod(), entreguePor: distribForm.entreguePor?.trim() || user?.name || "" };
+    const updated = { ...doc, distribuicaoFisica: [...lista, nova] };
+    await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog("Registrou cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { setor, entreguePor: nova.entreguePor });
+    toast_(`Cópia controlada registrada no setor ${setor}.`, "green");
+    setSel(updated);
+    setModalDistribuir(null);
+  };
+
+  // Cópia recolhida/destruída — remove o setor da distribuição vigente.
+  const removerDistribuicao = async (doc, setor) => {
+    if (!window.confirm(`Confirmar recolha/destruição da cópia controlada do setor ${setor}?`)) return;
+    const updated = { ...doc, distribuicaoFisica: (doc.distribuicaoFisica||[]).filter(x => x.setor !== setor) };
+    await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog("Recolheu cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { setor }, null);
+    toast_(`Cópia do setor ${setor} recolhida.`, "green");
+    setSel(updated);
+  };
+
+  // Pendência de recolha (após nova revisão) — marca o setor como recolhido.
+  const marcarRecolhida = async (doc, setor) => {
+    const pend = (doc.recolhaPendente||[]).filter(x => x.setor !== setor);
+    const updated = { ...doc, recolhaPendente: pend.length ? pend : null };
+    await saveCollection("gestao_docs", String(doc.id), updated);
+    await auditLog("Confirmou recolha de cópia obsoleta", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { setor }, null);
+    toast_(`Recolha da cópia obsoleta confirmada no setor ${setor}.`, "green");
+    setSel(updated);
+  };
+
   const solicitarRevisao = async (doc) => {
     try {
     if (!window.confirm("Criar nova revisão? A versão atual será arquivada no histórico.")) return;
@@ -752,7 +792,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }];
     // Arquivo controlado (PDF) da versão anterior fica no snapshot; nova revisão exige novo upload.
     // O arquivo fonte é mantido: o elaborador baixa o fonte anterior, edita e substitui.
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    // Cópias físicas da versão anterior viram pendência de recolha na nova revisão.
+    const copiasAnteriores = doc.distribuicaoFisica || [];
+    const recolhaPendente = copiasAnteriores.length
+      ? [...(doc.recolhaPendente||[]), ...copiasAnteriores.map(c => ({ setor: c.setor, versaoAnterior: versaoAtual }))]
+      : (doc.recolhaPendente || null);
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -972,7 +1017,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const exportarListaMestraCSV = () => {
     const linhas = [];
-    linhas.push(["Código", "Título", "Versão", "Departamento", "Data Última Revisão", "Próxima Revisão", "Status"].join(","));
+    linhas.push(["Código", "Título", "Versão", "Departamento", "Data Última Revisão", "Próxima Revisão", "Cópias Físicas", "Status"].join(","));
     lmFiltrados.forEach(d => {
       linhas.push([
         `"${d.codigo || ""}"`,
@@ -981,6 +1026,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         d.depto || "",
         d.atualizadoEm || "",
         d.proximaRevisao || "",
+        `"${(d.distribuicaoFisica||[]).map(c=>c.setor).join(", ")}"`,
         d.status || "",
       ].join(","));
     });
@@ -1001,7 +1047,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Lista Mestra");
 
-      const headers = ["Código", "Título", "Versão", "Depto", "Data Última Revisão", "Próxima Revisão", "Status"];
+      const headers = ["Código", "Título", "Versão", "Depto", "Data Última Revisão", "Próxima Revisão", "Cópias Físicas", "Status"];
       const headerRow = worksheet.addRow(headers);
 
       headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -1021,6 +1067,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           d.depto || "",
           fmt(d.atualizadoEm) || "",
           fmt(d.proximaRevisao) || "",
+          (d.distribuicaoFisica||[]).map(c=>c.setor).join(", "),
           d.status || "",
         ]);
 
@@ -1043,6 +1090,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         { header: "Depto", key: "depto", width: 12 },
         { header: "Data Última Revisão", key: "atualizadoEm", width: 18 },
         { header: "Próxima Revisão", key: "proximaRevisao", width: 18 },
+        { header: "Cópias Físicas", key: "copiasFisicas", width: 22 },
         { header: "Status", key: "status", width: 12 },
       ];
 
@@ -1054,7 +1102,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       const currentDateTime = new Date().toLocaleString("pt-BR");
       footerRow.getCell(1).value = `Gerado em ${currentDateTime} pelo SGQ Herbamed`;
       footerRow.getCell(1).font = { italic: true, size: 10, color: { argb: "FF888888" } };
-      worksheet.mergeCells(`A${footerRow.number}:G${footerRow.number}`);
+      worksheet.mergeCells(`A${footerRow.number}:H${footerRow.number}`);
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
@@ -1402,6 +1450,59 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             ))}
           </div>
         </div>
+        {/* ── PENDÊNCIA DE RECOLHA — cópias obsoletas após nova revisão ── */}
+        {d.recolhaPendente?.length > 0 && (
+          <div style={{...s.card, border:"1px solid #ff4f6a55", background:"#ff4f6a0d"}}>
+            <SecTitle icon="⚠️" ch="Cópias obsoletas a recolher" />
+            <div style={{fontSize:12,color:T.text2,marginBottom:10}}>
+              Estes setores têm cópias impressas de versões anteriores que precisam ser recolhidas e destruídas antes de distribuir a nova versão.
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {d.recolhaPendente.map((p,i)=>{
+                const dep = deptosAtivos.find(x=>x.id===p.setor);
+                return (
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                    <span style={{fontSize:18}}>📄</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:600,color:T.text}}>{dep?`${dep.id} — ${dep.label}`:p.setor}</div>
+                      <div style={{fontSize:11,color:T.text2}}>Cópia da Rev.{p.versaoAnterior} pendente de recolha</div>
+                    </div>
+                    {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>marcarRecolhida(d,p.setor)}>✓ Recolhida</button>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {/* ── DISTRIBUIÇÃO FÍSICA — cópias controladas impressas (só Vigente) ── */}
+        {d.status==="Vigente" && (
+          <div style={s.card}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+              <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
+              {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ setor:"", entreguePor:user?.name||"" }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
+            </div>
+            <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Setores com cópia controlada impressa da Rev.{d.versao}.</div>
+            {(d.distribuicaoFisica||[]).length===0 ? (
+              <div style={{fontSize:12,color:T.text3,padding:"0.5rem 0"}}>Nenhuma cópia física registrada.</div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {d.distribuicaoFisica.map((c,i)=>{
+                  const dep = deptosAtivos.find(x=>x.id===c.setor);
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                      <span style={{fontSize:18}}>🗂️</span>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{dep?`${dep.id} — ${dep.label}`:c.setor}</div>
+                        <div style={{fontSize:11,color:T.text2}}>Entregue em {fmt(c.dataEntrega)} por {c.entreguePor||"—"}</div>
+                      </div>
+                      {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>removerDistribuicao(d,c.setor)}>🗑️ Recolher</button>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {verSnapshot && (
           <div onClick={()=>setVerSnapshot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,maxWidth:760,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
@@ -1540,6 +1641,35 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           />
         )}
         {/* ── ROTA DE ASSINATURA: Elaborador escolhe Revisor e Aprovador ── */}
+        {/* ── REGISTRAR CÓPIA FÍSICA ── */}
+        {modalDistribuir && (
+          <div onClick={()=>setModalDistribuir(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:480,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>🗂️ Registrar cópia física</div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDistribuir(null)}>✕ Fechar</button>
+              </div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalDistribuir.doc.codigo} · Rev.{modalDistribuir.doc.versao} — registre o setor que recebeu a cópia controlada impressa.</div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Setor</label>
+                <select value={distribForm.setor} onChange={e=>setDistribForm(p=>({...p,setor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
+                  <option value="">Selecione o setor…</option>
+                  {deptosAtivos.filter(dep=>!(modalDistribuir.doc.distribuicaoFisica||[]).some(c=>c.setor===dep.id)).map(dep=>(
+                    <option key={dep.id} value={dep.id}>{dep.id} — {dep.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Entregue por</label>
+                <input value={distribForm.entreguePor} onChange={e=>setDistribForm(p=>({...p,entreguePor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} placeholder="Responsável pela entrega" />
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>setModalDistribuir(null)}>Cancelar</button>
+                <button style={s.btnA} onClick={()=>registrarDistribuicao(modalDistribuir.doc)}>Registrar</button>
+              </div>
+            </div>
+          </div>
+        )}
         {modalRota && (
           <div onClick={()=>setModalRota(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:520,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
@@ -2132,7 +2262,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead>
                 <tr style={{background:T.surf,borderBottom:`2px solid ${T.border}`}}>
-                  {["Código","Título","Versão","Depto","Data Última Revisão","Próxima Revisão","Status"].map(h=>(
+                  {["Código","Título","Versão","Depto","Data Última Revisão","Próxima Revisão","Cópias Físicas","Status"].map(h=>(
                     <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:11,textTransform:"uppercase"}}>
                       {h}
                     </th>
@@ -2142,7 +2272,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               <tbody>
                 {lmFiltrados.length===0?(
                   <tr>
-                    <td colSpan="7" style={{textAlign:"center",padding:"2rem",color:T.text3,fontSize:12}}>
+                    <td colSpan="8" style={{textAlign:"center",padding:"2rem",color:T.text3,fontSize:12}}>
                       Nenhum documento encontrado.
                     </td>
                   </tr>
@@ -2159,6 +2289,12 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                         <td style={{padding:"8px 10px",color:T.text2}}>{fmt(d.atualizadoEm)}</td>
                         <td style={{padding:"8px 10px",color:dias&&dias<=90?dias<=0?"#ff4f6a":"#ffd166":T.text2}}>
                           {d.proximaRevisao?fmt(d.proximaRevisao):"—"}
+                        </td>
+                        <td style={{padding:"8px 10px",color:T.text2}}>
+                          {(d.distribuicaoFisica||[]).length>0
+                            ? <span title={d.distribuicaoFisica.map(c=>c.setor).join(", ")}>🗂️ {d.distribuicaoFisica.length} setor{d.distribuicaoFisica.length!==1?"es":""}</span>
+                            : "—"}
+                          {d.recolhaPendente?.length>0 && <span title={`${d.recolhaPendente.length} cópia(s) obsoleta(s) a recolher`} style={{color:"#ff4f6a",marginLeft:6}}>⚠️{d.recolhaPendente.length}</span>}
                         </td>
                         <td style={{padding:"8px 10px"}}>
                           <BadgeStatusGD status={d.status}/>
