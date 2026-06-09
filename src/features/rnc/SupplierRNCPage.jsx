@@ -2,10 +2,8 @@ import React, { useState, useEffect } from "react";
 import { HerbamedLogo } from "../../shared/ui";
 import { fmt } from "../../core/utils";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:9028";
-
 const api = async (path, opts = {}) => {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,

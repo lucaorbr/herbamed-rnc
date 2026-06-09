@@ -58,10 +58,8 @@ Herbamed® · Sistema de Gestão da Qualidade
   return { subject, body };
 }
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:9028";
-
 async function gerarLinkFornecedor(rncId, rncNum, diasValidade = 30) {
-  const res = await fetch(`${API}/api/rnc-supplier/gerar-token`, {
+  const res = await fetch(`/api/rnc-supplier/gerar-token`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
