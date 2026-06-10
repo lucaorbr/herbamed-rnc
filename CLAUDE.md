@@ -17,6 +17,14 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 6. Abrir PR no GitHub → revisar → mergear
 7. Avisar TI se precisar configurar algo em produção antes do deploy
 
+## Rede Docker e Nginx (deploy)
+- Guia completo: `GUIA_REDE_DOCKER_NGINX.md`
+- Padrão: o Nginx (`nginx-proxy`) deve acessar o SGQ pela rede compartilhada `herbamed_proxy`, via alias interno `sgq-frontend:80` — nunca por `IP-do-host:porta-publicada`.
+- `sgq.herbamed.com.br` → upstream `sgq-frontend:80` (rede interna)
+- Container: `container_name: herbamed_sgq_frontend`, alias proxy: `sgq-frontend`
+- Porta publicada (host) `9027` é só para diagnóstico local; o `proxy_pass` no Nginx deve sempre usar a porta interna `80`
+- Antes de mexer no `nginx.conf`: subir o app, testar `docker exec nginx-proxy getent hosts sgq-frontend` e `wget` no upstream, depois `nginx -t` e `nginx -s reload`
+
 ## Regras importantes
 - Nunca commitar o .env local (está no .gitignore)
 - JWT_SECRET obrigatório — backend não sobe sem ele
