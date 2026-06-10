@@ -8,6 +8,7 @@ COPY package*.json ./
 RUN npm install -g npm@11.6.2
 RUN npm ci --omit=dev
 COPY server ./server
+COPY public ./public
 
 EXPOSE 9028
 CMD ["node", "server/index.js"]
