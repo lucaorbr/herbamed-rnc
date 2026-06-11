@@ -668,7 +668,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     const codigo  = pdfSafe(doc.codigo || "—");
     const versao  = pdfSafe(doc.versao || "01");
     const titulo  = pdfSafe(doc.titulo || "Documento");
-    const tipoLbl = pdfSafe(TIPOS_DOC_RENDER[doc.tipo] || doc.tipo || "—");
+    let tipoLbl = pdfSafe(TIPOS_DOC_RENDER[doc.tipo] || doc.tipo || "—");
     const deptoLbl = pdfSafe(DEPTOS_DOC_RENDER[doc.depto] || doc.depto || "—");
     const status  = pdfSafe(doc.status || "—");
     const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
@@ -681,6 +681,8 @@ async function handleDocumentRender(req, res, pathname, url) {
         "SELECT data FROM generic_documents WHERE collection = 'configuracoes' AND id = 'catalogo_tipos_doc'"
       );
       const tipoCfg = (catRes.rows[0]?.data?.items || []).find(t => t.id === doc.tipo);
+      const tipoNome = tipoCfg?.label || tipoCfg?.descricao || tipoCfg?.nome;
+      if (tipoNome) tipoLbl = pdfSafe(tipoNome);
       // Default do tipo na base; flags explícitas do catálogo (se houver a chave) prevalecem.
       const fonte = { ...(TIPO_MODELO_DEFAULTS[doc.tipo] || {}), ...(tipoCfg || {}) };
       semCapa = !!fonte.semCapa;
