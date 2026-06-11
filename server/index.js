@@ -1,5 +1,7 @@
 const http = require("http");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const bcrypt = require("bcryptjs");
 const { PDFDocument, StandardFonts, rgb, degrees } = require("pdf-lib");
 const { migrate } = require("./migrate");
@@ -17,6 +19,7 @@ const {
 const { runArecoSync, startArecoScheduler } = require("./arecoSync");
 
 const PORT = Number(process.env.PORT || 9028);
+const HERBAMED_LOGO_PATH = path.join(__dirname, "..", "public", "logo-herbamed.png");
 
 function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
@@ -665,7 +668,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     const codigo  = pdfSafe(doc.codigo || "—");
     const versao  = pdfSafe(doc.versao || "01");
     const titulo  = pdfSafe(doc.titulo || "Documento");
-    const tipoLbl = pdfSafe(TIPOS_DOC_RENDER[doc.tipo] || doc.tipo || "—");
+    let tipoLbl = pdfSafe(TIPOS_DOC_RENDER[doc.tipo] || doc.tipo || "—");
     const deptoLbl = pdfSafe(DEPTOS_DOC_RENDER[doc.depto] || doc.depto || "—");
     const status  = pdfSafe(doc.status || "—");
     const ctxAss  = `${doc.codigo || ""}|R${doc.versao || ""}`;
@@ -678,6 +681,8 @@ async function handleDocumentRender(req, res, pathname, url) {
         "SELECT data FROM generic_documents WHERE collection = 'configuracoes' AND id = 'catalogo_tipos_doc'"
       );
       const tipoCfg = (catRes.rows[0]?.data?.items || []).find(t => t.id === doc.tipo);
+      const tipoNome = tipoCfg?.label || tipoCfg?.descricao || tipoCfg?.nome;
+      if (tipoNome) tipoLbl = pdfSafe(tipoNome);
       // Default do tipo na base; flags explícitas do catálogo (se houver a chave) prevalecem.
       const fonte = { ...(TIPO_MODELO_DEFAULTS[doc.tipo] || {}), ...(tipoCfg || {}) };
       semCapa = !!fonte.semCapa;
@@ -694,9 +699,23 @@ async function handleDocumentRender(req, res, pathname, url) {
     const out = await PDFDocument.create();
     const fontB = await out.embedFont(StandardFonts.HelveticaBold);
     const fontR = await out.embedFont(StandardFonts.Helvetica);
+    let herbamedLogo = null;
+    try {
+      if (fs.existsSync(HERBAMED_LOGO_PATH)) {
+        herbamedLogo = await out.embedPng(fs.readFileSync(HERBAMED_LOGO_PATH));
+      }
+    } catch (e) {
+      console.warn("Logo Herbamed não pôde ser carregado no PDF:", e.message);
+    }
 
     const draw = (page, text, x, y, size, font, color) =>
       page.drawText(pdfSafe(text), { x, y, size, font, color });
+    const drawLogo = (page, x, y, maxW, maxH) => {
+      if (!herbamedLogo) return false;
+      const logo = herbamedLogo.scaleToFit(maxW, maxH);
+      page.drawImage(herbamedLogo, { x, y: y + (maxH - logo.height) / 2, width: logo.width, height: logo.height });
+      return true;
+    };
     const drawRight = (page, text, xRight, y, size, font, color) => {
       const t = pdfSafe(text);
       const w = font.widthOfTextAtSize(t, size);
@@ -719,8 +738,10 @@ async function handleDocumentRender(req, res, pathname, url) {
 
     // Faixa superior verde
     capa.drawRectangle({ x: 0, y: H - 60, width: W, height: 60, color: verde });
-    draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, H - 32, 13, fontB, rgb(1, 1, 1));
-    draw(capa, "CNPJ: 14.829.598/0001-30", 40, H - 48, 9, fontR, rgb(0.85, 0.93, 0.87));
+    if (!drawLogo(capa, 42, H - 47, 142, 34)) {
+      draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, H - 32, 13, fontB, rgb(1, 1, 1));
+      draw(capa, "CNPJ: 14.829.598/0001-30", 40, H - 48, 9, fontR, rgb(0.85, 0.93, 0.87));
+    }
     drawRight(capa, tipoLbl, W - 40, H - 32, 11, fontB, rgb(1, 1, 1));
     drawRight(capa, `${codigo} · Rev. ${versao}`, W - 40, H - 48, 10, fontR, rgb(0.85, 0.93, 0.87));
 
@@ -826,8 +847,10 @@ async function handleDocumentRender(req, res, pathname, url) {
       // de conteúdo para que documentos sem capa (semCapa) mantenham identidade visual
       const hdrH = 46;
       page.drawRectangle({ x: 0, y: height - hdrH, width, height: hdrH, color: verde });
-      draw(page, "Herbamed Laboratório Nutracêutico LTDA", 16, height - 19, 10, fontB, rgb(1, 1, 1));
-      draw(page, "CNPJ: 14.829.598/0001-30", 16, height - 32, 7, fontR, rgb(0.85, 0.93, 0.87));
+      if (!drawLogo(page, 20, height - 35, 112, 24)) {
+        draw(page, "Herbamed Laboratório Nutracêutico LTDA", 16, height - 19, 10, fontB, rgb(1, 1, 1));
+        draw(page, "CNPJ: 14.829.598/0001-30", 16, height - 32, 7, fontR, rgb(0.85, 0.93, 0.87));
+      }
       const tituloHdr = titulo.length > 55 ? titulo.slice(0, 54) + "…" : titulo;
       drawRight(page, pdfSafe(tituloHdr), width - 16, height - 19, 9, fontB, rgb(1, 1, 1));
       drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - 32, 8, fontR, rgb(0.85, 0.93, 0.87));
