@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useFormal } from "../core/theme";
+import { APP_VERSION_LABEL } from "../config/appVersion";
 import { MENU_SVG_ICONS } from "./menuIcons";
 
 export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }) {
@@ -95,7 +96,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmi
       {sidebarOpen && (
         <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3 }}>
           <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
-          <div>v2.0 · {new Date().getFullYear()}</div>
+          <div>{APP_VERSION_LABEL} � {new Date().getFullYear()}</div>
         </div>
       )}
     </div>

@@ -31,6 +31,15 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - ARECO_SYNC_ENABLED=false para testes locais
 - Seção 17 do roadmap depende de infraestrutura da TI
 
+## Versao do sistema
+- Versao atual: `2.0.0`
+- A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
+- Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
+- `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
+- `MINOR` (ex.: `2.0.1` -> `2.1.0`): melhorias ou novas funcionalidades compativeis com o fluxo atual.
+- `MAJOR` (ex.: `2.1.0` -> `3.0.0`): mudancas grandes de fluxo, arquitetura, permissoes ou comportamento que exigem atencao da TI/usuarios.
+- Toda PR que altere comportamento do sistema deve avaliar se precisa incrementar a versao. A versao visivel ajuda a confirmar se o ambiente oficial da TI recebeu o mesmo codigo do GitHub.
+
 ## Status do roadmap (auditoria 2026-06-08)
 
 ### ✅ Completadas
