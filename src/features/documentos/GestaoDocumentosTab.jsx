@@ -923,17 +923,21 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const deletar = async (id) => {
     try {
     const doc = docs.find(x => String(x.id) === String(id)) || sel;
-    // Documento controlado: só rascunho nunca assinado pode ser apagado.
-    // Qualquer documento que já teve assinatura ou ficou Vigente é arquivado como Obsoleto, nunca excluído.
-    const jaAssinado = !!(doc?.assinaturaElaborador || doc?.assinaturaRevisor || doc?.assinaturaAprovador);
-    if (doc?.status !== "Rascunho" || jaAssinado) {
-      alert("Documento controlado não pode ser excluído.\n\nDocumentos já assinados ou que entraram em vigência devem ser arquivados como Obsoleto (botão 🗄️), preservando a rastreabilidade exigida em BPF.");
+    // Documento controlado: uma vez Vigente (ou Obsoleto), o código fica
+    // permanentemente associado a ele e não pode ser excluído (rastreabilidade BPF).
+    const jaFoiVigente = doc?.historicoRevisoes?.length > 0 || ["Vigente","Obsoleto"].includes(doc?.status);
+    if (jaFoiVigente) {
+      alert("Documento controlado não pode ser excluído.\n\nDocumentos que já entraram em vigência devem ser arquivados como Obsoleto (botão 🗄️), preservando a rastreabilidade exigida em BPF.");
       return;
     }
-    if (!window.confirm("Excluir este rascunho permanentemente? Esta ação não pode ser desfeita.")) return;
+    const jaAssinado = !!(doc?.assinaturaElaborador || doc?.assinaturaRevisor || doc?.assinaturaAprovador);
+    const aviso = jaAssinado
+      ? `Excluir permanentemente este documento (${doc?.codigo})?\n\nEle já possui assinatura(s), mas nunca chegou a Vigente. A exclusão remove o registro e LIBERA o código "${doc?.codigo}" para uso em um novo documento.\n\nEsta ação não pode ser desfeita.`
+      : "Excluir este rascunho permanentemente? Esta ação não pode ser desfeita.";
+    if (!window.confirm(aviso)) return;
     await deleteFromCollection("gestao_docs", String(id));
-    await auditLog("Excluiu Rascunho", "gestao_docs", id, doc?.codigo ? `${doc.codigo} — ${doc.titulo}` : String(id), doc || null, null);
-    toast_("Rascunho excluído.", "red");
+    await auditLog(jaAssinado ? "Excluiu Documento (não vigente)" : "Excluiu Rascunho", "gestao_docs", id, doc?.codigo ? `${doc.codigo} — ${doc.titulo}` : String(id), doc || null, null);
+    toast_("Documento excluído.", "red");
     setSel(null); setView("lista");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -1179,7 +1183,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
             {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||""}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
-            {isAdmin && d.status==="Rascunho" && !d.assinaturaElaborador && !d.assinaturaRevisor && !d.assinaturaAprovador && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir rascunho</button>}
+            {isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0) && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir</button>}
           </div>
         </div>
         {d.status==="Aguardando Vigência" && d.dataVigencia && (
