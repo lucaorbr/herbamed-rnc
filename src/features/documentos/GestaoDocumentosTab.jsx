@@ -505,7 +505,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       const url = typeof result === "string" ? result : result.url;
       setDocArquivoFonte({ url, nome: file.name, tipo: file.type, tamanho: file.size, enviadoPor: user?.name || "", enviadoEm: tod() });
       toast_("Arquivo fonte anexado!", "green");
-    } catch(e) { toast_("Erro ao enviar arquivo fonte.", "red"); }
+    } catch(e) { toast_(`Erro ao enviar arquivo fonte: ${e.message || "erro desconhecido"}`, "red"); }
     setDocArquivoFonteUploading(false);
   };
 
