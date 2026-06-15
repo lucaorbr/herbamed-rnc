@@ -234,6 +234,27 @@ async function migrate() {
     ON rnc_supplier_tokens (token)
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      user_id text NOT NULL,
+      tipo text NOT NULL,
+      titulo text NOT NULL,
+      mensagem text,
+      doc_id text,
+      doc_codigo text,
+      link text,
+      lida boolean NOT NULL DEFAULT false,
+      criada_em timestamptz NOT NULL DEFAULT now(),
+      lida_em timestamptz
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+    ON notifications (user_id, criada_em DESC)
+  `);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged } from "../firebase";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
@@ -40,6 +40,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
+  const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [config, setConfig] = useState({ aprovadorDiferenteAnalista: false });
@@ -145,6 +146,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
+    const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
       setFornecedores(list.sort((a,b) => (a.nome||"").localeCompare(b.nome||"")));
@@ -159,7 +161,7 @@ export default function App() {
       const ct = list.find(c => c.id === "catalogo_tipos_doc");
       setCatalogoTipos(ct?.items || []);
     });
-    return () => { unsub(); unsubForn(); unsubCfg(); };
+    return () => { unsub(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -315,6 +317,9 @@ export default function App() {
 
   // Notificações — RNCs com prazo vencido
   const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
+  // Notificações — documentos (rota de assinatura, vigência etc.)
+  const docNotifsUnread = docNotifs.filter(n => !n.lida);
+  const totalNotifs = notifs.length + docNotifsUnread.length;
 
   const MENU = [
     { id: "home",        icon: "🏠", label: "Home" },
@@ -452,24 +457,39 @@ export default function App() {
               </button>
             )}
             <div style={{ position:"relative" }}>
-              <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:notifs.length>0?"#ffd16618":"none", border:`1px solid ${notifs.length>0?"#ffd16633":T.border}`, borderRadius:8, color:notifs.length>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
+              <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:totalNotifs>0?"#ffd16618":"none", border:`1px solid ${totalNotifs>0?"#ffd16633":T.border}`, borderRadius:8, color:totalNotifs>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
                 🔔
-                {notifs.length>0 && <span style={{ position:"absolute", top:2, right:2, width:14, height:14, borderRadius:"50%", background:T.red, color:"#fff", fontSize:8, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${T.bg}` }}>{notifs.length}</span>}
+                {totalNotifs>0 && <span style={{ position:"absolute", top:2, right:2, width:14, height:14, borderRadius:"50%", background:T.red, color:"#fff", fontSize:8, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${T.bg}` }}>{totalNotifs}</span>}
               </button>
               {notifOpen && (
-                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:320, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:14, boxShadow:"0 16px 48px #0008", zIndex:500, animation:"fadeIn .15s ease" }}>
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:320, maxHeight:420, overflowY:"auto", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:14, boxShadow:"0 16px 48px #0008", zIndex:500, animation:"fadeIn .15s ease" }}>
                   <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}`, fontSize:12, fontWeight:700, color:T.text, display:"flex", justifyContent:"space-between" }}>
-                    🔔 Notificações <span style={{ color:T.text3, fontWeight:400 }}>{notifs.length} alerta(s)</span>
+                    🔔 Notificações <span style={{ color:T.text3, fontWeight:400 }}>{totalNotifs} alerta(s)</span>
                   </div>
-                  {notifs.length===0 ? (
+                  {totalNotifs===0 ? (
                     <div style={{ padding:"1.5rem", textAlign:"center", color:T.text3, fontSize:13 }}>Nenhum alerta no momento ✓</div>
-                  ) : notifs.map(r=>(
-                    <div key={r.id} onClick={()=>{setTab("lista");setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
-                      <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num} — Prazo vencido</div>
-                      <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,50)}...</div>
-                      <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>Prazo AC: {fmt(r.prazoAC)}</div>
-                    </div>
-                  ))}
+                  ) : (
+                    <>
+                      {notifs.map(r=>(
+                        <div key={`rnc-${r.id}`} onClick={()=>{setTab("lista");setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
+                          <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num} — Prazo vencido</div>
+                          <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,50)}...</div>
+                          <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>Prazo AC: {fmt(r.prazoAC)}</div>
+                        </div>
+                      ))}
+                      {docNotifsUnread.map(n=>(
+                        <div key={`doc-${n.id}`} onClick={async ()=>{
+                          setTab("gestao-docs"); setNotifOpen(false);
+                          setDocNotifs(prev => prev.map(x => x.id===n.id ? { ...x, lida:true } : x));
+                          await markNotificationsRead([n.id]);
+                        }} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
+                          <div style={{ fontSize:12, fontWeight:600, color:T.accent }}>{n.titulo}</div>
+                          <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{n.mensagem}</div>
+                          <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{fmt(n.criada_em)}</div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

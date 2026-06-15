@@ -272,6 +272,36 @@ async function handleSignatures(req, res, pathname, url) {
   return false;
 }
 
+async function handleNotifications(req, res, pathname) {
+  if (pathname === "/api/notifications" && req.method === "GET") {
+    const user = await requireUser(req);
+    const result = await query(
+      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY criada_em DESC LIMIT 50",
+      [String(user.id)]
+    );
+    return sendJson(res, 200, result.rows);
+  }
+
+  if (pathname === "/api/notifications/mark-read" && req.method === "POST") {
+    const user = await requireUser(req);
+    const { ids = null } = await readBody(req);
+    if (Array.isArray(ids) && ids.length) {
+      await query(
+        "UPDATE notifications SET lida = true, lida_em = now() WHERE user_id = $1 AND id = ANY($2::uuid[])",
+        [String(user.id), ids]
+      );
+    } else {
+      await query(
+        "UPDATE notifications SET lida = true, lida_em = now() WHERE user_id = $1 AND lida = false",
+        [String(user.id)]
+      );
+    }
+    return sendJson(res, 200, { ok: true });
+  }
+
+  return false;
+}
+
 async function handleUsers(req, res, pathname) {
   if (pathname === "/api/users" && req.method === "GET") {
     await requireUser(req);
@@ -513,6 +543,60 @@ function dailyCounterNumber(value) {
   return `${dd}${mm}${yy}${value}`;
 }
 
+async function createNotification(userId, tipo, titulo, mensagem, docId, docCodigo, link) {
+  if (!userId) return;
+  try {
+    await query(`
+      INSERT INTO notifications (user_id, tipo, titulo, mensagem, doc_id, doc_codigo, link)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [String(userId), tipo, titulo, mensagem || null, docId ? String(docId) : null, docCodigo || null, link || null]);
+  } catch (error) {
+    console.error("Falha ao criar notificacao:", error);
+  }
+}
+
+// Notifica o proximo responsavel da rota de assinatura quando o Elaborador
+// define a rota, quando o Revisor assina e quando o documento entra em vigencia.
+async function notifyDocumentSignatureRoute(docId, oldData, newData) {
+  const codigo = newData?.codigo || oldData?.codigo || docId;
+  const titulo = newData?.titulo || oldData?.titulo || "";
+  const refDoc = `${codigo} — ${titulo}`;
+  const link = "/documentos";
+
+  const novaRota = !oldData?.rota?.revisorId && newData?.rota?.revisorId;
+  if (novaRota) {
+    await createNotification(
+      newData.rota.revisorId,
+      "documento_revisao",
+      "Documento aguardando sua revisão",
+      `${refDoc} foi designado para sua revisão.`,
+      docId, codigo, link
+    );
+  }
+
+  const novaAssinaturaRevisor = !oldData?.assinaturaRevisor && newData?.assinaturaRevisor;
+  if (novaAssinaturaRevisor && newData?.rota?.aprovadorId) {
+    await createNotification(
+      newData.rota.aprovadorId,
+      "documento_aprovacao",
+      "Documento aguardando sua aprovação",
+      `${refDoc} foi revisado e aguarda sua aprovação.`,
+      docId, codigo, link
+    );
+  }
+
+  const tornouVigente = oldData?.status !== "Vigente" && newData?.status === "Vigente";
+  if (tornouVigente && newData?.assinaturaElaborador?.uid) {
+    await createNotification(
+      newData.assinaturaElaborador.uid,
+      "documento_vigente",
+      "Documento entrou em vigência",
+      `${refDoc} foi aprovado e está Vigente.`,
+      docId, codigo, link
+    );
+  }
+}
+
 async function handleCollections(req, res, pathname) {
   const match = pathname.match(/^\/api\/collections\/([^/]+)(?:\/(.+))?$/);
   if (!match) return false;
@@ -531,11 +615,26 @@ async function handleCollections(req, res, pathname) {
 
   if (id && (req.method === "PUT" || req.method === "POST")) {
     const data = sanitize(await readBody(req));
+
+    let oldData = null;
+    if (collection === "gestao_docs") {
+      const prev = await query(
+        "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
+        [collection, id]
+      );
+      oldData = prev.rows[0]?.data || null;
+    }
+
     await query(`
       INSERT INTO generic_documents (collection, id, data, updated_at)
       VALUES ($1,$2,$3::jsonb,now())
       ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
     `, [collection, id, JSON.stringify({ ...data, id })]);
+
+    if (collection === "gestao_docs") {
+      await notifyDocumentSignatureRoute(id, oldData, data);
+    }
+
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1104,7 +1203,7 @@ async function route(req, res) {
   const supplierHandled = await handleSupplierRNC(req, res, pathname);
   if (supplierHandled !== false) return supplierHandled;
 
-  const handlers = [handleAuth, handleSignatures, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;
