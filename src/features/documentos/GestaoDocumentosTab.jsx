@@ -1900,7 +1900,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         </div>
 
         {/* ── UPLOAD DO ARQUIVO FONTE (editável, não controlado) — Fase 4/5 ── */}
-        {podeBaixarFonte && (
+        {podeCriarDoc && (
           <div style={{ border:`2px dashed ${T.border2}`, borderRadius:14, padding:"1.25rem", marginBottom:"1rem", background:T.surf }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
               <span style={{ fontSize:22 }}>🛠️</span>
@@ -1917,7 +1917,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   <div style={{ fontSize:13, fontWeight:600, color:T.text2 }}>{docArquivoFonte.nome}</div>
                   <div style={{ fontSize:11, color:T.text3 }}>{docArquivoFonte.tamanho ? (docArquivoFonte.tamanho/1024).toFixed(1)+" KB" : ""}</div>
                 </div>
-                <button onClick={()=>abrirArquivoAutenticado(docArquivoFonte.url, true, docArquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
+                {podeBaixarFonte && <button onClick={()=>abrirArquivoAutenticado(docArquivoFonte.url, true, docArquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>}
                 <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                   🔄 Substituir
                   <input type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx" style={{ display:"none" }} onChange={e=>{ handleDocArquivoFonte(e.target.files[0]); e.target.value=""; }} />
