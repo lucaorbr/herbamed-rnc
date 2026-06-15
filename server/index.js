@@ -44,7 +44,7 @@ function parseUrl(req) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
-    const maxBytes = Number(process.env.JSON_BODY_LIMIT_BYTES || 30_000_000);
+    const maxBytes = Number(process.env.JSON_BODY_LIMIT_BYTES || 80_000_000);
     req.on("data", chunk => {
       body += chunk;
       if (Buffer.byteLength(body) > maxBytes) {
@@ -485,7 +485,7 @@ async function handleFiles(req, res, pathname) {
     const encoded = String(body.data || "");
     const base64 = encoded.includes(",") ? encoded.split(",").pop() : encoded;
     const buffer = Buffer.from(base64, "base64");
-    const maxFileBytes = Number(process.env.FILE_UPLOAD_MAX_BYTES || 15 * 1024 * 1024);
+    const maxFileBytes = Number(process.env.FILE_UPLOAD_MAX_BYTES || 50 * 1024 * 1024);
 
     if (!buffer.length) return sendJson(res, 400, { error: "Arquivo vazio ou invalido" });
     if (buffer.length > maxFileBytes) return sendJson(res, 413, { error: "Arquivo maior que o limite permitido" });

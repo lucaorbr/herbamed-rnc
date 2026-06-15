@@ -104,6 +104,12 @@ proxy_pass http://sgq-frontend:80;
 
 Evite apontar o Nginx para `IP_DO_HOST:9027`, pois o padrao atual da infraestrutura usa a rede `herbamed_proxy`.
 
+Para uploads de documentos controlados, o bloco do Nginx corporativo tambem precisa permitir corpos maiores:
+
+```nginx
+client_max_body_size 80m;
+```
+
 ## Comandos uteis
 
 ```bash
