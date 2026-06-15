@@ -297,8 +297,8 @@ export function BadgeStatusGD({ status }) {
   );
 }
 
-export function BadgeTipoGD({ tipo }) {
-  const m = TIPOS_DOC_GD.find(t => t.id === tipo) || TIPOS_DOC_GD[0];
+export function BadgeTipoGD({ tipo, tipos = TIPOS_DOC_GD }) {
+  const m = tipos.find(t => t.id === tipo) || TIPOS_DOC_GD.find(t => t.id === tipo) || { id: tipo, label: tipo, icon: "📄", cor: "#2ab84a" };
   return (
     <span style={{ padding:"3px 10px", borderRadius:6, fontSize:10, fontWeight:700, background:m.cor+"20", color:m.cor }}>
       {m.icon} {m.id}
@@ -446,16 +446,27 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const tiposAtivos  = catalogoTipos.length  ? catalogoTipos.filter(t  => t.ativo  !== false) : TIPOS_DOC_GD;
   const deptosAtivos = catalogoDeptos.length ? catalogoDeptos.filter(d => d.ativo !== false) : DEPARTAMENTOS_GD;
 
-  const formVazio = {
-    tipo:"PO", depto:"SGQ", titulo:"", versao:"00",
+  const tipoInicial = tiposAtivos[0]?.id || "PO";
+  const deptoInicial = deptosAtivos.find(d => d.id === "SGQ")?.id || deptosAtivos[0]?.id || "SGQ";
+  const makeFormVazio = () => ({
+    tipo:tipoInicial, depto:deptoInicial, titulo:"", versao:"00",
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
     historicoRevisoes:[], dataVigencia:"",
-  };
-  const [form, setForm] = useState(formVazio);
+  });
+  const [form, setForm] = useState(() => makeFormVazio());
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
-  const resetForm = () => { setForm(formVazio); setCapituloAtivo("objetivo"); setDocArquivo(null); setDocArquivoFonte(null); setCapitulosAberto(false); };
+  const resetForm = () => { setForm(makeFormVazio()); setCapituloAtivo("objetivo"); setDocArquivo(null); setDocArquivoFonte(null); setCapitulosAberto(false); };
+  const tipoInfo = (tipoId) => tiposAtivos.find(t => t.id === tipoId) || TIPOS_DOC_GD.find(t => t.id === tipoId) || { id: tipoId, label: tipoId, cor: T.accent, icon: "📄" };
+  const deptoInfo = (deptoId) => deptosAtivos.find(d => d.id === deptoId) || DEPARTAMENTOS_GD.find(d => d.id === deptoId) || { id: deptoId, label: deptoId };
+
+  useEffect(() => {
+    if (sel || view !== "novo" || !tiposAtivos.length) return;
+    if (!tiposAtivos.some(t => t.id === form.tipo)) {
+      setForm(p => ({ ...p, tipo: tiposAtivos[0].id }));
+    }
+  }, [sel, view, form.tipo, tiposAtivos]);
 
   const handleDocArquivo = async (file) => {
     if (!file) return;
@@ -963,7 +974,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   };
 
   const exportPDF = (doc) => {
-    const tipo  = TIPOS_DOC_GD.find(t=>t.id===doc.tipo);
+    const tipo  = tipoInfo(doc.tipo);
     const cor   = tipo?.cor || "#2ab84a";
     // Seção 18 — marca d'água: obsoleto em vermelho, demais "cópia não controlada" em cinza.
     const obsoleto = doc.status === "Obsoleto";
@@ -1141,8 +1152,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   /* ── DETALHE ── */
   if (view==="detalhe" && sel) {
     const d = docs.find(x=>x.id===sel.id)||sel;
-    const tipo  = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
-    const depto = DEPARTAMENTOS_GD.find(x=>x.id===d.depto);
+    const tipo  = tipoInfo(d.tipo);
+    const depto = deptoInfo(d.depto);
     const diasRev = diasParaRevisaoGD(d.proximaRevisao);
     const mesmoAssinante = (ass) => !!ass && ((ass.email && user?.email && ass.email===user.email) || (!ass.email && ass.nome===user?.name));
     const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor===user?.name);
@@ -1206,7 +1217,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             ))}
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <BadgeTipoGD tipo={d.tipo} />
+            <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos} />
             <BadgeStatusGD status={d.status} />
             {d.treinamentoObrigatorio && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
           </div>
@@ -1949,7 +1960,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                     const buf=await file.arrayBuffer();
                     const result=await window.mammoth.convertToHtml({arrayBuffer:buf});
                     const docHtml=result.value;
-                    const tipoLabel=TIPOS_DOC_GD.find(t=>t.id===form.tipo)?.label||form.tipo;
+                    const tipoLabel=tipoInfo(form.tipo)?.label||form.tipo;
                     const caps=CAPITULOS_GD.filter(c=>!c.special);
                     const capIds=caps.map(c=>c.id).join(", ");
                     const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -2007,9 +2018,9 @@ ${docHtml.slice(0,9000)}`}]})
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
           {form.tipo && (()=>{
-            const tp = tiposAtivos.find(t=>t.id===form.tipo) || TIPOS_DOC_GD.find(t=>t.id===form.tipo);
+            const tp = tipoInfo(form.tipo);
             const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
-            const depResp = deptosAtivos.find(x=>x.id===tp?.departamentoResponsavel) || DEPARTAMENTOS_GD.find(x=>x.id===tp?.departamentoResponsavel);
+            const depResp = deptoInfo(tp?.departamentoResponsavel);
             return (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
                 <span>📅 Prazo de revisão padrão: <strong style={{color:T.text2}}>{anos} {anos===1?"ano":"anos"}</strong></span>
@@ -2278,7 +2289,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                   </tr>
                 ):(
                   lmFiltrados.map((d,i)=>{
-                    const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
+                    const tipo = tipoInfo(d.tipo);
                     const dias = diasParaRevisaoGD(d.proximaRevisao);
                     return (
                       <tr key={d.id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
@@ -2335,7 +2346,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                 <span style={{fontSize:11,color:T.text3,background:T.surf,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>{dd.length} doc{dd.length!==1?"s":""}</span>
               </div>
               <div style={{paddingLeft:20,borderLeft:`2px solid ${dep.cor}30`}}>
-                {TIPOS_DOC_GD.map(tp=>{
+                {tiposAtivos.map(tp=>{
                   const dt = dd.filter(d=>d.tipo===tp.id);
                   if (!dt.length) return null;
                   return (
@@ -2382,7 +2393,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           </div>
           <Sel value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
             <option value="todos">Todos os tipos</option>
-            {TIPOS_DOC_GD.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
+            {tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon} {t.label}</option>)}
           </Sel>
           <Sel value={filtroDepto} onChange={e=>setFiltroDepto(e.target.value)}>
             <option value="todos">Todos os deptos</option>
@@ -2410,7 +2421,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
       ):
       (<>
       {_gds.map(d=>{
-        const tipo = TIPOS_DOC_GD.find(t=>t.id===d.tipo);
+        const tipo = tipoInfo(d.tipo);
         return (
           <div key={d.id} className="rnc-row" onClick={()=>{setSel(d);setView("detalhe");}}
             style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`3px solid ${tipo?.cor||T.border}`,borderRadius:10,padding:"10px 14px",marginBottom:8,cursor:"pointer",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -2439,7 +2450,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               {d.assinaturaElaborador&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:T.accent+"18",color:T.accent}}>✍️</span>}
               {d.assinaturaRevisor&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:(T.blue||"#4fc3f7")+"18",color:T.blue||"#4fc3f7"}}>🔎</span>}
               {d.assinaturaAprovador&&<span style={{fontSize:10,padding:"2px 6px",borderRadius:12,background:(T.orange||"#ff9800")+"18",color:T.orange||"#ff9800"}}>✅</span>}
-              <BadgeTipoGD tipo={d.tipo}/>
+              <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos}/>
               <BadgeStatusGD status={d.status}/>
             </div>
           </div>
