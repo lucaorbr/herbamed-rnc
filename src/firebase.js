@@ -137,6 +137,13 @@ export const getAllRNCs = () => api("/api/rncs");
 
 export const subscribeRNCs = (cb) => poll(() => getAllRNCs().then(cb));
 
+export const getNotifications = () => api("/api/notifications");
+
+export const subscribeNotifications = (cb, onErr) => poll(() => getNotifications().then(cb), onErr);
+
+export const markNotificationsRead = (ids = null) =>
+  api("/api/notifications/mark-read", { method: "POST", body: { ids } });
+
 export const incrementCounter = async () => {
   const { value } = await api("/api/counters/increment-daily", { method: "POST", body: {} });
   return value;

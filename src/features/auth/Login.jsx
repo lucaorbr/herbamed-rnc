@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { loginUser, getUser } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { HerbamedLogo } from "../../shared/ui";
+import { APP_VERSION_LABEL } from "../../config/appVersion";
 
 export function Login({ onLogin }) {
   const T = useTheme();
@@ -144,7 +145,7 @@ export function Login({ onLogin }) {
         {/* Footer */}
         <div style={{ padding:"1.25rem 2.75rem", borderTop:"1px solid rgba(255,255,255,0.05)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.18)" }}>© {new Date().getFullYear()} Herbamed®</div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.18)" }}>SGQ v2.0 · Acesso restrito</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.18)" }}>SGQ {APP_VERSION_LABEL} � Acesso restrito</div>
         </div>
       </div>
       <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
