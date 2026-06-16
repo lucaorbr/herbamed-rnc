@@ -41,18 +41,28 @@ function parseUrl(req) {
   return new URL(req.url, `http://${req.headers.host || "localhost"}`);
 }
 
+function payloadTooLargeError() {
+  const error = new Error("Payload muito grande");
+  error.status = 413;
+  return error;
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
     const maxBytes = Number(process.env.JSON_BODY_LIMIT_BYTES || 80_000_000);
+    let done = false;
     req.on("data", chunk => {
+      if (done) return;
       body += chunk;
       if (Buffer.byteLength(body) > maxBytes) {
-        req.destroy();
-        reject(new Error("Payload muito grande"));
+        done = true;
+        req.pause();
+        reject(payloadTooLargeError());
       }
     });
     req.on("end", () => {
+      if (done) return;
       if (!body) return resolve({});
       try {
         resolve(JSON.parse(body));
@@ -68,16 +78,22 @@ function readBinaryBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
+    let done = false;
     req.on("data", chunk => {
+      if (done) return;
       total += chunk.length;
       if (total > maxBytes) {
-        req.destroy();
-        reject(new Error("Payload muito grande"));
+        done = true;
+        req.pause();
+        reject(payloadTooLargeError());
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => {
+      if (done) return;
+      resolve(Buffer.concat(chunks));
+    });
     req.on("error", reject);
   });
 }

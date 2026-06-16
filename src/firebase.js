@@ -207,17 +207,30 @@ export const uploadLocalFile = async (file) => {
     type: file.type || "application/octet-stream",
   });
 
-  const response = await fetch(`${API_BASE}/api/files?${qs.toString()}`, {
-    method: "POST",
-    credentials: "include",
-    headers,
-    body: file,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/api/files?${qs.toString()}`, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: file,
+    });
+  } catch (error) {
+    const networkError = new Error("Falha de rede ao enviar arquivo");
+    networkError.code = "network-error";
+    networkError.cause = error;
+    throw networkError;
+  }
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
   if (!response.ok) {
-    const error = new Error(data?.error || "Erro de comunicacao com o servidor");
+    const error = new Error(data?.error || `Erro de comunicacao com o servidor (${response.status})`);
     error.code = response.status === 401 ? "unauthenticated" : response.status === 403 ? "permission-denied" : "server-error";
     error.status = response.status;
     throw error;
