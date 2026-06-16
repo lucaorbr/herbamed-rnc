@@ -1875,7 +1875,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}><span className="btn-emoji">✏️ </span>Editar</button>
+                <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}>{selAnalise.conclusao==="Pendente"?<><span className="btn-emoji">📝 </span>Lançar Resultados</>:<><span className="btn-emoji">✏️ </span>Editar</>}</button>
                 <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}><span className="btn-emoji">📄 </span>PDF</button>
                 <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>
                 <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
@@ -1929,8 +1929,8 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 ))}
               </div>
             )}
-            <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a" }}>
-              {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
+            <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":selAnalise.conclusao==="Reprovado"?"#ff4f6a18":"#ffaa0018", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":selAnalise.conclusao==="Reprovado"?"#ff4f6a":"#ffaa00" }}>
+              {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":selAnalise.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE — aguardando lançamento de resultados"}
             </div>
             <DisposicaoSecao T={T} s={s} registro={selAnalise} onAprovar={()=>aprovarDisposicaoAnalise(selAnalise)} />
           </div>
