@@ -892,8 +892,39 @@ async function handleDocumentRender(req, res, pathname, url) {
 
     // Bloco de identificação (título grande)
     let y = H - 110;
-    draw(capa, titulo, 40, y, 22, fontB, verde);
-    y -= 26;
+    // Quebra o título em várias linhas para não transbordar/cortar na borda direita.
+    // Reduz o corpo da fonte se ainda assim ficar com muitas linhas.
+    const wrapText = (text, font, size, maxW) => {
+      const palavras = pdfSafe(text).split(/\s+/).filter(Boolean);
+      const linhas = [];
+      let atual = "";
+      for (const palavra of palavras) {
+        const tentativa = atual ? `${atual} ${palavra}` : palavra;
+        if (font.widthOfTextAtSize(tentativa, size) > maxW && atual) {
+          linhas.push(atual);
+          atual = palavra;
+        } else {
+          atual = tentativa;
+        }
+      }
+      if (atual) linhas.push(atual);
+      return linhas.length ? linhas : [""];
+    };
+    const tituloMaxW = W - 80; // margens de 40 de cada lado
+    let tituloSize = 22;
+    let tituloLinhas = wrapText(titulo, fontB, tituloSize, tituloMaxW);
+    // Se ficar muito alto (mais de 3 linhas), reduz a fonte até caber melhor.
+    while (tituloLinhas.length > 3 && tituloSize > 14) {
+      tituloSize -= 2;
+      tituloLinhas = wrapText(titulo, fontB, tituloSize, tituloMaxW);
+    }
+    const tituloLineH = Math.round(tituloSize * 1.2);
+    for (const linha of tituloLinhas) {
+      draw(capa, linha, 40, y, tituloSize, fontB, verde);
+      y -= tituloLineH;
+    }
+    // Espaço extra abaixo do título (equivalente ao recuo original)
+    y -= 26 - tituloLineH;
     draw(capa, `Departamento: ${deptoLbl}   ·   Status: ${status}`, 40, y, 11, fontR, cinzaC);
     y -= 16;
     draw(capa, `Data de elaboração: ${fmtDataBR(doc.criadoEm)}   ·   Próxima revisão: ${fmtDataBR(doc.proximaRevisao)}`, 40, y, 11, fontR, cinzaC);
