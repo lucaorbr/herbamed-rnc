@@ -1163,6 +1163,49 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     );
   }
 
+  // Modal de recusa (Revisor/Aprovador) — renderizado tanto na lista quanto no detalhe,
+  // já que os botões "Recusar" vivem na tela de detalhe (que tem return próprio).
+  const recusaModal = rejeicaoModal?.show && (() => {
+    const papelLabel = rejeicaoModal.papel === "aprovador" ? "Aprovador" : "Revisor";
+    const setItem = (i, campo, val) => setApontamentosForm(arr => arr.map((a,idx)=> idx===i ? { ...a, [campo]: val } : a));
+    const addItem = () => setApontamentosForm(arr => [...arr, { secao:"Geral", descricao:"" }]);
+    const rmItem  = (i) => setApontamentosForm(arr => arr.length>1 ? arr.filter((_,idx)=>idx!==i) : arr);
+    const temItem = apontamentosForm.some(a => (a.descricao||"").trim());
+    const fechar  = () => { setRejeicaoModal(null); setApontamentosForm([{ secao:"Geral", descricao:"" }]); };
+    return (
+      <div onClick={fechar} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+          <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>❌ Recusar documento ({papelLabel})</div>
+          <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{rejeicaoModal.doc?.codigo} Rev.{rejeicaoModal.doc?.versao} — {rejeicaoModal.doc?.titulo}</div>
+          <div style={{fontSize:11,color:T.text3,marginBottom:16}}>Aponte os erros/mudanças por seção. O documento volta para <strong>Rascunho</strong>, as assinaturas desta revisão são invalidadas e o elaborador corrige antes de reiniciar a rota.</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+            {apontamentosForm.map((a,i)=>(
+              <div key={i} style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:11,color:T.text3,fontWeight:700}}>#{i+1}</span>
+                  <select value={a.secao} onChange={e=>setItem(i,"secao",e.target.value)}
+                    style={{...s.inp,flex:1,fontSize:12,padding:"6px 8px",color:T.text,background:T.bg,border:`1px solid ${T.border}`}}>
+                    {SECOES_DOC.map(sec=> <option key={sec} value={sec}>{sec}</option>)}
+                  </select>
+                  {apontamentosForm.length>1 && <button style={{...s.btn,fontSize:11,padding:"4px 8px"}} onClick={()=>rmItem(i)}>🗑️</button>}
+                </div>
+                <textarea placeholder="Descreva o problema e o que precisa mudar" value={a.descricao} onChange={e=>setItem(i,"descricao",e.target.value)}
+                  style={{...s.inp,width:"100%",fontSize:13,padding:"8px 10px",boxSizing:"border-box",minHeight:64,fontFamily:"inherit",color:T.text,background:T.bg,border:`1px solid ${T.border}`}} />
+              </div>
+            ))}
+          </div>
+          <button style={{...s.btn,fontSize:12,marginBottom:16}} onClick={addItem}>＋ Adicionar apontamento</button>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            <button style={s.btn} onClick={fechar}>Cancelar</button>
+            <button style={{...s.btnD,opacity:!temItem?0.5:1,cursor:!temItem?"not-allowed":"pointer"}} disabled={!temItem} onClick={()=>recusarDoc(rejeicaoModal.doc, rejeicaoModal.papel)}>
+              ❌ Recusar e devolver
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
   /* ── DETALHE ── */
   if (view==="detalhe" && sel) {
     const d = docs.find(x=>x.id===sel.id)||sel;
@@ -1878,6 +1921,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             ))}
           </div>
         )}
+        {recusaModal}
       </div>
     );
   }
@@ -2493,47 +2537,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
       }<Pagination page={_pgGD} total={_totGD} setPage={_setPgGD}/>
       </>
       )}
-      {/* ── MODAL DE RECUSA (Revisor/Aprovador) — apontamentos estruturados ── */}
-      {rejeicaoModal?.show && (() => {
-        const papelLabel = rejeicaoModal.papel === "aprovador" ? "Aprovador" : "Revisor";
-        const setItem = (i, campo, val) => setApontamentosForm(arr => arr.map((a,idx)=> idx===i ? { ...a, [campo]: val } : a));
-        const addItem = () => setApontamentosForm(arr => [...arr, { secao:"Geral", descricao:"" }]);
-        const rmItem  = (i) => setApontamentosForm(arr => arr.length>1 ? arr.filter((_,idx)=>idx!==i) : arr);
-        const temItem = apontamentosForm.some(a => (a.descricao||"").trim());
-        const fechar  = () => { setRejeicaoModal(null); setApontamentosForm([{ secao:"Geral", descricao:"" }]); };
-        return (
-        <div onClick={fechar} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
-            <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>❌ Recusar documento ({papelLabel})</div>
-            <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{rejeicaoModal.doc?.codigo} Rev.{rejeicaoModal.doc?.versao} — {rejeicaoModal.doc?.titulo}</div>
-            <div style={{fontSize:11,color:T.text3,marginBottom:16}}>Aponte os erros/mudanças por seção. O documento volta para <strong>Rascunho</strong>, as assinaturas desta revisão são invalidadas e o elaborador corrige antes de reiniciar a rota.</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
-              {apontamentosForm.map((a,i)=>(
-                <div key={i} style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                    <span style={{fontSize:11,color:T.text3,fontWeight:700}}>#{i+1}</span>
-                    <select value={a.secao} onChange={e=>setItem(i,"secao",e.target.value)}
-                      style={{...s.inp,flex:1,fontSize:12,padding:"6px 8px",color:T.text,background:T.bg,border:`1px solid ${T.border}`}}>
-                      {SECOES_DOC.map(sec=> <option key={sec} value={sec}>{sec}</option>)}
-                    </select>
-                    {apontamentosForm.length>1 && <button style={{...s.btn,fontSize:11,padding:"4px 8px"}} onClick={()=>rmItem(i)}>🗑️</button>}
-                  </div>
-                  <textarea placeholder="Descreva o problema e o que precisa mudar" value={a.descricao} onChange={e=>setItem(i,"descricao",e.target.value)}
-                    style={{...s.inp,width:"100%",fontSize:13,padding:"8px 10px",boxSizing:"border-box",minHeight:64,fontFamily:"inherit",color:T.text,background:T.bg,border:`1px solid ${T.border}`}} />
-                </div>
-              ))}
-            </div>
-            <button style={{...s.btn,fontSize:12,marginBottom:16}} onClick={addItem}>＋ Adicionar apontamento</button>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button style={s.btn} onClick={fechar}>Cancelar</button>
-              <button style={{...s.btnD,opacity:!temItem?0.5:1,cursor:!temItem?"not-allowed":"pointer"}} disabled={!temItem} onClick={()=>recusarDoc(rejeicaoModal.doc, rejeicaoModal.papel)}>
-                ❌ Recusar e devolver
-              </button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {recusaModal}
     </div>
   );
 }
