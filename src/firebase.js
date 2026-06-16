@@ -196,26 +196,34 @@ export const runArecoSync = () =>
   api("/api/areco/sync/run", { method: "POST", body: {} });
 
 export const uploadLocalFile = async (file) => {
-  const data = await fileToBase64(file);
-  return api("/api/files", {
-    method: "POST",
-    body: {
-      name: file.name,
-      type: file.type || "application/octet-stream",
-      size: file.size,
-      data,
-    },
-  });
-};
+  const token = localStorage.getItem(TOKEN_KEY);
+  const headers = {
+    "Content-Type": file.type || "application/octet-stream",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error || new Error("Erro ao ler arquivo"));
-    reader.readAsDataURL(file);
+  const qs = new URLSearchParams({
+    name: file.name,
+    type: file.type || "application/octet-stream",
   });
-}
+
+  const response = await fetch(`${API_BASE}/api/files?${qs.toString()}`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: file,
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const error = new Error(data?.error || "Erro de comunicacao com o servidor");
+    error.code = response.status === 401 ? "unauthenticated" : response.status === 403 ? "permission-denied" : "server-error";
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+};
 
 function poll(fn, onErr, intervalMs = 5000) {
   let alive = true;

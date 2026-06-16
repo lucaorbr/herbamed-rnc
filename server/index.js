@@ -64,6 +64,24 @@ function readBody(req) {
   });
 }
 
+function readBinaryBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    req.on("data", chunk => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        req.destroy();
+        reject(new Error("Payload muito grande"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
 function sendBuffer(res, status, buffer, headers = {}) {
   res.writeHead(status, {
     "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
@@ -479,13 +497,25 @@ async function handleCounters(req, res, pathname) {
 async function handleFiles(req, res, pathname) {
   if (pathname === "/api/files" && req.method === "POST") {
     const user = await requireUser(req);
-    const body = await readBody(req);
-    const name = String(body.name || "arquivo").slice(0, 255);
-    const type = String(body.type || "application/octet-stream").slice(0, 160);
-    const encoded = String(body.data || "");
-    const base64 = encoded.includes(",") ? encoded.split(",").pop() : encoded;
-    const buffer = Buffer.from(base64, "base64");
     const maxFileBytes = Number(process.env.FILE_UPLOAD_MAX_BYTES || 50 * 1024 * 1024);
+    const contentType = String(req.headers["content-type"] || "");
+    let name = "arquivo";
+    let type = "application/octet-stream";
+    let buffer = Buffer.alloc(0);
+
+    if (contentType.includes("application/json")) {
+      const body = await readBody(req);
+      name = String(body.name || "arquivo").slice(0, 255);
+      type = String(body.type || "application/octet-stream").slice(0, 160);
+      const encoded = String(body.data || "");
+      const base64 = encoded.includes(",") ? encoded.split(",").pop() : encoded;
+      buffer = Buffer.from(base64, "base64");
+    } else {
+      const url = parseUrl(req);
+      name = String(url.searchParams.get("name") || "arquivo").slice(0, 255);
+      type = String(url.searchParams.get("type") || req.headers["content-type"] || "application/octet-stream").slice(0, 160);
+      buffer = await readBinaryBody(req, maxFileBytes);
+    }
 
     if (!buffer.length) return sendJson(res, 400, { error: "Arquivo vazio ou invalido" });
     if (buffer.length > maxFileBytes) return sendJson(res, 413, { error: "Arquivo maior que o limite permitido" });
