@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.2.0`
+- Versao atual: `2.3.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -186,6 +186,12 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - **Sem abertura de RNC** (devolução em rota = retrabalho, não NC formal)
 - Banner/checklist na tela do documento mostra os apontamentos ao elaborador; `apontamentos` é limpo quando o elaborador reassina
 - Novo campo `generic_documents.data.apontamentos`: `[{ id, autor, autorPapel, data, secao, descricao, resolvido }]`
+
+### Documentos — Histórico de revisão na capa ✅ (v2.3.0)
+- Documentos com capa exibem uma tabela curta de histórico de revisão na capa renderizada.
+- Primeira emissão aparece automaticamente como `Rev.00 | Emissão inicial`.
+- Ao iniciar Rev.01 ou maior, o fluxo exige `itemModificado` e `descricao` da alteração.
+- Modelos sem capa continuam inalterados.
 
 ### Seção 13: RNC — Link público para fornecedor ✅ (PR #44)
 - Fornecedor responde RNC via link compartilhável

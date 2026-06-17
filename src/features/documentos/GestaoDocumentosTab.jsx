@@ -433,7 +433,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const SECOES_DOC = ["Geral","Objetivo","Alcance","Responsabilidades","Definições","Procedimento","Inf. Complementares","Referências","Registros","Anexos","Arquivo anexado (PDF)"];
   const [rejeicaoModal, setRejeicaoModal] = useState(null); // { doc, papel, show }
   const [apontamentosForm, setApontamentosForm] = useState([{ secao:"Geral", descricao:"" }]);
-  const entradaVazia = { versao:"", data:tod(), motivo:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
+  const entradaVazia = { versao:"", data:tod(), motivo:"", itemModificado:"", descricao:"", responsavel:user?.name||"", aprovador:"" };
   const [novaEntrada, setNovaEntrada] = useState(entradaVazia);
   const [editEntradaIdx, setEditEntradaIdx] = useState(null);
   const setE = (k,v) => setNovaEntrada(p=>({...p,[k]:v}));
@@ -789,17 +789,32 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const versaoAtual = doc.versao || "01";
     const novaVersao  = String(parseInt(versaoAtual,10)+1).padStart(2,"0");
     const motivo      = window.prompt("Motivo da revisão:", "") || "";
-    const descricao   = window.prompt("Descrição das alterações realizadas:", "") || "";
+    const itemModificadoRaw = window.prompt("Item modificado nesta revisão (ex: Item 5.2, Anexo I, Fluxo de aprovação):", "");
+    if (itemModificadoRaw === null) return;
+    const itemModificado = itemModificadoRaw.trim();
+    if (!itemModificado) {
+      alert("Informe o item modificado para iniciar a nova revisão.");
+      return;
+    }
+    const descricaoRaw = window.prompt("Descrição da alteração desta revisão:", "");
+    if (descricaoRaw === null) return;
+    const descricao = descricaoRaw.trim();
+    if (!descricao) {
+      alert("Informe a descrição da alteração para iniciar a nova revisão.");
+      return;
+    }
     const aprovador   = window.prompt("Aprovador desta revisão:", "") || "";
     // Snapshot do conteúdo completo da versão que está sendo arquivada (rastreabilidade BPF).
     const snapshotConteudo = { titulo: doc.titulo, etapas: doc.etapas||[], materiais: doc.materiais||[], arquivo: doc.arquivo || null, arquivoFonte: doc.arquivoFonte || null };
     CAPITULOS_GD.filter(c=>!c.special).forEach(c=>{ snapshotConteudo[c.id] = doc[c.id] ?? ""; });
     const historico   = [...(doc.historicoRevisoes||[]), {
       versao: versaoAtual,
+      versaoAlvo: novaVersao,
       status: doc.status,
       data:   doc.atualizadoEm||doc.criadoEm,
       responsavel: doc.atualizadoPor||doc.criadoPor,
       motivo,
+      itemModificado,
       descricao,
       aprovador,
       conteudo: snapshotConteudo,
@@ -1443,12 +1458,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versao}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versaoAlvo||h.versao}</span>
                         {h.status&&<BadgeStatusGD status={h.status}/>}
                       </div>
                       <div style={{fontSize:11,color:T.text2,marginTop:2}}>
                         {fmt(h.data)} · {h.responsavel||"—"}{h.aprovador?` · Aprov.: ${h.aprovador}`:""}
                       </div>
+                      {h.itemModificado&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Item modificado: {h.itemModificado}</div>}
                       {h.motivo&&<div style={{fontSize:11,color:T.text3,marginTop:2,fontStyle:"italic"}}>{h.motivo}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
@@ -2180,11 +2196,16 @@ ${docHtml.slice(0,9000)}`}]})
                     </div>
                     <F lbl="Motivo da revisão" ch={<Inp placeholder="Ex: Adequação regulatória, Melhoria de processo, Correção de erro..." value={novaEntrada.motivo} onChange={e=>setE("motivo",e.target.value)} />} />
                     <div style={{marginTop:8}}>
+                      <F lbl="Item modificado" ch={<Inp placeholder="Ex: Item 5.2, Anexo I, Fluxo de aprovação..." value={novaEntrada.itemModificado} onChange={e=>setE("itemModificado",e.target.value)} />} />
+                    </div>
+                    <div style={{marginTop:8}}>
                       <F lbl="Descrição das alterações" ch={<textarea rows={3} placeholder="Descreva detalhadamente o que foi alterado nesta revisão..." value={novaEntrada.descricao} onChange={e=>setE("descricao",e.target.value)} style={{width:"100%",borderRadius:8,border:`1px solid ${T.border}`,padding:"8px 10px",fontSize:12,color:T.text,background:T.bg,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"}} />} />
                     </div>
                     <div style={{display:"flex",gap:8,marginTop:10}}>
                       <button style={s.btnA} onClick={()=>{
                         if(!novaEntrada.versao.trim()||!novaEntrada.data){alert("Preencha ao menos Revisão e Data.");return;}
+                        if(novaEntrada.versao.trim()!=="00" && !novaEntrada.itemModificado.trim()){alert("Informe o item modificado para revisões 01 ou maiores.");return;}
+                        if(novaEntrada.versao.trim()!=="00" && !novaEntrada.descricao.trim()){alert("Informe a descrição da alteração para revisões 01 ou maiores.");return;}
                         const entry={...novaEntrada};
                         if(editEntradaIdx!==null){
                           const arr=[...(form.historicoRevisoes||[])];
@@ -2206,7 +2227,7 @@ ${docHtml.slice(0,9000)}`}]})
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:T.surf}}>
-                          {["Rev.","Data","Motivo","Descrição das alterações","Responsável","Aprovador",""].map((h,i)=>(
+                          {["Rev.","Data","Motivo","Item modificado","Descrição das alterações","Responsável","Aprovador",""].map((h,i)=>(
                             <th key={i} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                           ))}
                         </tr></thead>
@@ -2216,6 +2237,7 @@ ${docHtml.slice(0,9000)}`}]})
                               <td style={{padding:"8px 10px",fontWeight:700,color:T.accent,whiteSpace:"nowrap"}}>Rev.{h.versao}</td>
                               <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{fmt(h.data)}</td>
                               <td style={{padding:"8px 10px",color:T.text2,maxWidth:150}}>{h.motivo||"—"}</td>
+                              <td style={{padding:"8px 10px",color:T.text2,maxWidth:160}}>{h.itemModificado||"—"}</td>
                               <td style={{padding:"8px 10px",color:T.text,maxWidth:280,lineHeight:1.5}}>{h.descricao||"—"}</td>
                               <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.responsavel||"—"}</td>
                               <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{h.aprovador||"—"}</td>
