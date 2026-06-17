@@ -755,6 +755,40 @@ function fmtDataBR(value) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(value);
 }
 
+function normalizarHistoricoCapa(doc) {
+  const historico = Array.isArray(doc?.historicoRevisoes) ? doc.historicoRevisoes : [];
+  const rows = [{
+    versao: "00",
+    data: doc?.criadoEm || doc?.atualizadoEm || "",
+    item: "Documento completo",
+    descricao: "Emissão inicial",
+  }];
+
+  historico.forEach((h) => {
+    const baseVersao = String(h.versao || "").match(/^\d+$/)
+      ? String(parseInt(h.versao, 10) + 1).padStart(2, "0")
+      : (h.versao || "");
+    const versao = h.versaoAlvo || h.revisao || baseVersao;
+    const item = h.itemModificado || h.item || h.secao || h.motivo || "";
+    const descricao = h.descricao || h.alteracao || h.motivo || "";
+    if (!versao && !item && !descricao) return;
+    rows.push({
+      versao,
+      data: h.data || h.atualizadoEm || "",
+      item: item || "Não informado",
+      descricao: descricao || "Não informado",
+    });
+  });
+
+  const vistos = new Set();
+  return rows.filter((row) => {
+    const key = `${row.versao}|${row.data}|${row.item}|${row.descricao}`;
+    if (vistos.has(key)) return false;
+    vistos.add(key);
+    return true;
+  });
+}
+
 async function handleDistributionLog(req, res, pathname, url) {
   if (pathname !== "/api/distribution-log" || req.method !== "GET") return false;
   await requireUser(req);
@@ -947,6 +981,43 @@ async function handleDocumentRender(req, res, pathname, url) {
         draw(capa, v, colX[c], y - 13, 11, fontR, cinzaC);
       }
       y -= 34;
+    }
+
+    // Histórico de revisão na capa: resumo controlado, sem afetar modelos sem capa.
+    y -= 4;
+    draw(capa, "HISTÓRICO DE REVISÃO", 40, y, 11, fontB, verde);
+    capa.drawLine({ start: { x: 40, y: y - 5 }, end: { x: W - 40, y: y - 5 }, thickness: 1, color: verde });
+    y -= 20;
+
+    const historicoCapa = normalizarHistoricoCapa(doc);
+    const rowH = 22;
+    const colRev = 40, colData = 88, colItem = 162, colDesc = 330;
+    const tableW = W - 80;
+    const maxRows = Math.max(1, Math.min(historicoCapa.length, Math.floor((y - 250) / rowH)));
+    const rowsCapa = historicoCapa.slice(-maxRows);
+
+    capa.drawRectangle({ x: 40, y: y - 16, width: tableW, height: 18, color: rgb(0.94, 0.97, 0.94), borderColor: verde, borderWidth: 0.5 });
+    draw(capa, "REV.", colRev + 5, y - 10, 7, fontB, verde);
+    draw(capa, "DATA", colData + 5, y - 10, 7, fontB, verde);
+    draw(capa, "ITEM MODIFICADO", colItem + 5, y - 10, 7, fontB, verde);
+    draw(capa, "DESCRIÇÃO", colDesc + 5, y - 10, 7, fontB, verde);
+    y -= 18;
+
+    rowsCapa.forEach((h, idx) => {
+      const bg = idx % 2 === 0 ? rgb(0.99, 1, 0.99) : rgb(0.97, 0.99, 0.97);
+      capa.drawRectangle({ x: 40, y: y - rowH + 2, width: tableW, height: rowH, color: bg, borderColor: rgb(0.82, 0.88, 0.82), borderWidth: 0.4 });
+      const item = wrapText(h.item || "", fontR, 7, 150)[0] || "";
+      const descricao = wrapText(h.descricao || "", fontR, 7, 178)[0] || "";
+      draw(capa, `Rev.${h.versao || "—"}`, colRev + 5, y - 10, 7, fontB, cinzaC);
+      draw(capa, fmtDataBR(h.data), colData + 5, y - 10, 7, fontR, cinzaC);
+      draw(capa, item, colItem + 5, y - 10, 7, fontR, cinzaC);
+      draw(capa, descricao, colDesc + 5, y - 10, 7, fontR, cinzaC);
+      y -= rowH;
+    });
+
+    if (historicoCapa.length > rowsCapa.length) {
+      draw(capa, `+ ${historicoCapa.length - rowsCapa.length} registro(s) adicional(is) no histórico do sistema.`, 40, y - 4, 7, fontR, cinza);
+      y -= 14;
     }
 
     // Seção "Assinaturas Eletrônicas" — 3 caixas lado a lado
