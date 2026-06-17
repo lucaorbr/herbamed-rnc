@@ -1341,6 +1341,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
   const [resultados, setResultados] = useState([]);
   const [coa, setCoa] = useState(null);
   const [coaUploading, setCoaUploading] = useState(false);
+  const [modalLancar, setModalLancar] = useState(false);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -1400,7 +1401,9 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     const reprovado = ncs.length > 0;
     const isEditando = selAnalise?._editando === true;
     const num = isEditando ? (selAnalise.num || `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`) : `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
+    const { _editando: _ed, ...baseAnalise } = isEditando ? selAnalise : {};
     const analise = {
+      ...baseAnalise,
       id: isEditando ? selAnalise.id : Date.now(), num,
       materialId: matSel.id, materialNome: matSel.nome, materialTipo: matSel.tipo,
       ...form,
@@ -1424,6 +1427,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
       }
     }
     setView("lista");
+    setModalLancar(false);
     setMatSel(null);
     setSelAnalise(null);
     setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" });
@@ -1456,7 +1460,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     setForm({ fornecedor:a.fornecedor||"", lote:a.lote||"", qtdRecebidaValor: a.qtdRecebidaValor || _q.valor, qtdRecebidaUnidade: a.qtdRecebidaUnidade || _q.unidade, qtdRecebida:a.qtdRecebida||"", nf:a.nf||"", dataRecebimento:a.dataRecebimento||tod(), dataAnalise:a.dataAnalise||tod(), resp:a.resp||user.name, obs:a.obs||"" });
     setCoa(a.coa||null);
     setSelAnalise({ ...a, _editando: true });
-    setView("nova");
+    setModalLancar(true);
     toast_("Editando análise — salve para registrar as alterações.", "green");
   };
 
@@ -1589,13 +1593,16 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
   // ── NOVA ANÁLISE ──
-  if(view==="nova") return (
+  const renderNovaForm = (modo="page") => (
     <div>
+      {modo==="page" && (
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
         <button style={s.btn} onClick={()=>{ setView("lista"); setSelAnalise(null); }}>← Voltar</button>
         <div style={{ fontSize:15, fontWeight:700, color:T.text }}>Nova Ficha de Análise</div>
       </div>
+      )}
 
+      {modo==="page" && (<>
       {/* Seleção do material */}
       <div style={s.card}>
         <SecTitle icon="📦" ch="Selecionar material" />
@@ -1641,6 +1648,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
           );
         })())}
       </div>
+      </>)}
 
       {matSel && <>
         {/* Dados do recebimento */}
@@ -1794,12 +1802,14 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
         <F lbl="Observações gerais" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Observações sobre o recebimento ou análise..." />} />
 
         <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem", marginTop:"1rem" }}>
-          <button style={s.btn} onClick={()=>{ setView("lista"); setSelAnalise(null); }}>Cancelar</button>
+          <button style={s.btn} onClick={()=>{ if(modo==="modal"){ setModalLancar(false); } else { setView("lista"); setSelAnalise(null); } }}>Cancelar</button>
           <button style={s.btnA} onClick={salvar}>💾 Salvar análise →</button>
         </div>
       </>}
     </div>
   );
+
+  if(view==="nova") return renderNovaForm("page");
 
   // ── LISTA ──
   return (
@@ -1866,9 +1876,9 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
       )}
 
       {/* Modal detalhe */}
-      {selAnalise && (
+      {selAnalise && !modalLancar && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.82)", backdropFilter:"blur(6px)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }} onClick={e=>e.target===e.currentTarget&&setSelAnalise(null)}>
-          <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"1.75rem", maxWidth:760, width:"100%", maxHeight:"90vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
+          <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"2rem 2.5rem", maxWidth:1200, width:"100%", maxHeight:"94vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
               <div>
                 <div style={{ fontSize:20, fontWeight:700 }}>{selAnalise.num} — {selAnalise.materialNome}</div>
@@ -1933,6 +1943,22 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
               {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":selAnalise.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE — aguardando lançamento de resultados"}
             </div>
             <DisposicaoSecao T={T} s={s} registro={selAnalise} onAprovar={()=>aprovarDisposicaoAnalise(selAnalise)} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal de lançamento de resultados (material já selecionado) */}
+      {modalLancar && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.82)", backdropFilter:"blur(6px)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }} onClick={e=>e.target===e.currentTarget&&setModalLancar(false)}>
+          <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"2rem 2.5rem", maxWidth:1200, width:"100%", maxHeight:"94vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
+              <div>
+                <div style={{ fontSize:18, fontWeight:700, color:T.text }}>📝 Lançar Resultados — {matSel?.nome || selAnalise?.materialNome}</div>
+                {selAnalise && <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.num} · Lote: {selAnalise.lote||"—"}</div>}
+              </div>
+              <button onClick={()=>setModalLancar(false)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
+            </div>
+            {renderNovaForm("modal")}
           </div>
         </div>
       )}
