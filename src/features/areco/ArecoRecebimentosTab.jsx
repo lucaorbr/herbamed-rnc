@@ -208,63 +208,72 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
         </Sel>
       </div>
 
-      <div style={s.card}>
-        {loading ? (
+      {loading ? (
+        <div style={s.card}>
           <div style={{ color:T.text2, padding:"2rem", textAlign:"center" }}>Carregando recebimentos...</div>
-        ) : filtered.length === 0 ? (
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={s.card}>
           <div style={{ color:T.text3, padding:"2rem", textAlign:"center" }}>Nenhum recebimento encontrado.</div>
-        ) : (
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1320 }}>
-              <thead>
-                <tr>
-                  {["NF","Recebimento","Fornecedor","Referencia Areco","Descricao do item","Tipo","Lote","Quantidade","Status","Acao"].map(h => (
-                    <th key={h} style={{ textAlign:"left", fontSize:11, color:T.text3, borderBottom:`1px solid ${T.border}`, padding:"8px 10px" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id} style={{ borderBottom:`1px solid ${T.border}` }}>
-                    <td style={{ padding:"10px", color:T.text, fontWeight:700 }}>{item.nf_numero || "-"}</td>
-                    <td style={{ padding:"10px", color:T.text2 }}>{fmtDateTime(item.data_entrada)}</td>
-                    <td style={{ padding:"10px", color:T.text2 }}>
-                      <div style={{ fontWeight:700, color:T.text }}>{item.fornecedor_nome || "-"}</div>
-                      <div style={{ fontSize:11, color:T.text3 }}>{item.fornecedor_documento || item.fornecedor_codigo || ""}</div>
-                    </td>
-                    <td style={{ padding:"10px", color:T.text }}>
-                      <div style={{ fontWeight:700 }}>{item.produto_referencia || item.produto_codigo || "-"}</div>
-                      <div style={{ fontSize:11, color:T.text3 }}>ID Areco: {item.produto_id_areco || item.payload?.produto_id_areco || item.produto_codigo || "-"}</div>
-                    </td>
-                    <td style={{ padding:"10px", color:T.text2 }}>
-                      <div style={{ fontWeight:700, color:T.text }}>{item.produto_descricao || item.produto_nome || "-"}</div>
-                      <div style={{ fontSize:11, color:T.text3 }}>{[item.produto_subgrupo, item.produto_categoria].filter(Boolean).join(" / ")}</div>
-                    </td>
-                    <td style={{ padding:"10px", color:T.text2 }}>
-                      <div style={{ fontWeight:700, color:item.escopo_qualidade === false ? T.red : T.text }}>{item.tipo_material || inferMaterialType(item)}</div>
-                      <div style={{ fontSize:11, color:T.text3 }}>{item.motivo_filtro || ""}</div>
-                    </td>
-                    <td style={{ padding:"10px", color:T.text2 }}>{item.lote || "-"}</td>
-                    <td style={{ padding:"10px", color:T.text2 }}>{item.quantidade || "-"} {item.unidade || ""}</td>
-                    <td style={{ padding:"10px" }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:T.accent, background:T.accentDim, borderRadius:20, padding:"3px 9px" }}>{item.status}</span>
-                    </td>
-                    <td style={{ padding:"10px" }}>
-                      {item.status === "fora_escopo" || item.escopo_qualidade === false ? (
-                        <span style={{ color:T.text3, fontSize:12, fontWeight:700 }}>Fora do CQ</span>
-                      ) : (
-                        <button style={s.btnA} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
-                          Iniciar analise
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:12 }}>
+          {filtered.map(item => {
+            const foraEscopo = item.status === "fora_escopo" || item.escopo_qualidade === false;
+            return (
+              <div key={item.id} style={{ ...s.card, margin:0, display:"flex", flexDirection:"column", gap:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>NF</div>
+                    <div style={{ fontSize:18, fontWeight:800, color:T.text }}>{item.nf_numero || "-"}</div>
+                  </div>
+                  <span style={{ fontSize:11, fontWeight:700, color:foraEscopo ? T.red : T.accent, background:foraEscopo ? (T.redDim || T.accentDim) : T.accentDim, borderRadius:20, padding:"3px 9px", whiteSpace:"nowrap" }}>{item.status}</span>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight:700, color:T.text }}>{item.produto_descricao || item.produto_nome || "-"}</div>
+                  <div style={{ fontSize:11, color:T.text3 }}>{[item.produto_subgrupo, item.produto_categoria].filter(Boolean).join(" / ")}</div>
+                </div>
+
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, fontSize:12 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Fornecedor</div>
+                    <div style={{ fontWeight:700, color:T.text }}>{item.fornecedor_nome || "-"}</div>
+                    <div style={{ fontSize:11, color:T.text3 }}>{item.fornecedor_documento || item.fornecedor_codigo || ""}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Referencia Areco</div>
+                    <div style={{ fontWeight:700, color:T.text }}>{item.produto_referencia || item.produto_codigo || "-"}</div>
+                    <div style={{ fontSize:11, color:T.text3 }}>ID: {item.produto_id_areco || item.payload?.produto_id_areco || item.produto_codigo || "-"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Tipo</div>
+                    <div style={{ fontWeight:700, color:foraEscopo ? T.red : T.text }}>{item.tipo_material || inferMaterialType(item)}</div>
+                    <div style={{ fontSize:11, color:T.text3 }}>{item.motivo_filtro || ""}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:T.text3, textTransform:"uppercase", fontWeight:700 }}>Quantidade</div>
+                    <div style={{ fontWeight:700, color:T.text }}>{item.quantidade || "-"} {item.unidade || ""}</div>
+                    <div style={{ fontSize:11, color:T.text3 }}>Lote: {item.lote || "-"}</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize:11, color:T.text3 }}>Recebimento: {fmtDateTime(item.data_entrada)}</div>
+
+                <div style={{ marginTop:"auto", paddingTop:4 }}>
+                  {foraEscopo ? (
+                    <span style={{ color:T.text3, fontSize:12, fontWeight:700 }}>Fora do CQ</span>
+                  ) : (
+                    <button style={{ ...s.btnA, width:"100%" }} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
+                      Iniciar analise
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
