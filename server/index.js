@@ -993,7 +993,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     const rowH = 22;
     const colRev = 40, colData = 88, colItem = 162, colDesc = 330;
     const tableW = W - 80;
-    const maxRows = Math.max(1, Math.min(historicoCapa.length, Math.floor((y - 250) / rowH)));
+    const maxRows = Math.max(1, Math.min(historicoCapa.length, Math.floor((y - 270) / rowH)));
     const rowsCapa = historicoCapa.slice(-maxRows);
 
     capa.drawRectangle({ x: 40, y: y - 16, width: tableW, height: 18, color: rgb(0.94, 0.97, 0.94), borderColor: verde, borderWidth: 0.5 });
@@ -1021,7 +1021,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     }
 
     // Seção "Assinaturas Eletrônicas" — 3 caixas lado a lado
-    y -= 6;
+    y -= 18;
     draw(capa, "ASSINATURAS ELETRÔNICAS", 40, y, 11, fontB, verde);
     capa.drawLine({ start: { x: 40, y: y - 5 }, end: { x: W - 40, y: y - 5 }, thickness: 1, color: verde });
     y -= 18;
