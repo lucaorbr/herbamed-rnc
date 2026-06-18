@@ -153,7 +153,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
           <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Adicionar item" ou use o gerador de IA</div>
         </div>
       ) : (
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden", marginBottom:"1rem" }}>
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto", marginBottom:"1rem" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:T.surf }}>

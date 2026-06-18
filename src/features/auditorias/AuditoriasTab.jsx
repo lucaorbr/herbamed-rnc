@@ -140,7 +140,7 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
       </div>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
         {Object.entries(STATUS_AUD).map(([st,c])=>(
           <div key={st} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
             <div style={{ fontSize:22, fontWeight:700, color:c }}>{auditorias.filter(a=>a.status===st).length}</div>

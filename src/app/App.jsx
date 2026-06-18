@@ -406,6 +406,7 @@ export default function App() {
           .home-body{display:grid;grid-template-columns:1fr 340px;gap:1.5rem;}
           .home-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
           .home-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+          .kpi-grid{display:grid;}
           @media(max-width:768px){
             .header-kpis{display:none!important;}
             .sidebar-desktop{display:none!important;}
@@ -415,6 +416,7 @@ export default function App() {
             .home-body{grid-template-columns:1fr!important;}
             .home-kpis{grid-template-columns:repeat(2,1fr)!important;}
             .home-actions{grid-template-columns:repeat(2,1fr)!important;}
+            .kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
             .sidebar-nav.mobile-open{
               display:flex!important;
               width:270px!important;

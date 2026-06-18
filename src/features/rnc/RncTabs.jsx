@@ -390,7 +390,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
         </div>
       ) : (
         <>
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr>
@@ -1449,7 +1449,7 @@ export function DashTab({ rncs }) {
       {dashTab==="kpis"&&(
         <>
           {/* Cards principais */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
+          <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
             {[
               {l:"Taxa de Eficácia",n:`${taxaEf}%`,c:taxaEf>=70?T.accent:"#ff8c42",sub:`${ef}/${tot} RNCs resolvidas`,icon:"✅",trend:taxaEf>=70?"↑ Bom":"↓ Atenção"},
               {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Requerem ação",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
@@ -1470,7 +1470,7 @@ export function DashTab({ rncs }) {
           </div>
 
           {/* KPIs secundários */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
+          <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
             {[
               ["Total RNCs",tot,T.accent],
               ["Críticas",critica,"#ff4f6a"],
@@ -1881,7 +1881,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       </div>
 
       {/* KPI CARDS */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
         {[
           { l:"Total no período", n:total, c:T.accent, sub:"RNCs registradas", icon:"📋" },
           { l:"Taxa de eficácia", n:`${taxaEficacia}%`, c:taxaEficacia>=70?T.accent:"#ff8c42", sub:`${eficaz} de ${total} resolvidas`, icon:"✅" },
@@ -1903,7 +1903,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       </div>
 
       {/* BARRA EXTRA — tempo médio + severidade */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12, marginBottom:"1rem" }}>
         {[
           { l:"Críticas", n:critica, c:"#ff4f6a" },
           { l:"Maiores", n:maior, c:"#ff8c42" },

@@ -115,7 +115,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   return (
     <div>
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+      <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
         {[
           { l: "Total de desvios", n: desvios.length, c: T.accent },
           { l: "Em aberto", n: abertos, c: "#4fc3f7" },
@@ -148,7 +148,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       </div>
 
       {/* Tabela */}
-      <div style={{ ...s.card, padding: 0, overflow: "hidden" }}>
+      <div style={{ ...s.card, padding: 0, overflowX: "auto" }}>
         {filtrados.length === 0 ? (
           <div style={{ padding: "3rem", textAlign: "center", color: T.text3, fontSize: 13 }}>Nenhum desvio registrado ainda.</div>
         ) : (

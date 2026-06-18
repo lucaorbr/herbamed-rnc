@@ -552,7 +552,7 @@ ${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</
           <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Nova Ficha de Análise" para começar</div>
         </div>
       ) : (
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:T.surf }}>
@@ -1092,7 +1092,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
             ))}
           </div>
 
-          <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+          <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr style={{ background:T.surf }}>
                 {["Material","Tipo","Fornecedor padrão","Ensaios","Referência",""].map(h=>(
@@ -1634,7 +1634,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                 ))}
               </div>
               {termo && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{matFiltrados.length} resultado{matFiltrados.length!==1?"s":""} para "{buscaMat}"</div>}
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+              <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
                 {matFiltrados.map(m=>(
                   <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
                     <div style={{ fontSize:13, fontWeight:600, color:matSel?.id===m.id?T.accent:T.text }}>{m.nome}</div>
@@ -1838,7 +1838,7 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
         </div>
       ) : (
         <>
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead><tr style={{ background:T.surf }}>
               {["Nº RA","Material","Fornecedor","Lote","Data","Analista","Conclusão",""].map(h=>(
@@ -2039,7 +2039,7 @@ export function CQDashboardTab() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1.5rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1.5rem" }}>
         {[
           { l:"Total de análises",  n:total,      c:T.accent,  icon:"📋", sub:"No período selecionado" },
           { l:"Taxa de aprovação",  n:`${taxaAprov}%`, c:taxaAprov>=80?T.accent:"#ff8c42", icon:"✅", sub:`${aprovadas} aprovadas` },

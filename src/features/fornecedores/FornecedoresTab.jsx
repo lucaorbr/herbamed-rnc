@@ -117,7 +117,7 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
       )}
 
       {/* Stats resumo */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
         {[
           ["Total",       fornecedores.length,                                    T.accent],
           ["Ativos",      fornecedores.filter(x=>x.status==="Ativo").length,       T.accent],
@@ -139,7 +139,7 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
           <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Novo Fornecedor" para começar</div>
         </div>
       ) : (
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
+        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:T.surf }}>
@@ -239,7 +239,7 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
                 {sel.obs && <div style={{ background:T.surf, borderRadius:8, padding:"10px 12px", marginBottom:"1rem", fontSize:13, color:T.text2 }}><b style={{ color:T.text3 }}>Obs:</b> {sel.obs}</div>}
 
                 {/* Indicadores de risco */}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
+                <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:"1rem" }}>
                   {[
                     ["Total NCs",   rncsForn(sel.nome).length, "#ff8c42"],
                     ["Abertas",     rncsForn(sel.nome).filter(x=>x.status==="Aberta").length, "#ff4f6a"],
