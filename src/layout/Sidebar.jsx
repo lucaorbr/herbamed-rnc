@@ -36,11 +36,15 @@ export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }
   );
 }
 
-export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmin }) {
+export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin }) {
   const GRUPOS = [
     { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
       ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
+    ]},
+    { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
+      { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },
+      ...(!isViewer?[{ id:"novo-desvio", icon:"➕", label:"Novo Desvio" }]:[]),
     ]},
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
@@ -96,7 +100,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, isViewer, isAdmi
       {sidebarOpen && (
         <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3 }}>
           <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
-          <div>{APP_VERSION_LABEL} � {new Date().getFullYear()}</div>
+          <div>{APP_VERSION_LABEL} � {new Date().getFullYear()}</div>
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, subscribeCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
@@ -20,6 +20,7 @@ import { LaudosTab } from "../features/laudos/LaudosTab";
 import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
+import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
@@ -40,6 +41,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
+  const [desvios, setDesvios] = useState([]);
   const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -146,6 +148,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
+    const unsubDesvios = subscribeCollection("desvios", setDesvios);
     const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
@@ -161,7 +164,7 @@ export default function App() {
       const ct = list.find(c => c.id === "catalogo_tipos_doc");
       setCatalogoTipos(ct?.items || []);
     });
-    return () => { unsub(); unsubNotifs(); unsubForn(); unsubCfg(); };
+    return () => { unsub(); unsubDesvios(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -285,6 +288,20 @@ export default function App() {
       await auditLog("Excluiu RNC", "rncs", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
   }, []);
+  const doSaveDesvio = useCallback(async (desvio) => {
+    try {
+      const isNew = !desvios.find(d => d.id === desvio.id);
+      await saveCollection("desvios", desvio.id, desvio);
+      await auditLog(isNew ? "Registrou desvio" : `Desvio: ${desvio.status}`, "desvios", desvio.id, desvio.num || desvio.id, isNew ? null : desvios.find(d=>d.id===desvio.id), desvio);
+    } catch(e) { console.error(e); }
+  }, [desvios]);
+  const doDeleteDesvio = useCallback(async (id) => {
+    try {
+      const antes = desvios.find(d => d.id === id);
+      await deleteFromCollection("desvios", id);
+      await auditLog("Excluiu desvio", "desvios", id, antes?.num || id, antes, null);
+    } catch(e) { console.error(e); }
+  }, [desvios]);
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
@@ -540,7 +557,7 @@ export default function App() {
 
           {/* SIDEBAR */}
           <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} isViewer={isViewer} isAdmin={isAdmin} />
+            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} />
           </div>
 
           {/* MAIN CONTENT */}
@@ -565,7 +582,9 @@ export default function App() {
             <div style={{ padding: tab==="home" ? "0" : "1.5rem" }}>
               {tab==="home"       && <HomeTab rncs={rncs} user={user} setTab={setTab} />}
               {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
-              {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
+              {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
+              {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />}
+              {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
