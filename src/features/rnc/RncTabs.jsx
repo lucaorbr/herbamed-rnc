@@ -808,9 +808,10 @@ export function AnexosUpload({ anexos, setAnexos, inputId = "anexo-input" }) {
   );
 }
 
-export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedores = [], rncPrefill = null, setRncPrefill }) {
+export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
+  const [origemDesvio, setOrigemDesvio] = useState(null);
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
@@ -830,9 +831,13 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
       fornecedor: rncPrefill.fornecedor || "",
       lote: rncPrefill.lote || "",
       detector: rncPrefill.detector || "",
+      setor: rncPrefill.setor || p.setor,
+      sev: rncPrefill.sev || p.sev,
+      desc: rncPrefill.desc || p.desc,
       tipo: rncPrefill.tipo || p.tipo,
       origemAnalise: rncPrefill.origemAnalise || "",
     }));
+    if (rncPrefill.origemDesvioDoc) setOrigemDesvio(rncPrefill.origemDesvioDoc);
     setIshikawa(p => ({ ...p, whys: ["", "", "", "", ""] }));
     if (setRncPrefill) setRncPrefill(null);
   }, [rncPrefill]);
@@ -864,8 +869,14 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, fornecedor
     if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
     if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
     const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
+    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
     await doSaveRNC(rnc);
+    // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
+    if (origemDesvio && doSaveDesvio) {
+      await doSaveDesvio({ ...origemDesvio, status: "Convertido em RNC", convertidoPor: user.name, convertidoEm: tod(), rncId: rnc.id, rncNum: rnc.num,
+        historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
+      setOrigemDesvio(null);
+    }
     toast_(`${rnc.num} registrada!`, "green");
     openEmail(rnc, "abertura");
     setTab("lista");
