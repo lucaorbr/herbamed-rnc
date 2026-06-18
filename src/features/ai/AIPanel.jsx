@@ -126,7 +126,7 @@ Responda APENAS em JSON válido, sem markdown:
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: "1rem" }}>
+      <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginBottom: "1rem" }}>
         {btns.map(b => (
           <button key={b.id} onClick={() => run(b.id)} disabled={loading} style={{ padding: "10px 6px", background: type === b.id && loading ? T.accentDim : T.surf, border: `1px solid ${T.border2}`, borderRadius: 10, color: T.text, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 500, textAlign: "center", lineHeight: 1.4, opacity: loading && type !== b.id ? .5 : 1, transition: "all .2s" }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>{b.icon}</div>

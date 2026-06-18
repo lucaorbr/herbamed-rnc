@@ -76,7 +76,7 @@ export function CEPTab({ rncs }) {
       )}
 
       {/* Indicadores */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
         {[
           ["Média (X̄)", mean.toFixed(2), T.accent],
           ["Desvio Padrão (σ)", stdDev.toFixed(2), T.blue],
