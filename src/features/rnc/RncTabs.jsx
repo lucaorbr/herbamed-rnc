@@ -785,8 +785,19 @@ export function AnexosUpload({ anexos, setAnexos, inputId = "anexo-input" }) {
           {uploading ? <span style={{ color: T.accent }}>{progress}</span> : "Clique ou arraste arquivos aqui"}
         </div>
         <div style={{ fontSize: 11, color: T.text3, marginTop: 4 }}>Fotos, PDFs, documentos — até 10MB por arquivo</div>
-        <input id={inputId} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={e => handleFiles(Array.from(e.target.files))} />
+        <input id={inputId} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style={{ display: "none" }} onChange={e => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
+        <input id={`${inputId}-cam`} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => { handleFiles(Array.from(e.target.files)); e.target.value = ""; }} />
       </div>
+
+      {/* Botão de câmera — só no celular (no desktop a classe mobile-only esconde) */}
+      <button
+        type="button"
+        className="mobile-only"
+        onClick={e => { e.stopPropagation(); document.getElementById(`${inputId}-cam`).click(); }}
+        style={{ width: "100%", padding: "12px", marginBottom: 12, background: T.accent, color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700 }}
+      >
+        📷 Tirar foto agora
+      </button>
 
       {/* Lista de anexos */}
       {anexos.length > 0 && (
