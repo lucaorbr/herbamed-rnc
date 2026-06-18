@@ -93,9 +93,9 @@ export function Sel({ sx, children, ...p }) { const T = useTheme(); const s = us
 
 export function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ ...s.inp, minHeight: 72, resize: "vertical", ...sx }} {...p} />; }
 
-export function G2({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{ch}</div>; }
+export function G2({ ch }) { return <div className="grid-2">{ch}</div>; }
 
-export function G3({ ch }) { return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>{ch}</div>; }
+export function G3({ ch }) { return <div className="grid-3">{ch}</div>; }
 
 export function Divider() { const T = useTheme(); return <div style={{ height: 1, background: T.border, margin: "1rem 0" }} />; }
 

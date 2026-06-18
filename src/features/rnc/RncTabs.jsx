@@ -81,7 +81,7 @@ export function HomeTab({ rncs, user, setTab }) {
         </div>
 
         {/* KPI pills */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+        <div className="home-kpis">
           {[
             { l:"Total RNCs",    n:rncs.length,  c:T.accent,  icon:"📋", action:()=>setTab("lista") },
             { l:"Abertas",       n:abertas,       c:"#ff4f6a", icon:"🔴", action:()=>setTab("lista") },
@@ -101,14 +101,14 @@ export function HomeTab({ rncs, user, setTab }) {
       </div>
 
       {/* ── BODY ── */}
-      <div style={{ padding:"1.5rem", display:"grid", gridTemplateColumns:"1fr 340px", gap:"1.5rem" }}>
+      <div className="home-body" style={{ padding:"1.5rem" }}>
 
         {/* LEFT */}
         <div>
           {/* Ações rápidas */}
           <div style={{ marginBottom:"1.5rem" }}>
             <div style={{ fontSize:12, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".08em", marginBottom:10 }}>Ações rápidas</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+            <div className="home-actions">
               {[
                 { icon:"➕", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>, label:"Nova RNC",    color:"#2ab84a", action:()=>setTab("nova") },
                 { icon:"📊", svg:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>, label:"Dashboard",   color:"#4fc3f7", action:()=>setTab("dashboard") },
