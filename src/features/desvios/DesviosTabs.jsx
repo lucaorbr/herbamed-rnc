@@ -9,11 +9,13 @@ import { AnexosUpload } from "../rnc/RncTabs";
 // ── Listas fixas (chão de fábrica Herbamed) ──
 export const SETORES_DESVIO = [
   "Mistura 1", "Mistura 2",
+  "Compressão",
   "Encapsulamento 1", "Encapsulamento 2", "Encapsulamento 3",
   "Escolha de Cápsula 1", "Escolha de Cápsula 2",
   "Envase 1", "Envase 2", "Envase 3", "Envase 4 (Sachê)", "Envase 5 (Líquido)", "Envase 6",
   "Encartuchamento 1", "Encartuchamento 2",
-  "Qualidade", "Recebimento", "Manutenção", "Almoxarifado",
+  "PCP", "Qualidade", "Recebimento", "Manutenção", "Almoxarifado",
+  "Outros",
 ];
 
 export const TIPOS_DESVIO = ["BPF", "Processo", "Recebimento", "Equipamento", "Documentação", "Fornecedor", "Outros"];
@@ -65,7 +67,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     .filter(d => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
-      return [d.num, d.desc, d.setor, d.tipo, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
+      return [d.num, d.desc, d.setor, d.setorOutro, d.tipo, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
     });
 
   const { paginated, page, total, setPage } = usePagination(filtrados, 15);
@@ -93,7 +95,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       produto: d.produto || "",
       lote: d.lote || "",
       detector: d.registradoPor || "",
-      setor: d.setor || "",
+      setor: d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || ""),
       sev: d.impacto || "Maior",
       desc: descParaRNC(d),
       origemDesvio: d.id,
@@ -167,7 +169,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{d.num}</td>
                   <td style={{ padding: "10px 12px", color: T.text2, whiteSpace: "nowrap" }}>{fmt(d.dataOcorrencia)}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.setor || "—"}</td>
+                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.setor === "Outros" ? d.setorOutro || "Outros" : d.setor || "—"}</td>
                   <td style={{ padding: "10px 12px", color: T.text2 }}>{d.tipo === "Outros" ? d.tipoOutro || "Outros" : d.tipo}</td>
                   <td style={{ padding: "10px 12px" }}>{d.impacto ? <SevB s={d.impacto} /> : "—"}</td>
                   <td style={{ padding: "10px 12px", color: T.text, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</td>
@@ -195,7 +197,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             </div>
             <div style={{ padding: "1.5rem" }}>
               <Campo T={T} l="Data da ocorrência" v={fmt(sel.dataOcorrencia)} />
-              <Campo T={T} l="Setor" v={sel.setor} />
+              <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros — ${sel.setorOutro || ""}` : sel.setor} />
               <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros — ${sel.tipoOutro || ""}` : sel.tipo} />
               <Campo T={T} l="Descrição do desvio" v={sel.desc} bloco />
               {sel.produto && <Campo T={T} l="Produto / Lote" v={sel.produto} />}
@@ -250,7 +252,7 @@ function Campo({ T, l, v, bloco }) {
 function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({
-    dataOcorrencia: tod(), setor: "", tipo: "BPF", tipoOutro: "", impacto: "Maior",
+    dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: "BPF", tipoOutro: "", impacto: "Maior",
     desc: "", produto: "", acaoImediata: "Não", acaoDesc: "",
   });
   const [anexos, setAnexos] = useState([]);
@@ -259,6 +261,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio }) {
 
   const salvar = async () => {
     if (!f.setor) { alert("Selecione o setor do desvio."); return; }
+    if (f.setor === "Outros" && !f.setorOutro.trim()) { alert("Especifique o setor do desvio (Outros)."); return; }
     if (f.tipo === "Outros" && !f.tipoOutro.trim()) { alert("Especifique o tipo do desvio (Outros)."); return; }
     if (!f.desc.trim()) { alert("Descreva o desvio observado."); return; }
     if (f.acaoImediata === "Sim" && !f.acaoDesc.trim()) { alert("Descreva a ação imediata adotada."); return; }
@@ -297,7 +300,12 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio }) {
         </div>
         <G3 ch={<>
           <F lbl="Data da ocorrência" tip="Quando o desvio aconteceu. Por padrão é hoje, mas pode ajustar se viu hoje algo de ontem." ch={<Inp type="date" value={f.dataOcorrencia} onChange={e => set("dataOcorrencia", e.target.value)} />} />
-          <F lbl="Setor *" ch={<Sel value={f.setor} onChange={e => set("setor", e.target.value)}><option value="">Selecione...</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+          <F lbl="Setor *" ch={
+            <div>
+              <Sel value={f.setor} onChange={e => set("setor", e.target.value)}><option value="">Selecione...</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>
+              {f.setor === "Outros" && <Inp placeholder="Especifique o setor..." value={f.setorOutro} onChange={e => set("setorOutro", e.target.value)} sx={{ marginTop: 8 }} />}
+            </div>
+          } />
           <F lbl="Impacto" tip="Mesma escala da RNC. Crítica: risco ao produto/paciente. Maior: impacto relevante. Menor: desvio leve." ch={<Sel value={f.impacto} onChange={e => set("impacto", e.target.value)}>{IMPACTOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
         </>} />
         <F lbl="Tipo do desvio" ch={
