@@ -4,6 +4,7 @@ import { SEVMETA, SMETA, TIPOC } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
+import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { askClaude } from "../../services/aiClient";
 import { isExternalStorageUrl, uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
@@ -692,6 +693,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
+                  {!isViewer && sel.fornecedor && <button style={{ ...s.btn, color: "#1a7a3c", borderColor: "#1a7a3c33", background: "#1a7a3c12", display: "flex", alignItems: "center", gap: 6 }} onClick={async () => { try { await exportFormularioFornecedor(sel); toast_("Formulário do fornecedor gerado!", "green"); } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); } }}>📋 Formulário p/ fornecedor</button>}
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
                   {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
                   <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
