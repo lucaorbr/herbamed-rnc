@@ -236,7 +236,7 @@ export const TIPOS_DOC_CODIFICACAO = {
   "MTA":  { prefixo: "MTA",  padrao: "ABC-Abc-xxx",     descricao: "Métodos Analíticos" },
   "PCAL": { prefixo: "PCAL", padrao: "ABC-Abc-xxx",     descricao: "Controle Alergênicos" },
   "EPI":  { prefixo: "EPI",  padrao: "ABC-Abc-xxx",     descricao: "Especificação Produto Intermediário" },
-  "ANX":  { prefixo: "A",    padrao: "A-BCD-xxx-xx",    descricao: "Anexo" },
+  "ANX":  { prefixo: "ANX",  padrao: "ANX-BCD-xxx-xx",  descricao: "Anexo" },
 };
 
 export function gerarCodigoGD(tipo, depto, docs, versao = "00") {
@@ -244,14 +244,14 @@ export function gerarCodigoGD(tipo, depto, docs, versao = "00") {
   const prefixo = cfg ? cfg.prefixo : tipo;
 
   if (tipo === "ANX") {
-    const prefix = `A-${depto}-`;
+    const prefix = `ANX-${depto}-`;
     const nums = docs
       .filter(d => d.codigo && d.codigo.startsWith(prefix))
       .map(d => parseInt((d.codigo.split("-")[2] || "0"), 10))
       .filter(n => Number.isFinite(n) && n > 0);
     const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
     const rev = String(parseInt(versao, 10) || 0).padStart(2, "0");
-    return `A-${depto}-${String(next).padStart(3, "0")}-${rev}`;
+    return `ANX-${depto}-${String(next).padStart(3, "0")}-${rev}`;
   }
 
   const prefix = `${prefixo}-${depto}-`;
