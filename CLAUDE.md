@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.6.1`
+- Versao atual: `2.7.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -55,6 +55,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Documentos** — Rota de assinatura: Elaborador designa Revisor/Aprovador (PR #55)
 - **Documentos** — Distribuição de cópias físicas + recolha por revisão (PR #56)
 - **CQ** — Fix: recebimento Areco reutiliza material e puxa ensaios parametrizados (PR #57)
+- **RNC** — Exportar formulário de resposta do fornecedor em Excel pré-preenchido (alternativa offline ao link público enquanto a TI libera o acesso externo) — v2.7.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
@@ -231,6 +232,13 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Entidades de achado (número, descrição, nível risco)
 - Rastreamento de fechamento
 - Anexo de evidências
+
+#### Auditoria do módulo atual (`auditorias/AuditoriasTab.jsx`) — lacunas mapeadas (2026-06-19)
+O módulo já cobre o básico (planejamento + achados com tipo/ação/responsável/prazo/status, KPIs, PDF, trilha). Falta para ficar condizente com o SE Suite / Seção 16:
+1. **Número/identificador rastreável do achado** — hoje os achados são só uma lista numerada na tela (`#1`, `#2`), sem código próprio.
+2. **Nível de risco no achado** — hoje só existe o *tipo* (NC/observação/etc.), não a severidade/risco.
+3. **Anexo de evidências no achado** — sem upload (RNC e Desvios já têm; reaproveitar `AnexosUpload`).
+4. **Converter achado em RNC** — `AuditoriasTab` já recebe `rncs` e `doSaveRNC` por props mas não usa; achado de "Não conformidade" deveria virar RNC formal (5 Porquês + CAPA), como nos Desvios.
 
 ### Melhorias técnicas (paralelo)
 - **Code-splitting:** bundle 561.7 kB → lazy load por rota
