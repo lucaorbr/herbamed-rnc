@@ -3,6 +3,7 @@ import { getArecoRecebimentos, getArecoSyncStatus, getCollection, runArecoSync, 
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle, Sel } from "../../shared/ui";
+import { EnsaiosEditorModal } from "../cq/EnsaiosEditorModal";
 
 const fmtDateTime = value => value ? new Date(value).toLocaleString("pt-BR", { dateStyle:"short", timeStyle:"short", timeZone:"America/Sao_Paulo" }) : "-";
 const today = () => new Date().toISOString().slice(0, 10);
@@ -64,6 +65,7 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [editMat, setEditMat] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -106,6 +108,23 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
   });
 
   const lastSync = syncStatus.find(s => s.source === "areco_recebimentos");
+
+  // Abre o modal de parametrização de ensaios do material vinculado ao recebimento.
+  // Reutiliza o material existente no SGQ (areco-<codigo>) ou cria um a partir do recebimento.
+  const parametrizarEnsaios = async (item) => {
+    if (item.status === "fora_escopo" || item.escopo_qualidade === false) {
+      toast_("Esse recebimento esta fora do escopo da qualidade.", "red");
+      return;
+    }
+    try {
+      const novoMaterial = buildMaterialFromReceipt(item);
+      const materiaisExistentes = await getCollection("cq_materiais").catch(() => []);
+      const existente = (materiaisExistentes || []).find(m => String(m.id) === String(novoMaterial.id));
+      setEditMat(existente || novoMaterial);
+    } catch (error) {
+      toast_(error.message || "Erro ao abrir parametrizacao de ensaios.", "red");
+    }
+  };
 
   const iniciarAnalise = async (item) => {
     if (item.status === "fora_escopo" || item.escopo_qualidade === false) {
@@ -260,19 +279,33 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
 
                 <div style={{ fontSize:11, color:T.text3 }}>Recebimento: {fmtDateTime(item.data_entrada)}</div>
 
-                <div style={{ marginTop:"auto", paddingTop:4 }}>
+                <div style={{ marginTop:"auto", paddingTop:4, display:"flex", flexDirection:"column", gap:6 }}>
                   {foraEscopo ? (
                     <span style={{ color:T.text3, fontSize:12, fontWeight:700 }}>Fora do CQ</span>
                   ) : (
-                    <button style={{ ...s.btnA, width:"100%" }} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
-                      Iniciar analise
-                    </button>
+                    <>
+                      <button style={{ ...s.btn, width:"100%" }} onClick={() => parametrizarEnsaios(item)}>
+                        🔬 Parametrizar ensaios
+                      </button>
+                      <button style={{ ...s.btnA, width:"100%" }} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
+                        Iniciar analise
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {editMat && (
+        <EnsaiosEditorModal
+          material={editMat}
+          user={user}
+          toast_={toast_}
+          onClose={() => setEditMat(null)}
+        />
       )}
     </div>
   );
