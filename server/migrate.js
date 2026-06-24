@@ -272,7 +272,6 @@ async function seedAdmin() {
     VALUES ($1, lower($2), $3, 'admin', 'Qualidade', $4::jsonb)
     ON CONFLICT (email) DO UPDATE SET
       name = EXCLUDED.name,
-      password_hash = EXCLUDED.password_hash,
       role = 'admin',
       setor = EXCLUDED.setor,
       data = EXCLUDED.data,
