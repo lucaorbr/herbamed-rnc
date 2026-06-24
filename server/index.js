@@ -19,6 +19,7 @@ const {
 const { runArecoSync, startArecoScheduler } = require("./arecoSync");
 
 const PORT = Number(process.env.PORT || 9028);
+const HOST = process.env.HOST || "0.0.0.0";
 const HERBAMED_LOGO_PATH = path.join(__dirname, "..", "public", "logo-herbamed.png");
 
 function sendJson(res, status, payload, headers = {}) {
@@ -1399,8 +1400,8 @@ const server = http.createServer((req, res) => {
 migrate()
   .then(() => {
     startArecoScheduler();
-    server.listen(PORT, () => {
-      console.log(`SGQ Herbamed backend ouvindo na porta ${PORT}`);
+    server.listen(PORT, HOST, () => {
+      console.log(`SGQ Herbamed backend ouvindo em ${HOST}:${PORT}`);
     });
   })
   .catch(error => {
