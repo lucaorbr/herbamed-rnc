@@ -905,6 +905,24 @@ async function handleDocumentRender(req, res, pathname, url) {
       const w = font.widthOfTextAtSize(t, size);
       page.drawText(t, { x: cx - w / 2, y, size, font, color });
     };
+    // Quebra o texto em várias linhas para não transbordar/cortar na borda.
+    // Usado na capa (título grande) e no cabeçalho das páginas de conteúdo.
+    const wrapText = (text, font, size, maxW) => {
+      const palavras = pdfSafe(text).split(/\s+/).filter(Boolean);
+      const linhas = [];
+      let atual = "";
+      for (const palavra of palavras) {
+        const tentativa = atual ? `${atual} ${palavra}` : palavra;
+        if (font.widthOfTextAtSize(tentativa, size) > maxW && atual) {
+          linhas.push(atual);
+          atual = palavra;
+        } else {
+          atual = tentativa;
+        }
+      }
+      if (atual) linhas.push(atual);
+      return linhas.length ? linhas : [""];
+    };
 
     const verde = rgb(0.10, 0.29, 0.18);
     const cinza = rgb(0.42, 0.42, 0.42);
@@ -926,24 +944,9 @@ async function handleDocumentRender(req, res, pathname, url) {
 
     // Bloco de identificação (título grande)
     let y = H - 110;
-    // Quebra o título em várias linhas para não transbordar/cortar na borda direita.
-    // Reduz o corpo da fonte se ainda assim ficar com muitas linhas.
-    const wrapText = (text, font, size, maxW) => {
-      const palavras = pdfSafe(text).split(/\s+/).filter(Boolean);
-      const linhas = [];
-      let atual = "";
-      for (const palavra of palavras) {
-        const tentativa = atual ? `${atual} ${palavra}` : palavra;
-        if (font.widthOfTextAtSize(tentativa, size) > maxW && atual) {
-          linhas.push(atual);
-          atual = palavra;
-        } else {
-          atual = tentativa;
-        }
-      }
-      if (atual) linhas.push(atual);
-      return linhas.length ? linhas : [""];
-    };
+    // Quebra o título em várias linhas (wrapText, helper hoistado) para não
+    // transbordar/cortar na borda direita. Reduz o corpo da fonte se ainda
+    // assim ficar com muitas linhas.
     const tituloMaxW = W - 80; // margens de 40 de cada lado
     let tituloSize = 22;
     let tituloLinhas = wrapText(titulo, fontB, tituloSize, tituloMaxW);
@@ -1091,16 +1094,39 @@ async function handleDocumentRender(req, res, pathname, url) {
       // Cabeçalho e rodapé nas páginas de conteúdo
       const numPag = idx - capaOffset + 1; // página de conteúdo (1..N)
       // Faixa de cabeçalho — mesmo padrão verde da capa, repetida nas páginas
-      // de conteúdo para que documentos sem capa (semCapa) mantenham identidade visual
-      const hdrH = 46;
+      // de conteúdo para que documentos sem capa (semCapa) mantenham identidade visual.
+      // Título adaptativo: encolhe e, se preciso, quebra em 2 linhas para nunca
+      // cortar o nome. A faixa só cresce quando há 2 linhas, evitando cobrir
+      // conteúdo nos documentos de título curto.
+      const tituloHdrMaxW = (width - 16) - 140; // 140 ≈ borda direita do logo + folga
+      let tHdrSize = 9;
+      let tHdrLinhas = wrapText(titulo, fontB, tHdrSize, tituloHdrMaxW);
+      // 1) tenta manter em uma única linha encolhendo a fonte (até 8pt)
+      while (tHdrLinhas.length > 1 && tHdrSize > 8) {
+        tHdrSize -= 0.5;
+        tHdrLinhas = wrapText(titulo, fontB, tHdrSize, tituloHdrMaxW);
+      }
+      // 2) se ainda não couber, usa no máximo 2 linhas (com "…" na 2ª se sobrar)
+      if (tHdrLinhas.length > 2) {
+        tHdrLinhas = tHdrLinhas.slice(0, 2);
+        let l2 = tHdrLinhas[1];
+        while (l2 && fontB.widthOfTextAtSize(`${l2}…`, tHdrSize) > tituloHdrMaxW) {
+          l2 = l2.slice(0, -1);
+        }
+        tHdrLinhas[1] = `${l2}…`;
+      }
+      const hdrH = tHdrLinhas.length > 1 ? 60 : 46;
       page.drawRectangle({ x: 0, y: height - hdrH, width, height: hdrH, color: verde });
-      if (!drawLogo(page, 20, height - 35, 112, 24)) {
+      if (!drawLogo(page, 20, height - hdrH + (hdrH - 24) / 2, 112, 24)) {
         draw(page, "Herbamed Laboratório Nutracêutico LTDA", 16, height - 19, 10, fontB, rgb(1, 1, 1));
         draw(page, "CNPJ: 14.829.598/0001-30", 16, height - 32, 7, fontR, rgb(0.85, 0.93, 0.87));
       }
-      const tituloHdr = titulo.length > 55 ? titulo.slice(0, 54) + "…" : titulo;
-      drawRight(page, pdfSafe(tituloHdr), width - 16, height - 19, 9, fontB, rgb(1, 1, 1));
-      drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - 32, 8, fontR, rgb(0.85, 0.93, 0.87));
+      let tHdrY = height - 17;
+      for (const linha of tHdrLinhas) {
+        drawRight(page, pdfSafe(linha), width - 16, tHdrY, tHdrSize, fontB, rgb(1, 1, 1));
+        tHdrY -= 11;
+      }
+      drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - hdrH + 12, 8, fontR, rgb(0.85, 0.93, 0.87));
       // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
       const rodape = semMarcaDagua
