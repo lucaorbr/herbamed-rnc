@@ -708,7 +708,7 @@ export const ENSAIOS_SUGERIDOS = {
     { nome:"Altura",                espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
     { nome:"Largura",               espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
     { nome:"Profundidade",          espec:"",                                unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
-    { nome:"Gramatura",             espec:"",                                unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Gramatura",             espec:"",                                unidade:"g/m²", tipo:"gramatura",casas:1, multiplos:false, min:null, max:null },
     { nome:"Espessura",             espec:"",                                unidade:"mm",   tipo:"numero",   casas:3, multiplos:true  },
     { nome:"Resistência",           espec:"Conforme especificação",          unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
   ],
@@ -718,7 +718,7 @@ export const ENSAIOS_SUGERIDOS = {
     { nome:"Código de barras",      espec:"Leitura correta",            unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
     { nome:"Altura",                espec:"",                           unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
     { nome:"Largura",               espec:"",                           unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
-    { nome:"Gramatura",             espec:"",                           unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Gramatura",             espec:"",                           unidade:"g/m²", tipo:"gramatura",casas:1, multiplos:false, min:null, max:null },
     { nome:"Aderência",             espec:"Sem descolamento",           unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
     { nome:"Cor (CMYK)",            espec:"Conforme aprovado",          unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
   ],
@@ -727,7 +727,7 @@ export const ENSAIOS_SUGERIDOS = {
     { nome:"Impressão",             espec:"Conforme arte aprovada",            unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
     { nome:"Largura",               espec:"",                                  unidade:"mm",   tipo:"numero",   casas:2, multiplos:true  },
     { nome:"Espessura",             espec:"",                                  unidade:"µm",   tipo:"numero",   casas:3, multiplos:true  },
-    { nome:"Gramatura",             espec:"",                                  unidade:"g/m²", tipo:"numero",   casas:1, multiplos:false },
+    { nome:"Gramatura",             espec:"",                                  unidade:"g/m²", tipo:"gramatura",casas:1, multiplos:false, min:null, max:null },
     { nome:"Resistência ao calor",  espec:"Selagem íntegra",                   unidade:"—",    tipo:"conforme", casas:0, multiplos:false },
     { nome:"Resistência ao rasgo",  espec:"",                                  unidade:"N",    tipo:"numero",   casas:1, multiplos:false },
   ],
@@ -989,16 +989,27 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     try {
       const id = sel ? String(sel.id) : String(Date.now());
       // Limpar ensaios para manter o payload simples no banco local
-      const ensaiosLimpos = ensaios.map((e,i) => ({
-        id: i+1,
-        nome: e.nome||"",
-        espec: e.espec||"",
-        unidade: e.unidade||"",
-        ref: e.ref||"",
-        tipo: e.tipo||"numero",
-        casas: e.casas !== undefined ? e.casas : 2,
-        multiplos: e.multiplos||false,
-      }));
+      const ensaiosLimpos = ensaios.map((e,i) => {
+        const base = {
+          id: i+1,
+          nome: e.nome||"",
+          espec: e.espec||"",
+          unidade: e.unidade||"",
+          ref: e.ref||"",
+          tipo: e.tipo||"numero",
+          casas: e.casas !== undefined ? e.casas : 2,
+          multiplos: e.multiplos||false,
+        };
+        if (e.tipo==="gramatura") {
+          base.unidade = (e.unidade||"").trim() || "g/m²";
+          base.min = e.min ?? null;
+          base.max = e.max ?? null;
+          if (e.min!=null && e.max!=null) base.espec = `${String(e.min).replace(".",",")} – ${String(e.max).replace(".",",")} ${base.unidade}`;
+          else if (e.min!=null) base.espec = `≥ ${String(e.min).replace(".",",")} ${base.unidade}`;
+          else if (e.max!=null) base.espec = `≤ ${String(e.max).replace(".",",")} ${base.unidade}`;
+        }
+        return base;
+      });
       const material = {
         id,
         nome: montarNome(form) || form.nomeBase.trim(),
@@ -1248,12 +1259,13 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                   <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
                   <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev=>updEnsaio(e.id,"unidade",ev.target.value)} sx={{ fontSize:12 }}/>
                   <Inp placeholder="Ex: EI-001" value={e.ref||""} onChange={ev=>updEnsaio(e.id,"ref",ev.target.value)} sx={{ fontSize:12 }}/>
-                  <Sel value={e.tipo||"numero"} onChange={ev=>updEnsaio(e.id,"tipo",ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
+                  <Sel value={e.tipo||"numero"} onChange={ev=>{ const nt=ev.target.value; updEnsaio(e.id,"tipo",nt); if(nt==="gramatura"){ if(!(e.unidade||"").trim()) updEnsaio(e.id,"unidade","g/m²"); if(e.casas===undefined||e.casas===2) updEnsaio(e.id,"casas",1); } }} sx={{ fontSize:11, padding:"5px 6px" }}>
                     <option value="numero">🔢 Numérico</option>
+                    <option value="gramatura">📐 Gramatura (g/m²)</option>
                     <option value="conforme">✓/✗ Conforme</option>
                     <option value="texto">📝 Texto livre</option>
                   </Sel>
-                  <Sel value={String(e.casas!==undefined?e.casas:2)} onChange={ev=>updEnsaio(e.id,"casas",parseInt(ev.target.value))} disabled={e.tipo!=="numero"} sx={{ fontSize:11, padding:"5px 6px", opacity:e.tipo!=="numero"?.4:1 }}>
+                  <Sel value={String(e.casas!==undefined?e.casas:2)} onChange={ev=>updEnsaio(e.id,"casas",parseInt(ev.target.value))} disabled={e.tipo!=="numero"&&e.tipo!=="gramatura"} sx={{ fontSize:11, padding:"5px 6px", opacity:(e.tipo!=="numero"&&e.tipo!=="gramatura")?.4:1 }}>
                     <option value="0">0</option>
                     <option value="1">1</option>
                     <option value="2">2</option>
@@ -1266,6 +1278,46 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                   <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, paddingLeft:2 }}>
                     <input type="checkbox" id={`mult-${e.id}`} checked={!!e.multiplos} onChange={ev=>updEnsaio(e.id,"multiplos",ev.target.checked)} style={{ accentColor:T.accent, width:14, height:14 }}/>
                     <label htmlFor={`mult-${e.id}`} style={{ fontSize:11, color:T.text2, cursor:"pointer" }}>Permite lançamento de múltiplos valores (calcula média automaticamente)</label>
+                  </div>
+                )}
+                {e.tipo==="gramatura" && (
+                  <div style={{ marginTop:8, padding:"8px 10px", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Especificação (g/m²) — limite mín./máx.</div>
+                    <div style={{ display:"flex", alignItems:"flex-end", gap:8, flexWrap:"wrap" }}>
+                      <div>
+                        <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>MÍNIMO</div>
+                        <Inp type="number" step="any" placeholder="Ex: 240" value={e.min ?? ""} onChange={ev=>updEnsaio(e.id,"min",ev.target.value===""?null:parseFloat(ev.target.value))} sx={{ fontSize:12, width:90 }}/>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>MÁXIMO</div>
+                        <Inp type="number" step="any" placeholder="Ex: 260" value={e.max ?? ""} onChange={ev=>updEnsaio(e.id,"max",ev.target.value===""?null:parseFloat(ev.target.value))} sx={{ fontSize:12, width:90 }}/>
+                      </div>
+                      <div style={{ fontSize:11, color:T.text2, paddingBottom:6 }}>
+                        {e.min!=null && e.max!=null ? `→ ${String(e.min).replace(".",",")} – ${String(e.max).replace(".",",")} g/m²` : "defina mín. e máx."}
+                      </div>
+                    </div>
+                    <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}`, display:"flex", alignItems:"flex-end", gap:8, flexWrap:"wrap" }}>
+                      <div style={{ fontSize:10, color:T.text3 }}>Calcular por tolerância:</div>
+                      <div>
+                        <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>NOMINAL</div>
+                        <Inp type="number" step="any" placeholder="250" value={e._nominal ?? ""} onChange={ev=>updEnsaio(e.id,"_nominal",ev.target.value)} sx={{ fontSize:12, width:80 }}/>
+                      </div>
+                      <div>
+                        <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>± TOL.</div>
+                        <Inp type="number" step="any" placeholder="10" value={e._tol ?? ""} onChange={ev=>updEnsaio(e.id,"_tol",ev.target.value)} sx={{ fontSize:12, width:70 }}/>
+                      </div>
+                      <Sel value={e._tolTipo||"%"} onChange={ev=>updEnsaio(e.id,"_tolTipo",ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
+                        <option value="%">%</option>
+                        <option value="abs">g/m²</option>
+                      </Sel>
+                      <button type="button" style={{ ...s.btn, fontSize:11, padding:"5px 12px" }} onClick={()=>{
+                        const nom=parseFloat(String(e._nominal).replace(",",".")); const tol=parseFloat(String(e._tol).replace(",","."));
+                        if(isNaN(nom)||isNaN(tol)){ alert("Informe o nominal e a tolerância."); return; }
+                        const delta=(e._tolTipo||"%")==="%"?nom*tol/100:tol;
+                        updEnsaio(e.id,"min",Math.round((nom-delta)*100)/100);
+                        updEnsaio(e.id,"max",Math.round((nom+delta)*100)/100);
+                      }}>↧ Aplicar</button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1353,7 +1405,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
 
   const selecionarMaterial = (mat) => {
     setMatSel(mat);
-    setResultados((mat.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e, resultado:"", conforme:null, obs:"" })));
+    setResultados((mat.ensaios||[]).map(e=>({ tipo:"numero", casas:2, multiplos:false, ...e, resultado:"", conforme:null, obs:"", ...(e.tipo==="gramatura"?{corpos:[{comp:"",larg:"",massa:""}]}:{}) })));
     if(mat.fornecedorPadrao && mat.fornecedorPadrao!=="Vários") setF("fornecedor", mat.fornecedorPadrao);
   };
 
@@ -1363,6 +1415,30 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
   const toggleMultiplos = (id) => setMultiplosState(p=>({...p,[id]:{aberto:!p[id]?.aberto,valores:p[id]?.valores||["","","","",""]}}));
   const updValorMultiplo = (id,idx,val) => setMultiplosState(p=>({...p,[id]:{...p[id],valores:p[id].valores.map((v,i)=>i===idx?val:v)}}));
   const aplicarMedia = (id,casas) => { const vals=multiplosState[id]?.valores||[]; const media=calcMedia(vals,casas); if(media){updRes(id,"resultado",media);setMultiplosState(p=>({...p,[id]:{...p[id],aberto:false}}));} };
+
+  // ── Gramatura (g/m²) — corpos de prova retangulares ──
+  // g/m² = massa(g) / (comp(mm) × larg(mm) / 1.000.000)
+  const gramPorCorpo = (c) => {
+    const comp = parseFloat(String(c?.comp).replace(",","."));
+    const larg = parseFloat(String(c?.larg).replace(",","."));
+    const massa = parseFloat(String(c?.massa).replace(",","."));
+    if (isNaN(comp)||isNaN(larg)||isNaN(massa)||comp<=0||larg<=0) return null;
+    return massa / ((comp*larg)/1000000);
+  };
+  const recalcGram = (r) => {
+    const casas = r.casas!=null?r.casas:1;
+    const vals = (r.corpos||[]).map(gramPorCorpo).filter(n=>n!=null);
+    if (!vals.length) return { ...r, resultado:"", conforme:null };
+    const media = vals.reduce((a,b)=>a+b,0)/vals.length;
+    let conforme = null;
+    if (r.min!=null && media < r.min) conforme = false;
+    else if (r.max!=null && media > r.max) conforme = false;
+    else if (r.min!=null || r.max!=null) conforme = true;
+    return { ...r, resultado: media.toFixed(casas).replace(".",","), conforme };
+  };
+  const updCorpo = (id,idx,k,v) => setResultados(p=>p.map(r=>{ if(r.id!==id) return r; const corpos=(r.corpos||[]).map((c,i)=>i===idx?{...c,[k]:v}:c); return recalcGram({...r,corpos}); }));
+  const addCorpo = (id) => setResultados(p=>p.map(r=>r.id===id?{...r,corpos:[...(r.corpos||[{comp:"",larg:"",massa:""}]),{comp:"",larg:"",massa:""}]}:r));
+  const delCorpo = (id,idx) => setResultados(p=>p.map(r=>r.id===id?recalcGram({...r,corpos:(r.corpos||[]).filter((c,i)=>i!==idx)}):r));
 
   const fmtNum = (val, casas) => {
     const n = parseFloat(String(val).replace(",","."));
@@ -1449,7 +1525,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
       const lista = mat.ensaios || [];
       setResultados(lista.map((e,i) => {
         const res = (a.resultados||[]).find(r => r.nome === e.nome || r.id === e.id) || {};
-        return { ...e, id:i, resultado:res.resultado||"", conforme:res.conforme!=null?res.conforme:null, obs:res.obs||"", tipo:e.tipo||"numero", casas:e.casas!==undefined?e.casas:2, multiplos:e.multiplos||false };
+        return { ...e, id:i, resultado:res.resultado||"", conforme:res.conforme!=null?res.conforme:null, obs:res.obs||"", tipo:e.tipo||"numero", casas:e.casas!==undefined?e.casas:2, multiplos:e.multiplos||false, ...(e.tipo==="gramatura"?{corpos:(res.corpos&&res.corpos.length)?res.corpos:[{comp:"",larg:"",massa:""}]}:{}) };
       }));
     } else {
       // Material não encontrado (ex.: excluído): material sintético para o salvar funcionar.
@@ -1701,6 +1777,50 @@ ${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laud
                         </div>
                       ) : r.tipo==="texto" ? (
                         <Inp placeholder="Resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:110 }}/>
+                      ) : r.tipo==="gramatura" ? (
+                        (() => {
+                          const corpos = r.corpos && r.corpos.length ? r.corpos : [{comp:"",larg:"",massa:""}];
+                          const gms = corpos.map(gramPorCorpo);
+                          const valid = gms.filter(n=>n!=null);
+                          const casas = r.casas!=null?r.casas:1;
+                          const media = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : null;
+                          const dp = valid.length>1 ? Math.sqrt(valid.reduce((s,v)=>s+Math.pow(v-media,2),0)/valid.length) : null;
+                          const cv = (dp!=null&&media) ? (dp/media*100) : null;
+                          const fmtG = (n)=> n==null ? "—" : n.toFixed(casas).replace(".",",");
+                          return (
+                            <div style={{ minWidth:300, padding:"6px", background:T.card, border:`1px solid ${T.accent}22`, borderRadius:8 }}>
+                              <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:5 }}>Corpos de prova — área retangular</div>
+                              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                                <thead><tr>
+                                  {["#","Comp. (mm)","Larg. (mm)","Massa (g)","g/m²",""].map(h=>(
+                                    <th key={h} style={{ fontSize:9, color:T.text3, fontWeight:700, textAlign:"left", padding:"2px 3px" }}>{h}</th>
+                                  ))}
+                                </tr></thead>
+                                <tbody>
+                                  {corpos.map((c,ci)=>(
+                                    <tr key={ci}>
+                                      <td style={{ fontSize:11, color:T.text3, padding:"2px 3px" }}>{ci+1}</td>
+                                      <td style={{ padding:"2px 3px" }}><Inp type="number" step="any" value={c.comp} onChange={e=>updCorpo(r.id,ci,"comp",e.target.value)} sx={{ width:62, padding:"3px 5px", fontSize:11 }}/></td>
+                                      <td style={{ padding:"2px 3px" }}><Inp type="number" step="any" value={c.larg} onChange={e=>updCorpo(r.id,ci,"larg",e.target.value)} sx={{ width:62, padding:"3px 5px", fontSize:11 }}/></td>
+                                      <td style={{ padding:"2px 3px" }}><Inp type="number" step="any" value={c.massa} onChange={e=>updCorpo(r.id,ci,"massa",e.target.value)} sx={{ width:62, padding:"3px 5px", fontSize:11 }}/></td>
+                                      <td style={{ fontSize:11, fontWeight:600, color:gms[ci]!=null?T.text:T.text3, padding:"2px 5px", whiteSpace:"nowrap" }}>{fmtG(gms[ci])}</td>
+                                      <td style={{ padding:"2px 3px" }}>{corpos.length>1 && <button onClick={()=>delCorpo(r.id,ci)} style={{ background:"transparent", border:"none", color:"#ff4f6a", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✕</button>}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <button onClick={()=>addCorpo(r.id)} style={{ marginTop:4, padding:"3px 8px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11 }}>+ corpo de prova</button>
+                              {media!=null && (
+                                <div style={{ marginTop:6, fontSize:11, color:T.text2 }}>
+                                  <span style={{ fontWeight:700, color:T.accent }}>Média: {fmtG(media)} g/m²</span>
+                                  <span style={{ color:T.text3, marginLeft:8 }}>n={valid.length}</span>
+                                  {dp!=null && <span style={{ color:T.text3, marginLeft:8 }}>DP ±{fmtG(dp)}</span>}
+                                  {cv!=null && <span style={{ color:T.text3, marginLeft:8 }}>CV {cv.toFixed(1).replace(".",",")}%</span>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : (
                         <div>
                           <div style={{ display:"flex", gap:4, alignItems:"center" }}>

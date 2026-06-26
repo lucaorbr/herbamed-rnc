@@ -96,13 +96,25 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     if (ensaios.some(e => !(e.nome || "").trim())) { alert("Todos os ensaios precisam de um nome."); return; }
     setSalvando(true);
     try {
-      const ensaiosLimpos = ensaios.map((e, i) => ({
-        id: i + 1,
-        nome: e.nome || "", espec: e.espec || "", unidade: e.unidade || "", ref: e.ref || "",
-        tipo: e.tipo || "numero",
-        casas: e.casas !== undefined ? e.casas : 2,
-        multiplos: e.multiplos || false,
-      }));
+      const ensaiosLimpos = ensaios.map((e, i) => {
+        const base = {
+          id: i + 1,
+          nome: e.nome || "", espec: e.espec || "", unidade: e.unidade || "", ref: e.ref || "",
+          tipo: e.tipo || "numero",
+          casas: e.casas !== undefined ? e.casas : 2,
+          multiplos: e.multiplos || false,
+        };
+        if (e.tipo === "gramatura") {
+          base.unidade = (e.unidade || "").trim() || "g/m²";
+          base.min = e.min ?? null;
+          base.max = e.max ?? null;
+          // Especificação textual derivada dos limites (aparece nas tabelas e no PDF)
+          if (e.min != null && e.max != null) base.espec = `${String(e.min).replace(".", ",")} – ${String(e.max).replace(".", ",")} ${base.unidade}`;
+          else if (e.min != null) base.espec = `≥ ${String(e.min).replace(".", ",")} ${base.unidade}`;
+          else if (e.max != null) base.espec = `≤ ${String(e.max).replace(".", ",")} ${base.unidade}`;
+        }
+        return base;
+      });
       const id = String(material.id);
       const atualizado = {
         ...material, id, tipo,
@@ -193,12 +205,13 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                     <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev => updEnsaio(e.id, "espec", ev.target.value)} sx={{ fontSize:12 }} />
                     <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev => updEnsaio(e.id, "unidade", ev.target.value)} sx={{ fontSize:12 }} />
                     <Inp placeholder="Ex: EI-001" value={e.ref || ""} onChange={ev => updEnsaio(e.id, "ref", ev.target.value)} sx={{ fontSize:12 }} />
-                    <Sel value={e.tipo || "numero"} onChange={ev => updEnsaio(e.id, "tipo", ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
+                    <Sel value={e.tipo || "numero"} onChange={ev => { const nt = ev.target.value; updEnsaio(e.id, "tipo", nt); if (nt === "gramatura") { if (!(e.unidade || "").trim()) updEnsaio(e.id, "unidade", "g/m²"); if (e.casas === undefined || e.casas === 2) updEnsaio(e.id, "casas", 1); } }} sx={{ fontSize:11, padding:"5px 6px" }}>
                       <option value="numero">🔢 Numérico</option>
+                      <option value="gramatura">📐 Gramatura (g/m²)</option>
                       <option value="conforme">✓/✗ Conforme</option>
                       <option value="texto">📝 Texto livre</option>
                     </Sel>
-                    <Sel value={String(e.casas !== undefined ? e.casas : 2)} onChange={ev => updEnsaio(e.id, "casas", parseInt(ev.target.value))} disabled={e.tipo !== "numero"} sx={{ fontSize:11, padding:"5px 6px", opacity:e.tipo !== "numero" ? .4 : 1 }}>
+                    <Sel value={String(e.casas !== undefined ? e.casas : 2)} onChange={ev => updEnsaio(e.id, "casas", parseInt(ev.target.value))} disabled={e.tipo !== "numero" && e.tipo !== "gramatura"} sx={{ fontSize:11, padding:"5px 6px", opacity:(e.tipo !== "numero" && e.tipo !== "gramatura") ? .4 : 1 }}>
                       <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
                     </Sel>
                     <button onClick={() => delEnsaio(e.id)} style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a33", color:"#ff4f6a", borderRadius:6, cursor:"pointer", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontFamily:"inherit" }}>✕</button>
@@ -207,6 +220,49 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                     <div style={{ marginTop:6, display:"flex", alignItems:"center", gap:6, paddingLeft:2 }}>
                       <input type="checkbox" id={`mult-areco-${e.id}`} checked={!!e.multiplos} onChange={ev => updEnsaio(e.id, "multiplos", ev.target.checked)} style={{ accentColor:T.accent, width:14, height:14 }} />
                       <label htmlFor={`mult-areco-${e.id}`} style={{ fontSize:11, color:T.text2, cursor:"pointer" }}>Permite lançamento de múltiplos valores (calcula média automaticamente)</label>
+                    </div>
+                  )}
+                  {e.tipo === "gramatura" && (
+                    <div style={{ marginTop:8, padding:"8px 10px", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
+                      <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Especificação (g/m²) — limite mín./máx.</div>
+                      <div style={{ display:"flex", alignItems:"flex-end", gap:8, flexWrap:"wrap" }}>
+                        <div>
+                          <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>MÍNIMO</div>
+                          <Inp type="number" step="any" placeholder="Ex: 240" value={e.min ?? ""} onChange={ev => updEnsaio(e.id, "min", ev.target.value === "" ? null : parseFloat(ev.target.value))} sx={{ fontSize:12, width:90 }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>MÁXIMO</div>
+                          <Inp type="number" step="any" placeholder="Ex: 260" value={e.max ?? ""} onChange={ev => updEnsaio(e.id, "max", ev.target.value === "" ? null : parseFloat(ev.target.value))} sx={{ fontSize:12, width:90 }} />
+                        </div>
+                        <div style={{ fontSize:11, color:T.text2, paddingBottom:6 }}>
+                          {e.min != null && e.max != null ? `→ ${String(e.min).replace(".",",")} – ${String(e.max).replace(".",",")} g/m²` : "defina mín. e máx."}
+                        </div>
+                      </div>
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:`1px dashed ${T.border}`, display:"flex", alignItems:"flex-end", gap:8, flexWrap:"wrap" }}>
+                        <div style={{ fontSize:10, color:T.text3 }}>Calcular por tolerância:</div>
+                        <div>
+                          <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>NOMINAL</div>
+                          <Inp type="number" step="any" placeholder="250" value={e._nominal ?? ""} onChange={ev => updEnsaio(e.id, "_nominal", ev.target.value)} sx={{ fontSize:12, width:80 }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize:9, color:T.text3, fontWeight:700, marginBottom:2 }}>± TOL.</div>
+                          <Inp type="number" step="any" placeholder="10" value={e._tol ?? ""} onChange={ev => updEnsaio(e.id, "_tol", ev.target.value)} sx={{ fontSize:12, width:70 }} />
+                        </div>
+                        <Sel value={e._tolTipo || "%"} onChange={ev => updEnsaio(e.id, "_tolTipo", ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
+                          <option value="%">%</option>
+                          <option value="abs">g/m²</option>
+                        </Sel>
+                        <button type="button" style={{ ...s.btn, fontSize:11, padding:"5px 12px" }} onClick={() => {
+                          const nom = parseFloat(String(e._nominal).replace(",", "."));
+                          const tol = parseFloat(String(e._tol).replace(",", "."));
+                          if (isNaN(nom) || isNaN(tol)) { alert("Informe o nominal e a tolerância."); return; }
+                          const delta = (e._tolTipo || "%") === "%" ? nom * tol / 100 : tol;
+                          const min = Math.round((nom - delta) * 100) / 100;
+                          const max = Math.round((nom + delta) * 100) / 100;
+                          updEnsaio(e.id, "min", min);
+                          updEnsaio(e.id, "max", max);
+                        }}>↧ Aplicar</button>
+                      </div>
                     </div>
                   )}
                 </div>
