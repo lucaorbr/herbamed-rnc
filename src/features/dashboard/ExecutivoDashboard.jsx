@@ -8,7 +8,7 @@ import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
 import { HerbamedLogo } from "../../shared/ui";
 
-export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
+export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onClose }) {
   const T = useTheme();
   const [docs, setDocs] = useState([]);
   const [clock, setClock] = useState(new Date());
@@ -36,10 +36,15 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
   const docsVencendo   = docs.filter(d => d.proximaRevisao && d.proximaRevisao >= hoje && d.proximaRevisao <= d30str && d.status !== "Obsoleto").length;
   const docsVigentes   = docs.filter(d => d.status === "Vigente").length;
 
+  // KPIs de desvios (chão de fábrica)
+  const desviosAbertos    = desvios.filter(d => d.status === "Registrado").length;
+  const desviosConvertidos = desvios.filter(d => d.status === "Convertido em RNC").length;
+  const taxaDesvioRNC     = desvios.length > 0 ? Math.round(desviosConvertidos / desvios.length * 100) : null;
+
   // Semáforo geral
   const situacao = rncsCriticas > 0 || rncsVencidas > 3
     ? { cor: "#ff4f6a", label: "Atenção Requerida", icon: "🔴" }
-    : rncsVencidas > 0 || rncsAbertas > 5
+    : rncsVencidas > 0 || rncsAbertas > 5 || desviosAbertos > 5
     ? { cor: "#ffd166", label: "Monitoramento", icon: "🟡" }
     : { cor: "#2ab84a", label: "Sob Controle", icon: "🟢" };
 
@@ -53,7 +58,8 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
     const label = new Date(ano, ms - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
     const abertas = rncs.filter(r => r.data && r.data.startsWith(m)).length;
     const eficazes = rncs.filter(r => r.eficacia?.data && r.eficacia.data.startsWith(m) && r.status === "Eficaz").length;
-    return { _key: m, mes: label, "NC Abertas": abertas, "Encerradas Eficaz": eficazes };
+    const desviosMes = desvios.filter(d => (d.dataOcorrencia || d.dataRegistro || "").startsWith(m)).length;
+    return { _key: m, mes: label, "NC Abertas": abertas, "Encerradas Eficaz": eficazes, "Desvios": desviosMes };
   });
 
   // ── Top fornecedores com mais RNCs ──
@@ -186,6 +192,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
           <KpiCard icon="🔴" label="NC Críticas Ativas" value={rncsCriticas}  color={rncsCriticas > 0 ? "#ff4f6a" : C.accent} sub="Severidade crítica em aberto"  alert={rncsCriticas > 0} />
           <KpiCard icon="⏰" label="Prazos Vencidos"  value={rncsVencidas}  color={rncsVencidas > 0 ? C.orange : C.accent}  sub="Ações corretivas em atraso"    alert={rncsVencidas > 0} />
           <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz · ${ineficaz} ineficaz`} />
+          <KpiCard icon="⚠️" label="Desvios em Aberto" value={desviosAbertos} color={desviosAbertos > 0 ? "#4fc3f7" : C.accent} sub={`${desvios.length} total${taxaDesvioRNC !== null ? ` · ${taxaDesvioRNC}% viraram RNC` : ""}`} alert={desviosAbertos > 5} />
           <KpiCard icon="🗂️" label="Docs Vigentes"   value={docsVigentes}  color={C.accent}                                sub={`${docsVencendo > 0 ? `⚠ ${docsVencendo} vencendo em 30d` : "Revisões em dia"}`} alert={docsVencendo > 0} />
         </div>
 
@@ -207,11 +214,12 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, onClose }) {
                   <RcTooltip content={<CustomTooltip />} />
                   <Line type="monotone" dataKey="NC Abertas" stroke="#ff4f6a" strokeWidth={2.5} dot={{ r: 4, fill: "#ff4f6a" }} activeDot={{ r: 6 }} />
                   <Line type="monotone" dataKey="Encerradas Eficaz" stroke={C.accent} strokeWidth={2.5} dot={{ r: 4, fill: C.accent }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="Desvios" stroke="#4fc3f7" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: "#4fc3f7" }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
-              {[["NC Abertas", "#ff4f6a"], ["Encerradas Eficaz", C.accent]].map(([l, c]) => (
+              {[["NC Abertas", "#ff4f6a"], ["Encerradas Eficaz", C.accent], ["Desvios", "#4fc3f7"]].map(([l, c]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.text2 }}>
                   <div style={{ width: 10, height: 3, borderRadius: 2, background: c }} />{l}
                 </div>

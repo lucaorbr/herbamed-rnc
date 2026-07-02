@@ -5,6 +5,7 @@ import { incrementCounter } from "../../firebase";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA, usePagination } from "../../shared/ui";
 import { AnexosUpload } from "../rnc/RncTabs";
+import { DesviosIndicadores } from "./DesviosIndicadores";
 
 // ── Listas fixas (chão de fábrica Herbamed) ──
 export const SETORES_DESVIO = [
@@ -46,6 +47,9 @@ function descParaRNC(d) {
 export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin }) {
   if (view === "novo") {
     return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} />;
+  }
+  if (view === "indicadores") {
+    return <DesviosIndicadores desvios={desvios} setTab={setTab} />;
   }
   return <DesviosLista user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />;
 }
