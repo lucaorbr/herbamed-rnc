@@ -325,7 +325,7 @@ export default function App() {
 
   if (user.role === "exec") return (
     <ThemeCtx.Provider value={T}>
-      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} />
+      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} />
     </ThemeCtx.Provider>
   );
 
@@ -372,6 +372,7 @@ export default function App() {
     "cq-materiais": "CQ — Cadastro de Materiais",
     "cq-analises": "CQ — Fichas de Análise",
     "cq-dashboard": "CQ — Dashboard de Qualidade",
+    "indicadores-desvios": "Desvios — Indicadores",
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
@@ -596,6 +597,7 @@ export default function App() {
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />}
+              {tab==="indicadores-desvios" && perm("verDesvios") && <DesviosTab view="indicadores" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
@@ -647,7 +649,7 @@ export default function App() {
         {/* ── MODO APRESENTAÇÃO ── */}
         {presentationMode && (
           <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.bg }}>
-            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} onClose={() => setPresentationMode(false)} />
+            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} onClose={() => setPresentationMode(false)} />
           </div>
         )}
 

@@ -45,6 +45,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
     { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
       { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },
       ...(!isViewer?[{ id:"novo-desvio", icon:"➕", label:"Novo Desvio" }]:[]),
+      { id:"indicadores-desvios", icon:"📊", label:"Indicadores" },
     ]},
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
