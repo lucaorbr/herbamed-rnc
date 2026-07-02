@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.7.0`
+- Versao atual: `2.9.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -56,6 +56,8 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Documentos** — Distribuição de cópias físicas + recolha por revisão (PR #56)
 - **CQ** — Fix: recebimento Areco reutiliza material e puxa ensaios parametrizados (PR #57)
 - **RNC** — Exportar formulário de resposta do fornecedor em Excel pré-preenchido (alternativa offline ao link público enquanto a TI libera o acesso externo) — v2.7.0
+- **UI** — Favicon com a folha do logo Herbamed (PR #89) — v2.8.2
+- **Desvios — Indicadores** — aba completa de indicadores (filtro de período, 6 KPIs, tendência mensal, por setor/tipo/impacto, aging de triagem, export CSV) + integração no Dashboard Executivo (card "Desvios em Aberto", linha de desvios na tendência, semáforo) (PR #90) — v2.9.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
