@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.10.1`
+- Versao atual: `2.11.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -59,6 +59,8 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **UI** — Favicon com a folha do logo Herbamed (PR #89) — v2.8.2
 - **Desvios — Indicadores** — aba completa de indicadores (filtro de período, 6 KPIs, tendência mensal, por setor/tipo/impacto, aging de triagem, export CSV) + integração no Dashboard Executivo (card "Desvios em Aberto", linha de desvios na tendência, semáforo) (PR #90) — v2.9.0
 - **Desvios — Indicadores v2** — KPIs com comparativo do período anterior (Δ), tendência mensal empilhada por impacto, Pareto de tipos (eixo único em %, substitui a pizza), matriz de recorrência Setor × Tipo (heatmap), desempenho de triagem por faixas com meta de 7 dias (% ≤7d + mediana), aging com contadores >7d/>15d, top produtos/lotes recorrentes, clique em gráficos/KPIs navega para a lista já filtrada (novo filtro de Tipo na lista) — v2.10.0
+- **Desvios — Indicadores (fix de layout)** — `minWidth:0` nos cards do grid Triagem/Aging e no `<span>` da descrição: o gráfico "Desempenho de Triagem" não é mais espremido por descrições longas e o ellipsis passa a funcionar — v2.10.2 (PR #94)
+- **Desvios — Catálogo de tipos configurável** — tipos de desvio deixam de ser lista fixa no código e passam a ser geridos no Admin → Catálogos → "Tipos de Desvio" (`configuracoes/catalogo_tipos_desvio`, `{ nome, ativo }`). Formulário e filtro usam a lista ativa; "Outros" (texto livre) segue sempre disponível e não pode ser removido. Objetivo: evitar tipos duplicados com grafias diferentes que distorcem Pareto e matriz Setor×Tipo. **Pendente (próximo passo):** tela para reclassificar os `tipoOutro` históricos para os tipos canônicos — v2.11.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)

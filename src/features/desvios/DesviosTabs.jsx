@@ -19,7 +19,19 @@ export const SETORES_DESVIO = [
   "Outros",
 ];
 
+// Lista-semente padrão. A lista efetiva vem do catálogo configurável
+// (configuracoes/catalogo_tipos_desvio, gerido no Admin); esta é o fallback.
 export const TIPOS_DESVIO = ["BPF", "Processo", "Recebimento", "Equipamento", "Documentação", "Fornecedor", "Outros"];
+
+// Nomes de tipo ativos a partir do catálogo (ou o padrão, se ainda não configurado).
+// "Outros" é sempre garantido como último item — é a válvula de escape do texto livre.
+export function tiposDesvioAtivos(catalogo) {
+  const base = (catalogo && catalogo.length)
+    ? catalogo.filter(t => t.ativo !== false).map(t => t.nome).filter(Boolean)
+    : TIPOS_DESVIO;
+  const semOutros = base.filter(t => t !== "Outros");
+  return [...semOutros, "Outros"];
+}
 
 // Mesma escala de severidade da RNC, para converter sem reclassificar.
 export const IMPACTOS_DESVIO = ["Crítica", "Maior", "Menor"];
@@ -50,18 +62,19 @@ function descParaRNC(d) {
   return partes.filter(Boolean).join("");
 }
 
-export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin }) {
+export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, catalogoTiposDesvio = [] }) {
+  const tiposDesvio = tiposDesvioAtivos(catalogoTiposDesvio);
   if (view === "novo") {
-    return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} />;
+    return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} tiposDesvio={tiposDesvio} />;
   }
   if (view === "indicadores") {
-    return <DesviosIndicadores desvios={desvios} setTab={setTab} />;
+    return <DesviosIndicadores desvios={desvios} setTab={setTab} tiposDesvio={tiposDesvio} />;
   }
-  return <DesviosLista user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} />;
+  return <DesviosLista user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} tiposDesvio={tiposDesvio} />;
 }
 
 // ── Lista + triagem ──
-function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin }) {
+function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, tiposDesvio = TIPOS_DESVIO }) {
   const T = useTheme(); const s = useS();
   const [fIni] = useState(consumirFiltroDesvios);
   const [busca, setBusca] = useState(fIni.busca || "");
@@ -157,7 +170,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           <div style={{ flex: "1 1 130px" }}>
-            <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{TIPOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+            <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           {perm("criarDesvio") && (
             <button onClick={() => setTab("novo-desvio")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Novo desvio</button>
@@ -265,10 +278,10 @@ function Campo({ T, l, v, bloco }) {
 }
 
 // ── Formulário de novo desvio ──
-function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio }) {
+function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPOS_DESVIO }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({
-    dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: "BPF", tipoOutro: "", impacto: "Maior",
+    dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: tiposDesvio[0] || "Outros", tipoOutro: "", impacto: "Maior",
     desc: "", produto: "", acaoImediata: "Não", acaoDesc: "",
   });
   const [anexos, setAnexos] = useState([]);
@@ -326,7 +339,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio }) {
         </>} />
         <F lbl="Tipo do desvio" ch={
           <div>
-            <Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>{TIPOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>
+            <Sel value={f.tipo} onChange={e => set("tipo", e.target.value)}>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>
             {f.tipo === "Outros" && <Inp placeholder="Especifique o tipo..." value={f.tipoOutro} onChange={e => set("tipoOutro", e.target.value)} sx={{ marginTop: 8 }} />}
           </div>
         } />

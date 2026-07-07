@@ -7,8 +7,9 @@ import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
+import { TIPOS_DESVIO } from "../desvios/DesviosTabs";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -48,6 +49,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   // ── Catálogos ─────────────────────────────────────────────────────────────
   const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ ...d, ativo:true }));
   const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ ...t, prazoRevisaoAnos:t.prazoRevisaoAnos??2, semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua, ativo:true }));
+  const mkDefaultTiposDesvio = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DESVIO.map(nome => ({ nome, ativo:true }));
 
   const [abaAdmin, setAbaAdmin] = useState("usuarios");
   const [catAba, setCatAba] = useState("deptos");
@@ -61,9 +63,15 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [editTipoData, setEditTipoData] = useState({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
   const [novoTipo, setNovoTipo] = useState({ id:"", label:"", prazoRevisaoAnos:"2", semCapa:false, semMarcaDagua:false });
   const [savingTipos, setSavingTipos] = useState(false);
+  const [listaTiposDesvio, setListaTiposDesvio] = useState(() => mkDefaultTiposDesvio(catalogoTiposDesvio));
+  const [editTdIdx, setEditTdIdx] = useState(null);
+  const [editTdNome, setEditTdNome] = useState("");
+  const [novoTd, setNovoTd] = useState("");
+  const [savingTd, setSavingTd] = useState(false);
 
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
+  useEffect(() => { setListaTiposDesvio(mkDefaultTiposDesvio(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
 
   const persistDeptos = async (lista) => {
     if (!isAdmin) return;
@@ -91,6 +99,19 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     setSavingTipos(false);
   };
   const salvarCatTipos = () => persistTipos(listaTipos);
+
+  // Catálogo de tipos de desvio (configuracoes/catalogo_tipos_desvio) — só nome + ativo.
+  const persistTiposDesvio = async (lista) => {
+    if (!isAdmin) return;
+    if (lista.some(t => !t.nome.trim())) { toast_("Todos os tipos de desvio precisam de um nome.", "red"); return; }
+    setSavingTd(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_tipos_desvio", { items: lista });
+      await auditLog("Atualizou Catálogo de Tipos de Desvio", "configuracoes", "catalogo_tipos_desvio", "Catálogo", null, { total: lista.length });
+      toast_("Catálogo de tipos de desvio salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingTd(false);
+  };
 
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
@@ -363,10 +384,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       {abaAdmin==="catalogos" && (<>
       {/* ── CATÁLOGOS DE DOCUMENTOS ── */}
       <div style={s.card}>
-        <SecTitle icon="🗂️" ch="Catálogos de Documentos" />
+        <SecTitle icon="🗂️" ch="Catálogos" />
         {/* Tabs */}
-        <div style={{ display:"flex", gap:6, marginBottom:16 }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"]].map(([k,l])=>(
+        <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"]].map(([k,l])=>(
             <button key={k} onClick={()=>setCatAba(k)}
               style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
                 background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -534,6 +555,80 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <div style={{ textAlign:"right", marginTop:12 }}>
             <button style={{ ...s.btnA, opacity:(!isAdmin||savingTipos)?0.6:1 }} disabled={!isAdmin||savingTipos} onClick={salvarCatTipos}>
               {savingTipos?"Salvando...":"💾 Salvar tipos de documento"}
+            </button>
+          </div>
+        </>)}
+
+        {/* ── ABA TIPOS DE DESVIO ── */}
+        {catAba==="desvios" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Nomes dos tipos usados ao registrar um desvio (ex: BPF, Processo, Equipamento). Manter uma lista fechada evita
+            que o mesmo tipo apareça com grafias diferentes e distorça o Pareto e a matriz Setor × Tipo dos indicadores.
+            Apenas tipos ativos aparecem no formulário. <strong>Outros</strong> continua sempre disponível como texto livre.
+            As alterações são salvas automaticamente.
+          </div>
+          {/* Adicionar novo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Nome do tipo (ex: Limpeza)" value={novoTd}
+              onChange={e=>setNovoTd(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") document.getElementById("td-add-btn")?.click(); }}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button id="td-add-btn" style={s.btnA} onClick={()=>{
+              const nome = novoTd.trim();
+              if (!nome) return;
+              if (listaTiposDesvio.some(t=>t.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse tipo já existe.", "red"); return; }
+              const next = [...listaTiposDesvio, { nome, ativo:true }];
+              setListaTiposDesvio(next);
+              setNovoTd("");
+              persistTiposDesvio(next);
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
+            {listaTiposDesvio.map((t, i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                {editTdIdx===i ? (<>
+                  <input value={editTdNome} autoFocus
+                    onChange={e=>setEditTdNome(e.target.value)}
+                    style={{ ...s.inp, flex:1, fontSize:12 }} />
+                  <button style={s.btnA} onClick={()=>{
+                    const nome = editTdNome.trim();
+                    if (!nome) return;
+                    if (listaTiposDesvio.some((x,j)=>j!==i && x.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse tipo já existe.", "red"); return; }
+                    const next = listaTiposDesvio.map((x,j)=>j===i?{ ...x, nome }:x);
+                    setListaTiposDesvio(next);
+                    setEditTdIdx(null);
+                    persistTiposDesvio(next);
+                  }}>✓</button>
+                  <button style={s.btn} onClick={()=>setEditTdIdx(null)}>✕</button>
+                </>) : (<>
+                  <span style={{ flex:1, fontSize:12, color:T.text }}>{t.nome}</span>
+                  <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
+                    {t.ativo?"Ativo":"Inativo"}
+                  </span>
+                  {t.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTdIdx(i); setEditTdNome(t.nome); }}>✏️</button>
+                  )}
+                  {t.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaTiposDesvio.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x); setListaTiposDesvio(next); persistTiposDesvio(next); }}>
+                      {t.ativo?"🔒 Desativar":"🔓 Ativar"}
+                    </button>
+                  )}
+                  {t.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                      title="Excluir tipo de desvio do catálogo"
+                      onClick={()=>{ if(confirm(`Excluir o tipo de desvio "${t.nome}" do catálogo?\n\nDesvios já registrados com este tipo não são afetados. Prefira desativar se o tipo já foi usado.`)) { const next=listaTiposDesvio.filter((_,j)=>j!==i); setListaTiposDesvio(next); persistTiposDesvio(next); } }}>🗑️</button>
+                  )}
+                  {t.nome==="Outros" && (
+                    <span style={{ fontSize:10, color:T.text3, fontStyle:"italic" }}>sempre disponível</span>
+                  )}
+                </>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTd)?0.6:1 }} disabled={!isAdmin||savingTd} onClick={()=>persistTiposDesvio(listaTiposDesvio)}>
+              {savingTd?"Salvando...":"💾 Salvar tipos de desvio"}
             </button>
           </div>
         </>)}
