@@ -53,7 +53,7 @@ const mesesAntes = (iso, n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
-export function DesviosIndicadores({ desvios = [], setTab }) {
+export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_DESVIO }) {
   const T = useTheme();
   const [periodo, setPeriodo] = useState("12m");
 
@@ -217,7 +217,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
     setTab("desvios");
   };
   const filtroSetor = s => (SETORES_DESVIO.includes(s) ? { setor: s } : { busca: s });
-  const filtroTipo  = t => (TIPOS_DESVIO.includes(t) ? { tipo: t } : { busca: t });
+  const filtroTipo  = t => (tiposDesvio.includes(t) ? { tipo: t } : { busca: t });
 
   // ── Export CSV ──
   const exportCSV = () => {
