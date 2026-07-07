@@ -365,7 +365,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
       {/* ── Pareto de tipos + Setores ── */}
       <div className="grid-2" style={{ marginBottom: 16 }}>
         {/* Pareto */}
-        <div style={card}>
+        <div style={{ ...card, minWidth: 0 }}>
           {cardTitle("📊", "Pareto de Tipos", "Barras: % do total (nº de desvios no topo) · Linha: % acumulado — onde concentrar ação")}
           {pareto.length === 0 ? semDados : (
             <div style={{ height: 280 }}>
@@ -388,7 +388,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         </div>
 
         {/* Por setor */}
-        <div style={card}>
+        <div style={{ ...card, minWidth: 0 }}>
           {cardTitle("🏭", "Desvios por Setor", "Top 8 setores no período — clique para ver na lista")}
           {porSetor.length === 0 ? semDados : (
             <div style={{ height: 280 }}>
@@ -461,7 +461,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
       {/* ── SLA de triagem + Aging (60/40: gráfico precisa de largura; lista, não) ── */}
       <div className="grid-2" style={{ marginBottom: 16, gridTemplateColumns: "3fr 2fr" }}>
         {/* SLA */}
-        <div style={card}>
+        <div style={{ ...card, minWidth: 0 }}>
           {cardTitle("⏱️", "Desempenho de Triagem", `Tempo do registro até encerrar/converter — meta: ${META_TRIAGEM_DIAS} dias`)}
           {a.triados.length === 0 ? semDados : (
             <>
@@ -495,7 +495,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         </div>
 
         {/* Aging */}
-        <div style={card}>
+        <div style={{ ...card, minWidth: 0 }}>
           {cardTitle("⏳", "Desvios em Aberto há Mais Tempo", "Aguardando triagem da Qualidade — independe do filtro de período")}
           {abertosTotal > 0 && (
             <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -518,7 +518,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
                   <div key={d.id} onClick={() => irParaLista({ busca: d.num })}
                     style={{ background: T.surf, border: `1px solid ${T.border}`, borderLeft: `3px solid ${corDias}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 12, cursor: setTab ? "pointer" : "default" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{d.num}</span>
-                    <span style={{ fontSize: 11, color: T.text2, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</span>
+                    <span style={{ fontSize: 11, color: T.text2, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</span>
                     <span style={{ fontSize: 10, color: T.text3, whiteSpace: "nowrap" }}>{setorDe(d)} · {fmt(dataDe(d))}</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: corDias, whiteSpace: "nowrap", minWidth: 44, textAlign: "right" }}>{d.dias}d</span>
                   </div>
@@ -540,7 +540,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
                 <div key={pr.nome} onClick={() => irParaLista({ busca: pr.nome })}
                   style={{ position: "relative", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, cursor: setTab ? "pointer" : "default", overflow: "hidden" }}>
                   <div style={{ position: "absolute", inset: 0, width: `${pr.qtd / topProdutos[0].qtd * 100}%`, background: T.accentDim }} />
-                  <span style={{ fontSize: 12, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", position: "relative" }}>{pr.nome}</span>
+                  <span style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", position: "relative" }}>{pr.nome}</span>
                   {pr.criticos > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.red, position: "relative", whiteSpace: "nowrap" }}>{pr.criticos} crítico{pr.criticos > 1 ? "s" : ""}</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, color: T.accent, position: "relative", minWidth: 24, textAlign: "right" }}>{pr.qtd}</span>
                 </div>
