@@ -65,6 +65,8 @@ http://IP_DO_SERVIDOR:9027
 
 A integracao com o banco do Areco e somente leitura. O SGQ consulta recebimentos no ERP e grava uma copia operacional no PostgreSQL local do SGQ.
 
+A fila de `Recebimentos Areco` mostra apenas os itens dos ultimos 7 dias por padrao (`ARECO_RECEBIMENTOS_DAYS=7`). Itens mais antigos sao limpos da copia operacional local do SGQ; eles permanecem preservados no ERP Areco.
+
 Para ativar a sincronizacao a cada 3 minutos, configure no `.env`:
 
 ```env

@@ -16,11 +16,15 @@ const {
   requireUser,
   verifyPassword,
 } = require("./auth");
-const { runArecoSync, startArecoScheduler } = require("./arecoSync");
+const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
 
 const PORT = Number(process.env.PORT || 9028);
 const HOST = process.env.HOST || "0.0.0.0";
 const HERBAMED_LOGO_PATH = path.join(__dirname, "..", "public", "logo-herbamed.png");
+const ARECO_RECEBIMENTOS_DAYS = (() => {
+  const days = Number(process.env.ARECO_RECEBIMENTOS_DAYS || 7);
+  return Number.isFinite(days) && days > 0 ? days : 7;
+})();
 
 function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
@@ -644,6 +648,82 @@ async function notifyDocumentSignatureRoute(docId, oldData, newData) {
   }
 }
 
+function normMatch(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function arecoMaterialCodeFromAnalysis(data = {}) {
+  const materialId = String(data.materialId || data.material?.id || "").trim();
+  if (materialId.toLowerCase().startsWith("areco-")) return materialId.slice(6);
+  return String(data.codigoAreco || data.produto_id_areco || data.produtoCodigo || "").trim();
+}
+
+function arecoStatusFromAnalysis(data = {}) {
+  const conclusao = normMatch(data.conclusao);
+  return conclusao && conclusao !== "pendente" ? "concluido" : "em_analise";
+}
+
+async function reconcileArecoRecebimentoForAnalise(analiseId, data = {}) {
+  if (!analiseId || !data) return null;
+
+  const status = arecoStatusFromAnalysis(data);
+  const directId = data.arecoRecebimentoId || data.areco_recebimento_id;
+  if (directId) {
+    const direct = await query(`
+      UPDATE areco_recebimentos
+      SET status = $2,
+          cq_analise_id = $3,
+          updated_at = now()
+      WHERE id = $1
+        AND status <> 'fora_escopo'
+      RETURNING *
+    `, [directId, status, String(analiseId)]);
+    if (direct.rowCount) return direct.rows[0];
+  }
+
+  const nf = normMatch(data.nf || data.nf_numero || data.notaFiscal);
+  const lote = normMatch(data.lote);
+  const materialCode = normMatch(arecoMaterialCodeFromAnalysis(data));
+  const materialName = normMatch(data.materialNome || data.material?.nome);
+
+  if ((!nf && !lote) || (!materialCode && !materialName)) return null;
+
+  const matched = await query(`
+    WITH candidate AS (
+      SELECT id
+      FROM areco_recebimentos
+      WHERE status IN ('pendente_analise', 'em_analise')
+        AND escopo_qualidade IS DISTINCT FROM false
+        AND data_entrada IS NOT NULL
+        AND data_entrada >= now() - ($1::int * interval '1 day')
+        AND ($2::text = '' OR lower(trim(coalesce(nf_numero, ''))) = $2)
+        AND ($3::text = '' OR regexp_replace(lower(coalesce(lote, '')), '\\s+', '', 'g') = regexp_replace($3, '\\s+', '', 'g'))
+        AND (
+          ($4::text <> '' AND (
+            lower(coalesce(produto_id_areco, '')) = $4 OR
+            lower(coalesce(produto_codigo, '')) = $4 OR
+            lower(coalesce(produto_referencia, '')) = $4
+          ))
+          OR
+          ($5::text <> '' AND (
+            lower(coalesce(produto_nome, '')) = $5 OR
+            lower(coalesce(produto_descricao, '')) = $5
+          ))
+        )
+      ORDER BY data_entrada DESC NULLS LAST, imported_at DESC
+      LIMIT 1
+    )
+    UPDATE areco_recebimentos
+    SET status = $6,
+        cq_analise_id = $7,
+        updated_at = now()
+    WHERE id = (SELECT id FROM candidate)
+    RETURNING *
+  `, [ARECO_RECEBIMENTOS_DAYS, nf, lote, materialCode, materialName, status, String(analiseId)]);
+
+  return matched.rows[0] || null;
+}
+
 async function handleCollections(req, res, pathname) {
   const match = pathname.match(/^\/api\/collections\/([^/]+)(?:\/(.+))?$/);
   if (!match) return false;
@@ -677,6 +757,10 @@ async function handleCollections(req, res, pathname) {
       VALUES ($1,$2,$3::jsonb,now())
       ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
     `, [collection, id, JSON.stringify({ ...data, id })]);
+
+    if (collection === "cq_analises") {
+      await reconcileArecoRecebimentoForAnalise(id, { ...data, id });
+    }
 
     if (collection === "gestao_docs") {
       await notifyDocumentSignatureRoute(id, oldData, data);
@@ -1185,15 +1269,18 @@ async function handleAreco(req, res, pathname, url) {
   if (pathname === "/api/areco/recebimentos" && req.method === "GET") {
     await requireUser(req);
     const status = url.searchParams.get("status");
-    const params = [];
-    let where = "";
+    const params = [ARECO_RECEBIMENTOS_DAYS];
+    const where = [`
+      data_entrada IS NOT NULL
+      AND data_entrada >= now() - ($1::int * interval '1 day')
+    `];
     if (status) {
       params.push(status);
-      where = "WHERE status = $1";
+      where.push(`status = $${params.length}`);
     }
     const result = await query(`
       SELECT * FROM areco_recebimentos
-      ${where}
+      WHERE ${where.join(" AND ")}
       ORDER BY data_entrada DESC NULLS LAST, imported_at DESC
       LIMIT 500
     `, params);
@@ -1398,7 +1485,8 @@ const server = http.createServer((req, res) => {
 });
 
 migrate()
-  .then(() => {
+  .then(async () => {
+    await pruneOldRecebimentos().catch(error => console.warn("Limpeza de recebimentos Areco falhou:", error.message));
     startArecoScheduler();
     server.listen(PORT, HOST, () => {
       console.log(`SGQ Herbamed backend ouvindo em ${HOST}:${PORT}`);

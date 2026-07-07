@@ -53,8 +53,18 @@ function recebimentosLimitClause() {
 }
 
 function recebimentosDaysBack() {
-  const days = Number(process.env.ARECO_RECEBIMENTOS_DAYS || 30);
-  return Number.isFinite(days) && days > 0 ? days : 30;
+  const days = Number(process.env.ARECO_RECEBIMENTOS_DAYS || 7);
+  return Number.isFinite(days) && days > 0 ? days : 7;
+}
+
+async function pruneOldRecebimentos() {
+  const days = recebimentosDaysBack();
+  const result = await query(`
+    DELETE FROM areco_recebimentos
+    WHERE data_entrada IS NOT NULL
+      AND data_entrada < now() - ($1::int * interval '1 day')
+  `, [days]);
+  return result.rowCount || 0;
 }
 
 function defaultRecebimentosQuery() {
@@ -548,6 +558,7 @@ async function runArecoSync() {
 
     importedMateriais += await syncMateriais(pool);
     importedFornecedores += await syncFornecedores(pool);
+    const prunedRecebimentos = await pruneOldRecebimentos();
 
     await query(`
       INSERT INTO areco_sync_state (source, last_success_at, last_cursor, last_error, updated_at)
@@ -559,7 +570,7 @@ async function runArecoSync() {
         updated_at = now()
     `, [source, String(imported)]);
 
-    return { imported, importedMateriais, importedFornecedores };
+    return { imported, importedMateriais, importedFornecedores, prunedRecebimentos };
   } catch (error) {
     await query(`
       INSERT INTO areco_sync_state (source, last_error, updated_at)
@@ -593,4 +604,4 @@ function startArecoScheduler() {
   setInterval(tick, interval);
 }
 
-module.exports = { runArecoSync, startArecoScheduler };
+module.exports = { runArecoSync, startArecoScheduler, pruneOldRecebimentos };
