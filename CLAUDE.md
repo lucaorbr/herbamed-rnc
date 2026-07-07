@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.10.0`
+- Versao atual: `2.10.1`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -58,7 +58,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **RNC** — Exportar formulário de resposta do fornecedor em Excel pré-preenchido (alternativa offline ao link público enquanto a TI libera o acesso externo) — v2.7.0
 - **UI** — Favicon com a folha do logo Herbamed (PR #89) — v2.8.2
 - **Desvios — Indicadores** — aba completa de indicadores (filtro de período, 6 KPIs, tendência mensal, por setor/tipo/impacto, aging de triagem, export CSV) + integração no Dashboard Executivo (card "Desvios em Aberto", linha de desvios na tendência, semáforo) (PR #90) — v2.9.0
-- **Desvios — Indicadores v2** — KPIs com comparativo do período anterior (Δ), tendência mensal empilhada por impacto, Pareto de tipos (eixo único em %, substitui a pizza), matriz de recorrência Setor × Tipo (heatmap), desempenho de triagem por faixas com meta de 7 dias (% ≤7d + mediana), aging com contadores >7d/>15d, top produtos/lotes recorrentes, engajamento no registro, clique em gráficos/KPIs navega para a lista já filtrada (novo filtro de Tipo na lista) — v2.10.0
+- **Desvios — Indicadores v2** — KPIs com comparativo do período anterior (Δ), tendência mensal empilhada por impacto, Pareto de tipos (eixo único em %, substitui a pizza), matriz de recorrência Setor × Tipo (heatmap), desempenho de triagem por faixas com meta de 7 dias (% ≤7d + mediana), aging com contadores >7d/>15d, top produtos/lotes recorrentes, clique em gráficos/KPIs navega para a lista já filtrada (novo filtro de Tipo na lista) — v2.10.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)

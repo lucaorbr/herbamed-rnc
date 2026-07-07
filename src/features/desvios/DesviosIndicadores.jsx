@@ -210,17 +210,6 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
     return Object.values(map).sort((a, b) => b.qtd - a.qtd).slice(0, 5);
   }, [filtrados]);
 
-  // ── Engajamento: quem mais registra ──
-  const engajamento = useMemo(() => {
-    const map = {};
-    filtrados.forEach(d => {
-      const r = (d.registradoPor || "").trim() || "—";
-      map[r] = (map[r] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-      .map(([nome, qtd]) => ({ nome, qtd }));
-  }, [filtrados]);
-
   // ── Navegação: clique em gráfico → lista já filtrada ──
   const irParaLista = (filtro) => {
     if (!setTab) return;
@@ -379,11 +368,11 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         <div style={card}>
           {cardTitle("📊", "Pareto de Tipos", "Barras: % do total (nº de desvios no topo) · Linha: % acumulado — onde concentrar ação")}
           {pareto.length === 0 ? semDados : (
-            <div style={{ height: 250 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={pareto} margin={{ top: 18 }}>
                   <CartesianGrid stroke={T.border} vertical={false} />
-                  <XAxis dataKey="nome" tick={{ fill: T.text2, fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
+                  <XAxis dataKey="nome" tick={{ fill: T.text2, fontSize: 10 }} angle={-35} textAnchor="end" height={58} axisLine={false} tickLine={false} interval={0} />
                   <YAxis unit="%" domain={[0, 100]} tick={{ fill: T.text2, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <RcTooltip content={<ParetoTooltip />} cursor={{ fill: T.accentDim }} />
                   <Bar dataKey="pct" name="% do total" fill={T.accent} radius={[4, 4, 0, 0]} maxBarSize={44}
@@ -402,7 +391,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         <div style={card}>
           {cardTitle("🏭", "Desvios por Setor", "Top 8 setores no período — clique para ver na lista")}
           {porSetor.length === 0 ? semDados : (
-            <div style={{ height: 250 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={porSetor} layout="vertical" barCategoryGap="25%">
                   <CartesianGrid stroke={T.border} horizontal={false} />
@@ -469,8 +458,8 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         )}
       </div>
 
-      {/* ── SLA de triagem + Aging ── */}
-      <div className="grid-2" style={{ marginBottom: 16 }}>
+      {/* ── SLA de triagem + Aging (60/40: gráfico precisa de largura; lista, não) ── */}
+      <div className="grid-2" style={{ marginBottom: 16, gridTemplateColumns: "3fr 2fr" }}>
         {/* SLA */}
         <div style={card}>
           {cardTitle("⏱️", "Desempenho de Triagem", `Tempo do registro até encerrar/converter — meta: ${META_TRIAGEM_DIAS} dias`)}
@@ -488,7 +477,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
                   </div>
                 ))}
               </div>
-              <div style={{ height: 170 }}>
+              <div style={{ height: 210 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={slaFaixas} barCategoryGap="28%">
                     <CartesianGrid stroke={T.border} vertical={false} />
@@ -540,10 +529,8 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         </div>
       </div>
 
-      {/* ── Produtos recorrentes + Engajamento ── */}
-      <div className="grid-2">
-        {/* Top produtos */}
-        <div style={card}>
+      {/* ── Produtos recorrentes ── */}
+      <div style={card}>
           {cardTitle("📦", "Produtos / Lotes Recorrentes", "Produto que repete desvio é sinal de revisão de processo — clique para ver os casos")}
           {topProdutos.length === 0 ? (
             <div style={{ padding: "1.2rem", textAlign: "center", color: T.text3, fontSize: 12 }}>Nenhum desvio com produto/lote informado no período</div>
@@ -561,26 +548,6 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
             </div>
           )}
         </div>
-
-        {/* Engajamento */}
-        <div style={card}>
-          {cardTitle("🙌", "Engajamento no Registro", "Quem mais reporta fortalece a cultura de qualidade — reconhecimento, não cobrança")}
-          {engajamento.length === 0 ? (
-            <div style={{ padding: "1.2rem", textAlign: "center", color: T.text3, fontSize: 12 }}>Sem registros no período</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {engajamento.map((r, i) => (
-                <div key={r.nome} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 14 }}>{["🥇", "🥈", "🥉"][i] || "•"}</span>
-                  <span style={{ fontSize: 12, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
-                  <span style={{ fontSize: 10, color: T.text3 }}>{a.total > 0 ? Math.round(r.qtd / a.total * 100) : 0}%</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: T.accent, minWidth: 24, textAlign: "right" }}>{r.qtd}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
