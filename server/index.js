@@ -1278,6 +1278,9 @@ async function handleAreco(req, res, pathname, url) {
       params.push(status);
       where.push(`status = $${params.length}`);
     }
+    if (status !== "fora_escopo") {
+      where.push("escopo_qualidade IS DISTINCT FROM false");
+    }
     const result = await query(`
       SELECT * FROM areco_recebimentos
       WHERE ${where.join(" AND ")}
