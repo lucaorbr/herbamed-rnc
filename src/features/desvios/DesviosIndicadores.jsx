@@ -379,11 +379,11 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         <div style={card}>
           {cardTitle("📊", "Pareto de Tipos", "Barras: % do total (nº de desvios no topo) · Linha: % acumulado — onde concentrar ação")}
           {pareto.length === 0 ? semDados : (
-            <div style={{ height: 250 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={pareto} margin={{ top: 18 }}>
                   <CartesianGrid stroke={T.border} vertical={false} />
-                  <XAxis dataKey="nome" tick={{ fill: T.text2, fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
+                  <XAxis dataKey="nome" tick={{ fill: T.text2, fontSize: 10 }} angle={-35} textAnchor="end" height={58} axisLine={false} tickLine={false} interval={0} />
                   <YAxis unit="%" domain={[0, 100]} tick={{ fill: T.text2, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <RcTooltip content={<ParetoTooltip />} cursor={{ fill: T.accentDim }} />
                   <Bar dataKey="pct" name="% do total" fill={T.accent} radius={[4, 4, 0, 0]} maxBarSize={44}
@@ -402,7 +402,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         <div style={card}>
           {cardTitle("🏭", "Desvios por Setor", "Top 8 setores no período — clique para ver na lista")}
           {porSetor.length === 0 ? semDados : (
-            <div style={{ height: 250 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={porSetor} layout="vertical" barCategoryGap="25%">
                   <CartesianGrid stroke={T.border} horizontal={false} />
@@ -469,8 +469,8 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         )}
       </div>
 
-      {/* ── SLA de triagem + Aging ── */}
-      <div className="grid-2" style={{ marginBottom: 16 }}>
+      {/* ── SLA de triagem + Aging (60/40: gráfico precisa de largura; lista, não) ── */}
+      <div className="grid-2" style={{ marginBottom: 16, gridTemplateColumns: "3fr 2fr" }}>
         {/* SLA */}
         <div style={card}>
           {cardTitle("⏱️", "Desempenho de Triagem", `Tempo do registro até encerrar/converter — meta: ${META_TRIAGEM_DIAS} dias`)}
@@ -488,7 +488,7 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
                   </div>
                 ))}
               </div>
-              <div style={{ height: 170 }}>
+              <div style={{ height: 210 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={slaFaixas} barCategoryGap="28%">
                     <CartesianGrid stroke={T.border} vertical={false} />
