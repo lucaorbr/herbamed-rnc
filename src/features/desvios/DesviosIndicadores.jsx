@@ -210,17 +210,6 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
     return Object.values(map).sort((a, b) => b.qtd - a.qtd).slice(0, 5);
   }, [filtrados]);
 
-  // ── Engajamento: quem mais registra ──
-  const engajamento = useMemo(() => {
-    const map = {};
-    filtrados.forEach(d => {
-      const r = (d.registradoPor || "").trim() || "—";
-      map[r] = (map[r] || 0) + 1;
-    });
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5)
-      .map(([nome, qtd]) => ({ nome, qtd }));
-  }, [filtrados]);
-
   // ── Navegação: clique em gráfico → lista já filtrada ──
   const irParaLista = (filtro) => {
     if (!setTab) return;
@@ -540,10 +529,8 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
         </div>
       </div>
 
-      {/* ── Produtos recorrentes + Engajamento ── */}
-      <div className="grid-2">
-        {/* Top produtos */}
-        <div style={card}>
+      {/* ── Produtos recorrentes ── */}
+      <div style={card}>
           {cardTitle("📦", "Produtos / Lotes Recorrentes", "Produto que repete desvio é sinal de revisão de processo — clique para ver os casos")}
           {topProdutos.length === 0 ? (
             <div style={{ padding: "1.2rem", textAlign: "center", color: T.text3, fontSize: 12 }}>Nenhum desvio com produto/lote informado no período</div>
@@ -561,26 +548,6 @@ export function DesviosIndicadores({ desvios = [], setTab }) {
             </div>
           )}
         </div>
-
-        {/* Engajamento */}
-        <div style={card}>
-          {cardTitle("🙌", "Engajamento no Registro", "Quem mais reporta fortalece a cultura de qualidade — reconhecimento, não cobrança")}
-          {engajamento.length === 0 ? (
-            <div style={{ padding: "1.2rem", textAlign: "center", color: T.text3, fontSize: 12 }}>Sem registros no período</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {engajamento.map((r, i) => (
-                <div key={r.nome} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 14 }}>{["🥇", "🥈", "🥉"][i] || "•"}</span>
-                  <span style={{ fontSize: 12, color: T.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
-                  <span style={{ fontSize: 10, color: T.text3 }}>{a.total > 0 ? Math.round(r.qtd / a.total * 100) : 0}%</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: T.accent, minWidth: 24, textAlign: "right" }}>{r.qtd}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
