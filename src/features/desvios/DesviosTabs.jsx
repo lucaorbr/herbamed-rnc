@@ -30,6 +30,12 @@ export const DESVIO_SMETA = {
   "Convertido em RNC": { c: "#ff8c42", bg: "#ff8c4218", dot: "#ff8c42" },
 };
 
+// Filtro pendente vindo dos Indicadores (clique em gráfico → lista já filtrada).
+// Consumido uma única vez quando a lista monta.
+let _filtroPendente = null;
+export const pedirFiltroDesvios = f => { _filtroPendente = f; };
+const consumirFiltroDesvios = () => { const f = _filtroPendente; _filtroPendente = null; return f || {}; };
+
 function DesvioBadge({ status }) {
   const m = DESVIO_SMETA[status] || DESVIO_SMETA["Registrado"];
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, textTransform: "uppercase", background: m.bg, color: m.c }}>
@@ -57,9 +63,11 @@ export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [],
 // ── Lista + triagem ──
 function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin }) {
   const T = useTheme(); const s = useS();
-  const [busca, setBusca] = useState("");
-  const [fStatus, setFStatus] = useState("");
-  const [fSetor, setFSetor] = useState("");
+  const [fIni] = useState(consumirFiltroDesvios);
+  const [busca, setBusca] = useState(fIni.busca || "");
+  const [fStatus, setFStatus] = useState(fIni.status || "");
+  const [fSetor, setFSetor] = useState(fIni.setor || "");
+  const [fTipo, setFTipo] = useState(fIni.tipo || "");
   const [sel, setSel] = useState(null);
 
   const podeTriar = isAdmin || perm("triarDesvio");
@@ -68,6 +76,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
     .filter(d => !fStatus || d.status === fStatus)
     .filter(d => !fSetor || d.setor === fSetor)
+    .filter(d => !fTipo || d.tipo === fTipo)
     .filter(d => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
@@ -146,6 +155,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
           </div>
           <div style={{ flex: "1 1 150px" }}>
             <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{TIPOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           {perm("criarDesvio") && (
             <button onClick={() => setTab("novo-desvio")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Novo desvio</button>
