@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
@@ -55,6 +55,15 @@ function DesvioBadge({ status }) {
   </span>;
 }
 
+// Normaliza texto livre para agrupar grafias equivalentes ("Temperatura",
+// "temperatura ", "TEMPERATURA" → mesma chave). Sem acento, minúsculo, espaços colapsados.
+const normTipo = (str) => (str || "")
+  .toLowerCase()
+  .normalize("NFD")
+  .replace(/[̀-ͯ]/g, "")
+  .replace(/\s+/g, " ")
+  .trim();
+
 // Texto do desvio reaproveitado ao pré-popular a RNC.
 function descParaRNC(d) {
   const partes = [d.desc?.trim()];
@@ -82,8 +91,12 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [fSetor, setFSetor] = useState(fIni.setor || "");
   const [fTipo, setFTipo] = useState(fIni.tipo || "");
   const [sel, setSel] = useState(null);
+  const [reclassOpen, setReclassOpen] = useState(false);
 
   const podeTriar = isAdmin || perm("triarDesvio");
+
+  // Quantos desvios ainda estão como "Outros" com texto livre (candidatos a reclassificar).
+  const pendentesReclass = desvios.filter(d => d.tipo === "Outros" && (d.tipoOutro || "").trim()).length;
 
   const filtrados = [...desvios]
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
@@ -172,6 +185,12 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
           <div style={{ flex: "1 1 130px" }}>
             <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
+          {isAdmin && pendentesReclass > 0 && (
+            <button onClick={() => setReclassOpen(true)} title="Reclassificar desvios antigos que ficaram como 'Outros' para os tipos do catálogo" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              🏷️ Reclassificar tipos
+              <span style={{ background: "#ff8c42", color: "#fff", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pendentesReclass}</span>
+            </button>
+          )}
           {perm("criarDesvio") && (
             <button onClick={() => setTab("novo-desvio")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Novo desvio</button>
           )}
@@ -263,6 +282,134 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
           </div>
         </div>
       )}
+
+      {reclassOpen && (
+        <ReclassificarTiposModal
+          desvios={desvios}
+          tiposDesvio={tiposDesvio}
+          doSaveDesvio={doSaveDesvio}
+          user={user}
+          toast_={toast_}
+          onClose={() => setReclassOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Reclassificação de tipos históricos ──
+// Junta os desvios que ficaram como "Outros" + texto livre (tipoOutro) por grafia
+// equivalente e permite mapear cada grupo para um tipo canônico do catálogo, limpando
+// o texto livre. Objetivo: parar de sujar o Pareto e a matriz Setor×Tipo com duplicatas.
+function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toast_, onClose }) {
+  const T = useTheme(); const s = useS();
+  const canonicos = tiposDesvio.filter(t => t !== "Outros");
+  const [mapa, setMapa] = useState({}); // chave normalizada → tipo canônico escolhido
+  const [saving, setSaving] = useState(false);
+
+  const grupos = useMemo(() => {
+    const map = new Map();
+    for (const d of desvios) {
+      if (d.tipo !== "Outros") continue;
+      const raw = (d.tipoOutro || "").trim();
+      if (!raw) continue;
+      const key = normTipo(raw);
+      if (!map.has(key)) map.set(key, { key, label: raw, ids: [], count: 0 });
+      const g = map.get(key);
+      g.ids.push(d.id);
+      g.count++;
+      if (raw.length > g.label.length) g.label = raw; // grafia mais completa como rótulo
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  }, [desvios]);
+
+  const selecionados = grupos.filter(g => mapa[g.key]);
+  const totalDesvios = selecionados.reduce((acc, g) => acc + g.count, 0);
+
+  const aplicar = async () => {
+    if (!selecionados.length) { toast_("Selecione um destino para ao menos um grupo.", "red"); return; }
+    if (!window.confirm(`Reclassificar ${totalDesvios} desvio(s) em ${selecionados.length} grupo(s)? O texto livre será substituído pelo tipo do catálogo.`)) return;
+    setSaving(true);
+    let n = 0;
+    try {
+      for (const g of selecionados) {
+        const destino = mapa[g.key];
+        for (const id of g.ids) {
+          const d = desvios.find(x => x.id === id);
+          if (!d) continue;
+          await doSaveDesvio({
+            ...d,
+            tipo: destino,
+            tipoOutro: "",
+            historico: [...(d.historico || []), { data: tod(), acao: `Tipo reclassificado: "${d.tipoOutro || g.label}" → ${destino}`, resp: user?.name || "—" }],
+          });
+          n++;
+        }
+      }
+      toast_(`${n} desvio(s) reclassificado(s).`, "green");
+      onClose();
+    } catch (e) {
+      console.error(e);
+      toast_("Erro ao reclassificar: " + e.message, "red");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 14, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px #000a" }}>
+        <div style={{ padding: "1.2rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: T.bg }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text }}>🏷️ Reclassificar tipos "Outros"</span>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
+        </div>
+        <div style={{ padding: "1.5rem" }}>
+          <p style={{ fontSize: 12.5, color: T.text2, lineHeight: 1.5, marginTop: 0, marginBottom: 18 }}>
+            Estes desvios foram registrados como <strong>“Outros”</strong> com texto livre. Escolha um tipo do catálogo para cada grupo — os desvios daquele grupo passam a usar o tipo canônico e param de aparecer soltos no Pareto e na matriz Setor×Tipo. Grupos sem destino escolhido ficam como estão.
+          </p>
+
+          {canonicos.length === 0 ? (
+            <div style={{ padding: "1.5rem", textAlign: "center", color: T.text3, fontSize: 13, background: T.surf, borderRadius: 10 }}>
+              Nenhum tipo canônico ativo no catálogo. Cadastre os tipos em <strong>Admin → Catálogos → Tipos de Desvio</strong> antes de reclassificar.
+            </div>
+          ) : grupos.length === 0 ? (
+            <div style={{ padding: "1.5rem", textAlign: "center", color: T.text3, fontSize: 13, background: T.surf, borderRadius: 10 }}>
+              Nenhum desvio pendente — todos os tipos já estão no catálogo. ✓
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {grupos.map(g => (
+                <div key={g.key} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: mapa[g.key] ? T.accentDim : T.surf, border: `1px solid ${mapa[g.key] ? T.accent + "44" : T.border}`, borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</div>
+                    <div style={{ fontSize: 11, color: T.text3 }}>{g.count} desvio{g.count > 1 ? "s" : ""}</div>
+                  </div>
+                  <div style={{ fontSize: 15, color: T.text3 }}>→</div>
+                  <div style={{ flex: "0 1 200px" }}>
+                    <Sel value={mapa[g.key] || ""} onChange={e => setMapa(m => ({ ...m, [g.key]: e.target.value }))}>
+                      <option value="">— manter como Outros —</option>
+                      {canonicos.map(t => <option key={t} value={t}>{t}</option>)}
+                    </Sel>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", position: "sticky", bottom: 0, background: T.bg }}>
+          <div style={{ fontSize: 12, color: T.text2 }}>
+            {selecionados.length > 0 ? <><strong style={{ color: T.accent }}>{totalDesvios}</strong> desvio(s) em {selecionados.length} grupo(s) selecionado(s)</> : "Nenhum grupo selecionado"}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onClose} style={{ ...s.btn }}>Cancelar</button>
+            <button onClick={aplicar} disabled={saving || !selecionados.length} style={{ ...s.btnA, opacity: saving || !selecionados.length ? 0.5 : 1, cursor: saving || !selecionados.length ? "not-allowed" : "pointer" }}>
+              {saving ? "Reclassificando..." : "✓ Reclassificar"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
