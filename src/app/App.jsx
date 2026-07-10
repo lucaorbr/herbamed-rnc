@@ -25,6 +25,7 @@ import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab,
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
+import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
 
 export default function App() {
@@ -332,6 +333,7 @@ export default function App() {
   if (user.role === "exec") return (
     <ThemeCtx.Provider value={T}>
       <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} />
+      <AtualizacaoDisponivel />
     </ThemeCtx.Provider>
   );
 
@@ -633,6 +635,7 @@ export default function App() {
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+        <AtualizacaoDisponivel />
 
         {/* Modal voluntário — "Mudar senha" no avatar */}
         {pwModalOpen && !user?.senhaTemporaria && (
