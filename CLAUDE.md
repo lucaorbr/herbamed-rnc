@@ -82,6 +82,19 @@ Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tri
 
 Regra ao pegar estes itens: seguir o que o SE Suite faria e manter a **fonte única** já estabelecida (catálogos configuráveis, `META_TRIAGEM_DIAS`, histórico imutável via `doSaveDesvio`).
 
+### 🔭 CQ — Reanálise periódica + Obsolescência de embalagem (norte, auditoria 2026-07-10)
+Ideia levantada: como revalidar um material que já foi analisado no recebimento e está parado no estoque há algum tempo — garantir que ainda está íntegro/atual (ex.: matéria-prima, rótulos, cartuchos). **Hoje não existe:** o CQ (`cq_fichas`) é só análise de recebimento (evento único na entrada), sem data de reanálise/validade, sem fila de vencimento, sem controle de obsolescência e **sem módulo de estoque/almoxarifado**.
+
+⚠️ **Bloqueio conhecido (decisão do usuário 2026-07-10):** não há tempo agora para alimentar o saldo de estoque do almoxarifado; qualquer fila de reanálise depende de saber o que ainda está em estoque. **Adiado para quando houver mais tempo.** Isto é só o norte.
+
+São **dois mecanismos distintos** (como SE Suite/SAP separam) — não confundir:
+
+1. **Matéria-prima / insumos → reanálise por tempo (retest / validade).** É degradação físico-química. Campos no lote/RA: `dataFabricacao`, `validade` e/ou `periodoReteste` (este último **configurável por tipo de material** no Admin → Catálogos, igual ao `prazoRevisaoAnos` dos tipos de documento) → calcula `proximaReanalise`. Fila/alerta de "materiais vencendo reanálise" (clone da revisão periódica dos Documentos + aging dos Desvios, com e-mail nos moldes do alerta de prazo das RNCs). A reanálise vira nova ficha RA vinculada ao lote original (histórico); aprovou reseta `proximaReanalise`, reprovou dispara RNC automática (já existe) + segregação (a disposição com aprovação já existe). Análogo ao **tipo de inspeção 09 / inspeção recorrente do SAP QM** (data dispara e status do lote bloqueia o consumo até passar).
+
+2. **Rótulos / cartuchos → obsolescência por versão (change control), NÃO reanálise.** Embalagem impressa não "estraga" — o risco é a **arte/texto ter sido revisada** (nova dosagem, novo registro ANVISA, layout). O material em estoque fica **obsoleto** e deve ser **segregado/destruído**, não reanalisado. Amarrar cada item de embalagem à **arte aprovada (documento controlado / versão)**; quando o documento é revisado, o estoque da versão anterior vira **pendência de segregação** — reusando o padrão `recolhaPendente` da Gestão de Documentos (PR #56). O ensaio de recebimento "Impressão/texto — conforme aprovado" continua cobrindo a entrada; a obsolescência cobre o que já entrou e envelheceu no estoque.
+
+Recomendação registrada: quando retomar, começar pela opção **leve** (campo de situação em estoque por lote — Em estoque / Consumido / Segregado — mantido manualmente pela Qualidade, suficiente para gerar a fila) e deixar a **integração ERP/almoxarifado** (SAP-style, fonte real de saldo) como evolução ligada à Seção 17 (infra da TI).
+
 ## Referência de design: SE Suite (SoftExpert Suite)
 Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
 
