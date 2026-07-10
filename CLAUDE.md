@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.11.0`
+- Versao atual: `2.13.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -62,6 +62,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Desvios — Indicadores (fix de layout)** — `minWidth:0` nos cards do grid Triagem/Aging e no `<span>` da descrição: o gráfico "Desempenho de Triagem" não é mais espremido por descrições longas e o ellipsis passa a funcionar — v2.10.2 (PR #94)
 - **Desvios — Catálogo de tipos configurável** — tipos de desvio deixam de ser lista fixa no código e passam a ser geridos no Admin → Catálogos → "Tipos de Desvio" (`configuracoes/catalogo_tipos_desvio`, `{ nome, ativo }`). Formulário e filtro usam a lista ativa; "Outros" (texto livre) segue sempre disponível e não pode ser removido. Objetivo: evitar tipos duplicados com grafias diferentes que distorcem Pareto e matriz Setor×Tipo. — v2.11.0
 - **Desvios — Reclassificação de tipos históricos** — tela admin-only na Lista de Desvios (botão "🏷️ Reclassificar tipos", com contador dos pendentes) que agrupa os desvios registrados como "Outros" + texto livre (`tipoOutro`) por grafia equivalente (case/acento-insensível via `normTipo`) e permite mapear cada grupo para um tipo canônico do catálogo. Ao aplicar, seta `tipo` = canônico, limpa `tipoOutro` e registra no `historico` de cada desvio (auditoria via `doSaveDesvio`). Fecha o passo pendente da v2.11.0 e limpa a distorção do Pareto/matriz Setor×Tipo. Só mapeia para tipos já existentes no catálogo — v2.12.0
+- **Desvios — Catálogo de setores configurável + reclassificação + prazo/atraso na lista** — (1) setores de desvio deixam de ser lista fixa no código e passam a ser geridos no Admin → Catálogos → "Setores de Desvio" (`configuracoes/catalogo_setores_desvio`, `{ nome, ativo }`); formulário e filtro usam a lista ativa; "Outros" (texto livre) segue sempre disponível e não pode ser removido; `setoresDesvioAtivos()` espelha `tiposDesvioAtivos()`. (2) O modal de reclassificação foi generalizado (`ReclassificarModal` com `RECLASS_DIMS`) para funcionar tanto para tipos quanto para setores — botão "🏭 Reclassificar setores" com contador de pendentes na Lista, admin-only. (3) Fechou-se o loop do SLA de triagem: `META_TRIAGEM_DIAS` (7d) virou fonte única em `DesviosTabs` (importada pelos Indicadores), e a Lista ganhou coluna "Triagem" (`TriagemChip`) + linha no modal de detalhe mostrando há quantos dias o desvio está aberto e destacando os atrasados — a métrica que antes só existia nos indicadores agora é acionável no fluxo. — v2.13.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)

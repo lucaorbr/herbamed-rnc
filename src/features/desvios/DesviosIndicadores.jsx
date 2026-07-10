@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
-import { DESVIO_SMETA, SETORES_DESVIO, TIPOS_DESVIO, pedirFiltroDesvios } from "./DesviosTabs";
+import { DESVIO_SMETA, META_TRIAGEM_DIAS, SETORES_DESVIO, TIPOS_DESVIO, pedirFiltroDesvios } from "./DesviosTabs";
 
 const VERDE_OK = "#2ab84a";
 
@@ -15,9 +15,6 @@ const PERIODOS = [
   { id: "ano", label: "Ano atual",        meses: null },
   { id: "tudo", label: "Todo o histórico", meses: null },
 ];
-
-// Meta de triagem da Qualidade (dias corridos do registro até encerrar/converter)
-const META_TRIAGEM_DIAS = 7;
 
 const setorDe = d => (d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || "—"));
 const tipoDe  = d => (d.tipo === "Outros" ? (d.tipoOutro || "Outros") : (d.tipo || "—"));
@@ -53,7 +50,7 @@ const mesesAntes = (iso, n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
-export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_DESVIO }) {
+export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const T = useTheme();
   const [periodo, setPeriodo] = useState("12m");
 
@@ -216,7 +213,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
     pedirFiltroDesvios(filtro);
     setTab("desvios");
   };
-  const filtroSetor = s => (SETORES_DESVIO.includes(s) ? { setor: s } : { busca: s });
+  const filtroSetor = s => (setoresDesvio.includes(s) ? { setor: s } : { busca: s });
   const filtroTipo  = t => (tiposDesvio.includes(t) ? { tipo: t } : { busca: t });
 
   // ── Export CSV ──
