@@ -7,9 +7,9 @@ import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
-import { TIPOS_DESVIO } from "../desvios/DesviosTabs";
+import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -50,6 +50,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const mkDefaultDeptos = (cat) => cat && cat.length > 0 ? [...cat] : DEPARTAMENTOS_GD.map(d => ({ ...d, ativo:true }));
   const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ ...t, prazoRevisaoAnos:t.prazoRevisaoAnos??2, semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua, ativo:true }));
   const mkDefaultTiposDesvio = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DESVIO.map(nome => ({ nome, ativo:true }));
+  const mkDefaultSetoresDesvio = (cat) => cat && cat.length > 0 ? [...cat] : SETORES_DESVIO.map(nome => ({ nome, ativo:true }));
 
   const [abaAdmin, setAbaAdmin] = useState("usuarios");
   const [catAba, setCatAba] = useState("deptos");
@@ -68,10 +69,16 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [editTdNome, setEditTdNome] = useState("");
   const [novoTd, setNovoTd] = useState("");
   const [savingTd, setSavingTd] = useState(false);
+  const [listaSetoresDesvio, setListaSetoresDesvio] = useState(() => mkDefaultSetoresDesvio(catalogoSetoresDesvio));
+  const [editSdIdx, setEditSdIdx] = useState(null);
+  const [editSdNome, setEditSdNome] = useState("");
+  const [novoSd, setNovoSd] = useState("");
+  const [savingSd, setSavingSd] = useState(false);
 
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
   useEffect(() => { setListaTiposDesvio(mkDefaultTiposDesvio(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
+  useEffect(() => { setListaSetoresDesvio(mkDefaultSetoresDesvio(catalogoSetoresDesvio)); }, [catalogoSetoresDesvio.length]);
 
   const persistDeptos = async (lista) => {
     if (!isAdmin) return;
@@ -111,6 +118,19 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       toast_("Catálogo de tipos de desvio salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingTd(false);
+  };
+
+  // Catálogo de setores de desvio (configuracoes/catalogo_setores_desvio) — só nome + ativo.
+  const persistSetoresDesvio = async (lista) => {
+    if (!isAdmin) return;
+    if (lista.some(sx => !sx.nome.trim())) { toast_("Todos os setores precisam de um nome.", "red"); return; }
+    setSavingSd(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_setores_desvio", { items: lista });
+      await auditLog("Atualizou Catálogo de Setores de Desvio", "configuracoes", "catalogo_setores_desvio", "Catálogo", null, { total: lista.length });
+      toast_("Catálogo de setores de desvio salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingSd(false);
   };
 
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
@@ -387,7 +407,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         <SecTitle icon="🗂️" ch="Catálogos" />
         {/* Tabs */}
         <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"]].map(([k,l])=>(
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"]].map(([k,l])=>(
             <button key={k} onClick={()=>setCatAba(k)}
               style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
                 background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -629,6 +649,80 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <div style={{ textAlign:"right", marginTop:12 }}>
             <button style={{ ...s.btnA, opacity:(!isAdmin||savingTd)?0.6:1 }} disabled={!isAdmin||savingTd} onClick={()=>persistTiposDesvio(listaTiposDesvio)}>
               {savingTd?"Salvando...":"💾 Salvar tipos de desvio"}
+            </button>
+          </div>
+        </>)}
+
+        {/* ── ABA SETORES DE DESVIO ── */}
+        {catAba==="setores" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Setores/áreas do chão de fábrica usados ao registrar um desvio (ex: Mistura 1, Compressão, Envase 3).
+            Manter uma lista fechada evita que o mesmo setor apareça com grafias diferentes e distorça os gráficos
+            "Desvios por Setor" e a matriz Setor × Tipo dos indicadores. Apenas setores ativos aparecem no formulário.
+            <strong>Outros</strong> continua sempre disponível como texto livre. As alterações são salvas automaticamente.
+          </div>
+          {/* Adicionar novo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Nome do setor (ex: Rotulagem)" value={novoSd}
+              onChange={e=>setNovoSd(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") document.getElementById("sd-add-btn")?.click(); }}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button id="sd-add-btn" style={s.btnA} onClick={()=>{
+              const nome = novoSd.trim();
+              if (!nome) return;
+              if (listaSetoresDesvio.some(sx=>sx.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse setor já existe.", "red"); return; }
+              const next = [...listaSetoresDesvio, { nome, ativo:true }];
+              setListaSetoresDesvio(next);
+              setNovoSd("");
+              persistSetoresDesvio(next);
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
+            {listaSetoresDesvio.map((sx, i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                {editSdIdx===i ? (<>
+                  <input value={editSdNome} autoFocus
+                    onChange={e=>setEditSdNome(e.target.value)}
+                    style={{ ...s.inp, flex:1, fontSize:12 }} />
+                  <button style={s.btnA} onClick={()=>{
+                    const nome = editSdNome.trim();
+                    if (!nome) return;
+                    if (listaSetoresDesvio.some((x,j)=>j!==i && x.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse setor já existe.", "red"); return; }
+                    const next = listaSetoresDesvio.map((x,j)=>j===i?{ ...x, nome }:x);
+                    setListaSetoresDesvio(next);
+                    setEditSdIdx(null);
+                    persistSetoresDesvio(next);
+                  }}>✓</button>
+                  <button style={s.btn} onClick={()=>setEditSdIdx(null)}>✕</button>
+                </>) : (<>
+                  <span style={{ flex:1, fontSize:12, color:T.text }}>{sx.nome}</span>
+                  <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:sx.ativo?T.accent+"22":"#ff4f6a22", color:sx.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
+                    {sx.ativo?"Ativo":"Inativo"}
+                  </span>
+                  {sx.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditSdIdx(i); setEditSdNome(sx.nome); }}>✏️</button>
+                  )}
+                  {sx.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaSetoresDesvio.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x); setListaSetoresDesvio(next); persistSetoresDesvio(next); }}>
+                      {sx.ativo?"🔒 Desativar":"🔓 Ativar"}
+                    </button>
+                  )}
+                  {sx.nome!=="Outros" && (
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                      title="Excluir setor do catálogo"
+                      onClick={()=>{ if(confirm(`Excluir o setor "${sx.nome}" do catálogo?\n\nDesvios já registrados com este setor não são afetados. Prefira desativar se o setor já foi usado.`)) { const next=listaSetoresDesvio.filter((_,j)=>j!==i); setListaSetoresDesvio(next); persistSetoresDesvio(next); } }}>🗑️</button>
+                  )}
+                  {sx.nome==="Outros" && (
+                    <span style={{ fontSize:10, color:T.text3, fontStyle:"italic" }}>sempre disponível</span>
+                  )}
+                </>)}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingSd)?0.6:1 }} disabled={!isAdmin||savingSd} onClick={()=>persistSetoresDesvio(listaSetoresDesvio)}>
+              {savingSd?"Salvando...":"💾 Salvar setores de desvio"}
             </button>
           </div>
         </>)}

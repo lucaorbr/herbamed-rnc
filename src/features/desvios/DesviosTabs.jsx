@@ -7,7 +7,9 @@ import { F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA, usePagination } fr
 import { AnexosUpload } from "../rnc/RncTabs";
 import { DesviosIndicadores } from "./DesviosIndicadores";
 
-// ── Listas fixas (chão de fábrica Herbamed) ──
+// ── Lista-semente de setores (chão de fábrica Herbamed) ──
+// A lista efetiva vem do catálogo configurável (configuracoes/catalogo_setores_desvio,
+// gerido no Admin); esta é o fallback quando o catálogo ainda não foi configurado.
 export const SETORES_DESVIO = [
   "Mistura 1", "Mistura 2",
   "Compressão",
@@ -18,6 +20,16 @@ export const SETORES_DESVIO = [
   "PCP", "Qualidade", "Recebimento", "Manutenção", "Almoxarifado",
   "Outros",
 ];
+
+// Nomes de setor ativos a partir do catálogo (ou o padrão, se ainda não configurado).
+// "Outros" é sempre garantido como último item — é a válvula de escape do texto livre.
+export function setoresDesvioAtivos(catalogo) {
+  const base = (catalogo && catalogo.length)
+    ? catalogo.filter(sx => sx.ativo !== false).map(sx => sx.nome).filter(Boolean)
+    : SETORES_DESVIO;
+  const semOutros = base.filter(sx => sx !== "Outros");
+  return [...semOutros, "Outros"];
+}
 
 // Lista-semente padrão. A lista efetiva vem do catálogo configurável
 // (configuracoes/catalogo_tipos_desvio, gerido no Admin); esta é o fallback.
@@ -35,6 +47,25 @@ export function tiposDesvioAtivos(catalogo) {
 
 // Mesma escala de severidade da RNC, para converter sem reclassificar.
 export const IMPACTOS_DESVIO = ["Crítica", "Maior", "Menor"];
+
+// Meta de triagem da Qualidade (dias corridos do registro até encerrar/converter).
+// Fonte única compartilhada com a aba de Indicadores e com o sinal de atraso na lista.
+export const META_TRIAGEM_DIAS = 7;
+
+// Dias entre uma data YYYY-MM-DD e hoje (0 se a data faltar/for futura).
+const diasCorridos = (iso) => {
+  if (!iso) return 0;
+  const ms = new Date(tod() + "T12:00:00") - new Date(iso + "T12:00:00");
+  return Math.max(0, Math.round(ms / 86400000));
+};
+
+// Situação de triagem de um desvio ainda "Registrado": há quantos dias está aberto
+// e se já passou da meta. Retorna null para desvios já triados (encerrados/convertidos).
+export function triagemStatus(d) {
+  if (d.status !== "Registrado") return null;
+  const dias = diasCorridos(d.dataRegistro || d.dataOcorrencia);
+  return { dias, atrasado: dias > META_TRIAGEM_DIAS };
+}
 
 export const DESVIO_SMETA = {
   "Registrado":        { c: "#4fc3f7", bg: "#4fc3f718", dot: "#4fc3f7" },
@@ -71,19 +102,20 @@ function descParaRNC(d) {
   return partes.filter(Boolean).join("");
 }
 
-export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, catalogoTiposDesvio = [] }) {
+export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, catalogoTiposDesvio = [], catalogoSetoresDesvio = [] }) {
   const tiposDesvio = tiposDesvioAtivos(catalogoTiposDesvio);
+  const setoresDesvio = setoresDesvioAtivos(catalogoSetoresDesvio);
   if (view === "novo") {
-    return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} tiposDesvio={tiposDesvio} />;
+    return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} tiposDesvio={tiposDesvio} setoresDesvio={setoresDesvio} />;
   }
   if (view === "indicadores") {
-    return <DesviosIndicadores desvios={desvios} setTab={setTab} tiposDesvio={tiposDesvio} />;
+    return <DesviosIndicadores desvios={desvios} setTab={setTab} tiposDesvio={tiposDesvio} setoresDesvio={setoresDesvio} />;
   }
-  return <DesviosLista user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} tiposDesvio={tiposDesvio} />;
+  return <DesviosLista user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} tiposDesvio={tiposDesvio} setoresDesvio={setoresDesvio} />;
 }
 
 // ── Lista + triagem ──
-function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, tiposDesvio = TIPOS_DESVIO }) {
+function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const T = useTheme(); const s = useS();
   const [fIni] = useState(consumirFiltroDesvios);
   const [busca, setBusca] = useState(fIni.busca || "");
@@ -91,12 +123,13 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [fSetor, setFSetor] = useState(fIni.setor || "");
   const [fTipo, setFTipo] = useState(fIni.tipo || "");
   const [sel, setSel] = useState(null);
-  const [reclassOpen, setReclassOpen] = useState(false);
+  const [reclassDim, setReclassDim] = useState(null); // "tipo" | "setor" | null
 
   const podeTriar = isAdmin || perm("triarDesvio");
 
-  // Quantos desvios ainda estão como "Outros" com texto livre (candidatos a reclassificar).
-  const pendentesReclass = desvios.filter(d => d.tipo === "Outros" && (d.tipoOutro || "").trim()).length;
+  // Quantos desvios ainda estão como "Outros" com texto livre por dimensão (candidatos a reclassificar).
+  const pendentesTipo  = desvios.filter(d => d.tipo === "Outros" && (d.tipoOutro || "").trim()).length;
+  const pendentesSetor = desvios.filter(d => d.setor === "Outros" && (d.setorOutro || "").trim()).length;
 
   const filtrados = [...desvios]
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
@@ -180,15 +213,21 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             <F lbl="Status" ch={<Sel value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Todos</option>{Object.keys(DESVIO_SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           <div style={{ flex: "1 1 150px" }}>
-            <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+            <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{setoresDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           <div style={{ flex: "1 1 130px" }}>
             <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
-          {isAdmin && pendentesReclass > 0 && (
-            <button onClick={() => setReclassOpen(true)} title="Reclassificar desvios antigos que ficaram como 'Outros' para os tipos do catálogo" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+          {isAdmin && pendentesTipo > 0 && (
+            <button onClick={() => setReclassDim("tipo")} title="Reclassificar desvios antigos que ficaram como 'Outros' para os tipos do catálogo" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
               🏷️ Reclassificar tipos
-              <span style={{ background: "#ff8c42", color: "#fff", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pendentesReclass}</span>
+              <span style={{ background: "#ff8c42", color: "#fff", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pendentesTipo}</span>
+            </button>
+          )}
+          {isAdmin && pendentesSetor > 0 && (
+            <button onClick={() => setReclassDim("setor")} title="Reclassificar desvios antigos que ficaram como 'Outros' para os setores do catálogo" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+              🏭 Reclassificar setores
+              <span style={{ background: "#ff8c42", color: "#fff", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pendentesSetor}</span>
             </button>
           )}
           {perm("criarDesvio") && (
@@ -205,7 +244,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: T.surf, color: T.text3, fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em" }}>
-                {["Nº", "Data", "Setor", "Tipo", "Impacto", "Descrição", "Status", ""].map(h => (
+                {["Nº", "Data", "Setor", "Tipo", "Impacto", "Descrição", "Status", "Triagem", ""].map(h => (
                   <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${T.border}` }}>{h}</th>
                 ))}
               </tr>
@@ -222,6 +261,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                   <td style={{ padding: "10px 12px" }}>{d.impacto ? <SevB s={d.impacto} /> : "—"}</td>
                   <td style={{ padding: "10px 12px", color: T.text, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</td>
                   <td style={{ padding: "10px 12px" }}><DesvioBadge status={d.status} /></td>
+                  <td style={{ padding: "10px 12px" }}><TriagemChip d={d} T={T} /></td>
                   <td style={{ padding: "10px 12px", color: T.text3, fontSize: 16 }}>›</td>
                 </tr>
               ))}
@@ -263,6 +303,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               )}
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.text3 }}>
                 Registrado por <strong style={{ color: T.text2 }}>{sel.registradoPor}</strong> em {fmt(sel.dataRegistro)}
+                {(() => { const st = triagemStatus(sel); return st && <div style={{ marginTop: 4, color: st.atrasado ? T.yellow : T.text3, fontWeight: st.atrasado ? 700 : 400 }}>{st.atrasado ? "⚠️ " : ""}Aguardando triagem há {st.dias} dia(s) — meta: {META_TRIAGEM_DIAS} dias{st.atrasado ? " (atrasado)" : ""}</div>; })()}
                 {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}{sel.encerramentoMotivo ? ` — ${sel.encerramentoMotivo}` : ""}</div>}
                 {sel.status === "Convertido em RNC" && <div style={{ marginTop: 4 }}>Convertido por {sel.convertidoPor} em {fmt(sel.convertidoEm)}{sel.rncNum ? ` → ${sel.rncNum}` : ""}</div>}
               </div>
@@ -283,35 +324,55 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
         </div>
       )}
 
-      {reclassOpen && (
-        <ReclassificarTiposModal
+      {reclassDim && (
+        <ReclassificarModal
+          dim={reclassDim}
           desvios={desvios}
-          tiposDesvio={tiposDesvio}
+          canonicos={(reclassDim === "tipo" ? tiposDesvio : setoresDesvio).filter(x => x !== "Outros")}
           doSaveDesvio={doSaveDesvio}
           user={user}
           toast_={toast_}
-          onClose={() => setReclassOpen(false)}
+          onClose={() => setReclassDim(null)}
         />
       )}
     </div>
   );
 }
 
-// ── Reclassificação de tipos históricos ──
-// Junta os desvios que ficaram como "Outros" + texto livre (tipoOutro) por grafia
-// equivalente e permite mapear cada grupo para um tipo canônico do catálogo, limpando
-// o texto livre. Objetivo: parar de sujar o Pareto e a matriz Setor×Tipo com duplicatas.
-function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toast_, onClose }) {
+// Chip de situação de triagem: para desvios "Registrado" mostra há quantos dias está
+// aberto, colorindo quando passa da meta; para os já triados, um traço discreto.
+function TriagemChip({ d, T }) {
+  const st = triagemStatus(d);
+  if (!st) return <span style={{ color: T.text3 }}>—</span>;
+  const cor = st.dias > 15 ? T.red : st.dias > META_TRIAGEM_DIAS ? T.yellow : T.text2;
+  return (
+    <span title={`Aberto há ${st.dias} dia(s) — meta de triagem: ${META_TRIAGEM_DIAS} dias`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: cor, whiteSpace: "nowrap" }}>
+      {st.atrasado && "⚠️"}{st.dias}d{st.atrasado ? " · atrasado" : ""}
+    </span>
+  );
+}
+
+// ── Reclassificação de "Outros" históricos (tipo ou setor) ──
+// Junta os desvios que ficaram como "Outros" + texto livre (tipoOutro/setorOutro) por
+// grafia equivalente e permite mapear cada grupo para um valor canônico do catálogo,
+// limpando o texto livre. Objetivo: parar de sujar o Pareto e a matriz Setor×Tipo.
+const RECLASS_DIMS = {
+  tipo:  { campo: "tipo",  campoOutro: "tipoOutro",  rotulo: "Tipo",  plural: "tipos",   icon: "🏷️", catalogo: "Tipos de Desvio" },
+  setor: { campo: "setor", campoOutro: "setorOutro", rotulo: "Setor", plural: "setores", icon: "🏭", catalogo: "Setores de Desvio" },
+};
+
+function ReclassificarModal({ dim, desvios, canonicos, doSaveDesvio, user, toast_, onClose }) {
   const T = useTheme(); const s = useS();
-  const canonicos = tiposDesvio.filter(t => t !== "Outros");
-  const [mapa, setMapa] = useState({}); // chave normalizada → tipo canônico escolhido
+  const D = RECLASS_DIMS[dim];
+  const [mapa, setMapa] = useState({}); // chave normalizada → valor canônico escolhido
   const [saving, setSaving] = useState(false);
 
   const grupos = useMemo(() => {
     const map = new Map();
     for (const d of desvios) {
-      if (d.tipo !== "Outros") continue;
-      const raw = (d.tipoOutro || "").trim();
+      if (d[D.campo] !== "Outros") continue;
+      const raw = (d[D.campoOutro] || "").trim();
       if (!raw) continue;
       const key = normTipo(raw);
       if (!map.has(key)) map.set(key, { key, label: raw, ids: [], count: 0 });
@@ -321,14 +382,14 @@ function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toa
       if (raw.length > g.label.length) g.label = raw; // grafia mais completa como rótulo
     }
     return [...map.values()].sort((a, b) => b.count - a.count);
-  }, [desvios]);
+  }, [desvios, D.campo, D.campoOutro]);
 
   const selecionados = grupos.filter(g => mapa[g.key]);
   const totalDesvios = selecionados.reduce((acc, g) => acc + g.count, 0);
 
   const aplicar = async () => {
     if (!selecionados.length) { toast_("Selecione um destino para ao menos um grupo.", "red"); return; }
-    if (!window.confirm(`Reclassificar ${totalDesvios} desvio(s) em ${selecionados.length} grupo(s)? O texto livre será substituído pelo tipo do catálogo.`)) return;
+    if (!window.confirm(`Reclassificar ${totalDesvios} desvio(s) em ${selecionados.length} grupo(s)? O texto livre será substituído pelo ${D.rotulo.toLowerCase()} do catálogo.`)) return;
     setSaving(true);
     let n = 0;
     try {
@@ -339,9 +400,9 @@ function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toa
           if (!d) continue;
           await doSaveDesvio({
             ...d,
-            tipo: destino,
-            tipoOutro: "",
-            historico: [...(d.historico || []), { data: tod(), acao: `Tipo reclassificado: "${d.tipoOutro || g.label}" → ${destino}`, resp: user?.name || "—" }],
+            [D.campo]: destino,
+            [D.campoOutro]: "",
+            historico: [...(d.historico || []), { data: tod(), acao: `${D.rotulo} reclassificado: "${d[D.campoOutro] || g.label}" → ${destino}`, resp: user?.name || "—" }],
           });
           n++;
         }
@@ -361,22 +422,22 @@ function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toa
       <div onClick={e => e.stopPropagation()} style={{ background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 14, maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px #000a" }}>
         <div style={{ padding: "1.2rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, background: T.bg }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: T.text }}>🏷️ Reclassificar tipos "Outros"</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: T.text }}>{D.icon} Reclassificar {D.plural} "Outros"</span>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
         </div>
         <div style={{ padding: "1.5rem" }}>
           <p style={{ fontSize: 12.5, color: T.text2, lineHeight: 1.5, marginTop: 0, marginBottom: 18 }}>
-            Estes desvios foram registrados como <strong>“Outros”</strong> com texto livre. Escolha um tipo do catálogo para cada grupo — os desvios daquele grupo passam a usar o tipo canônico e param de aparecer soltos no Pareto e na matriz Setor×Tipo. Grupos sem destino escolhido ficam como estão.
+            Estes desvios foram registrados como <strong>“Outros”</strong> com texto livre. Escolha um {D.rotulo.toLowerCase()} do catálogo para cada grupo — os desvios daquele grupo passam a usar o valor canônico e param de aparecer soltos no Pareto e na matriz Setor×Tipo. Grupos sem destino escolhido ficam como estão.
           </p>
 
           {canonicos.length === 0 ? (
             <div style={{ padding: "1.5rem", textAlign: "center", color: T.text3, fontSize: 13, background: T.surf, borderRadius: 10 }}>
-              Nenhum tipo canônico ativo no catálogo. Cadastre os tipos em <strong>Admin → Catálogos → Tipos de Desvio</strong> antes de reclassificar.
+              Nenhum {D.rotulo.toLowerCase()} canônico ativo no catálogo. Cadastre em <strong>Admin → Catálogos → {D.catalogo}</strong> antes de reclassificar.
             </div>
           ) : grupos.length === 0 ? (
             <div style={{ padding: "1.5rem", textAlign: "center", color: T.text3, fontSize: 13, background: T.surf, borderRadius: 10 }}>
-              Nenhum desvio pendente — todos os tipos já estão no catálogo. ✓
+              Nenhum desvio pendente — todos os {D.plural} já estão no catálogo. ✓
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -390,7 +451,7 @@ function ReclassificarTiposModal({ desvios, tiposDesvio, doSaveDesvio, user, toa
                   <div style={{ flex: "0 1 200px" }}>
                     <Sel value={mapa[g.key] || ""} onChange={e => setMapa(m => ({ ...m, [g.key]: e.target.value }))}>
                       <option value="">— manter como Outros —</option>
-                      {canonicos.map(t => <option key={t} value={t}>{t}</option>)}
+                      {canonicos.map(c => <option key={c} value={c}>{c}</option>)}
                     </Sel>
                   </div>
                 </div>
@@ -425,7 +486,7 @@ function Campo({ T, l, v, bloco }) {
 }
 
 // ── Formulário de novo desvio ──
-function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPOS_DESVIO }) {
+function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({
     dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: tiposDesvio[0] || "Outros", tipoOutro: "", impacto: "Maior",
@@ -478,7 +539,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPO
           <F lbl="Data da ocorrência" tip="Quando o desvio aconteceu. Por padrão é hoje, mas pode ajustar se viu hoje algo de ontem." ch={<Inp type="date" value={f.dataOcorrencia} onChange={e => set("dataOcorrencia", e.target.value)} />} />
           <F lbl="Setor *" ch={
             <div>
-              <Sel value={f.setor} onChange={e => set("setor", e.target.value)}><option value="">Selecione...</option>{SETORES_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>
+              <Sel value={f.setor} onChange={e => set("setor", e.target.value)}><option value="">Selecione...</option>{setoresDesvio.map(x => <option key={x}>{x}</option>)}</Sel>
               {f.setor === "Outros" && <Inp placeholder="Especifique o setor..." value={f.setorOutro} onChange={e => set("setorOutro", e.target.value)} sx={{ marginTop: 8 }} />}
             </div>
           } />

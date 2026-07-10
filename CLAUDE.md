@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.11.0`
+- Versao atual: `2.13.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -62,10 +62,25 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **Desvios — Indicadores (fix de layout)** — `minWidth:0` nos cards do grid Triagem/Aging e no `<span>` da descrição: o gráfico "Desempenho de Triagem" não é mais espremido por descrições longas e o ellipsis passa a funcionar — v2.10.2 (PR #94)
 - **Desvios — Catálogo de tipos configurável** — tipos de desvio deixam de ser lista fixa no código e passam a ser geridos no Admin → Catálogos → "Tipos de Desvio" (`configuracoes/catalogo_tipos_desvio`, `{ nome, ativo }`). Formulário e filtro usam a lista ativa; "Outros" (texto livre) segue sempre disponível e não pode ser removido. Objetivo: evitar tipos duplicados com grafias diferentes que distorcem Pareto e matriz Setor×Tipo. — v2.11.0
 - **Desvios — Reclassificação de tipos históricos** — tela admin-only na Lista de Desvios (botão "🏷️ Reclassificar tipos", com contador dos pendentes) que agrupa os desvios registrados como "Outros" + texto livre (`tipoOutro`) por grafia equivalente (case/acento-insensível via `normTipo`) e permite mapear cada grupo para um tipo canônico do catálogo. Ao aplicar, seta `tipo` = canônico, limpa `tipoOutro` e registra no `historico` de cada desvio (auditoria via `doSaveDesvio`). Fecha o passo pendente da v2.11.0 e limpa a distorção do Pareto/matriz Setor×Tipo. Só mapeia para tipos já existentes no catálogo — v2.12.0
+- **Desvios — Catálogo de setores configurável + reclassificação + prazo/atraso na lista** — (1) setores de desvio deixam de ser lista fixa no código e passam a ser geridos no Admin → Catálogos → "Setores de Desvio" (`configuracoes/catalogo_setores_desvio`, `{ nome, ativo }`); formulário e filtro usam a lista ativa; "Outros" (texto livre) segue sempre disponível e não pode ser removido; `setoresDesvioAtivos()` espelha `tiposDesvioAtivos()`. (2) O modal de reclassificação foi generalizado (`ReclassificarModal` com `RECLASS_DIMS`) para funcionar tanto para tipos quanto para setores — botão "🏭 Reclassificar setores" com contador de pendentes na Lista, admin-only. (3) Fechou-se o loop do SLA de triagem: `META_TRIAGEM_DIAS` (7d) virou fonte única em `DesviosTabs` (importada pelos Indicadores), e a Lista ganhou coluna "Triagem" (`TriagemChip`) + linha no modal de detalhe mostrando há quantos dias o desvio está aberto e destacando os atrasados — a métrica que antes só existia nos indicadores agora é acionável no fluxo. — v2.13.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
 - Code-splitting (bundle 561.7 kB)
+
+### 🔭 Desvios — backlog priorizado (auditoria de especialista 2026-07-10)
+Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tria → **encerra** OU **converte em RNC**), mas os indicadores ficaram muito ricos. Há um **descompasso**: os indicadores medem coisas que o fluxo ainda não deixa o usuário agir/registrar. Fechar esse descompasso é o eixo do backlog. Ordenado por impacto para uma farmacêutica (BPF/ANVISA + modelo SE Suite):
+
+1. **Disposição de produto/lote (maior lacuna de compliance).** Hoje "Produto / Lote" é só texto livre. Num QMS farma, desvio que toca um lote exige **decisão de disposição** rastreável: liberar, segregar, quarentenar, reprovar, retrabalhar. É o primeiro item que uma inspeção ANVISA olha. Não existe hoje.
+2. **Rigor no encerramento.** Encerrar hoje é um `window.prompt()` de uma linha, sem anexo de evidência, sem assinatura e **sem segregação** (quem tem `triarDesvio` encerra o próprio registro). Desvio de impacto **Crítico** encerrado sem investigação deveria exigir justificativa/aprovação de segunda pessoa. O SE Suite trata como etapa formal.
+3. **Investigação leve no nível do desvio.** A análise de causa (5 Porquês/Ishikawa) só existe **depois** de virar RNC. Muitos desvios merecem investigação curta **sem** escalar para RNC formal — hoje o fluxo é "tudo ou nada".
+4. **Responsável/dono do desvio.** Não há investigador/dono designado — some na triagem de "quem puder". Sem owner não há a quem cobrar prazo (complementa o SLA já surfado na lista).
+5. **Notificação/escalonamento de atraso.** A coluna "Triagem" (v2.13.0) já mostra o atraso; falta o alerta ativo (e-mail/aviso) quando estoura a meta, nos moldes do alerta de prazo das RNCs no `App.jsx`. Crítico deveria ter prazo de triagem menor que Menor (prazo por impacto).
+6. **Recorrência no registro.** Os indicadores mostram recorrência (matriz Setor×Tipo, produtos que repetem), mas no registro não dá para marcar "isto já aconteceu / é recorrente" nem vincular a um desvio anterior — recorrência deveria elevar a criticidade.
+7. **Relatório PDF.** RNC e Auditorias exportam PDF; Desvios só CSV. Falta o relatório individual do desvio e/ou o sumário para reunião de gestão/inspeção.
+8. **Polimento da lista.** Falta filtro por **impacto** e por **período** na lista (os Indicadores já têm ambos) — inconsistência pequena.
+
+Regra ao pegar estes itens: seguir o que o SE Suite faria e manter a **fonte única** já estabelecida (catálogos configuráveis, `META_TRIAGEM_DIAS`, histórico imutável via `doSaveDesvio`).
 
 ## Referência de design: SE Suite (SoftExpert Suite)
 Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
