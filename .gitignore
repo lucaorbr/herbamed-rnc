@@ -4,3 +4,6 @@ build/
 .env.local
 .DS_Store
 modelos/
+
+# gerado no build (prebuild) a partir da versao do package.json
+/public/version.json

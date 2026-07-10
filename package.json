@@ -1,6 +1,6 @@
 {
   "name": "herbamed-rnc",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "private": true,
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -16,6 +16,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "prebuild": "node scripts/genVersion.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "docker:build": "docker compose build",

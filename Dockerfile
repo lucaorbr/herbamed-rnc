@@ -8,6 +8,7 @@ FROM deps AS build
 WORKDIR /app
 COPY public ./public
 COPY src ./src
+COPY scripts ./scripts
 COPY package*.json ./
 RUN npm run build
 

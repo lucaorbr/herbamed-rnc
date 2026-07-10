@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.13.0`
+- Versao atual: `2.14.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -81,6 +81,13 @@ Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tri
 8. **Polimento da lista.** Falta filtro por **impacto** e por **período** na lista (os Indicadores já têm ambos) — inconsistência pequena.
 
 Regra ao pegar estes itens: seguir o que o SE Suite faria e manter a **fonte única** já estabelecida (catálogos configuráveis, `META_TRIAGEM_DIAS`, histórico imutável via `doSaveDesvio`).
+
+### Infra — Aviso de nova versão + fim do cache do índice (v2.14.0)
+Problema: usuários ficavam presos em versões antigas (aba aberta há dias e/ou `index.html` cacheado pelo navegador). Solução em duas camadas:
+- **Camada 1 (`nginx/default.conf`):** `index.html` e `version.json` passam a responder `Cache-Control: no-store, must-revalidate` — o navegador sempre revalida o "índice" que aponta para o JS novo. Assets com hash no nome seguem com cache de 1 ano `immutable` (o nome muda a cada versão, então é seguro).
+- **Camada 2 (app):** `scripts/genVersion.js` roda no `prebuild` e gera `public/version.json` (`{ version, builtAt }`) a partir da versão do `package.json`. O componente `src/shared/AtualizacaoDisponivel.jsx` (montado no `App.jsx`, nas duas saídas: exec e principal) consulta `/version.json` a cada 3 min e ao voltar o foco para a aba; se a versão publicada divergir de `APP_VERSION`, mostra uma faixa fixa "Nova versão disponível — Atualizar agora" que faz `window.location.reload()`. **Não recarrega sozinho** (evita perder preenchimento em andamento).
+- `public/version.json` é gerado no build (gitignored). Depende de `package.json.version` e `APP_VERSION` estarem em sincronia — o que o protocolo já exige.
+- **Observação:** só passa a funcionar para versões publicadas **a partir do deploy da 2.14.0** (quem está numa versão anterior ainda não tem o verificador). A TI deve confirmar que o `nginx-proxy` externo também não segura cache do `index.html`.
 
 ## Referência de design: SE Suite (SoftExpert Suite)
 Este sistema é modelado no SE Suite, o software de referência. Ao implementar qualquer funcionalidade, sempre se baseie na lógica e estrutura do SE Suite para os pilares da qualidade:
