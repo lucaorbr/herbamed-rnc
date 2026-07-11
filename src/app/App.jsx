@@ -21,6 +21,7 @@ import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
 import { DesviosTab } from "../features/desvios/DesviosTabs";
+import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
@@ -43,6 +44,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
   const [desvios, setDesvios] = useState([]);
+  const [revalidacoes, setRevalidacoes] = useState([]);
   const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -152,6 +154,7 @@ export default function App() {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
     const unsubDesvios = subscribeCollection("desvios", setDesvios);
+    const unsubReval = subscribeCollection("revalidacoes_grafico", setRevalidacoes);
     const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
@@ -171,7 +174,7 @@ export default function App() {
       const csd = list.find(c => c.id === "catalogo_setores_desvio");
       setCatalogoSetoresDesvio(csd?.items || []);
     });
-    return () => { unsub(); unsubDesvios(); unsubNotifs(); unsubForn(); unsubCfg(); };
+    return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -309,6 +312,20 @@ export default function App() {
       await auditLog("Excluiu desvio", "desvios", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
   }, [desvios]);
+  const doSaveRevalidacao = useCallback(async (reg) => {
+    try {
+      const isNew = !revalidacoes.find(r => r.id === reg.id);
+      await saveCollection("revalidacoes_grafico", reg.id, reg);
+      await auditLog(isNew ? "Registrou revalidação gráfica" : `Revalidação: ${reg.status}`, "revalidacoes_grafico", reg.id, reg.num || reg.id, isNew ? null : revalidacoes.find(r=>r.id===reg.id), reg);
+    } catch(e) { console.error(e); }
+  }, [revalidacoes]);
+  const doDeleteRevalidacao = useCallback(async (id) => {
+    try {
+      const antes = revalidacoes.find(r => r.id === id);
+      await deleteFromCollection("revalidacoes_grafico", id);
+      await auditLog("Excluiu revalidação gráfica", "revalidacoes_grafico", id, antes?.num || id, antes, null);
+    } catch(e) { console.error(e); }
+  }, [revalidacoes]);
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
@@ -381,6 +398,8 @@ export default function App() {
     "cq-analises": "CQ — Fichas de Análise",
     "cq-dashboard": "CQ — Dashboard de Qualidade",
     "indicadores-desvios": "Desvios — Indicadores",
+    revalidacao: "Revalidação de Material Gráfico",
+    "nova-revalidacao": "Nova Revalidação de Material Gráfico",
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
@@ -606,6 +625,8 @@ export default function App() {
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
               {tab==="indicadores-desvios" && perm("verDesvios") && <DesviosTab view="indicadores" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
+              {tab==="revalidacao"      && perm("verRevalidacao") && <RevalidacaoTab view="lista" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} />}
+              {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
