@@ -12,6 +12,10 @@ export const PERMS_GRUPOS = [
     { key: "criarDesvio",  label: "Registrar novo desvio" },
     { key: "triarDesvio",  label: "Triar desvio (encerrar / converter em RNC)" },
   ]},
+  { grupo: "Revalidação Gráfica", items: [
+    { key: "verRevalidacao",   label: "Visualizar revalidações de material gráfico" },
+    { key: "criarRevalidacao", label: "Criar / editar revalidação de material gráfico" },
+  ]},
   { grupo: "Controle de Qualidade", items: [
     { key: "verCQMateriais",     label: "Visualizar CQ Materiais" },
     { key: "criarMaterialCQ",    label: "Criar / editar material CQ" },
@@ -58,6 +62,7 @@ export const PERMS_PADRAO = {
   viewer: {
     criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
+    verRevalidacao:true, criarRevalidacao:false,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:true, criarLaudos:false,
     criarDocumento:false, assinarElaborador:false, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
     verDocumentos:true, iniciarRevisao:false, tornarObsoleto:false, configurarDocumentos:false, baixarArquivoFonte:false, baixarCopiaNaoControlada:true, gerenciarTreinamento:false, acessoRestritoVigente:true,
@@ -66,6 +71,7 @@ export const PERMS_PADRAO = {
   user: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false,
     verDesvios:true, criarDesvio:true, triarDesvio:false,
+    verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:true, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
     criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
     verDocumentos:true, iniciarRevisao:false, tornarObsoleto:false, configurarDocumentos:false, baixarArquivoFonte:false, baixarCopiaNaoControlada:false, gerenciarTreinamento:false, acessoRestritoVigente:false,
@@ -74,6 +80,7 @@ export const PERMS_PADRAO = {
   rt: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
     criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:false, registrarTreinamento:true,
     verDocumentos:true, iniciarRevisao:true, tornarObsoleto:false, configurarDocumentos:true, baixarArquivoFonte:true, baixarCopiaNaoControlada:true, gerenciarTreinamento:false, acessoRestritoVigente:false,
@@ -82,6 +89,7 @@ export const PERMS_PADRAO = {
   keyuser: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
     criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:true, registrarTreinamento:true,
     verDocumentos:true, iniciarRevisao:true, tornarObsoleto:true, configurarDocumentos:true, baixarArquivoFonte:true, baixarCopiaNaoControlada:true, gerenciarTreinamento:false, acessoRestritoVigente:false,
@@ -90,6 +98,7 @@ export const PERMS_PADRAO = {
   admin: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
     criarDocumento:true, assinarElaborador:true, assinarRevisorAprovador:true, excluirDocumento:true, registrarTreinamento:true,
     verDocumentos:true, iniciarRevisao:true, tornarObsoleto:true, configurarDocumentos:true, baixarArquivoFonte:true, baixarCopiaNaoControlada:true, gerenciarTreinamento:true, acessoRestritoVigente:false,
@@ -98,6 +107,7 @@ export const PERMS_PADRAO = {
   exec: {
     criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
+    verRevalidacao:true, criarRevalidacao:false,
     verCQMateriais:false, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
     criarDocumento:false, assinarElaborador:false, assinarRevisorAprovador:false, excluirDocumento:false, registrarTreinamento:false,
     verDocumentos:false, iniciarRevisao:false, tornarObsoleto:false, configurarDocumentos:false, baixarArquivoFonte:false, baixarCopiaNaoControlada:false, gerenciarTreinamento:false, acessoRestritoVigente:false,

@@ -47,6 +47,10 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
       ...(!isViewer?[{ id:"novo-desvio", icon:"➕", label:"Novo Desvio" }]:[]),
       { id:"indicadores-desvios", icon:"📊", label:"Indicadores" },
     ]},
+    { id:"revalidacao-grupo", icon:"🎨", label:"Revalidação Gráfica", items:[
+      { id:"revalidacao", icon:"📋", label:"Revalidações" },
+      ...(!isViewer?[{ id:"nova-revalidacao", icon:"➕", label:"Nova Revalidação" }]:[]),
+    ]},
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
       { id:"5w2h",     icon:"📋", label:"CAPA" },
