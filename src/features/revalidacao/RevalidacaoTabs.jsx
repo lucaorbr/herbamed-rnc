@@ -6,16 +6,20 @@ import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA, usePagination } from "../../shared/ui";
 import { openPDFWindow } from "../pdf/pdfExports";
 
-// ── Módulo: Revalidação de Material Gráfico (RMG) ──
-// Registra a revalidação de materiais gráficos de embalagem (cartuchos, rótulos,
-// bulas): compara o material vigente com o proposto, item a item, e dá parecer.
+// ── Módulo: Revalidações ──
+// Registra a revalidação de qualquer item da qualidade (material gráfico de
+// embalagem, matéria-prima, método analítico, equipamento...): compara o estado
+// vigente com o proposto/verificado, item a item por um checklist, e dá parecer.
+// O TIPO de revalidação vem de um catálogo configurável no Admin
+// (configuracoes/catalogo_tipos_revalidacao) e decide o checklist-semente e se
+// exibe os campos específicos de material gráfico (nº de arte, categoria).
 // MVP enxuto — sem assinatura eletrônica (registra quem criou). Espelha a
-// estrutura do módulo de Desvios; persistência na collection genérica
-// "revalidacoes_grafico".
+// estrutura do módulo de Desvios; persistência na collection "revalidacoes".
 
+// Categorias de material gráfico (só aparecem no preset "Material Gráfico").
 export const TIPOS_MATERIAL = ["Cartucho", "Rótulo", "Bula", "Etiqueta", "Blister", "Outros"];
 
-// Itens-semente do checklist de diferenças (mesma base do template impresso).
+// Itens-semente do checklist gráfico (mesma base do template impresso).
 export const ITENS_CHECKLIST = [
   "Dizeres legais (validade, lote, SAC)",
   "Composição / fórmula",
@@ -27,6 +31,56 @@ export const ITENS_CHECKLIST = [
   "Símbolos e advertências regulatórias",
   "Textos e ortografia",
 ];
+
+// Catálogo-semente de tipos de revalidação (fallback quando o Admin ainda não
+// configurou nada). Cada tipo: { nome, ativo, grafico, checklist }.
+// - grafico:true → mostra categoria do material + nº de arte + rótulos de embalagem.
+// - checklist → itens-semente carregados ao escolher o tipo (preservando respostas
+//   de itens de mesmo nome ao trocar de tipo).
+export const TIPOS_REVALIDACAO_SEED = [
+  { nome: "Material Gráfico", ativo: true, grafico: true, checklist: ITENS_CHECKLIST },
+  {
+    nome: "Matéria-prima / Insumo", ativo: true, grafico: false, checklist: [
+      "Aspecto / característica organoléptica",
+      "Integridade da embalagem / lacre",
+      "Identificação / rotulagem do lote",
+      "Laudo do fornecedor vigente",
+      "Dentro da validade / período de reteste",
+      "Condições de armazenamento mantidas",
+    ],
+  },
+  {
+    nome: "Método Analítico", ativo: true, grafico: false, checklist: [
+      "Referência / farmacopeia atualizada",
+      "Parâmetros e critérios de aceitação",
+      "Reagentes e padrões dentro da validade",
+      "Equipamento calibrado / qualificado",
+      "Adequação (system suitability)",
+    ],
+  },
+  {
+    nome: "Equipamento / Instrumento", ativo: true, grafico: false, checklist: [
+      "Calibração vigente",
+      "Qualificação / verificação de desempenho",
+      "Limpeza e conservação",
+      "Registros de manutenção em dia",
+    ],
+  },
+];
+
+// Tipos ativos a partir do catálogo (ou o padrão, se ainda não configurado).
+// Retorna objetos completos ({ nome, grafico, checklist }), não só nomes —
+// o formulário precisa do checklist e da flag gráfica.
+export function tiposRevalidacaoAtivos(catalogo) {
+  const base = (catalogo && catalogo.length)
+    ? catalogo.filter(t => t.ativo !== false)
+    : TIPOS_REVALIDACAO_SEED;
+  return base.filter(t => t && t.nome).map(t => ({
+    nome: t.nome,
+    grafico: !!t.grafico,
+    checklist: Array.isArray(t.checklist) ? t.checklist : [],
+  }));
+}
 
 // Parecer → rótulo/cor do badge. status do registro = parecer (ou "Em análise" sem parecer).
 export const PARECER_META = {
@@ -48,14 +102,15 @@ let _edicaoPendente = null;
 export const pedirEdicaoRevalidacao = r => { _edicaoPendente = r; };
 const consumirEdicao = () => { const r = _edicaoPendente; _edicaoPendente = null; return r; };
 
-export function RevalidacaoTab({ view = "lista", user, toast_, setTab, revalidacoes = [], doSaveRevalidacao, doDeleteRevalidacao, perm, isAdmin }) {
+export function RevalidacaoTab({ view = "lista", user, toast_, setTab, revalidacoes = [], doSaveRevalidacao, doDeleteRevalidacao, perm, isAdmin, catalogoTiposRevalidacao = [] }) {
+  const tipos = tiposRevalidacaoAtivos(catalogoTiposRevalidacao);
   if (view === "nova") {
-    return <NovaRevalidacaoForm user={user} toast_={toast_} setTab={setTab} doSaveRevalidacao={doSaveRevalidacao} />;
+    return <NovaRevalidacaoForm user={user} toast_={toast_} setTab={setTab} doSaveRevalidacao={doSaveRevalidacao} tipos={tipos} />;
   }
-  return <RevalidacaoLista user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} />;
+  return <RevalidacaoLista user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} tipos={tipos} />;
 }
 
-// ── Upload de foto única com preview ──
+// ── Upload de foto/evidência única com preview ──
 function FotoUpload({ foto, setFoto, label, cor, inputId }) {
   const T = useTheme();
   const [uploading, setUploading] = useState(false);
@@ -97,24 +152,41 @@ function FotoUpload({ foto, setFoto, label, cor, inputId }) {
 }
 
 // ── Formulário: nova / editar ──
-function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao }) {
+function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao, tipos }) {
   const s = useS(); const T = useTheme();
   const [edicao] = useState(consumirEdicao);
+  const tipoInicial = edicao?.tipoRevalidacao || tipos[0]?.nome || "Material Gráfico";
+  const checklistInicial = tipos.find(t => t.nome === tipoInicial)?.checklist || ITENS_CHECKLIST;
   const [f, setF] = useState(() => edicao || {
+    tipoRevalidacao: tipoInicial,
     sku: "", tipoMaterial: "Cartucho", tipoMaterialOutro: "", fornecedor: "", produto: "", registroMS: "",
     arteAtual: "", arteNova: "", motivo: "",
     fotoAtual: null, fotoNova: null,
-    itens: ITENS_CHECKLIST.map(item => ({ item, conforme: "", obs: "" })),
+    itens: checklistInicial.map(item => ({ item, conforme: "", obs: "" })),
     parecer: "", justificativa: "",
   });
   const [salvando, setSalvando] = useState(false);
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setF(p => ({ ...p, itens: p.itens.map((it, j) => j === i ? { ...it, [k]: v } : it) }));
 
+  const tipoObj = tipos.find(t => t.nome === f.tipoRevalidacao) || tipos[0] || { grafico: true, checklist: ITENS_CHECKLIST };
+  const grafico = !!tipoObj.grafico;
+
+  // Trocar de tipo recarrega o checklist-semente, preservando as respostas de
+  // itens com o mesmo nome (não perde trabalho ao alternar tipos parecidos).
+  const trocarTipo = (nome) => {
+    const t = tipos.find(x => x.nome === nome);
+    setF(p => {
+      const prev = Object.fromEntries((p.itens || []).map(it => [it.item, it]));
+      const itens = (t?.checklist || []).map(item => prev[item] || { item, conforme: "", obs: "" });
+      return { ...p, tipoRevalidacao: nome, itens };
+    });
+  };
+
   const salvar = async () => {
-    if (!f.sku.trim()) { alert("Informe o código / SKU do material."); return; }
-    if (!f.produto.trim()) { alert("Informe o produto / apresentação."); return; }
-    if (f.tipoMaterial === "Outros" && !f.tipoMaterialOutro.trim()) { alert("Especifique o tipo de material (Outros)."); return; }
+    if (!f.sku.trim()) { alert("Informe o código / referência do item."); return; }
+    if (!f.produto.trim()) { alert("Informe o item / produto."); return; }
+    if (grafico && f.tipoMaterial === "Outros" && !f.tipoMaterialOutro.trim()) { alert("Especifique a categoria do material (Outros)."); return; }
     if (!f.motivo.trim()) { alert("Informe o motivo da revalidação."); return; }
     setSalvando(true);
     try {
@@ -122,7 +194,7 @@ function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao }) {
       let num = edicao?.num;
       if (isNew) {
         const n = await incrementCounter();
-        num = `RMG-${new Date().getFullYear()}-${genNum(n)}`;
+        num = `REV-${new Date().getFullYear()}-${genNum(n)}`;
       }
       const registro = {
         ...(edicao || {}),
@@ -151,43 +223,51 @@ function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao }) {
     <div>
       {/* 1. Identificação */}
       <div style={{ ...s.card }}>
-        <SecTitle icon="🎨" ch="Identificação do material" />
+        <SecTitle icon="🔁" ch="Identificação da revalidação" />
         <div style={{ fontSize: 12, color: T.text3, marginBottom: 16, lineHeight: 1.5 }}>
-          Revalidação de material gráfico de embalagem. Compare o material vigente com o proposto e registre o parecer. Quem registra e a data são preenchidos automaticamente.
+          Escolha o tipo de revalidação, identifique o item e registre o parecer. O checklist é carregado a partir do tipo escolhido. Quem registra e a data são preenchidos automaticamente.
         </div>
         <G3 ch={<>
-          <F lbl="Código / SKU *" ch={<Inp placeholder="Código interno do material" value={f.sku} onChange={e => set("sku", e.target.value)} />} />
-          <F lbl="Tipo de material" ch={
-            <div>
-              <Sel value={f.tipoMaterial} onChange={e => set("tipoMaterial", e.target.value)}>{TIPOS_MATERIAL.map(x => <option key={x}>{x}</option>)}</Sel>
-              {f.tipoMaterial === "Outros" && <Inp placeholder="Especifique..." value={f.tipoMaterialOutro} onChange={e => set("tipoMaterialOutro", e.target.value)} sx={{ marginTop: 8 }} />}
-            </div>
+          <F lbl="Código / Referência *" ch={<Inp placeholder="Código interno / referência do item" value={f.sku} onChange={e => set("sku", e.target.value)} />} />
+          <F lbl="Tipo de revalidação *" ch={
+            <Sel value={f.tipoRevalidacao} onChange={e => trocarTipo(e.target.value)}>{tipos.map(t => <option key={t.nome}>{t.nome}</option>)}</Sel>
           } />
-          <F lbl="Fornecedor gráfico" ch={<Inp placeholder="Gráfica / fornecedor" value={f.fornecedor} onChange={e => set("fornecedor", e.target.value)} />} />
+          <F lbl="Fornecedor" ch={<Inp placeholder="Fornecedor / origem" value={f.fornecedor} onChange={e => set("fornecedor", e.target.value)} />} />
         </>} />
         <G2 ch={<>
-          <F lbl="Produto / Apresentação *" ch={<Inp placeholder="Ex: Calcivitam D3 60 cáps" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
+          <F lbl="Item / Produto *" ch={<Inp placeholder="Ex: Calcivitam D3 60 cáps" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
           <F lbl="Registro MS / ANVISA" ch={<Inp value={f.registroMS} onChange={e => set("registroMS", e.target.value)} />} />
         </>} />
-        <G3 ch={<>
-          <F lbl="Nº arte atual (vigente)" ch={<Inp value={f.arteAtual} onChange={e => set("arteAtual", e.target.value)} />} />
-          <F lbl="Nº arte revalidada (proposta)" ch={<Inp value={f.arteNova} onChange={e => set("arteNova", e.target.value)} />} />
-          <F lbl="Motivo da revalidação *" ch={<Inp placeholder="Troca de fornecedor, alteração legal..." value={f.motivo} onChange={e => set("motivo", e.target.value)} />} />
-        </>} />
+        {grafico && (
+          <G3 ch={<>
+            <F lbl="Categoria do material" ch={
+              <div>
+                <Sel value={f.tipoMaterial} onChange={e => set("tipoMaterial", e.target.value)}>{TIPOS_MATERIAL.map(x => <option key={x}>{x}</option>)}</Sel>
+                {f.tipoMaterial === "Outros" && <Inp placeholder="Especifique..." value={f.tipoMaterialOutro} onChange={e => set("tipoMaterialOutro", e.target.value)} sx={{ marginTop: 8 }} />}
+              </div>
+            } />
+            <F lbl="Nº arte atual (vigente)" ch={<Inp value={f.arteAtual} onChange={e => set("arteAtual", e.target.value)} />} />
+            <F lbl="Nº arte revalidada (proposta)" ch={<Inp value={f.arteNova} onChange={e => set("arteNova", e.target.value)} />} />
+          </>} />
+        )}
+        <F lbl="Motivo da revalidação *" ch={<Inp placeholder="Troca de fornecedor, alteração legal, reteste, prazo vencido..." value={f.motivo} onChange={e => set("motivo", e.target.value)} />} />
       </div>
 
-      {/* 2. Comparação visual */}
+      {/* 2. Evidências / comparação visual */}
       <div style={{ ...s.card, marginTop: 16 }}>
-        <SecTitle icon="🔍" ch="Comparação visual" />
+        <SecTitle icon="🔍" ch={grafico ? "Comparação visual" : "Evidências (opcional)"} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FotoUpload foto={f.fotoAtual} setFoto={v => set("fotoAtual", v)} label="MATERIAL ATUAL (vigente)" cor={T.text2} inputId="rmg-foto-atual" />
-          <FotoUpload foto={f.fotoNova} setFoto={v => set("fotoNova", v)} label="MATERIAL REVALIDADO (proposto)" cor={T.accent} inputId="rmg-foto-nova" />
+          <FotoUpload foto={f.fotoAtual} setFoto={v => set("fotoAtual", v)} label={grafico ? "MATERIAL ATUAL (vigente)" : "EVIDÊNCIA — ESTADO / REFERÊNCIA"} cor={T.text2} inputId="rev-foto-atual" />
+          <FotoUpload foto={f.fotoNova} setFoto={v => set("fotoNova", v)} label={grafico ? "MATERIAL REVALIDADO (proposto)" : "EVIDÊNCIA — RESULTADO / VERIFICADO"} cor={T.accent} inputId="rev-foto-nova" />
         </div>
       </div>
 
       {/* 3. Checklist */}
       <div style={{ ...s.card, marginTop: 16 }}>
-        <SecTitle icon="✅" ch="Checklist de diferenças (item a item)" />
+        <SecTitle icon="✅" ch="Checklist de verificação (item a item)" />
+        {f.itens.length === 0 ? (
+          <div style={{ fontSize: 12, color: T.text3 }}>Este tipo não possui checklist configurado. Registre o parecer abaixo.</div>
+        ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
@@ -215,6 +295,7 @@ function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao }) {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* 4. Parecer */}
@@ -251,12 +332,15 @@ function Campo({ T, l, v, bloco }) {
 }
 
 const tipoMaterialLabel = r => r.tipoMaterial === "Outros" ? (r.tipoMaterialOutro || "Outros") : r.tipoMaterial;
+const tipoRevalLabel = r => r.tipoRevalidacao || "Material Gráfico";
+const isGrafico = r => (r.tipoRevalidacao || "Material Gráfico") === "Material Gráfico" || !!r.arteAtual || !!r.arteNova;
 
 // ── Lista + detalhe ──
-function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidacao, doDeleteRevalidacao, perm, isAdmin }) {
+function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidacao, doDeleteRevalidacao, perm, isAdmin, tipos }) {
   const T = useTheme(); const s = useS();
   const [busca, setBusca] = useState("");
   const [fParecer, setFParecer] = useState("");
+  const [fTipo, setFTipo] = useState("");
   const [sel, setSel] = useState(null);
 
   const podeCriar = isAdmin || perm("criarRevalidacao");
@@ -264,10 +348,11 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
   const filtrados = [...revalidacoes]
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
     .filter(r => !fParecer || (r.parecer || "") === fParecer)
+    .filter(r => !fTipo || tipoRevalLabel(r) === fTipo)
     .filter(r => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
-      return [r.num, r.sku, r.produto, r.fornecedor, r.motivo, r.criadoPor].some(x => (x || "").toLowerCase().includes(q));
+      return [r.num, r.sku, r.produto, r.fornecedor, r.motivo, r.criadoPor, tipoRevalLabel(r)].some(x => (x || "").toLowerCase().includes(q));
     });
 
   const { paginated, page, total, setPage } = usePagination(filtrados, 15);
@@ -275,6 +360,10 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
   const kAprov = revalidacoes.filter(r => r.parecer === "aprovado" || r.parecer === "ressalvas").length;
   const kReprov = revalidacoes.filter(r => r.parecer === "reprovado").length;
   const kPend = revalidacoes.filter(r => !r.parecer).length;
+
+  // Tipos para o filtro: catálogo ativo + quaisquer tipos já usados em registros
+  // (para não sumir com histórico de um tipo desativado).
+  const tiposFiltro = Array.from(new Set([...tipos.map(t => t.nome), ...revalidacoes.map(tipoRevalLabel)])).filter(Boolean);
 
   const editar = (r) => { pedirEdicaoRevalidacao(r); setSel(null); setTab("nova-revalidacao"); };
 
@@ -308,10 +397,13 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
       <div style={{ ...s.card, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div style={{ flex: "2 1 220px" }}>
-            <F lbl="Buscar" ch={<Inp placeholder="Nº, SKU, produto, fornecedor..." value={busca} onChange={e => setBusca(e.target.value)} />} />
+            <F lbl="Buscar" ch={<Inp placeholder="Nº, referência, item, fornecedor..." value={busca} onChange={e => setBusca(e.target.value)} />} />
           </div>
           <div style={{ flex: "1 1 160px" }}>
-            <F lbl="Parecer" ch={<Sel value={fParecer} onChange={e => setFParecer(e.target.value)}><option value="">Todos</option><option value="">Em análise</option><option value="aprovado">Aprovado</option><option value="ressalvas">Aprovado c/ ressalvas</option><option value="reprovado">Reprovado</option></Sel>} />
+            <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposFiltro.map(t => <option key={t} value={t}>{t}</option>)}</Sel>} />
+          </div>
+          <div style={{ flex: "1 1 160px" }}>
+            <F lbl="Parecer" ch={<Sel value={fParecer} onChange={e => setFParecer(e.target.value)}><option value="">Todos</option><option value="aprovado">Aprovado</option><option value="ressalvas">Aprovado c/ ressalvas</option><option value="reprovado">Reprovado</option></Sel>} />
           </div>
           {podeCriar && (
             <button onClick={() => setTab("nova-revalidacao")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Nova revalidação</button>
@@ -327,7 +419,7 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: T.surf, color: T.text3, fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em" }}>
-                {["Nº", "Data", "SKU", "Tipo", "Produto", "Parecer", ""].map(h => (
+                {["Nº", "Data", "Referência", "Tipo", "Item / Produto", "Parecer", ""].map(h => (
                   <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${T.border}` }}>{h}</th>
                 ))}
               </tr>
@@ -340,7 +432,7 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
                   <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{r.num}</td>
                   <td style={{ padding: "10px 12px", color: T.text2, whiteSpace: "nowrap" }}>{fmt(r.dataRegistro)}</td>
                   <td style={{ padding: "10px 12px", color: T.text2 }}>{r.sku || "—"}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{tipoMaterialLabel(r)}</td>
+                  <td style={{ padding: "10px 12px", color: T.text2 }}>{tipoRevalLabel(r)}</td>
                   <td style={{ padding: "10px 12px", color: T.text, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.produto}</td>
                   <td style={{ padding: "10px 12px" }}><ParecerBadge parecer={r.parecer} /></td>
                   <td style={{ padding: "10px 12px", color: T.text3, fontSize: 16 }}>›</td>
@@ -365,24 +457,27 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
             </div>
             <div style={{ padding: "1.5rem" }}>
               <G2 ch={<>
-                <Campo T={T} l="Código / SKU" v={sel.sku} />
-                <Campo T={T} l="Tipo de material" v={tipoMaterialLabel(sel)} />
+                <Campo T={T} l="Código / Referência" v={sel.sku} />
+                <Campo T={T} l="Tipo de revalidação" v={tipoRevalLabel(sel)} />
               </>} />
-              <Campo T={T} l="Produto / Apresentação" v={sel.produto} />
-              {sel.fornecedor && <Campo T={T} l="Fornecedor gráfico" v={sel.fornecedor} />}
+              <Campo T={T} l="Item / Produto" v={sel.produto} />
+              {isGrafico(sel) && sel.tipoMaterial && <Campo T={T} l="Categoria do material" v={tipoMaterialLabel(sel)} />}
+              {sel.fornecedor && <Campo T={T} l="Fornecedor" v={sel.fornecedor} />}
               {sel.registroMS && <Campo T={T} l="Registro MS / ANVISA" v={sel.registroMS} />}
-              <G2 ch={<>
-                <Campo T={T} l="Nº arte atual" v={sel.arteAtual} />
-                <Campo T={T} l="Nº arte revalidada" v={sel.arteNova} />
-              </>} />
+              {isGrafico(sel) && (sel.arteAtual || sel.arteNova) && (
+                <G2 ch={<>
+                  <Campo T={T} l="Nº arte atual" v={sel.arteAtual} />
+                  <Campo T={T} l="Nº arte revalidada" v={sel.arteNova} />
+                </>} />
+              )}
               <Campo T={T} l="Motivo da revalidação" v={sel.motivo} bloco />
 
-              {/* Fotos */}
+              {/* Fotos / evidências */}
               {(sel.fotoAtual?.url || sel.fotoNova?.url) && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "12px 0" }}>
                   {["fotoAtual", "fotoNova"].map((k, i) => (
                     <div key={k}>
-                      <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>{i === 0 ? "Material atual" : "Material revalidado"}</div>
+                      <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>{isGrafico(sel) ? (i === 0 ? "Material atual" : "Material revalidado") : (i === 0 ? "Evidência — estado / referência" : "Evidência — resultado")}</div>
                       {sel[k]?.url
                         ? <a href={sel[k].url} target="_blank" rel="noopener noreferrer"><img src={sel[k].url} alt="" style={{ maxWidth: "100%", borderRadius: 8, border: `1px solid ${T.border}` }} /></a>
                         : <div style={{ fontSize: 12, color: T.text3 }}>—</div>}
@@ -394,7 +489,7 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
               {/* Checklist */}
               {sel.itens?.some(it => it.conforme || it.obs) && (
                 <div style={{ margin: "14px 0" }}>
-                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Checklist de diferenças</div>
+                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Checklist de verificação</div>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                     <thead><tr style={{ background: T.surf, color: T.text3, fontSize: 10 }}>
                       {["Item", "Conforme", "Observação"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>{h}</th>)}
@@ -441,46 +536,50 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
 function buildRevalidacaoHTML(r) {
   const esc = (x) => String(x ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const m = PARECER_META[r.parecer || ""] || PARECER_META[""];
+  const grafico = isGrafico(r);
   const field = (l, v) => `<div class="field"><div class="flabel">${esc(l)}</div><div class="fval">${esc(v) || "—"}</div></div>`;
   const itens = (r.itens || []).filter(it => it.conforme || it.obs);
   const confLabel = c => c === "sim" ? "Conforme" : c === "nao" ? "Não conforme" : c === "na" ? "N/A" : "—";
   return `
     <div class="page">
       <div class="header">
-        <div><div class="logo">HERBAMED</div><div class="logo-sub">Revalidação de Material Gráfico</div></div>
+        <div><div class="logo">HERBAMED</div><div class="logo-sub">Revalidação — ${esc(tipoRevalLabel(r))}</div></div>
         <div><div class="doc-num">${esc(r.num)}</div><div class="doc-date">${fmt(r.dataRegistro)}</div></div>
       </div>
 
       <div class="section">
         <div class="stitle">Identificação</div>
         <div class="grid3">
-          ${field("Código / SKU", r.sku)}
-          ${field("Tipo de material", tipoMaterialLabel(r))}
-          ${field("Fornecedor gráfico", r.fornecedor)}
+          ${field("Código / Referência", r.sku)}
+          ${field("Tipo de revalidação", tipoRevalLabel(r))}
+          ${field("Fornecedor", r.fornecedor)}
         </div>
         <div class="grid2" style="margin-top:8px">
-          ${field("Produto / Apresentação", r.produto)}
+          ${field("Item / Produto", r.produto)}
           ${field("Registro MS / ANVISA", r.registroMS)}
         </div>
-        <div class="grid3" style="margin-top:8px">
+        ${grafico ? `<div class="grid3" style="margin-top:8px">
+          ${field("Categoria do material", tipoMaterialLabel(r))}
           ${field("Nº arte atual", r.arteAtual)}
           ${field("Nº arte revalidada", r.arteNova)}
+        </div>` : ""}
+        <div class="grid2" style="margin-top:8px">
           ${field("Motivo", r.motivo)}
         </div>
       </div>
 
       ${(r.fotoAtual?.url || r.fotoNova?.url) ? `
       <div class="section">
-        <div class="stitle">Comparação visual</div>
+        <div class="stitle">${grafico ? "Comparação visual" : "Evidências"}</div>
         <div class="grid2">
-          <div style="text-align:center"><div class="flabel">Material atual</div>${r.fotoAtual?.url ? `<img src="${r.fotoAtual.url}" style="max-width:100%;max-height:240px;border:1px solid #ddd;border-radius:6px"/>` : "—"}</div>
-          <div style="text-align:center"><div class="flabel">Material revalidado</div>${r.fotoNova?.url ? `<img src="${r.fotoNova.url}" style="max-width:100%;max-height:240px;border:1px solid #ddd;border-radius:6px"/>` : "—"}</div>
+          <div style="text-align:center"><div class="flabel">${grafico ? "Material atual" : "Estado / referência"}</div>${r.fotoAtual?.url ? `<img src="${r.fotoAtual.url}" style="max-width:100%;max-height:240px;border:1px solid #ddd;border-radius:6px"/>` : "—"}</div>
+          <div style="text-align:center"><div class="flabel">${grafico ? "Material revalidado" : "Resultado / verificado"}</div>${r.fotoNova?.url ? `<img src="${r.fotoNova.url}" style="max-width:100%;max-height:240px;border:1px solid #ddd;border-radius:6px"/>` : "—"}</div>
         </div>
       </div>` : ""}
 
       ${itens.length ? `
       <div class="section">
-        <div class="stitle">Checklist de diferenças</div>
+        <div class="stitle">Checklist de verificação</div>
         <table>
           <thead><tr><th>Item</th><th>Conforme?</th><th>Observação</th></tr></thead>
           <tbody>${itens.map(it => `<tr><td><strong>${esc(it.item)}</strong></td><td>${confLabel(it.conforme)}</td><td>${esc(it.obs)}</td></tr>`).join("")}</tbody>
@@ -501,7 +600,7 @@ function buildRevalidacaoHTML(r) {
       </div>
 
       <div class="footer">
-        <span>Herbamed — SGQ · Revalidação de Material Gráfico</span>
+        <span>Herbamed — SGQ · Revalidação</span>
         <span>${esc(r.num)} · ${fmt(r.dataRegistro)}</span>
       </div>
     </div>`;

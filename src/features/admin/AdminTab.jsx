@@ -8,8 +8,9 @@ import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
 import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
+import { TIPOS_REVALIDACAO_SEED } from "../revalidacao/RevalidacaoTabs";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -51,6 +52,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const mkDefaultTipos  = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DOC_GD.map(t => ({ ...t, prazoRevisaoAnos:t.prazoRevisaoAnos??2, semCapa:!!t.semCapa, semMarcaDagua:!!t.semMarcaDagua, ativo:true }));
   const mkDefaultTiposDesvio = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DESVIO.map(nome => ({ nome, ativo:true }));
   const mkDefaultSetoresDesvio = (cat) => cat && cat.length > 0 ? [...cat] : SETORES_DESVIO.map(nome => ({ nome, ativo:true }));
+  const mkDefaultTiposReval = (cat) => cat && cat.length > 0
+    ? cat.map(t => ({ nome:t.nome, ativo:t.ativo!==false, grafico:!!t.grafico, checklist:Array.isArray(t.checklist)?t.checklist:[] }))
+    : TIPOS_REVALIDACAO_SEED.map(t => ({ nome:t.nome, ativo:true, grafico:!!t.grafico, checklist:[...(t.checklist||[])] }));
 
   const [abaAdmin, setAbaAdmin] = useState("usuarios");
   const [catAba, setCatAba] = useState("deptos");
@@ -74,11 +78,19 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [editSdNome, setEditSdNome] = useState("");
   const [novoSd, setNovoSd] = useState("");
   const [savingSd, setSavingSd] = useState(false);
+  const [listaTiposReval, setListaTiposReval] = useState(() => mkDefaultTiposReval(catalogoTiposRevalidacao));
+  const [editTrIdx, setEditTrIdx] = useState(null);
+  const [editTrNome, setEditTrNome] = useState("");
+  const [novoTr, setNovoTr] = useState("");
+  const [expandTrIdx, setExpandTrIdx] = useState(null);
+  const [novoItemTr, setNovoItemTr] = useState("");
+  const [savingTr, setSavingTr] = useState(false);
 
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
   useEffect(() => { setListaTiposDesvio(mkDefaultTiposDesvio(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
   useEffect(() => { setListaSetoresDesvio(mkDefaultSetoresDesvio(catalogoSetoresDesvio)); }, [catalogoSetoresDesvio.length]);
+  useEffect(() => { setListaTiposReval(mkDefaultTiposReval(catalogoTiposRevalidacao)); }, [catalogoTiposRevalidacao.length]);
 
   const persistDeptos = async (lista) => {
     if (!isAdmin) return;
@@ -131,6 +143,21 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       toast_("Catálogo de setores de desvio salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingSd(false);
+  };
+
+  // Catálogo de tipos de revalidação (configuracoes/catalogo_tipos_revalidacao)
+  // — { nome, ativo, grafico, checklist:[str] }. Cada tipo carrega seu checklist-semente
+  // no formulário de Revalidações; grafico:true exibe os campos de material impresso.
+  const persistTiposReval = async (lista) => {
+    if (!isAdmin) return;
+    if (lista.some(t => !t.nome.trim())) { toast_("Todos os tipos de revalidação precisam de um nome.", "red"); return; }
+    setSavingTr(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_tipos_revalidacao", { items: lista });
+      await auditLog("Atualizou Catálogo de Tipos de Revalidação", "configuracoes", "catalogo_tipos_revalidacao", "Catálogo", null, { total: lista.length });
+      toast_("Catálogo de tipos de revalidação salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingTr(false);
   };
 
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
@@ -407,7 +434,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         <SecTitle icon="🗂️" ch="Catálogos" />
         {/* Tabs */}
         <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"]].map(([k,l])=>(
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
             <button key={k} onClick={()=>setCatAba(k)}
               style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
                 background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -723,6 +750,108 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <div style={{ textAlign:"right", marginTop:12 }}>
             <button style={{ ...s.btnA, opacity:(!isAdmin||savingSd)?0.6:1 }} disabled={!isAdmin||savingSd} onClick={()=>persistSetoresDesvio(listaSetoresDesvio)}>
               {savingSd?"Salvando...":"💾 Salvar setores de desvio"}
+            </button>
+          </div>
+        </>)}
+
+        {/* ── ABA TIPOS DE REVALIDAÇÃO ── */}
+        {catAba==="reval" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Tipos usados no módulo <strong>Revalidações</strong> (Controle de Qualidade). Cada tipo carrega seu próprio
+            checklist-semente ao ser escolhido no formulário. Marque <strong>Material gráfico</strong> nos tipos de embalagem impressa
+            (cartucho, rótulo, bula) para exibir os campos específicos (categoria do material, nº de arte, comparação visual).
+            Apenas tipos ativos aparecem no formulário. Clique em ✏️/📋 para renomear ou editar o checklist. As alterações são salvas automaticamente.
+          </div>
+          {/* Adicionar novo tipo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Nome do tipo (ex: Método Analítico)" value={novoTr}
+              onChange={e=>setNovoTr(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") document.getElementById("tr-add-btn")?.click(); }}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button id="tr-add-btn" style={s.btnA} onClick={()=>{
+              const nome = novoTr.trim();
+              if (!nome) return;
+              if (listaTiposReval.some(t=>t.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse tipo já existe.", "red"); return; }
+              const next = [...listaTiposReval, { nome, ativo:true, grafico:false, checklist:[] }];
+              setListaTiposReval(next);
+              setNovoTr("");
+              persistTiposReval(next);
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista de tipos */}
+          <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:520, overflowY:"auto" }}>
+            {listaTiposReval.map((t, i)=>(
+              <div key={i} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 10px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  {editTrIdx===i ? (<>
+                    <input value={editTrNome} autoFocus
+                      onChange={e=>setEditTrNome(e.target.value)}
+                      style={{ ...s.inp, flex:1, fontSize:12 }} />
+                    <button style={s.btnA} onClick={()=>{
+                      const nome = editTrNome.trim();
+                      if (!nome) return;
+                      if (listaTiposReval.some((x,j)=>j!==i && x.nome.toLowerCase()===nome.toLowerCase())) { toast_("Esse tipo já existe.", "red"); return; }
+                      const next = listaTiposReval.map((x,j)=>j===i?{ ...x, nome }:x);
+                      setListaTiposReval(next); setEditTrIdx(null); persistTiposReval(next);
+                    }}>✓</button>
+                    <button style={s.btn} onClick={()=>setEditTrIdx(null)}>✕</button>
+                  </>) : (<>
+                    <span style={{ flex:1, fontSize:12, color:T.text, fontWeight:600 }}>{t.nome}</span>
+                    {t.grafico && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:T.accent+"22", color:T.accent, fontWeight:700 }}>Gráfico</span>}
+                    <span style={{ fontSize:10, color:T.text3 }}>{(t.checklist||[]).length} itens</span>
+                    <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
+                      {t.ativo?"Ativo":"Inativo"}
+                    </span>
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} title="Editar checklist" onClick={()=>{ setExpandTrIdx(expandTrIdx===i?null:i); setNovoItemTr(""); }}>📋</button>
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditTrIdx(i); setEditTrNome(t.nome); }}>✏️</button>
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaTiposReval.map((x,j)=>j===i?{...x,ativo:!x.ativo}:x); setListaTiposReval(next); persistTiposReval(next); }}>
+                      {t.ativo?"🔒 Desativar":"🔓 Ativar"}
+                    </button>
+                    <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                      title="Excluir tipo de revalidação do catálogo"
+                      onClick={()=>{ if(confirm(`Excluir o tipo de revalidação "${t.nome}" do catálogo?\n\nRevalidações já registradas com este tipo não são afetadas. Prefira desativar se o tipo já foi usado.`)) { const next=listaTiposReval.filter((_,j)=>j!==i); setListaTiposReval(next); if(expandTrIdx===i) setExpandTrIdx(null); persistTiposReval(next); } }}>🗑️</button>
+                  </>)}
+                </div>
+
+                {/* Editor de checklist + flag gráfico (expandido) */}
+                {expandTrIdx===i && editTrIdx!==i && (
+                  <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${T.border}` }}>
+                    <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.text2, cursor:"pointer", marginBottom:10 }}>
+                      <input type="checkbox" checked={!!t.grafico} onChange={e=>{ const next=listaTiposReval.map((x,j)=>j===i?{...x,grafico:e.target.checked}:x); setListaTiposReval(next); persistTiposReval(next); }} style={{ width:15, height:15, accentColor:T.accent }} />
+                      Material gráfico (exibe categoria, nº de arte e comparação visual)
+                    </label>
+                    <div style={{ fontSize:10, color:T.text3, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Checklist-semente</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:8 }}>
+                      {(t.checklist||[]).length===0 && <div style={{ fontSize:11, color:T.text3, fontStyle:"italic" }}>Sem itens. Adicione abaixo (opcional).</div>}
+                      {(t.checklist||[]).map((item, k)=>(
+                        <div key={k} style={{ display:"flex", alignItems:"center", gap:8, background:T.card, border:`1px solid ${T.border}`, borderRadius:6, padding:"5px 8px" }}>
+                          <span style={{ flex:1, fontSize:12, color:T.text }}>{item}</span>
+                          <button style={{ ...s.btn, fontSize:11, padding:"2px 8px", color:"#ff4f6a" }} title="Remover item"
+                            onClick={()=>{ const next=listaTiposReval.map((x,j)=>j===i?{...x,checklist:x.checklist.filter((_,z)=>z!==k)}:x); setListaTiposReval(next); persistTiposReval(next); }}>🗑️</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <input placeholder="Novo item do checklist" value={novoItemTr}
+                        onChange={e=>setNovoItemTr(e.target.value)}
+                        onKeyDown={e=>{ if(e.key==="Enter") document.getElementById("tr-item-add")?.click(); }}
+                        style={{ ...s.inp, flex:1, fontSize:12 }} />
+                      <button id="tr-item-add" style={s.btnA} onClick={()=>{
+                        const item = novoItemTr.trim();
+                        if (!item) return;
+                        if ((t.checklist||[]).some(x=>x.toLowerCase()===item.toLowerCase())) { toast_("Esse item já existe no checklist.", "red"); return; }
+                        const next = listaTiposReval.map((x,j)=>j===i?{...x,checklist:[...(x.checklist||[]),item]}:x);
+                        setListaTiposReval(next); setNovoItemTr(""); persistTiposReval(next);
+                      }}>+ Item</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTr)?0.6:1 }} disabled={!isAdmin||savingTr} onClick={()=>persistTiposReval(listaTiposReval)}>
+              {savingTr?"Salvando...":"💾 Salvar tipos de revalidação"}
             </button>
           </div>
         </>)}
