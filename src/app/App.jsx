@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { AdminTab } from "../features/admin/AdminTab";
@@ -29,6 +29,27 @@ import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
 
+// Migração única (por sessão): copia registros da collection legada
+// "revalidacoes_grafico" para "revalidacoes", marcando o tipo como
+// "Material Gráfico". Idempotente — não sobrescreve o que já foi migrado.
+let _revalMigrada = false;
+async function migrarRevalidacoesLegado() {
+  if (_revalMigrada) return;
+  _revalMigrada = true;
+  try {
+    const [novos, legado] = await Promise.all([
+      getCollection("revalidacoes").catch(() => []),
+      getCollection("revalidacoes_grafico").catch(() => []),
+    ]);
+    if (!legado?.length) return;
+    const idsNovos = new Set((novos || []).map(r => r.id));
+    for (const r of legado) {
+      if (idsNovos.has(r.id)) continue;
+      await saveCollection("revalidacoes", r.id, { ...r, tipoRevalidacao: r.tipoRevalidacao || "Material Gráfico", migradoDe: "revalidacoes_grafico" });
+    }
+  } catch (e) { console.error("Migração de revalidações:", e); _revalMigrada = false; }
+}
+
 export default function App() {
   const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
   const [formalMode, setFormalMode] = useState(() => localStorage.getItem("hm_formal") === "true");
@@ -54,6 +75,7 @@ export default function App() {
   const [catalogoTipos,  setCatalogoTipos]  = useState([]);
   const [catalogoTiposDesvio, setCatalogoTiposDesvio] = useState([]);
   const [catalogoSetoresDesvio, setCatalogoSetoresDesvio] = useState([]);
+  const [catalogoTiposRevalidacao, setCatalogoTiposRevalidacao] = useState([]);
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -154,7 +176,8 @@ export default function App() {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
     const unsubDesvios = subscribeCollection("desvios", setDesvios);
-    const unsubReval = subscribeCollection("revalidacoes_grafico", setRevalidacoes);
+    migrarRevalidacoesLegado();
+    const unsubReval = subscribeCollection("revalidacoes", setRevalidacoes);
     const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
@@ -173,6 +196,8 @@ export default function App() {
       setCatalogoTiposDesvio(ctd?.items || []);
       const csd = list.find(c => c.id === "catalogo_setores_desvio");
       setCatalogoSetoresDesvio(csd?.items || []);
+      const ctr = list.find(c => c.id === "catalogo_tipos_revalidacao");
+      setCatalogoTiposRevalidacao(ctr?.items || []);
     });
     return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
@@ -315,15 +340,15 @@ export default function App() {
   const doSaveRevalidacao = useCallback(async (reg) => {
     try {
       const isNew = !revalidacoes.find(r => r.id === reg.id);
-      await saveCollection("revalidacoes_grafico", reg.id, reg);
-      await auditLog(isNew ? "Registrou revalidação gráfica" : `Revalidação: ${reg.status}`, "revalidacoes_grafico", reg.id, reg.num || reg.id, isNew ? null : revalidacoes.find(r=>r.id===reg.id), reg);
+      await saveCollection("revalidacoes", reg.id, reg);
+      await auditLog(isNew ? "Registrou revalidação" : `Revalidação: ${reg.status}`, "revalidacoes", reg.id, reg.num || reg.id, isNew ? null : revalidacoes.find(r=>r.id===reg.id), reg);
     } catch(e) { console.error(e); }
   }, [revalidacoes]);
   const doDeleteRevalidacao = useCallback(async (id) => {
     try {
       const antes = revalidacoes.find(r => r.id === id);
-      await deleteFromCollection("revalidacoes_grafico", id);
-      await auditLog("Excluiu revalidação gráfica", "revalidacoes_grafico", id, antes?.num || id, antes, null);
+      await deleteFromCollection("revalidacoes", id);
+      await auditLog("Excluiu revalidação", "revalidacoes", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
   }, [revalidacoes]);
 
@@ -398,8 +423,8 @@ export default function App() {
     "cq-analises": "CQ — Fichas de Análise",
     "cq-dashboard": "CQ — Dashboard de Qualidade",
     "indicadores-desvios": "Desvios — Indicadores",
-    revalidacao: "Revalidação de Material Gráfico",
-    "nova-revalidacao": "Nova Revalidação de Material Gráfico",
+    revalidacao: "Revalidações",
+    "nova-revalidacao": "Nova Revalidação",
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
@@ -625,8 +650,8 @@ export default function App() {
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
               {tab==="indicadores-desvios" && perm("verDesvios") && <DesviosTab view="indicadores" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
-              {tab==="revalidacao"      && perm("verRevalidacao") && <RevalidacaoTab view="lista" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} />}
-              {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} />}
+              {tab==="revalidacao"      && perm("verRevalidacao") && <RevalidacaoTab view="lista" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
+              {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
@@ -649,7 +674,7 @@ export default function App() {
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
             </div>
           </div>
         </div>

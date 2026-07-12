@@ -12,9 +12,9 @@ export const PERMS_GRUPOS = [
     { key: "criarDesvio",  label: "Registrar novo desvio" },
     { key: "triarDesvio",  label: "Triar desvio (encerrar / converter em RNC)" },
   ]},
-  { grupo: "Revalidação Gráfica", items: [
-    { key: "verRevalidacao",   label: "Visualizar revalidações de material gráfico" },
-    { key: "criarRevalidacao", label: "Criar / editar revalidação de material gráfico" },
+  { grupo: "Revalidações", items: [
+    { key: "verRevalidacao",   label: "Visualizar revalidações" },
+    { key: "criarRevalidacao", label: "Criar / editar revalidação" },
   ]},
   { grupo: "Controle de Qualidade", items: [
     { key: "verCQMateriais",     label: "Visualizar CQ Materiais" },
