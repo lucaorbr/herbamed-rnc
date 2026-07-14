@@ -5,6 +5,7 @@ import { fmt, seloAssHTML, sigCodigo, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
+import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 
 export const LOGO_HERBAMED = "/logo.png";
 
@@ -237,50 +238,39 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
 
     const assinaturaRTHTML = seloAssHTML(laudo.assinaturaRT, "Responsável Técnico", "#2d5016", `LAUDO|${laudo.num||laudo.id||""}`);
 
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto">
-        <div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div>
-              <div style="color:#fff;font-size:14px;font-weight:bold">${HERBAMED_INFO.nome}</div>
-              <div style="color:#9fd4b2;font-size:10px">CNPJ: ${HERBAMED_INFO.cnpj}</div>
-            </div>
+    const corpo = `
+        <div class="section">
+          <div class="stitle">Identificação</div>
+          <div class="grid3">
+            <div class="field"><div class="flabel">Cliente</div><div class="fval">${cliente?.nome||"—"}</div>${cliente?.cnpj?`<div style="font-size:10px;color:#888">CNPJ: ${cliente.cnpj}</div>`:""}</div>
+            <div class="field"><div class="flabel">Produto</div><div class="fval">${laudo.produto}</div>${laudo.linha?`<div style="font-size:10px;color:#888">${laudo.linha}</div>`:""}</div>
+            <div class="field"><div class="flabel">Identificação</div><div class="fval">${laudo.op||laudo.lote||"—"}</div><div style="font-size:10px;color:#888">Lote: ${laudo.lote||"—"} · ${fmt(laudo.data)}</div></div>
           </div>
-          <div style="text-align:right">
-            <div style="color:#fff;font-size:13px;font-weight:bold">Laudo Analítico</div>
-            <div style="color:#9fd4b2;font-size:11px">N° ${laudo.numLaudo}</div>
-          </div>
+          <div style="margin-top:8px"><span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#e1f5ee;color:#0f6e56;font-weight:bold">${tipo}</span></div>
         </div>
-        <div style="padding:16px 24px;border-bottom:1px solid #eee;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-          <div><div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Cliente</div><div style="font-size:13px;font-weight:bold">${cliente?.nome||"—"}</div><div style="font-size:11px;color:#888">${cliente?.cnpj?"CNPJ: "+cliente.cnpj:""}</div></div>
-          <div><div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Produto</div><div style="font-size:13px;font-weight:bold">${laudo.produto}</div><div style="font-size:11px;color:#888">${laudo.linha||""}</div></div>
-          <div><div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Identificação</div><div style="font-size:13px;font-weight:bold">${laudo.op||laudo.lote||"—"}</div><div style="font-size:11px;color:#888">Lote: ${laudo.lote||"—"} · ${fmt(laudo.data)}</div></div>
-        </div>
-        <div style="padding:12px 24px;border-bottom:1px solid #eee"><span style="font-size:11px;padding:3px 10px;border-radius:20px;background:#e1f5ee;color:#0f6e56;font-weight:bold">${tipo}</span></div>
-        <div style="padding:16px 24px">
-          <div style="font-size:11px;font-weight:bold;color:#888;text-transform:uppercase;margin-bottom:10px">Resultados dos ensaios</div>
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:#f5f5f5"><th style="padding:7px 10px;text-align:left;font-size:10px;color:#888;text-transform:uppercase">Ensaio</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:#888;text-transform:uppercase">Unidade</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:#888;text-transform:uppercase">Especificação</th><th style="padding:7px 10px;text-align:left;font-size:10px;color:#888;text-transform:uppercase">Resultado</th><th style="padding:7px 10px;text-align:center;font-size:10px;color:#888;text-transform:uppercase">Situação</th></tr></thead>
+        <div class="section">
+          <div class="stitle">Resultados dos ensaios</div>
+          <table style="font-size:12px">
+            <thead><tr><th>Ensaio</th><th>Unidade</th><th>Especificação</th><th>Resultado</th><th style="text-align:center">Situação</th></tr></thead>
             <tbody>${ensaiosHTML}</tbody>
           </table>
         </div>
-        <div style="margin:0 24px 16px;padding:10px 14px;background:${statusBg};border-left:3px solid ${statusColor};border-radius:4px">
+        <div style="padding:10px 14px;background:${statusBg};border-left:3px solid ${statusColor};border-radius:4px;margin-bottom:16px">
           <div style="font-size:12px;font-weight:bold;color:${statusColor}">${statusTxt}</div>
         </div>
-        ${laudo.obs?`<div style="margin:0 24px 16px;padding:10px 14px;background:#f9f9f9;border-radius:4px;font-size:12px;color:#555"><strong>Observações:</strong> ${laudo.obs}</div>`:""}
-        ${laudo.armazenamento?`<div style="margin:0 24px 16px;padding:10px 14px;background:#e8f5e9;border-left:3px solid #2e7d32;border-radius:4px"><div style="font-size:11px;font-weight:bold;color:#2e7d32;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Condições de armazenamento</div><div style="font-size:11px;color:#333;white-space:pre-line">${laudo.armazenamento}</div></div>`:""}
-        <div style="padding:16px 24px;border-top:1px solid #eee;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        ${laudo.obs?`<div style="padding:10px 14px;background:#f9f9f9;border-radius:4px;font-size:12px;color:#555;margin-bottom:16px"><strong>Observações:</strong> ${laudo.obs}</div>`:""}
+        ${laudo.armazenamento?`<div style="padding:10px 14px;background:#e8f5e9;border-left:3px solid #2e7d32;border-radius:4px;margin-bottom:16px"><div style="font-size:11px;font-weight:bold;color:#2e7d32;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Condições de armazenamento</div><div style="font-size:11px;color:#333;white-space:pre-line">${laudo.armazenamento}</div></div>`:""}
+        <div style="border-top:1px solid #eee;padding-top:16px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
           ${assinaturaAnalistaHTML}
           ${assinaturaRTHTML}
-        </div>
-        <div style="padding:10px 24px;background:#f5f5f5;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#888">
-          <span>${HERBAMED_INFO.nome} · CNPJ: ${HERBAMED_INFO.cnpj}</span>
-          <span>${HERBAMED_INFO.endereco} · ${HERBAMED_INFO.cidade} · CEP: ${HERBAMED_INFO.cep}</span>
-        </div>
-      </div>`;
-    const win = window.open("","_blank");
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Laudo ${laudo.numLaudo}</title><style>@media print{body{margin:0}}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
-    win.document.close();
+        </div>`;
+    openPDFWindow(`Laudo ${laudo.numLaudo}`, buildPDFShell({
+      titulo: "Laudo Analítico",
+      numero: laudo.numLaudo,
+      meta: fmt(laudo.data),
+      rodapeEsq: `${HERBAMED_INFO.nome} · CNPJ: ${HERBAMED_INFO.cnpj}`,
+      corpo,
+    }));
   };
 
   const statusColor = { "Aprovado":T.accent, "Finalizado":T.accent, "Reprovado":T.red, "Rascunho":T.text3 };

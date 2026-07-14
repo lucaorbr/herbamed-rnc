@@ -8,6 +8,51 @@ import { uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
+import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
+
+// ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
+// (fichas) quanto pelas análises. Só o miolo muda entre os dois; o "rosto" (faixa
+// verde + rodapé) vem do buildPDFShell, igual aos demais PDFs do sistema.
+const RA_FOOTER = "Herbamed Laboratório Nutracêutico LTDA · CNPJ: 14.829.598/0001-30";
+const RA_STYLE = `<style>
+  .ra-conf{color:#1a7a3c;font-weight:700;}
+  .ra-nconf{color:#cc2244;font-weight:700;}
+  .ra-pend{color:#8a6000;font-weight:700;}
+  .ra-conclusao{padding:14px;border-radius:8px;text-align:center;font-size:16px;font-weight:800;margin:16px 0;}
+  .ra-selos{display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;}
+  .ra-selos > div{flex:1;}
+</style>`;
+
+function abrirRA_PDF({ num, dataAnalise, identFields, tableHead, tableRows, extraSecoes = "", conclusao, coa, selo, disp }) {
+  const concColor = conclusao === "Aprovado" ? "#1a7a3c" : conclusao === "Reprovado" ? "#cc2244" : "#8a6000";
+  const concTxt = conclusao === "Aprovado" ? "✅ APROVADO" : conclusao === "Reprovado" ? "❌ REPROVADO" : "⏳ ANÁLISE PENDENTE";
+  const corpo = `${RA_STYLE}
+  <div class="section">
+    <div class="stitle">Identificação do Material</div>
+    <div class="grid3">
+      ${identFields.map(f => `<div class="field"><div class="flabel">${f.label}</div><div class="fval">${f.value || "—"}</div></div>`).join("")}
+    </div>
+  </div>
+  <div class="section">
+    <div class="stitle">Resultados das Análises</div>
+    <table><thead>${tableHead}</thead><tbody>${tableRows}</tbody></table>
+  </div>
+  ${extraSecoes}
+  <div class="ra-conclusao" style="background:${concColor}15;border:2px solid ${concColor};color:${concColor};">${concTxt}</div>
+  ${coa ? `<div class="section"><div class="stitle">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor: <a href="${coa.url}" target="_blank">${coa.name}</a></p></div>` : ""}
+  <div class="ra-selos">
+    <div>${seloAssHTML(selo.resp, "Responsável pela análise", "#1a4a2e", selo.respCtx)}</div>
+    <div>${disp ? seloAssHTML(disp.ass, "Aprovou a disposição", "#1a5fb4", disp.ctx) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}</div>
+    <div style="text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
+  </div>`;
+  openPDFWindow(`${num} — Herbamed®`, buildPDFShell({
+    titulo: "Relatório de Análise",
+    numero: num,
+    meta: fmt(dataAnalise),
+    rodapeEsq: RA_FOOTER,
+    corpo,
+  }));
+}
 
 // Selo de assinatura para exibição na tela (versão JSX do seloAssHTML usado no PDF)
 function SeloUI({ T, papel, cor, ass, vazioLabel = "Aguardando aprovação" }) {
@@ -250,99 +295,37 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
     setEnsaios([]); setCoa(null);
   };
 
-  const exportRA = (ficha) => {
-    const conc = ficha.conclusao;
-    const concColor = conc==="Aprovado"?"#1a7a3c":conc==="Reprovado"?"#cc2244":"#8a6000";
-    const win = window.open("","_blank");
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/>
-<title>${ficha.num} — Herbamed®</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;padding:0;}
-  .page{width:210mm;padding:14mm;margin:0 auto;}
-  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:16px;}
-  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;}
-  .ra-num{font-size:18px;font-weight:700;color:#1a7a3c;text-align:right;}
-  .section{margin-bottom:16px;}
-  .section-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:6px;}
-  .section-title::before{content:'';display:inline-block;width:3px;height:11px;background:#1a7a3c;border-radius:2px;}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 9px;}
-  .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:2px;}
-  .field-value{font-size:12px;color:#1a1a1a;}
-  table{width:100%;border-collapse:collapse;font-size:11px;}
-  th{background:#f0f4f0;color:#333;font-weight:700;padding:7px 8px;text-align:left;border:1px solid #ddd;}
-  td{padding:6px 8px;border:1px solid #eee;vertical-align:middle;}
-  tr:nth-child(even)td{background:#f9fafb;}
-  .conf{color:#1a7a3c;font-weight:700;}
-  .nconf{color:#cc2244;font-weight:700;}
-  .pend{color:#8a6000;font-weight:700;}
-  .conclusao{padding:14px;border-radius:8px;text-align:center;font-size:16px;font-weight:800;background:${concColor}15;border:2px solid ${concColor};color:${concColor};margin:16px 0;}
-  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
-  @media print{body{background:#fff!important;}}
-</style></head><body><div class="page">
-<div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
-  <div style="display:flex;align-items:center;gap:12px;">
-    <img src="${window.location.origin}/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
-    <div>
-      <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
-      <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
-    </div>
-  </div>
-  <div style="text-align:right;">
-    <div style="color:#fff;font-size:13px;font-weight:bold;">Relatório de Análise</div>
-    <div style="color:#9fd4b2;font-size:11px;">N° ${ficha.num} · ${fmt(ficha.dataAnalise)}</div>
-  </div>
-</div>
-<div class="section">
-  <div class="section-title">Identificação do Material</div>
-  <div class="grid3">
-    <div class="field"><div class="field-label">Material</div><div class="field-value">${ficha.material}</div></div>
-    <div class="field"><div class="field-label">Tipo</div><div class="field-value">${ficha.tipoPadrao}</div></div>
-    <div class="field"><div class="field-label">Fornecedor</div><div class="field-value">${ficha.fornecedor||"—"}</div></div>
-    <div class="field"><div class="field-label">Nº do Lote</div><div class="field-value">${ficha.lote||"—"}</div></div>
-    <div class="field"><div class="field-label">Qtd. Recebida</div><div class="field-value">${ficha.qtdRecebida||"—"}</div></div>
-    <div class="field"><div class="field-label">Nota Fiscal</div><div class="field-value">${ficha.nf||"—"}</div></div>
-    <div class="field"><div class="field-label">Data Recebimento</div><div class="field-value">${fmt(ficha.dataRecebimento)}</div></div>
-    <div class="field"><div class="field-label">Data Análise</div><div class="field-value">${fmt(ficha.dataAnalise)}</div></div>
-    <div class="field"><div class="field-label">Analista</div><div class="field-value">${ficha.resp || user?.name || ""}</div></div>
-  </div>
-</div>
-<div class="section">
-  <div class="section-title">Resultados das Análises</div>
-  <table>
-    <thead><tr><th>Ensaio</th><th>Método</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Situação</th><th>Obs.</th></tr></thead>
-    <tbody>
-      ${ficha.ensaios.map(e=>{
-        const c = e.tipo==="numero"?(parseFloat(e.resultado)>=(e.min??-Infinity)&&parseFloat(e.resultado)<=(e.max??Infinity)?true:false):e.conforme;
-        const sit = c===true?'<span class="conf">✓ Conforme</span>':c===false?'<span class="nconf">✗ Não conforme</span>':'<span class="pend">— Pendente</span>';
-        return `<tr><td><strong>${e.nome}</strong></td><td>${e.metodo}</td><td>${e.espec}</td><td>${e.resultado||"—"}</td><td>${e.unidade}</td><td>${sit}</td><td>${e.obs||""}</td></tr>`;
-      }).join("")}
-    </tbody>
-  </table>
-</div>
-<div class="conclusao">
-  ${conc==="Aprovado"?"✅ APROVADO":conc==="Reprovado"?"❌ REPROVADO":"⏳ ANÁLISE PENDENTE"}
-</div>
-${ficha.coa?`<div class="section"><div class="section-title">COA do Fornecedor</div><p style="font-size:12px;color:#333;">Laudo do fornecedor disponível em: <a href="${ficha.coa.url}" target="_blank">${ficha.coa.name}</a></p></div>`:""}
-<div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
-  <div style="flex:1;">
-    ${seloAssHTML({ nome: ficha.resp || user?.name || "", cargo: ficha.respCargo || user?.cargo || "", registroProfissional: ficha.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm }, "Responsável pela análise", "#2d5016", `FICHA|${ficha.num||ficha.id||""}`)}
-  </div>
-  <div style="flex:1;">
-    ${ficha.aprovacaoDisposicao ? seloAssHTML({ nome: ficha.aprovacaoDisposicao.nome, cargo: ficha.aprovacaoDisposicao.cargo, registroProfissional: ficha.aprovacaoDisposicao.registro, timestamp: ficha.aprovacaoDisposicao.timestamp }, "Aprovou a disposição", "#1a5fb4", `FICHA-DISP|${ficha.num||ficha.id||""}`) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}
-  </div>
-  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
-</div>
-<div style="padding:10px 24px;background:#f5f5f5;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#888;">
-  <span>Herbamed Laboratório Nutracêutico LTDA · CNPJ: 14.829.598/0001-30</span>
-  <span>Av Irene Meneghetti Longhini, 500 · Assis/SP - Brasil · CEP: 19816-370</span>
-</div>
-</div><script>window.onload=()=>window.print();</script></body></html>`;
-    win.document.write(html);
-    win.document.close();
-  };
+  const exportRA = (ficha) => abrirRA_PDF({
+    num: ficha.num,
+    dataAnalise: ficha.dataAnalise,
+    identFields: [
+      { label: "Material", value: ficha.material },
+      { label: "Tipo", value: ficha.tipoPadrao },
+      { label: "Fornecedor", value: ficha.fornecedor },
+      { label: "Nº do Lote", value: ficha.lote },
+      { label: "Qtd. Recebida", value: ficha.qtdRecebida },
+      { label: "Nota Fiscal", value: ficha.nf },
+      { label: "Data Recebimento", value: fmt(ficha.dataRecebimento) },
+      { label: "Data Análise", value: fmt(ficha.dataAnalise) },
+      { label: "Analista", value: ficha.resp || user?.name || "" },
+    ],
+    tableHead: `<tr><th>Ensaio</th><th>Método</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Situação</th><th>Obs.</th></tr>`,
+    tableRows: ficha.ensaios.map(e => {
+      const c = e.tipo === "numero" ? (parseFloat(e.resultado) >= (e.min ?? -Infinity) && parseFloat(e.resultado) <= (e.max ?? Infinity)) : e.conforme;
+      const sit = c === true ? '<span class="ra-conf">✓ Conforme</span>' : c === false ? '<span class="ra-nconf">✗ Não conforme</span>' : '<span class="ra-pend">— Pendente</span>';
+      return `<tr><td><strong>${e.nome}</strong></td><td>${e.metodo}</td><td>${e.espec}</td><td>${e.resultado || "—"}</td><td>${e.unidade}</td><td>${sit}</td><td>${e.obs || ""}</td></tr>`;
+    }).join(""),
+    conclusao: ficha.conclusao,
+    coa: ficha.coa,
+    selo: {
+      resp: { nome: ficha.resp || user?.name || "", cargo: ficha.respCargo || user?.cargo || "", registroProfissional: ficha.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm },
+      respCtx: `FICHA|${ficha.num || ficha.id || ""}`,
+    },
+    disp: ficha.aprovacaoDisposicao ? {
+      ass: { nome: ficha.aprovacaoDisposicao.nome, cargo: ficha.aprovacaoDisposicao.cargo, registroProfissional: ficha.aprovacaoDisposicao.registro, timestamp: ficha.aprovacaoDisposicao.timestamp },
+      ctx: `FICHA-DISP|${ficha.num || ficha.id || ""}`,
+    } : null,
+  });
 
   if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
 
@@ -1496,92 +1479,34 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     }
   };
 
-  const exportRA = (a) => {
-    const concColor = a.conclusao==="Aprovado"?"#1a7a3c":a.conclusao==="Reprovado"?"#cc2244":"#8a6000";
-    const win = window.open("","_blank");
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/>
-<title>${a.num} — Herbamed®</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;}
-  .page{width:210mm;padding:14mm;margin:0 auto;}
-  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:16px;}
-  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;}
-  .section{margin-bottom:16px;}
-  .stitle{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #e0e0e0;padding-bottom:4px;margin-bottom:8px;}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
-  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 9px;}
-  .flabel{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:2px;}
-  table{width:100%;border-collapse:collapse;font-size:11px;}
-  th{background:#f0f4f0;color:#333;font-weight:700;padding:7px 8px;text-align:left;border:1px solid #ddd;}
-  td{padding:6px 8px;border:1px solid #eee;vertical-align:middle;}
-  .conf{color:#1a7a3c;font-weight:700;} .nconf{color:#cc2244;font-weight:700;} .pend{color:#888;}
-  .conclusao{padding:14px;border-radius:8px;text-align:center;font-size:16px;font-weight:800;background:${concColor}15;border:2px solid ${concColor};color:${concColor};margin:16px 0;}
-  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
-  @media print{body{background:#fff!important;}}
-</style></head><body><div class="page">
-<div style="background:#1a4a2e;padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
-  <div style="display:flex;align-items:center;gap:12px;">
-    <img src="${window.location.origin}/logo.png" style="width:44px;height:44px;border-radius:6px;object-fit:cover;"/>
-    <div>
-      <div style="color:#fff;font-size:14px;font-weight:bold;">Herbamed Laboratório Nutracêutico LTDA</div>
-      <div style="color:#9fd4b2;font-size:10px;">CNPJ: 14.829.598/0001-30</div>
-    </div>
-  </div>
-  <div style="text-align:right;">
-    <div style="color:#fff;font-size:13px;font-weight:bold;">Relatório de Análise</div>
-    <div style="color:#9fd4b2;font-size:11px;">N° ${a.num} · ${fmt(a.dataAnalise)}</div>
-  </div>
-</div>
-<div class="section">
-  <div class="stitle">Identificação</div>
-  <div class="grid3">
-    <div class="field"><div class="flabel">Material</div><div>${a.materialNome}</div></div>
-    <div class="field"><div class="flabel">Tipo</div><div>${a.materialTipo}</div></div>
-    <div class="field"><div class="flabel">Fornecedor</div><div>${a.fornecedor||"—"}</div></div>
-    <div class="field"><div class="flabel">Lote</div><div>${a.lote||"—"}</div></div>
-    <div class="field"><div class="flabel">Qtd. Recebida</div><div>${a.qtdRecebida||"—"}</div></div>
-    <div class="field"><div class="flabel">Nota Fiscal</div><div>${a.nf||"—"}</div></div>
-    <div class="field"><div class="flabel">Data Recebimento</div><div>${fmt(a.dataRecebimento)}</div></div>
-    <div class="field"><div class="flabel">Data Análise</div><div>${fmt(a.dataAnalise)}</div></div>
-    <div class="field"><div class="flabel">Analista</div><div>${a.resp || user?.name || ""}</div></div>
-  </div>
-</div>
-<div class="section">
-  <div class="stitle">Resultados das Análises</div>
-  <table>
-    <thead><tr><th>Ensaio</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Referência</th><th>Situação</th></tr></thead>
-    <tbody>
-      ${(a.resultados||[]).map(r=>`<tr>
-        <td><strong>${r.nome}</strong></td>
-        <td>${r.espec||"—"}</td>
-        <td>${r.resultado||"—"}</td>
-        <td>${r.unidade||"—"}</td>
-        <td>${r.ref||"—"}</td>
-        <td>${r.conforme===true?'<span class="conf">✓ Conforme</span>':r.conforme===false?'<span class="nconf">✗ N.C.</span>':'<span class="pend">—</span>'}</td>
-      </tr>`).join("")}
-    </tbody>
-  </table>
-</div>
-${a.obs?`<div class="section"><div class="stitle">Observações</div><p>${a.obs}</p></div>`:""}
-<div class="conclusao">${a.conclusao==="Aprovado"?"✅ APROVADO":a.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE"}</div>
-${a.coa?`<div class="section"><div class="stitle">COA do Fornecedor</div><p>Laudo: <a href="${a.coa.url}" target="_blank">${a.coa.name}</a></p></div>`:""}
-<div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
-  <div style="flex:1;">
-    ${seloAssHTML({ nome: a.resp || user?.name || "", cargo: a.respCargo || user?.cargo || "", registroProfissional: a.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise }, "Responsável pela análise", "#2d5016", `ANALISE|${a.num||a.id||""}`)}
-  </div>
-  <div style="flex:1;">
-    ${a.aprovacaoDisposicao ? seloAssHTML({ nome: a.aprovacaoDisposicao.nome, cargo: a.aprovacaoDisposicao.cargo, registroProfissional: a.aprovacaoDisposicao.registro, timestamp: a.aprovacaoDisposicao.timestamp }, "Aprovou a disposição", "#1a5fb4", `ANALISE-DISP|${a.num||a.id||""}`) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}
-  </div>
-  <div style="flex:1;text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
-</div>
-<div style="padding:10px 24px;background:#f5f5f5;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#888;">
-  <span>Herbamed Laboratório Nutracêutico LTDA · CNPJ: 14.829.598/0001-30</span>
-  <span>Av Irene Meneghetti Longhini, 500 · Assis/SP - Brasil · CEP: 19816-370</span>
-</div>
-</div><script>window.onload=()=>window.print();</script></body></html>`;
-    win.document.write(html); win.document.close();
-  };
+  const exportRA = (a) => abrirRA_PDF({
+    num: a.num,
+    dataAnalise: a.dataAnalise,
+    identFields: [
+      { label: "Material", value: a.materialNome },
+      { label: "Tipo", value: a.materialTipo },
+      { label: "Fornecedor", value: a.fornecedor },
+      { label: "Lote", value: a.lote },
+      { label: "Qtd. Recebida", value: a.qtdRecebida },
+      { label: "Nota Fiscal", value: a.nf },
+      { label: "Data Recebimento", value: fmt(a.dataRecebimento) },
+      { label: "Data Análise", value: fmt(a.dataAnalise) },
+      { label: "Analista", value: a.resp || user?.name || "" },
+    ],
+    tableHead: `<tr><th>Ensaio</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Referência</th><th>Situação</th></tr>`,
+    tableRows: (a.resultados || []).map(r => `<tr><td><strong>${r.nome}</strong></td><td>${r.espec || "—"}</td><td>${r.resultado || "—"}</td><td>${r.unidade || "—"}</td><td>${r.ref || "—"}</td><td>${r.conforme === true ? '<span class="ra-conf">✓ Conforme</span>' : r.conforme === false ? '<span class="ra-nconf">✗ N.C.</span>' : '<span class="ra-pend">—</span>'}</td></tr>`).join(""),
+    extraSecoes: a.obs ? `<div class="section"><div class="stitle">Observações</div><p style="font-size:12px;color:#333;">${a.obs}</p></div>` : "",
+    conclusao: a.conclusao,
+    coa: a.coa,
+    selo: {
+      resp: { nome: a.resp || user?.name || "", cargo: a.respCargo || user?.cargo || "", registroProfissional: a.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise },
+      respCtx: `ANALISE|${a.num || a.id || ""}`,
+    },
+    disp: a.aprovacaoDisposicao ? {
+      ass: { nome: a.aprovacaoDisposicao.nome, cargo: a.aprovacaoDisposicao.cargo, registroProfissional: a.aprovacaoDisposicao.registro, timestamp: a.aprovacaoDisposicao.timestamp },
+      ctx: `ANALISE-DISP|${a.num || a.id || ""}`,
+    } : null,
+  });
 
   const analiseFiltradas = analises.filter(a=>{
     const textoOk = !filtroTexto || (a.materialNome||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.num||"").toLowerCase().includes(filtroTexto.toLowerCase()) || (a.lote||"").toLowerCase().includes(filtroTexto.toLowerCase());
