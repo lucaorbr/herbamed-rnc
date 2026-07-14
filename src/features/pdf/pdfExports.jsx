@@ -207,8 +207,11 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="field"><div class="field-label">Nº do Lote</div><div class="field-value">${rnc.lote||"—"}</div></div>
     </div>
     <div class="grid3" style="margin-top:8px;">
+      <div class="field"><div class="field-label">Nº da Nota Fiscal</div><div class="field-value">${rnc.nf||"—"}</div></div>
       <div class="field"><div class="field-label">Qtd. Afetada</div><div class="field-value">${rnc.qtd||"—"}</div></div>
       <div class="field"><div class="field-label">Referência Normativa</div><div class="field-value">${rnc.ref||"—"}</div></div>
+    </div>
+    <div class="grid3" style="margin-top:8px;">
       <div class="field"><div class="field-label">Responsável pela Análise</div><div class="field-value">${rnc.resp||"—"}</div></div>
     </div>
   </div>
