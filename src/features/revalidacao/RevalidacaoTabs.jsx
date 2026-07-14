@@ -4,7 +4,7 @@ import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter, uploadLocalFile } from "../../firebase";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA, usePagination } from "../../shared/ui";
-import { openPDFWindow } from "../pdf/pdfExports";
+import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 
 // ── Módulo: Revalidações ──
 // Registra a revalidação de qualquer item da qualidade (material gráfico de
@@ -540,13 +540,12 @@ function buildRevalidacaoHTML(r) {
   const field = (l, v) => `<div class="field"><div class="flabel">${esc(l)}</div><div class="fval">${esc(v) || "—"}</div></div>`;
   const itens = (r.itens || []).filter(it => it.conforme || it.obs);
   const confLabel = c => c === "sim" ? "Conforme" : c === "nao" ? "Não conforme" : c === "na" ? "N/A" : "—";
-  return `
-    <div class="page">
-      <div class="header">
-        <div><div class="logo">HERBAMED</div><div class="logo-sub">Revalidação — ${esc(tipoRevalLabel(r))}</div></div>
-        <div><div class="doc-num">${esc(r.num)}</div><div class="doc-date">${fmt(r.dataRegistro)}</div></div>
-      </div>
-
+  return buildPDFShell({
+    titulo: `Revalidação — ${esc(tipoRevalLabel(r))}`,
+    numero: esc(r.num),
+    meta: fmt(r.dataRegistro),
+    rodapeEsq: "Herbamed® · SGQ · Revalidação",
+    corpo: `
       <div class="section">
         <div class="stitle">Identificação</div>
         <div class="grid3">
@@ -597,11 +596,6 @@ function buildRevalidacaoHTML(r) {
       <div class="sign-row">
         <div class="sign-box"><div class="sign-line">Elaborado por: ${esc(r.criadoPor)}</div></div>
         <div class="sign-box"><div class="sign-line">Aprovado por</div></div>
-      </div>
-
-      <div class="footer">
-        <span>Herbamed — SGQ · Revalidação</span>
-        <span>${esc(r.num)} · ${fmt(r.dataRegistro)}</span>
-      </div>
-    </div>`;
+      </div>`,
+  });
 }
