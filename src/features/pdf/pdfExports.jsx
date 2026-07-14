@@ -140,22 +140,8 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
 }
 
 export function exportRNCPDF(rnc, assinatura = null) {
-  const win = window.open("", "_blank");
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8"/>
-<title>RNC ${rnc.num} — Herbamed®</title>
+  const corpo = `
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;padding:0;}
-  .page{width:210mm;min-height:297mm;padding:16mm 14mm;margin:0 auto;}
-  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:3px solid #1a7a3c;margin-bottom:20px;}
-  .logo-area{display:flex;align-items:center;gap:12px;}
-  .logo-text{font-family:Georgia,serif;font-size:22px;font-weight:700;color:#1a7a3c;letter-spacing:1px;}
-  .logo-sub{font-size:10px;color:#666;margin-top:2px;}
-  .rnc-num{font-size:20px;font-weight:700;color:#1a7a3c;text-align:right;}
-  .rnc-date{font-size:11px;color:#666;text-align:right;margin-top:2px;}
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
   .badge-aberta{background:#ff4f6a18;color:#cc2244;border:1px solid #ff4f6a40;}
   .badge-eficaz{background:#22c97a18;color:#1a7a3c;border:1px solid #22c97a40;}
@@ -165,53 +151,29 @@ export function exportRNCPDF(rnc, assinatura = null) {
   .sev-critica{background:#ff4f6a18;color:#cc2244;border:1px solid #ff4f6a40;}
   .sev-maior{background:#ff8c4218;color:#7a3c00;border:1px solid #ff8c4240;}
   .sev-menor{background:#a78bfa18;color:#4a2a8a;border:1px solid #a78bfa40;}
-  .section{margin-bottom:18px;}
   .section-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:6px;}
-  .section-title::before{content:'';display:inline-block;width:3px;height:12px;background:#1a7a3c;border-radius:2px;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-  .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:8px 10px;}
+  .section-title::before{content:'';display:inline-block;width:3px;height:12px;background:#1a4a2e;border-radius:2px;}
   .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
   .field-value{font-size:12px;color:#1a1a1a;font-weight:500;}
   .desc-box{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#1a1a1a;}
   .contencao-box{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;}
-  .causa-box{background:#e8f5e9;border:2px solid #1a7a3c;border-radius:8px;padding:12px;font-size:13px;font-weight:600;color:#1a4a1a;}
+  .causa-box{background:#e8f5e9;border:2px solid #1a4a2e;border-radius:8px;padding:12px;font-size:13px;font-weight:600;color:#1a4a1a;}
   .step{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-  .step-num{width:24px;height:24px;border-radius:50%;background:#1a7a3c;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
+  .step-num{width:24px;height:24px;border-radius:50%;background:#1a4a2e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
   .step-text{font-size:12px;color:#333;}
-  .hist-item{padding:8px 10px;border-left:3px solid #1a7a3c;background:#f8f9fa;margin-bottom:6px;border-radius:0 6px 6px 0;}
+  .hist-item{padding:8px 10px;border-left:3px solid #1a4a2e;background:#f8f9fa;margin-bottom:6px;border-radius:0 6px 6px 0;}
   .hist-date{font-size:10px;color:#888;margin-bottom:2px;}
   .hist-acao{font-size:12px;color:#1a1a1a;}
-  .footer{margin-top:24px;padding-top:12px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;align-items:center;}
-  .footer-left{font-size:10px;color:#666;}
-  .footer-right{font-size:10px;color:#666;text-align:right;}
   .progress-bar{display:flex;gap:4px;margin-top:8px;}
   .progress-step{flex:1;height:6px;border-radius:3px;}
   .w2h-item{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:10px;margin-bottom:8px;}
   .w2h-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
-  @media print{body{background:#fff!important;}.page{padding:10mm 12mm;}}
 </style>
-</head>
-<body>
-<div class="page">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="logo-area">
-      <div>
-        <div class="logo-text">HERBAMED®</div>
-        <div class="logo-sub">Sistema de Gestão da Qualidade — SGQ</div>
-      </div>
-    </div>
-    <div>
-      <div class="rnc-num">${rnc.num}</div>
-      <div class="rnc-date">Aberta em ${fmt(rnc.data)} por ${rnc.detector||"—"}</div>
-      <div style="text-align:right;margin-top:4px;">
-        <span class="badge badge-${rnc.status==="Eficaz"?"eficaz":rnc.status==="Em andamento"?"andamento":rnc.status==="Pendente verificação"?"pendente":rnc.status==="Ineficaz"?"ineficaz":"aberta"}">${rnc.status}</span>
-        &nbsp;
-        <span class="badge sev-${rnc.sev==="Crítica"?"critica":rnc.sev==="Maior"?"maior":"menor"}">${rnc.sev}</span>
-      </div>
-    </div>
+  <!-- STATUS -->
+  <div class="section" style="display:flex;gap:8px;align-items:center;">
+    <span class="badge badge-${rnc.status==="Eficaz"?"eficaz":rnc.status==="Em andamento"?"andamento":rnc.status==="Pendente verificação"?"pendente":rnc.status==="Ineficaz"?"ineficaz":"aberta"}">${rnc.status}</span>
+    <span class="badge sev-${rnc.sev==="Crítica"?"critica":rnc.sev==="Maior"?"maior":"menor"}">${rnc.sev}</span>
   </div>
 
   <!-- PROGRESSO -->
@@ -366,28 +328,19 @@ export function exportRNCPDF(rnc, assinatura = null) {
       ${(rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf)?`<div style="font-size:10px;color:#777;">Registro profissional: ${rnc.assinaturaRT.registroProfissional||rnc.assinaturaRT.crf}</div>`:""}
       <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
-    </div>` : rnc.sev === "Crítica" ? `
+    </div>
+  </div>` : rnc.sev === "Crítica" ? `
   <div style="margin-top:12px;padding:10px 14px;border:1px solid #ffd16633;border-radius:8px;background:#fffbf0;font-size:11px;color:#b8860b;">
     ⏳ RNC Crítica — Aprovação do Responsável Técnico pendente
   </div>` : ""}
-
-  <!-- FOOTER -->
-  <div class="footer">
-    <div class="footer-left">
-      <strong>Herbamed® · Sistema de Gestão da Qualidade</strong><br/>
-      "Fornecendo Saúde. Cultivando Qualidade de Vida."
-    </div>
-    <div class="footer-right">
-      Documento gerado em ${new Date().toLocaleString("pt-BR")}<br/>
-      ${rnc.num} · Confidencial
-    </div>
-  </div>
-
-</div>
-<script>window.onload=()=>window.print();</script>
-</body></html>`;
-  win.document.write(html);
-  win.document.close();
+`;
+  openPDFWindow(`RNC ${rnc.num} — Herbamed®`, buildPDFShell({
+    titulo: "Registro de Não Conformidade",
+    numero: rnc.num,
+    meta: `Aberta em ${fmt(rnc.data)} por ${rnc.detector||"—"} · ${rnc.sev}`,
+    rodapeEsq: 'Herbamed® · SGQ · RNC · Confidencial',
+    corpo,
+  }));
 }
 
 export function exportFMEAPDF(items) {
