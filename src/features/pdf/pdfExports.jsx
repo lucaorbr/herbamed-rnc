@@ -5,17 +5,31 @@ import { fmt, past, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
 
+// Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
+// usado server-side no render da Gestão de Docs (server/index.js), para que todos
+// os PDFs saiam com a mesma faixa de topo e a mesma faixa fina de rodapé.
+export const PDF_VERDE = "#1a4a2e";
+
 export const PDF_CSS = `
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#1a1a1a;background:#fff;}
-  .page{width:210mm;min-height:297mm;padding:14mm;margin:0 auto;}
-  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a7a3c;margin-bottom:18px;}
-  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a7a3c;letter-spacing:1px;}
+  .page{width:210mm;min-height:297mm;padding:14mm;margin:0 auto;position:relative;}
+  /* ── Rosto padrão: faixa verde no topo + faixa fina no rodapé (igual à Gestão de Docs) ── */
+  .pdf-band{background:#1a4a2e;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 16px;margin:-14mm -14mm 18px;}
+  .pdf-band-left{display:flex;flex-direction:column;gap:4px;}
+  .pdf-band-logo{height:30px;width:auto;display:block;}
+  .pdf-band-sub{font-size:8.5px;color:#d9edde;letter-spacing:.1em;text-transform:uppercase;}
+  .pdf-band-right{text-align:right;}
+  .pdf-band-title{font-size:16px;font-weight:700;color:#fff;line-height:1.2;}
+  .pdf-band-meta{font-size:10px;color:#d9edde;margin-top:3px;}
+  .pdf-foot{background:#edf2ed;margin:22px -14mm -14mm;padding:7px 16px;display:flex;justify-content:space-between;align-items:center;font-size:9px;color:#5a6b5f;}
+  .header{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1a4a2e;margin-bottom:18px;}
+  .logo{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#1a4a2e;letter-spacing:1px;}
   .logo-sub{font-size:10px;color:#666;margin-top:2px;}
-  .doc-num{font-size:18px;font-weight:700;color:#1a7a3c;text-align:right;}
+  .doc-num{font-size:18px;font-weight:700;color:#1a4a2e;text-align:right;}
   .doc-date{font-size:11px;color:#666;text-align:right;margin-top:2px;}
   .section{margin-bottom:16px;}
-  .stitle{font-size:10px;font-weight:700;color:#1a7a3c;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #1a7a3c;padding-bottom:4px;margin-bottom:10px;}
+  .stitle{font-size:10px;font-weight:700;color:#1a4a2e;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #1a4a2e;padding-bottom:4px;margin-bottom:10px;}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
   .field{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:5px;padding:7px 10px;}
@@ -26,10 +40,10 @@ export const PDF_CSS = `
   .box-orange{background:#fff8f0;border:1px solid #ffe0b2;border-radius:7px;padding:10px 12px;}
   .box-red{background:#fff0f0;border:1px solid #ffcdd2;border-radius:7px;padding:10px 12px;}
   table{width:100%;border-collapse:collapse;font-size:11px;}
-  th{background:#1a7a3c;color:#fff;font-weight:700;padding:7px 8px;text-align:left;}
+  th{background:#1a4a2e;color:#fff;font-weight:700;padding:7px 8px;text-align:left;}
   td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:middle;}
   tr:nth-child(even)td{background:#f8faf8;}
-  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a7a3c;display:flex;justify-content:space-between;font-size:10px;color:#666;}
+  .footer{margin-top:20px;padding-top:10px;border-top:2px solid #1a4a2e;display:flex;justify-content:space-between;font-size:10px;color:#666;}
   .sign-row{display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;}
   .sign-box{flex:1;text-align:center;}
   .sign-line{border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;}
@@ -40,6 +54,32 @@ export function openPDFWindow(title, html) {
   const win = window.open("","_blank");
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>${title}</title><style>${PDF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
   win.document.close();
+}
+
+// Envolve o miolo (`corpo`) no "rosto" padrão: faixa verde no topo (logo Herbamed +
+// título + número/meta) e faixa fina no rodapé. Fonte única do cabeçalho/rodapé dos
+// PDFs client-side — cada módulo só produz as seções do miolo.
+export function buildPDFShell({ titulo, subtitulo = "Sistema de Gestão da Qualidade", numero = "", meta = "", corpo = "", rodapeEsq = "Herbamed® · Sistema de Gestão da Qualidade" }) {
+  const logoUrl = `${window.location.origin}/logo-herbamed.png`;
+  const metaLinha = [numero, meta].filter(Boolean).join(" · ");
+  return `
+<div class="page">
+  <div class="pdf-band">
+    <div class="pdf-band-left">
+      <img class="pdf-band-logo" src="${logoUrl}" alt="Herbamed"/>
+      <div class="pdf-band-sub">${subtitulo}</div>
+    </div>
+    <div class="pdf-band-right">
+      <div class="pdf-band-title">${titulo}</div>
+      ${metaLinha ? `<div class="pdf-band-meta">${metaLinha}</div>` : ""}
+    </div>
+  </div>
+  ${corpo}
+  <div class="pdf-foot">
+    <span>${rodapeEsq}</span>
+    <span>${numero ? numero + " · " : ""}Gerado em ${new Date().toLocaleString("pt-BR")}</span>
+  </div>
+</div>`;
 }
 
 export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "", papel = "", docId = null }) {
@@ -354,12 +394,11 @@ export function exportFMEAPDF(items) {
   const rpnColor = (r) => r>=100?"#cc2244":r>=50?"#8a4000":r>=25?"#8a6000":"#1a7a3c";
   const rpnLabel = (r) => r>=100?"CRÍTICO":r>=50?"ALTO":r>=25?"MÉDIO":"BAIXO";
   const sorted = [...items].sort((a,b)=>(b.S*b.O*b.D)-(a.S*a.O*a.D));
-  openPDFWindow("FMEA — Herbamed®", `
-<div class="page">
-  <div class="header">
-    <div><div class="logo">HERBAMED®</div><div class="logo-sub">FMEA — Análise de Modo e Efeito de Falha</div></div>
-    <div><div class="doc-date">Gerado em ${new Date().toLocaleDateString("pt-BR")}</div></div>
-  </div>
+  openPDFWindow("FMEA — Herbamed®", buildPDFShell({
+    titulo: "FMEA — Análise de Modo e Efeito de Falha",
+    meta: `Gerado em ${new Date().toLocaleDateString("pt-BR")}`,
+    rodapeEsq: "Herbamed® · SGQ · FMEA",
+    corpo: `
   <div class="section">
     <div class="stitle">Análise de Riscos — ${sorted.length} item(s)</div>
     <table>
@@ -387,22 +426,17 @@ export function exportFMEAPDF(items) {
       <div class="field"><div class="flabel">Itens críticos (RPN≥100)</div><div class="fval" style="color:#cc2244">${sorted.filter(x=>x.S*x.O*x.D>=100).length}</div></div>
       <div class="field"><div class="flabel">Itens altos (RPN 50-99)</div><div class="fval" style="color:#8a4000">${sorted.filter(x=>x.S*x.O*x.D>=50&&x.S*x.O*x.D<100).length}</div></div>
     </div>
-  </div>
-  <div class="footer">
-    <div>Herbamed® · Sistema de Gestão da Qualidade · FMEA</div>
-    <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
-  </div>
-</div>`);
+  </div>`,
+  }));
 }
 
 export function exportAuditoriaPDF(a) {
   const statusColor = { "Não conformidade":"#cc2244", "Observação":"#8a6000", "Oportunidade de melhoria":"#1a7a3c", "Ponto positivo":"#1a7a3c" };
-  openPDFWindow(`${a.titulo} — Herbamed®`, `
-<div class="page">
-  <div class="header">
-    <div><div class="logo">HERBAMED®</div><div class="logo-sub">Relatório de Auditoria ${a.tipo}</div></div>
-    <div><div class="doc-date">Planejado em ${fmt(a.dataPlano)}</div>${a.dataPrev?`<div class="doc-date">Execução: ${fmt(a.dataPrev)}</div>`:""}</div>
-  </div>
+  openPDFWindow(`${a.titulo} — Herbamed®`, buildPDFShell({
+    titulo: a.titulo,
+    meta: `Auditoria ${a.tipo} · Planejado em ${fmt(a.dataPlano)}${a.dataPrev?` · Execução ${fmt(a.dataPrev)}`:""}`,
+    rodapeEsq: "Herbamed® · SGQ · Auditoria",
+    corpo: `
   <div class="section">
     <div class="stitle">Identificação</div>
     <div class="grid2">
@@ -438,10 +472,6 @@ export function exportAuditoriaPDF(a) {
     <div class="sign-box"><div class="sign-line">${a.auditores||"Auditor"}<br/>Auditor</div></div>
     <div class="sign-box"><div class="sign-line">______________________<br/>Responsável da Área</div></div>
     <div class="sign-box"><div class="sign-line">______________________<br/>Gerente de Qualidade</div></div>
-  </div>
-  <div class="footer">
-    <div>Herbamed® · Sistema de Gestão da Qualidade · Auditoria</div>
-    <div>Gerado em ${new Date().toLocaleString("pt-BR")} · Documento confidencial</div>
-  </div>
-</div>`);
+  </div>`,
+  }));
 }
