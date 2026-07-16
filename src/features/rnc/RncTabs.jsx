@@ -13,6 +13,20 @@ import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, Status
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 
+// Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
+// primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
+// a análise de causa). Como o responsável é obrigatório já na abertura, ele não serve de
+// gatilho — "Aberta" significa "registrada, tratamento ainda não começou".
+// Devolve o patch a mesclar no doUpdateRNC (status + entrada de histórico); null se a RNC
+// já saiu de "Aberta".
+function andamentoPatch(r, motivo, autor) {
+  if (!r || r.status !== "Aberta") return null;
+  return {
+    status: "Em andamento",
+    hEntry: { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado -> Em andamento (${motivo})`, resp: autor || "—", tipo: "status" },
+  };
+}
+
 export function HomeTab({ rncs, user, setTab }) {
   const formal = useFormal();
   const [ipcPendentes, setIpcPendentes] = useState(0);
@@ -326,11 +340,17 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
       tipo: "edicao"
     };
 
-    const updated = { ...editData, historico: [...(r?.historico || []), h] };
-    await doUpdateRNC(sel.id, updated);
-    setSel(p => ({ ...p, ...editData, historico: [...(p.historico || []), h] }));
+    let hist = [...(r?.historico || []), h];
+    const patch = { ...editData };
+    // Contenção registrada agora (estava vazia) = 1º ato de tratamento -> Em andamento.
+    const contNova = editData.contencao?.trim() && !(r.contencao || "").trim();
+    const ap = contNova ? andamentoPatch(r, "contenção registrada", user.name) : null;
+    if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; }
+    patch.historico = hist;
+    await doUpdateRNC(sel.id, patch);
+    setSel(p => ({ ...p, ...patch }));
     setEditing(false);
-    toast_("RNC atualizada com sucesso!", "green");
+    toast_(ap ? "RNC atualizada — status movido para Em andamento." : "RNC atualizada com sucesso!", "green");
   };
 
   const del = async id => {
@@ -579,6 +599,9 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {Object.keys(SMETA).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
                     </div>
+                    <div style={{ fontSize: 10, color: T.text3, marginTop: 8, lineHeight: 1.5 }}>
+                      A RNC passa de <b>Aberta</b> para <b>Em andamento</b> automaticamente no 1º ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar a análise de causa). Os botões acima permitem ajuste manual quando necessário.
+                    </div>
                   </div>
                 )}
 
@@ -694,7 +717,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
                   <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
-                  {!isViewer && sel.fornecedor && <button style={{ ...s.btn, color: "#1a7a3c", borderColor: "#1a7a3c33", background: "#1a7a3c12", display: "flex", alignItems: "center", gap: 6 }} onClick={async () => { try { await exportFormularioFornecedor(sel); toast_("Formulário do fornecedor gerado!", "green"); } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); } }}>📋 Formulário p/ fornecedor</button>}
+                  {!isViewer && sel.fornecedor && <button style={{ ...s.btn, color: "#1a7a3c", borderColor: "#1a7a3c33", background: "#1a7a3c12", display: "flex", alignItems: "center", gap: 6 }} onClick={async () => { try { await exportFormularioFornecedor(sel); const ap = andamentoPatch(sel, "encaminhado ao fornecedor", user.name); if (ap) { const hist = [...(sel.historico || []), ap.hEntry]; await doUpdateRNC(sel.id, { status: ap.status, historico: hist }); setSel(p => p ? { ...p, status: ap.status, historico: [...(p.historico || []), ap.hEntry] } : p); } toast_(ap ? "Formulário gerado — status movido para Em andamento." : "Formulário do fornecedor gerado!", "green"); } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); } }}>📋 Formulário p/ fornecedor</button>}
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
                   {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
                   <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
@@ -1082,8 +1105,8 @@ Responda APENAS em JSON sem markdown:
     setIshiAiLoading(false);
   };
 
-  const saveI = async () => { if (!r) return; const ishi = { ...r.ishikawa, efeito, causes }; await doUpdateRNC(r.id, { ishikawa: ishi, historico: [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: "—" }] }); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
-  const saveW = async () => { if (!r) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; await doUpdateRNC(r.id, { ishikawa: ishi, historico: [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: "—" }] }); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
+  const saveI = async () => { if (!r) return; const ishi = { ...r.ishikawa, efeito, causes }; let hist = [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: "—" }]; const ap = andamentoPatch(r, "análise de causa iniciada", "—"); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
+  const saveW = async () => { if (!r) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; let hist = [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: "—" }]; const ap = andamentoPatch(r, "análise de causa iniciada", "—"); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
   const CATS = [["mao", "👤 Mão de obra", T.blue], ["maquina", "⚙️ Máquina", T.orange], ["metodo", "📋 Método", T.accent], ["material", "📦 Material", T.yellow], ["medicao", "📏 Medição", T.purple], ["meioamb", "🌿 Meio ambiente", "#5dd4b0"]];
   return (
     <div>
