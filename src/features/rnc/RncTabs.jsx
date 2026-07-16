@@ -716,7 +716,10 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
                   {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
-                  <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>📄 Assinar e exportar PDF</button>
+                  {/* Exportar/imprimir NÃO assina: reimprime sempre a assinatura do elaborador gravada na RNC. Quem só visualiza não assina nada. */}
+                  <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => exportRNCPDF(sel)}>📄 Exportar/Imprimir PDF</button>
+                  {/* Regularização de RNCs antigas (sem assinatura do elaborador gravada): só o próprio elaborador (criadoPor) ou admin. */}
+                  {!sel.assinaturaElaborador && (isAdmin || sel.criadoPor === user.name) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>✍️ Assinar como elaborador</button>}
                   {!isViewer && sel.fornecedor && <button style={{ ...s.btn, color: "#1a7a3c", borderColor: "#1a7a3c33", background: "#1a7a3c12", display: "flex", alignItems: "center", gap: 6 }} onClick={async () => { try { await exportFormularioFornecedor(sel); const ap = andamentoPatch(sel, "encaminhado ao fornecedor", user.name); if (ap) { const hist = [...(sel.historico || []), ap.hEntry]; await doUpdateRNC(sel.id, { status: ap.status, historico: hist }); setSel(p => p ? { ...p, status: ap.status, historico: [...(p.historico || []), ap.hEntry] } : p); } toast_(ap ? "Formulário gerado — status movido para Em andamento." : "Formulário do fornecedor gerado!", "green"); } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); } }}>📋 Formulário p/ fornecedor</button>}
                   {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
                   {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
@@ -731,11 +734,18 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
       {assinaturaModal && (
         <AssinaturaModal
           user={user}
-          titulo={`RNC ${assinaturaModal.num}`}
+          titulo={`RNC ${assinaturaModal.num} — assinatura do elaborador`}
           contexto={`RNC|${assinaturaModal.num||assinaturaModal.id||""}`}
-          papel="Responsavel pela analise"
+          papel="Elaborador"
           onClose={()=>setAssinaturaModal(null)}
-          onConfirm={(ass)=>{ exportRNCPDF(assinaturaModal, ass); setAssinaturaModal(null); toast_("PDF gerado com assinatura!", "green"); }}
+          onConfirm={async (ass)=>{
+            const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" };
+            const hist = [...(assinaturaModal.historico || []), h];
+            await doUpdateRNC(assinaturaModal.id, { assinaturaElaborador: ass, historico: hist });
+            setSel(p => p ? { ...p, assinaturaElaborador: ass, historico: [...(p.historico || []), h] } : p);
+            setAssinaturaModal(null);
+            toast_("Assinatura do elaborador registrada na RNC.", "green");
+          }}
         />
       )}
     </div>
@@ -856,6 +866,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const [fornOpen, setFornOpen] = useState(false);
   const [numPreview, setNumPreview] = useState("...");
   const [novaAba, setNovaAba] = useState("ident");
+  const [assinaturaModal, setAssinaturaModal] = useState(false);
 
   useEffect(() => {
     peekDailyCounter().then(n => setNumPreview(n)).catch(() => setNumPreview("—"));
@@ -899,14 +910,22 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
     }
   };
 
-  const salvar = async () => {
-    try {
+  // A RNC nasce assinada pelo elaborador (quem a registra). salvar() só valida e abre o
+  // modal de assinatura; o contador só é consumido quando a assinatura é confirmada
+  // (em finalizarSalvar), evitando "queimar" número se o elaborador desistir de assinar.
+  const salvar = () => {
     if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
     if (!f.sev)                 { alert("Selecione a severidade (Crítica / Maior / Menor)."); return; }
     if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
     if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
+    setAssinaturaModal(true);
+  };
+
+  const finalizarSalvar = async (assinaturaElaborador) => {
+    try {
     const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }], criadoPor: user.name, createdAt: Date.now(), assinaturaRT: null };
+    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+    setAssinaturaModal(false);
     await doSaveRNC(rnc);
     // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
     if (origemDesvio && doSaveDesvio) {
@@ -1030,8 +1049,19 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: ".5rem" }}>
         <button style={s.btn} onClick={() => setTab("lista")}>Cancelar</button>
-        <button style={s.btnA} onClick={salvar}>Salvar RNC →</button>
+        <button style={s.btnA} onClick={salvar}>Assinar e salvar RNC →</button>
       </div>
+
+      {assinaturaModal && (
+        <AssinaturaModal
+          user={user}
+          titulo={`Nova RNC ${numPreview} — assinatura do elaborador`}
+          contexto={`RNC|${numPreview}`}
+          papel="Elaborador"
+          onClose={() => setAssinaturaModal(false)}
+          onConfirm={finalizarSalvar}
+        />
+      )}
     </div>
   );
 }
