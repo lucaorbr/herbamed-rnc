@@ -396,7 +396,6 @@ export default function App() {
     ...(!isViewer ? [{ id: "ishikawa",   icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
     ...(!isViewer ? [{ id: "5w2h",       icon: "📋", label: "CAPA" }] : []),
     ...(!isViewer ? [{ id: "eficacia",   icon: "✅", label: "Eficácia" }] : []),
-    { id: "reunioes",    icon: "🗓️", label: "Reuniões" },
     ...(!isViewer ? [{ id: "fmea",       icon: "⚠️", label: "FMEA" }] : []),
     { id: "dashboard",   icon: "📊", label: "Dashboard" },
     { id: "relatorios",  icon: "📑", label: "Relatórios" },
