@@ -7,8 +7,9 @@ import { logoutUser, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
 import { HerbamedLogo } from "../../shared/ui";
+import { rncsEmperradas } from "../rnc/ReunioesTab";
 
-export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onClose }) {
+export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], reunioes = [], onClose }) {
   const T = useTheme();
   const [docs, setDocs] = useState([]);
   const [clock, setClock] = useState(new Date());
@@ -41,8 +42,11 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   const desviosConvertidos = desvios.filter(d => d.status === "Convertido em RNC").length;
   const taxaDesvioRNC     = desvios.length > 0 ? Math.round(desviosConvertidos / desvios.length * 100) : null;
 
+  // RNCs emperradas na análise crítica — mesmo critério da aba Reuniões/Indicadores.
+  const emperradas = rncsEmperradas(rncs, reunioes).length;
+
   // Semáforo geral
-  const situacao = rncsCriticas > 0 || rncsVencidas > 3
+  const situacao = rncsCriticas > 0 || rncsVencidas > 3 || emperradas > 0
     ? { cor: "#ff4f6a", label: "Atenção Requerida", icon: "🔴" }
     : rncsVencidas > 0 || rncsAbertas > 5 || desviosAbertos > 5
     ? { cor: "#ffd166", label: "Monitoramento", icon: "🟡" }
@@ -194,6 +198,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
           <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz · ${ineficaz} ineficaz`} />
           <KpiCard icon="⚠️" label="Desvios em Aberto" value={desviosAbertos} color={desviosAbertos > 0 ? "#4fc3f7" : C.accent} sub={`${desvios.length} total${taxaDesvioRNC !== null ? ` · ${taxaDesvioRNC}% viraram RNC` : ""}`} alert={desviosAbertos > 5} />
           <KpiCard icon="🗂️" label="Docs Vigentes"   value={docsVigentes}  color={C.accent}                                sub={`${docsVencendo > 0 ? `⚠ ${docsVencendo} vencendo em 30d` : "Revisões em dia"}`} alert={docsVencendo > 0} />
+          <KpiCard icon="🔁" label="RNCs Emperradas" value={emperradas}    color={emperradas > 0 ? "#ff4f6a" : C.accent}   sub="3+ passagens pela pauta da RAC" alert={emperradas > 0} />
         </div>
 
         {/* ── ROW 2 ── */}

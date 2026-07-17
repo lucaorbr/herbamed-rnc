@@ -74,12 +74,16 @@ export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }
   );
 }
 
-export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin }) {
+export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], reunioes = [], isViewer, isAdmin }) {
+  const hoje = new Date().toISOString().split("T")[0];
+  // Badge = reuniões que já deveriam ter acontecido (agendadas para hoje ou antes).
+  const racPendentes = reunioes.filter(r => r.status === "Agendada" && r.data <= hoje).length;
   const GRUPOS = [
     { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
       ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
-      { id:"reunioes", icon:"🗓️", label:"Reuniões" },
+      { id:"reunioes", icon:"🗓️", label:"Reuniões", badge: racPendentes },
+      { id:"indicadores-reunioes", icon:"📊", label:"Indicadores RAC" },
     ]},
     { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
       { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },

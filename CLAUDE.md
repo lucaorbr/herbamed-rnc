@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.22.0`
+- Versao atual: `2.23.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -69,13 +69,14 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **RNC** — Campo Nota Fiscal do material (quando aplicável) (PR #105) — v2.19.0
 - **RNC** — Status `Aberta` -> `Em andamento` automático no 1º ato de tratamento (encaminhar ao fornecedor, contenção ou início da análise de causa). Regra única em `andamentoPatch` no `RncTabs.jsx` (PR #106) — v2.20.0
 - **RNC** — Assinatura do elaborador gravada na criação; PDF reimprime sem reassinar (PR #107) — v2.21.0
-- **RNC — Reunião de Análise Crítica (RAC), Fase 1 / MVP** — nova aba 🗓️ Reuniões: entidade `rnc_reunioes` (coleção nova), pauta automática ordenada por GUT, deliberação por item que **age na própria RNC**, encerramento com ata em PDF assinada. Detalhes e o que ficou para as Fases 2/3 na seção abaixo — v2.22.0
+- **RNC — Reunião de Análise Crítica (RAC), Fase 1 / MVP** — nova aba 🗓️ Reuniões: entidade `rnc_reunioes` (coleção nova), pauta automática ordenada por GUT, deliberação por item que **age na própria RNC**, encerramento com ata em PDF assinada — v2.22.0
+- **RNC — Reunião de Análise Crítica (RAC), Fases 2 e 3** — delta "desde a última reunião" na ata e na tela, sinal de RNC emperrada, deliberações Escalar e Aprovar encerramento, recorrência automática ao encerrar, alerta por e-mail de reunião pendente, e nova aba 📊 Indicadores RAC (aderência da pauta, quórum médio, vazão semanal, RNCs emperradas) integrada ao Dashboard Executivo. Detalhes na seção abaixo — v2.23.0
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
 - Code-splitting (bundle 605.4 kB)
 
-### 🗓️ RNC — Reunião de Análise Crítica (RAC) — Fase 1 entregue em v2.22.0; Fases 2/3 pendentes
+### 🗓️ RNC — Reunião de Análise Crítica (RAC) — Fases 1, 2 e 3 entregues (v2.22.0 / v2.23.0)
 Proposta visual original (14 seções, esboço de tela, data model): artifact `https://claude.ai/code/artifact/3cd73fc6-4888-4a7a-99ae-ee5d3fd36b22`.
 
 Diagnóstico que originou o módulo: a RNC **media** muito bem (KPIs, Pareto, Matriz GUT, PDCA, tempo médio, reincidência) mas **não registrava decisão de gestão**. A reunião semanal acontecia na sala e não voltava pro sistema — sumia o encaminhamento, quem ficou responsável, e a evidência de que a direção analisou. Numa inspeção ANVISA/BPF a pergunta é "me mostre a análise crítica das NCs". Modelo SE Suite: **fórum com memória**, não um novo relatório. Regra-chave da implementação: **costurar, não reconstruir** — e manter **fonte única**: a deliberação age na própria RNC (via `doUpdateRNC` + `historico`), nunca num documento paralelo.
@@ -91,8 +92,18 @@ Diagnóstico que originou o módulo: a RNC **media** muito bem (KPIs, Pareto, Ma
 - ⚠️ **`firebase.js` não precisou ser tocado.** `subscribeCollection`/`saveCollection`/`deleteFromCollection` já são genéricos por nome de coleção, e `handleCollections` em `server/index.js` atende `/api/collections/:nome/:id` **sem whitelist** — coleção nova nasce funcionando, zero backend, zero migração. Vale para qualquer coleção futura.
 - **`calcGut`/`gutRank` foram extraídos** de dentro do `DashTab` para o topo do `RncTabs.jsx` e exportados — a Matriz GUT do Dashboard e a pauta da RAC precisam concordar sobre o que é prioritário. Refactor verificado como idêntico ao inline antigo nas 80 combinações de sev × prazo × status.
 
-**Fase 2 (próxima):** delta "desde a última reunião" (abriram/encerraram/venceram na janela) + sinal de **RNC emperrada** (3+ reuniões sem sair); assinatura de presença dos participantes; notificações (lembrete de reunião agendada/atrasada nos moldes do alerta de prazo do `App.jsx`, notificar participantes ao encerrar) + recorrência semanal; deliberações **Escalar** e **Aprovar encerramento** (→ EficaciaTab).
-**Fase 3:** indicadores da reunião (aderência da pauta, RNCs emperradas, presença/quórum, vazão semanal) + integração no Dashboard Executivo.
+**O que a Fase 2 entregou** (v2.23.0):
+- **Delta "desde a última reunião"** — `calcDelta()` compara com a última reunião **Encerrada** e mostra RNCs abertas/encerradas/prazos vencidos na janela; aparece na tela da reunião e na ata em PDF (`exportAtaReuniaoPDF`).
+- **Sinal de RNC emperrada** — `rncsEmperradas()`/`vezesNaPauta()`: RNC que já passou por `LIMITE_EMPERRADA` (3) reuniões encerradas sem sair da pauta ganha o chip 🔁 na tela e conta para o KPI dos Indicadores e do Dashboard Executivo.
+- **Deliberações `escalar`** (eleva a severidade, só para cima — `sevAcimaDe`) e **`aprovar_encerramento`** (só disponível quando a RNC está `Pendente verificação`; grava `encerramentoAprovado` na RNC, mas quem encerra de fato continua sendo a aba Eficácia — segregação preservada).
+- **Recorrência automática** — encerrar uma reunião com "Próxima reunião" preenchida já agenda a seguinte (`agendarProxima`), com os mesmos participantes e pauta recalculada na hora.
+- **Alerta por e-mail** de reunião Agendada para hoje ou atrasada (mesmo padrão do alerta de prazo de RNC no `App.jsx`, via EmailJS), disparado uma vez por dia só para o facilitador.
+- Botão **"Atualizar pauta"** em reunião ainda Agendada — recalcula a partir das RNCs de agora (a pauta é uma fotografia do momento do agendamento).
+
+**O que a Fase 3 entregou** (v2.23.0):
+- Nova aba **📊 Indicadores RAC** (`src/features/rnc/ReunioesIndicadores.jsx`): reuniões realizadas, aderência da pauta (% de itens de pauta já deliberados, somando todas as reuniões), quórum médio (presentes/convocados nas encerradas), RNCs emperradas, e gráfico de vazão semanal (itens deliberados por semana, últimas 12 semanas).
+- **Dashboard Executivo** ganhou o card "RNCs Emperradas" e o semáforo geral passou a considerar emperradas > 0 como sinal vermelho.
+- Tooltips (`Tooltip`/`SecTitle` com `tip`) nos campos e KPIs novos — deliberação, nova severidade, período de referência, próxima reunião, e nos 4 KPIs/gráfico dos Indicadores.
 
 ### 🔭 Desvios — backlog priorizado (auditoria de especialista 2026-07-10)
 Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tria → **encerra** OU **converte em RNC**), mas os indicadores ficaram muito ricos. Há um **descompasso**: os indicadores medem coisas que o fluxo ainda não deixa o usuário agir/registrar. Fechar esse descompasso é o eixo do backlog. Ordenado por impacto para uma farmacêutica (BPF/ANVISA + modelo SE Suite):

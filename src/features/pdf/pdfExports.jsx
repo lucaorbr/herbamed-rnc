@@ -438,7 +438,7 @@ export function exportAuditoriaPDF(a) {
 // Ata da Reunião de Análise Crítica de RNCs — a evidência de que a direção analisou as
 // não conformidades. Cada item traz a RNC, o motivo pelo qual entrou na pauta e a
 // deliberação tomada; a deliberação em si já foi gravada no histórico da própria RNC.
-export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberacaoLabel = (d) => d } = {}) {
+export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberacaoLabel = (d) => d, delta = null } = {}) {
   const presentes = (reuniao.participantes || []).filter(p => p.presente);
   const ausentes = (reuniao.participantes || []).filter(p => !p.presente);
   const pauta = reuniao.pauta || [];
@@ -477,6 +477,16 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
     ${ausentes.length > 0 ? `<div style="margin-top:6px;font-size:10px;color:#777;">Ausências registradas: ${ausentes.map(p => p.nome).join(", ")}</div>` : ""}
   </div>
 
+  ${delta ? `
+  <div class="section">
+    <div class="stitle">Movimentação desde a ${delta.numAnterior} (${fmt(delta.desde)} a ${fmt(delta.ate)})</div>
+    <div class="grid3">
+      <div class="field"><div class="flabel">RNCs abertas</div><div class="fval">${delta.abriram.length}${delta.abriram.length ? ` — ${delta.abriram.map(r => r.num).join(", ")}` : ""}</div></div>
+      <div class="field"><div class="flabel">RNCs encerradas</div><div class="fval" style="color:#1a7a3c">${delta.encerraram.length}</div></div>
+      <div class="field"><div class="flabel">Prazos vencidos</div><div class="fval" style="color:${delta.venceram.length ? "#cc2244" : "#1a1a1a"}">${delta.venceram.length}${delta.venceram.length ? ` — ${delta.venceram.map(r => r.num).join(", ")}` : ""}</div></div>
+    </div>
+  </div>` : ""}
+
   <div class="section">
     <div class="stitle">Pauta e deliberações (${pauta.length})</div>
     ${pauta.length === 0 ? `<div class="box-orange">Nenhum item levado à pauta.</div>` : pauta.map((it, i) => `
@@ -496,6 +506,7 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
           ${it.encaminhamento ? `<div style="font-size:11px;color:#333;margin-top:5px;"><strong>Encaminhamento:</strong> ${it.encaminhamento}</div>` : ""}
           ${it.novoResponsavel ? `<div style="font-size:11px;color:#333;margin-top:3px;"><strong>Responsável:</strong> ${it.novoResponsavel}</div>` : ""}
           ${it.novoPrazo ? `<div style="font-size:11px;color:#333;margin-top:3px;"><strong>Novo prazo:</strong> ${fmt(it.novoPrazo)}</div>` : ""}
+          ${it.novaSeveridade ? `<div style="font-size:11px;color:#333;margin-top:3px;"><strong>Severidade elevada para:</strong> ${it.novaSeveridade}</div>` : ""}
         </div>
       </div>`).join("")}
   </div>

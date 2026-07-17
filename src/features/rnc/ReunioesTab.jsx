@@ -3,7 +3,7 @@ import { deleteFromCollection, saveCollection, subscribeCollection } from "../..
 import { useTheme } from "../../core/theme";
 import { fmt, past, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
-import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA, Tooltip } from "../../shared/ui";
 import { AssinaturaModal, exportAtaReuniaoPDF } from "../pdf/pdfExports";
 import { calcGut } from "./RncTabs";
 
@@ -22,14 +22,26 @@ const MOTIVOS = {
 };
 const motivoLabel = (m) => MOTIVOS[m]?.label || m;
 
-// Fase 1 — só as deliberações que agem com peças que já existem no fluxo da RNC.
-// Escalar e aprovar encerramento entram na Fase 2.
 const DELIBERACOES = {
   manter:         { label: "Manter o tratamento", desc: "Registra a análise crítica na RNC, sem alterar prazo ou responsável." },
   reforcar_prazo: { label: "Reforçar prazo",      desc: "Grava um novo prazo de ação corretiva na RNC." },
   cobrar:         { label: "Cobrar responsável",  desc: "Registra a cobrança na RNC e abre o e-mail de notificação." },
+  escalar:        { label: "Escalar severidade",  desc: "Eleva a severidade da RNC e notifica o responsável. Afeta GUT, Pareto e a exigência de aprovação do RT." },
+  // A gestão aprova o encerramento, mas quem encerra de fato continua sendo a aba
+  // Eficácia — que exige critério, evidência e resultado. Segregação preservada.
+  aprovar_encerramento: { label: "Aprovar encerramento", desc: "Registra a aprovação da gestão. O encerramento formal continua na aba Eficácia." },
 };
 const deliberacaoLabel = (d) => DELIBERACOES[d]?.label || d;
+
+const SEV_ORDEM = ["Menor", "Maior", "Crítica"];
+// Escalar só faz sentido para cima.
+const sevAcimaDe = (sev) => SEV_ORDEM.slice(SEV_ORDEM.indexOf(sev) + 1);
+// Aprovar encerramento só cabe em quem está esperando verificação.
+const deliberacoesAplicaveis = (rnc) => Object.keys(DELIBERACOES).filter(k => {
+  if (k === "aprovar_encerramento") return rnc?.status === "Pendente verificação";
+  if (k === "escalar") return sevAcimaDe(rnc?.sev || "Crítica").length > 0;
+  return true;
+});
 
 function motivosDaRnc(r) {
   const m = [];
@@ -50,6 +62,45 @@ export function candidatasPauta(rncs) {
     .map(r => ({ ...calcGut(r), motivos: motivosDaRnc(r) }))
     .filter(r => r.motivos.length > 0)
     .sort((a, b) => b.gut - a.gut);
+}
+
+// Uma RNC que a gestão já olhou 3 vezes e continua na pauta não é um item de rotina:
+// é um problema que o fluxo normal não está resolvendo.
+export const LIMITE_EMPERRADA = 3;
+
+export function vezesNaPauta(rncId, reunioes, exceto = null) {
+  return reunioes.filter(r =>
+    r.status === "Encerrada" && r.id !== exceto && (r.pauta || []).some(i => i.rncId === rncId)
+  ).length;
+}
+
+// RNCs que, se entrassem numa reunião agora, já ganhariam o chip de emperrada —
+// usado pelos Indicadores e pelo Dashboard Executivo (mesmo critério da tela de reunião).
+export function rncsEmperradas(rncs, reunioes) {
+  return candidatasPauta(rncs).filter(r => vezesNaPauta(r.id, reunioes) >= LIMITE_EMPERRADA - 1);
+}
+
+const dataDaReuniao = (r) => r.realizadaEm || r.data;
+
+// O follow-up semanal: o que mudou desde a última reunião encerrada. Sem isso a reunião
+// recomeça do zero toda semana e ninguém enxerga se a fila está andando ou enchendo.
+export function calcDelta(rncs, reunioes, reuniaoAtual) {
+  const anterior = reunioes
+    .filter(r => r.status === "Encerrada" && r.id !== reuniaoAtual?.id)
+    .sort((a, b) => String(dataDaReuniao(b)).localeCompare(String(dataDaReuniao(a))))[0];
+  if (!anterior) return null;
+
+  const desde = dataDaReuniao(anterior);
+  const ate = reuniaoAtual ? dataDaReuniao(reuniaoAtual) : tod();
+  const naJanela = (d) => d && d > desde && d <= ate;
+  const encerrada = (r) => r.status === "Eficaz" || r.status === "Ineficaz";
+
+  return {
+    desde, ate, numAnterior: anterior.num,
+    abriram:    rncs.filter(r => naJanela(r.data)),
+    encerraram: rncs.filter(r => encerrada(r) && naJanela(r.eficacia?.data)),
+    venceram:   rncs.filter(r => naJanela(r.prazoAC) && !encerrada(r)),
+  };
 }
 
 function proxNum(reunioes) {
@@ -75,6 +126,27 @@ function MotivoChip({ m }) {
   const meta = MOTIVOS[m];
   if (!meta) return null;
   return <span style={{ display: "inline-flex", padding: "1px 7px", borderRadius: 20, fontSize: 9, fontWeight: 600, background: `${meta.cor}18`, color: meta.cor, border: `1px solid ${meta.cor}22` }}>{meta.label}</span>;
+}
+
+function EmperradaChip({ n }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "1px 7px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#ff4f6a18", color: "#ff4f6a", border: "1px solid #ff4f6a33" }}>
+      🔁 Emperrada · {n}ª vez
+      <Tooltip text={`Esta RNC já esteve na pauta de ${LIMITE_EMPERRADA}+ reuniões encerradas e continua sem sair — sinal de que o tratamento normal não está resolvendo. Vale considerar Escalar ou Cobrar.`} />
+    </span>
+  );
+}
+
+// Um número do delta. `tom` só destaca o que é má notícia (venceram).
+function DeltaNum({ n, label, tom }) {
+  const T = useTheme();
+  const cor = tom === "ruim" ? "#ff4f6a" : tom === "bom" ? "#2ab84a" : T.text;
+  return (
+    <div style={{ flex: 1, minWidth: 90 }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: cor, lineHeight: 1 }}>{n}</div>
+      <div style={{ fontSize: 10, color: T.text2, marginTop: 3 }}>{label}</div>
+    </div>
+  );
 }
 
 export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openEmail, perm, isAdmin }) {
@@ -129,12 +201,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
       participantes: users
         .filter(u => nova.participIds.includes(u.uid || u.id))
         .map(u => ({ id: u.uid || u.id, nome: u.name, cargo: u.cargo || "", presente: false })),
-      pauta: itens.map(r => ({
-        rncId: r.id, rncNum: r.num, sev: r.sev, desc: r.desc, gut: r.gut,
-        motivoEntrada: r.motivos, situacao: r.status,
-        deliberacao: "", encaminhamento: "", novoResponsavel: "", novoPrazo: "",
-        itemStatus: "pendente",
-      })),
+      pauta: montarPauta(itens),
       observacoesGerais: "",
       proximaReuniao: "",
       ata: null,
@@ -166,13 +233,20 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     const it = sel.pauta[idx];
     if (!it.deliberacao) { toast_("Escolha a deliberação do item.", "red"); return; }
     if (it.deliberacao === "reforcar_prazo" && !it.novoPrazo) { toast_("Informe o novo prazo de ação corretiva.", "red"); return; }
+    if (it.deliberacao === "escalar" && !it.novaSeveridade) { toast_("Escolha a nova severidade.", "red"); return; }
     const rnc = rncs.find(r => r.id === it.rncId);
     if (!rnc) { toast_(`RNC ${it.rncNum} não encontrada — pode ter sido excluída.`, "red"); return; }
+    // A RNC pode ter mudado de estado entre agendar a pauta e deliberar.
+    if (it.deliberacao === "aprovar_encerramento" && rnc.status !== "Pendente verificação") {
+      toast_(`RNC ${it.rncNum} está em "${rnc.status}" — aprovar encerramento só cabe em Pendente verificação.`, "red"); return;
+    }
 
     const detalhes = [
       it.encaminhamento && `Encaminhamento: ${it.encaminhamento}`,
       it.novoResponsavel && `Responsável indicado: ${it.novoResponsavel}`,
       it.deliberacao === "reforcar_prazo" && `Novo prazo: ${fmt(it.novoPrazo)} (anterior: ${fmt(rnc.prazoAC)})`,
+      it.deliberacao === "escalar" && `Severidade: ${rnc.sev} -> ${it.novaSeveridade}`,
+      it.deliberacao === "aprovar_encerramento" && "Encerramento aprovado pela gestão — falta registrar a verificação de eficácia.",
     ].filter(Boolean);
 
     const h = {
@@ -185,6 +259,8 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
       ultimaReuniao: { num: sel.num, data: sel.realizadaEm || sel.data },
     };
     if (it.deliberacao === "reforcar_prazo") patch.prazoAC = it.novoPrazo;
+    if (it.deliberacao === "escalar") patch.sev = it.novaSeveridade;
+    if (it.deliberacao === "aprovar_encerramento") patch.encerramentoAprovado = { reuniao: sel.num, por: user.name, data: tod() };
 
     try {
       await doUpdateRNC(rnc.id, patch);
@@ -192,7 +268,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
       toast_("Erro ao gravar a deliberação na RNC: " + e.message, "red");
       return;
     }
-    if (it.deliberacao === "cobrar") openEmail({ ...rnc, ...patch }, "manual");
+    if (it.deliberacao === "cobrar" || it.deliberacao === "escalar") openEmail({ ...rnc, ...patch }, "manual");
 
     const pauta = sel.pauta.map((x, i) => i === idx ? { ...x, itemStatus: "deliberado", deliberadoEm: tod(), deliberadoPor: user.name } : x);
     await salvar({
@@ -206,6 +282,55 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
   const encerrar = () => {
     if (pendentes > 0) { toast_(`Faltam ${pendentes} item(ns) sem deliberação.`, "red"); return; }
     setAssinaturaModal(sel);
+  };
+
+  // Monta os itens de pauta a partir das RNCs de agora. Usado ao agendar e ao
+  // reatualizar uma reunião ainda Agendada.
+  const montarPauta = (candidatas) => candidatas.map(r => ({
+    rncId: r.id, rncNum: r.num, sev: r.sev, desc: r.desc, gut: r.gut,
+    motivoEntrada: r.motivos, situacao: r.status,
+    deliberacao: "", encaminhamento: "", novoResponsavel: "", novoPrazo: "",
+    itemStatus: "pendente",
+  }));
+
+  // A pauta é uma fotografia do momento em que a reunião foi agendada. Numa reunião
+  // recorrente, agendada com dias de antecedência, essa foto envelhece — daí o botão.
+  const atualizarPauta = async () => {
+    const atual = montarPauta(candidatas);
+    const antes = sel.pauta?.length || 0;
+    await salvar({
+      ...sel, pauta: atual,
+      historico: [...(sel.historico || []), hEntry(`Pauta atualizada — ${antes} -> ${atual.length} item(ns)`)],
+    }, `Pauta atualizada: ${atual.length} item(ns).`);
+  };
+
+  // Recorrência: encerrar uma reunião com "próxima reunião" preenchida já deixa a
+  // seguinte agendada, com os mesmos participantes. Sem isso a recorrência depende
+  // de alguém lembrar.
+  const agendarProxima = async (encerrada) => {
+    const itens = montarPauta(candidatas);
+    const prox = {
+      id: String(Date.now()),
+      num: proxNum([...reunioes, encerrada]),
+      data: encerrada.proximaReuniao,
+      realizadaEm: null,
+      status: "Agendada",
+      facilitador: encerrada.facilitador,
+      periodoRef: { de: dataDaReuniao(encerrada), ate: encerrada.proximaReuniao },
+      participantes: (encerrada.participantes || []).map(p => ({ ...p, presente: false })),
+      pauta: itens,
+      observacoesGerais: "",
+      proximaReuniao: "",
+      ata: null,
+      criadoPor: user.name,
+      createdAt: Date.now(),
+      historico: [],
+      origemRecorrencia: encerrada.num,
+    };
+    prox.historico = [{ data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Agendada automaticamente ao encerrar a ${encerrada.num} — ${itens.length} item(ns) de pauta`, resp: user.name }];
+    await saveCollection("rnc_reunioes", prox.id, prox);
+    setReunioes(p => [prox, ...p]);
+    return prox;
   };
 
   const excluir = async (r) => {
@@ -226,8 +351,8 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           <SecTitle icon="🗓️" ch="Agendar reunião de análise crítica" />
           <G3 ch={<>
             <F lbl="Data da reunião *" ch={<Inp type="date" value={nova.data} onChange={e => setNova(p => ({ ...p, data: e.target.value }))} />} />
-            <F lbl="Período de referência — de" ch={<Inp type="date" value={nova.de} onChange={e => setNova(p => ({ ...p, de: e.target.value }))} />} />
-            <F lbl="Período de referência — até" ch={<Inp type="date" value={nova.ate} onChange={e => setNova(p => ({ ...p, ate: e.target.value }))} />} />
+            <F lbl="Período de referência — de" tip="Só informativo, aparece no cabeçalho da reunião e da ata — não filtra a pauta. A pauta é sempre a lista de RNCs que pedem análise crítica agora (vencidas, críticas sem aprovação do RT, etc.), independente desse período." ch={<Inp type="date" value={nova.de} onChange={e => setNova(p => ({ ...p, de: e.target.value }))} />} />
+            <F lbl="Período de referência — até" tip="Fim do intervalo mostrado no cabeçalho da reunião e da ata — apenas para dar contexto de qual janela de tempo a reunião cobre." ch={<Inp type="date" value={nova.ate} onChange={e => setNova(p => ({ ...p, ate: e.target.value }))} />} />
           </>} />
           <F lbl="Facilitador" ch={<div style={{ ...s.inp, color: T.text2 }}>{user.name}</div>} />
         </div>
@@ -294,6 +419,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     const emAndamento = sel.status === "Em andamento";
     const editavel = podeGerenciar && emAndamento;
     const presentes = (sel.participantes || []).filter(p => p.presente).length;
+    const delta = calcDelta(rncs, reunioes, sel);
 
     return (
       <div>
@@ -309,15 +435,34 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
               {sel.periodoRef?.de && ` · Referência: ${fmt(sel.periodoRef.de)} a ${fmt(sel.periodoRef.ate)}`}
             </div>
           </div>
+          {podeGerenciar && sel.status === "Agendada" && <button style={s.btn} onClick={atualizarPauta} title="Recalcula a pauta a partir das RNCs de agora">🔄 Atualizar pauta</button>}
           {podeGerenciar && sel.status === "Agendada" && <button style={s.btnA} onClick={iniciar}>▶️ Iniciar reunião</button>}
           {podeGerenciar && emAndamento && <button style={{ ...s.btnA, color: "#2ab84a", borderColor: "#2ab84a33", background: "#2ab84a12" }} onClick={encerrar}>🔒 Encerrar e assinar ata</button>}
-          {sel.status === "Encerrada" && <button style={s.btnA} onClick={() => exportAtaReuniaoPDF(sel, { motivoLabel, deliberacaoLabel })}>📄 Ata em PDF</button>}
+          {sel.status === "Encerrada" && <button style={s.btnA} onClick={() => exportAtaReuniaoPDF(sel, { motivoLabel, deliberacaoLabel, delta })}>📄 Ata em PDF</button>}
           {podeGerenciar && sel.status === "Agendada" && <button style={{ ...s.btn, color: "#ff4f6a", borderColor: "#ff4f6a33" }} onClick={() => excluir(sel)}>🗑️</button>}
         </div>
 
         {emAndamento && pendentes > 0 && (
           <div style={{ background: "#ffd16618", border: "1px solid #ffd16633", borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: "#8a6000" }}>
             ⏳ {pendentes} item(ns) da pauta ainda sem deliberação. A ata só pode ser assinada quando todos forem deliberados.
+          </div>
+        )}
+
+        {delta && (
+          <div style={s.card}>
+            <SecTitle icon="📈" ch={`Desde a ${delta.numAnterior} — ${fmt(delta.desde)} a ${fmt(delta.ate)}`} />
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <DeltaNum n={delta.abriram.length} label="RNCs abertas" />
+              <DeltaNum n={delta.encerraram.length} label="RNCs encerradas" tom="bom" />
+              <DeltaNum n={delta.venceram.length} label="Prazos vencidos" tom="ruim" />
+              <DeltaNum n={delta.abriram.length - delta.encerraram.length} label="Saldo da fila" tom={delta.abriram.length > delta.encerraram.length ? "ruim" : "bom"} />
+            </div>
+            {(delta.abriram.length > 0 || delta.venceram.length > 0) && (
+              <div style={{ fontSize: 11, color: T.text2, marginTop: 10, borderTop: `1px solid ${T.border}`, paddingTop: 8 }}>
+                {delta.abriram.length > 0 && <div>Abertas: {delta.abriram.map(r => r.num).join(", ")}</div>}
+                {delta.venceram.length > 0 && <div style={{ color: "#ff4f6a", marginTop: 2 }}>Venceram: {delta.venceram.map(r => r.num).join(", ")}</div>}
+              </div>
+            )}
           </div>
         )}
 
@@ -342,11 +487,14 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           {(sel.pauta || []).map((it, i) => {
             const rnc = rncs.find(r => r.id === it.rncId);
             const feito = it.itemStatus === "deliberado";
+            const vezes = vezesNaPauta(it.rncId, reunioes, sel.id);
+            const emperrada = vezes + 1 >= LIMITE_EMPERRADA;
             return (
-              <div key={it.rncId} style={{ background: T.surf, border: `1px solid ${feito ? "#2ab84a33" : T.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 8 }}>
+              <div key={it.rncId} style={{ background: T.surf, border: `1px solid ${emperrada && !feito ? "#ff4f6a44" : feito ? "#2ab84a33" : T.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>Item {i + 1} · {it.rncNum}</span>
-                  <SevB s={it.sev} />
+                  <SevB s={rnc?.sev || it.sev} />
+                  {emperrada && <EmperradaChip n={vezes + 1} />}
                   {(it.motivoEntrada || []).map(m => <MotivoChip key={m} m={m} />)}
                   <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: feito ? "#2ab84a" : "#8a6000" }}>{feito ? "✓ Deliberado" : "Pendente"}</span>
                 </div>
@@ -363,6 +511,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                     {it.encaminhamento && <div style={{ fontSize: 12, color: T.text, marginTop: 4 }}>{it.encaminhamento}</div>}
                     {it.novoResponsavel && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Responsável indicado: {it.novoResponsavel}</div>}
                     {it.novoPrazo && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Novo prazo: {fmt(it.novoPrazo)}</div>}
+                    {it.novaSeveridade && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Severidade elevada para: {it.novaSeveridade}</div>}
                     <div style={{ fontSize: 10, color: T.text3, marginTop: 4 }}>Registrado por {it.deliberadoPor} em {fmt(it.deliberadoEm)} — gravado no histórico da RNC.</div>
                   </div>
                 ) : !editavel ? (
@@ -370,13 +519,19 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                 ) : (
                   <div>
                     <G2 ch={<>
-                      <F lbl="Deliberação *" ch={
+                      <F lbl="Deliberação *" tip="Manter: só registra a análise, sem mudar nada na RNC. Reforçar prazo: grava um novo prazo de ação corretiva. Cobrar: registra a cobrança e abre o e-mail de notificação. Escalar: eleva a severidade. Aprovar encerramento: registra o aval da gestão (só aparece quando a RNC está Pendente verificação) — quem encerra de fato continua sendo a aba Eficácia." ch={
                         <Sel value={it.deliberacao} onChange={e => setItem(i, { deliberacao: e.target.value })}>
                           <option value="">Selecione...</option>
-                          {Object.entries(DELIBERACOES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          {deliberacoesAplicaveis(rnc).map(k => <option key={k} value={k}>{DELIBERACOES[k].label}</option>)}
                         </Sel>} />
                       {it.deliberacao === "reforcar_prazo"
                         ? <F lbl="Novo prazo de ação corretiva *" ch={<Inp type="date" value={it.novoPrazo} onChange={e => setItem(i, { novoPrazo: e.target.value })} />} />
+                        : it.deliberacao === "escalar"
+                        ? <F lbl="Nova severidade *" tip="Só é possível subir a severidade (Menor → Maior → Crítica), nunca descer. Uma RNC Crítica exige aprovação do RT e pesa mais no GUT e no Pareto." ch={
+                            <Sel value={it.novaSeveridade || ""} onChange={e => setItem(i, { novaSeveridade: e.target.value })}>
+                              <option value="">Selecione...</option>
+                              {sevAcimaDe(rnc?.sev || it.sev).map(sv => <option key={sv} value={sv}>{sv}</option>)}
+                            </Sel>} />
                         : <F lbl="Responsável indicado" ch={<Inp value={it.novoResponsavel} onChange={e => setItem(i, { novoResponsavel: e.target.value })} placeholder="Opcional" />} />}
                     </>} />
                     {it.deliberacao && <div style={{ fontSize: 11, color: T.text2, marginTop: -6, marginBottom: 10 }}>{DELIBERACOES[it.deliberacao]?.desc}</div>}
@@ -394,7 +549,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           {editavel
             ? <TA value={sel.observacoesGerais || ""} onChange={e => setSel(p => ({ ...p, observacoesGerais: e.target.value }))} onBlur={() => salvar(sel)} placeholder="Pontos gerais discutidos na reunião..." />
             : <div style={{ fontSize: 12, color: sel.observacoesGerais ? T.text : T.text3 }}>{sel.observacoesGerais || "—"}</div>}
-          {editavel && <F lbl="Próxima reunião" ch={<Inp type="date" value={sel.proximaReuniao || ""} onChange={e => setSel(p => ({ ...p, proximaReuniao: e.target.value }))} onBlur={() => salvar(sel)} sx={{ maxWidth: 200 }} />} />}
+          {editavel && <F lbl="Próxima reunião" tip="Preencher esta data já agenda automaticamente a próxima reunião ao encerrar e assinar a ata desta — com os mesmos participantes e a pauta recalculada na hora. Deixar em branco não agenda nada." ch={<Inp type="date" value={sel.proximaReuniao || ""} onChange={e => setSel(p => ({ ...p, proximaReuniao: e.target.value }))} onBlur={() => salvar(sel)} sx={{ maxWidth: 200 }} />} />}
         </div>
 
         {sel.ata?.assinatura && (
@@ -434,7 +589,13 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                 historico: [...(assinaturaModal.historico || []), hEntry("Reunião encerrada e ata assinada")],
               };
               setAssinaturaModal(null);
-              await salvar(encerrada, `Reunião ${encerrada.num} encerrada — ata assinada.`);
+              const ok = await salvar(encerrada, `Reunião ${encerrada.num} encerrada — ata assinada.`);
+              if (ok && encerrada.proximaReuniao) {
+                try {
+                  const prox = await agendarProxima(encerrada);
+                  toast_(`${prox.num} já agendada para ${fmt(prox.data)}.`, "green");
+                } catch (e) { toast_("Reunião encerrada, mas falhou agendar a próxima: " + e.message, "red"); }
+              }
             }}
           />
         )}

@@ -99,12 +99,12 @@ export function G3({ ch }) { return <div className="grid-3">{ch}</div>; }
 
 export function Divider() { const T = useTheme(); return <div style={{ height: 1, background: T.border, margin: "1rem 0" }} />; }
 
-export function SecTitle({ icon, ch }) {
+export function SecTitle({ icon, ch, tip }) {
   const T = useTheme();
   const formal = useFormal();
   return <div style={{ fontSize: 10, fontWeight: 700, color: T.text3, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
     <span style={{ display: "block", width: 3, height: 13, background: `linear-gradient(to bottom,${T.accent},${T.accent2})`, borderRadius: 2 }} />
-    {icon && !formal && <span>{icon}</span>}{ch}
+    {icon && !formal && <span>{icon}</span>}{ch}{tip && <Tooltip text={tip}/>}
   </div>;
 }
 

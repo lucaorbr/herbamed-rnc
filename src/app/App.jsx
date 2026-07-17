@@ -24,6 +24,7 @@ import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
+import { ReunioesIndicadores } from "../features/rnc/ReunioesIndicadores";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
@@ -66,6 +67,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
   const [desvios, setDesvios] = useState([]);
+  const [reunioes, setReunioes] = useState([]);
   const [revalidacoes, setRevalidacoes] = useState([]);
   const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
@@ -176,6 +178,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
+    const unsubReunioes = subscribeCollection("rnc_reunioes", setReunioes);
     const unsubDesvios = subscribeCollection("desvios", setDesvios);
     migrarRevalidacoesLegado();
     const unsubReval = subscribeCollection("revalidacoes", setRevalidacoes);
@@ -200,7 +203,7 @@ export default function App() {
       const ctr = list.find(c => c.id === "catalogo_tipos_revalidacao");
       setCatalogoTiposRevalidacao(ctr?.items || []);
     });
-    return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
+    return () => { unsub(); unsubReunioes(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -233,6 +236,31 @@ export default function App() {
       }
     }
   }, [rncs, user]);
+
+  // Alerta de reunião de análise crítica agendada para hoje ou atrasada. Mesmo padrão
+  // do alerta de prazo acima: dispara uma vez por dia, só para quem conduz a reunião.
+  useEffect(() => {
+    if (!user || !reunioes.length) return;
+    const minhas = reunioes.filter(r => r.status === "Agendada" && r.data <= tod() && r.facilitador === user.name);
+    if (minhas.length === 0) return;
+    const chave = `hm_last_alert_rac_${tod()}`;
+    if (localStorage.getItem(chave)) return;
+    localStorage.setItem(chave, "1");
+    const atrasadas = minhas.filter(r => r.data < tod());
+    fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: "service_gxhicii", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
+        template_params: {
+          to_email: user.email, to_name: user.name,
+          from_name: "SGQ Herbamed® · Alertas Automáticos",
+          subject: `🗓️ SGQ Herbamed — ${minhas.length} reunião(ões) de análise crítica pendente(s)`,
+          message: `Olá ${user.name},\n\nVocê é facilitador das seguintes reuniões de análise crítica:\n\n${minhas.map(r => `• ${r.num} — ${r.data < tod() ? "ATRASADA desde" : "agendada para"} ${fmt(r.data)}\n  ${r.pauta?.length || 0} item(ns) de pauta`).join("\n\n")}\n\n${atrasadas.length > 0 ? `${atrasadas.length} reunião(ões) já passou(aram) da data agendada.\n\n` : ""}Acesse o sistema para conduzir a reunião.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
+          reply_to: user.email,
+        }
+      })
+    }).catch(() => {});
+  }, [reunioes, user]);
 
   // ── Heartbeat — atualiza online status a cada 2 minutos ──────────────────
   useEffect(() => {
@@ -375,7 +403,7 @@ export default function App() {
 
   if (user.role === "exec") return (
     <ThemeCtx.Provider value={T}>
-      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} />
+      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} reunioes={reunioes} />
       <AtualizacaoDisponivel />
     </ThemeCtx.Provider>
   );
@@ -415,6 +443,7 @@ export default function App() {
     nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
     "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
     reunioes: "Reuniões de Análise Crítica de NCs",
+    "indicadores-reunioes": "Indicadores da Análise Crítica (RAC)",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
@@ -623,7 +652,7 @@ export default function App() {
 
           {/* SIDEBAR */}
           <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} />
+            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} reunioes={reunioes} isViewer={isViewer} isAdmin={isAdmin} />
           </div>
 
           {/* MAIN CONTENT */}
@@ -658,6 +687,7 @@ export default function App() {
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
+              {tab==="indicadores-reunioes" && <ReunioesIndicadores rncs={rncs} reunioes={reunioes} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
@@ -707,7 +737,7 @@ export default function App() {
         {/* ── MODO APRESENTAÇÃO ── */}
         {presentationMode && (
           <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.bg }}>
-            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} onClose={() => setPresentationMode(false)} />
+            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} reunioes={reunioes} onClose={() => setPresentationMode(false)} />
           </div>
         )}
 
