@@ -14,6 +14,7 @@ import { calcGut } from "./RncTabs";
 
 // Por que uma RNC entra na pauta. Uma RNC pode entrar por mais de um motivo.
 const MOTIVOS = {
+  ineficaz:       { label: "Eficácia reprovada",            cor: "#ff4f6a" },
   vencida:        { label: "Prazo de AC vencido",           cor: "#ff4f6a" },
   critica:        { label: "Crítica sem aprovação do RT",   cor: "#ff8c42" },
   pendente_verif: { label: "Pendente de verificação",       cor: "#4fc3f7" },
@@ -32,6 +33,9 @@ const deliberacaoLabel = (d) => DELIBERACOES[d]?.label || d;
 
 function motivosDaRnc(r) {
   const m = [];
+  // Ação corretiva que falhou na verificação: o item mais importante para a gestão
+  // discutir, independente de severidade — entra na pauta por direito próprio.
+  if (r.status === "Ineficaz") m.push("ineficaz");
   if (past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz") m.push("vencida");
   if (r.sev === "Crítica" && !r.assinaturaRT && r.status !== "Eficaz") m.push("critica");
   if (r.status === "Pendente verificação") m.push("pendente_verif");
