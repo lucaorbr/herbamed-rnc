@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.19.0`
+- Versao atual: `2.22.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -66,9 +66,33 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - **PDF — Padronização do "rosto" (Bloco 1 de 2)** — novo `buildPDFShell({ titulo, subtitulo, numero, meta, corpo, rodapeEsq })` em `src/features/pdf/pdfExports.jsx` que envolve o miolo de qualquer PDF client-side na mesma identidade visual da Gestão de Docs: **faixa verde no topo** (`#1a4a2e` = o `verde` rgb 0.10/0.29/0.18 do render server-side) com o logo `public/logo-herbamed.png` + título + número/meta, e **faixa fina no rodapé** (`#edf2ed`). O `PDF_CSS` compartilhado migrou o accent de `#1a7a3c` → `#1a4a2e`. Migrados para o shell os 3 geradores que já usavam `openPDFWindow`/`PDF_CSS`: **FMEA** (`exportFMEAPDF`), **Auditoria** (`exportAuditoriaPDF`) e **Revalidação** (`buildRevalidacaoHTML`). Falta o Bloco 2 (RNC, CQ ×2 unificado, Laudos — que têm HTML/CSS próprio inline). — v2.17.0
 - **PDF — Padronização do "rosto" (Bloco 2 de 2, conclui)** — migrados para o `buildPDFShell` os 3 geradores que tinham HTML/CSS próprio inline: **RNC** (`exportRNCPDF` — CSS específico de RNC virou `<style>` escopado no miolo; badges de status/severidade movidos para uma linha no topo do corpo; corrigido `<div>` do bloco "Aprovado pelo RT" que ficava sem fechar), **CQ** (as duas `exportRA` de recebimento e de análise foram **unificadas** no helper de módulo `abrirRA_PDF({ identFields, tableHead, tableRows, ... })` em `CQTabs.jsx` — só o miolo/colunas diferem entre os dois), e **Laudos** (`exportPDF`). CNPJ da empresa preservado no `rodapeEsq` de CQ e Laudos; endereço completo saiu do rodapé fino (fica só CNPJ, como fine print). Todos os PDFs do sistema agora saem com o mesmo cabeçalho verde + rodapé. — v2.18.0
 
+- **RNC** — Campo Nota Fiscal do material (quando aplicável) (PR #105) — v2.19.0
+- **RNC** — Status `Aberta` -> `Em andamento` automático no 1º ato de tratamento (encaminhar ao fornecedor, contenção ou início da análise de causa). Regra única em `andamentoPatch` no `RncTabs.jsx` (PR #106) — v2.20.0
+- **RNC** — Assinatura do elaborador gravada na criação; PDF reimprime sem reassinar (PR #107) — v2.21.0
+- **RNC — Reunião de Análise Crítica (RAC), Fase 1 / MVP** — nova aba 🗓️ Reuniões: entidade `rnc_reunioes` (coleção nova), pauta automática ordenada por GUT, deliberação por item que **age na própria RNC**, encerramento com ata em PDF assinada. Detalhes e o que ficou para as Fases 2/3 na seção abaixo — v2.22.0
+
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
-- Code-splitting (bundle 561.7 kB)
+- Code-splitting (bundle 605.4 kB)
+
+### 🗓️ RNC — Reunião de Análise Crítica (RAC) — Fase 1 entregue em v2.22.0; Fases 2/3 pendentes
+Proposta visual original (14 seções, esboço de tela, data model): artifact `https://claude.ai/code/artifact/3cd73fc6-4888-4a7a-99ae-ee5d3fd36b22`.
+
+Diagnóstico que originou o módulo: a RNC **media** muito bem (KPIs, Pareto, Matriz GUT, PDCA, tempo médio, reincidência) mas **não registrava decisão de gestão**. A reunião semanal acontecia na sala e não voltava pro sistema — sumia o encaminhamento, quem ficou responsável, e a evidência de que a direção analisou. Numa inspeção ANVISA/BPF a pergunta é "me mostre a análise crítica das NCs". Modelo SE Suite: **fórum com memória**, não um novo relatório. Regra-chave da implementação: **costurar, não reconstruir** — e manter **fonte única**: a deliberação age na própria RNC (via `doUpdateRNC` + `historico`), nunca num documento paralelo.
+
+**O que a Fase 1 entregou** (aba 🗓️ Reuniões, `src/features/rnc/ReunioesTab.jsx`):
+- Entidade `rnc_reunioes` com numeração `RAC-YYYY-NN` e ciclo Agendada → Em andamento → Encerrada.
+- **Pauta automática** — `candidatasPauta()` traz toda RNC que pede atenção da gestão (vencida / crítica sem `assinaturaRT` / pendente de verificação / em tratamento), ordenada por GUT; o facilitador ajusta antes de agendar. Cada item carrega o `motivoEntrada` (por que entrou na pauta).
+- **Deliberação por item que age na própria RNC** (fonte única, sem registro paralelo): `manter`, `reforcar_prazo` (grava `prazoAC` novo) e `cobrar` (abre `openEmail`). Toda deliberação grava entrada no `historico` da RNC ("Deliberado na RAC-xx", com `tipo:"reuniao"` e `detalhes`) + campo `ultimaReuniao` na RNC.
+- **Encerramento com ata assinada** — só encerra com todos os itens deliberados; `AssinaturaModal` com papel "Facilitador da Análise Crítica" → `exportAtaReuniaoPDF` via `buildPDFShell` (rosto verde padrão) usando `seloAssHTML`.
+- Permissão `gerenciarReunioesRNC` (default: rt/keyuser/admin). Sem a permissão a aba é somente leitura + ata em PDF.
+
+**Achados da implementação (corrigem o desenho original):**
+- ⚠️ **`firebase.js` não precisou ser tocado.** `subscribeCollection`/`saveCollection`/`deleteFromCollection` já são genéricos por nome de coleção, e `handleCollections` em `server/index.js` atende `/api/collections/:nome/:id` **sem whitelist** — coleção nova nasce funcionando, zero backend, zero migração. Vale para qualquer coleção futura.
+- **`calcGut`/`gutRank` foram extraídos** de dentro do `DashTab` para o topo do `RncTabs.jsx` e exportados — a Matriz GUT do Dashboard e a pauta da RAC precisam concordar sobre o que é prioritário. Refactor verificado como idêntico ao inline antigo nas 80 combinações de sev × prazo × status.
+
+**Fase 2 (próxima):** delta "desde a última reunião" (abriram/encerraram/venceram na janela) + sinal de **RNC emperrada** (3+ reuniões sem sair); assinatura de presença dos participantes; notificações (lembrete de reunião agendada/atrasada nos moldes do alerta de prazo do `App.jsx`, notificar participantes ao encerrar) + recorrência semanal; deliberações **Escalar** e **Aprovar encerramento** (→ EficaciaTab).
+**Fase 3:** indicadores da reunião (aderência da pauta, RNCs emperradas, presença/quórum, vazão semanal) + integração no Dashboard Executivo.
 
 ### 🔭 Desvios — backlog priorizado (auditoria de especialista 2026-07-10)
 Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tria → **encerra** OU **converte em RNC**), mas os indicadores ficaram muito ricos. Há um **descompasso**: os indicadores medem coisas que o fluxo ainda não deixa o usuário agir/registrar. Fechar esse descompasso é o eixo do backlog. Ordenado por impacto para uma farmacêutica (BPF/ANVISA + modelo SE Suite):

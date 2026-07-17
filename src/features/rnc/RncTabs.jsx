@@ -27,6 +27,19 @@ function andamentoPatch(r, motivo, autor) {
   };
 }
 
+// Matriz GUT — fonte única da priorização de RNCs. A Matriz GUT do DashTab e a pauta
+// da Reunião de Análise Crítica precisam concordar sobre o que é prioritário, então a
+// fórmula mora aqui e não dentro de cada tela.
+export function calcGut(r) {
+  const g = r.sev === "Crítica" ? 5 : r.sev === "Maior" ? 3 : 1;
+  const u = past(r.prazoAC) ? 5 : r.prazoAC ? 3 : 2;
+  const t = r.sev === "Crítica" ? 5 : r.sev === "Maior" ? 3 : 2;
+  return { ...r, G: g, U: u, T: t, gut: g * u * t };
+}
+
+export const gutRank = (rncs) =>
+  rncs.filter(x => x.status === "Aberta" || x.status === "Em andamento").map(calcGut).sort((a, b) => b.gut - a.gut);
+
 export function HomeTab({ rncs, user, setTab }) {
   const formal = useFormal();
   const [ipcPendentes, setIpcPendentes] = useState(0);
@@ -1487,13 +1500,7 @@ export function DashTab({ rncs }) {
   const paretoAcum = paretoData.map(([k,n])=>{ acum+=n; return [k,n,Math.round(acum/paretoTotal*100)]; });
 
   // Matriz GUT das RNCs abertas
-  const gutRncs = rncs.filter(x=>x.status==="Aberta"||x.status==="Em andamento").map(r=>({
-    ...r,
-    G: r.sev==="Crítica"?5:r.sev==="Maior"?3:1,
-    U: past(r.prazoAC)?5:r.prazoAC?3:2,
-    T: r.sev==="Crítica"?5:r.sev==="Maior"?3:2,
-    gut: (r.sev==="Crítica"?5:r.sev==="Maior"?3:1)*(past(r.prazoAC)?5:r.prazoAC?3:2)*(r.sev==="Crítica"?5:r.sev==="Maior"?3:2)
-  })).sort((a,b)=>b.gut-a.gut);
+  const gutRncs = gutRank(rncs);
 
   const DASH_TABS=[
     {id:"kpis",icon:"📈",label:"KPIs"},
