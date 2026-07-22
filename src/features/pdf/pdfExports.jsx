@@ -140,6 +140,9 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
 }
 
 export function exportRNCPDF(rnc, assinatura = null) {
+  // A assinatura principal do PDF é SEMPRE a do elaborador gravada na RNC (assinaturaElaborador),
+  // nunca a de quem está exportando/imprimindo. O param `assinatura` fica só como fallback legado.
+  const assElab = rnc.assinaturaElaborador || assinatura;
   const corpo = `
 <style>
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
@@ -303,16 +306,16 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <!-- ASSINATURA -->
   <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
     <div style="flex:1;text-align:center;">
-      ${assinatura ? `
+      ${assElab ? `
         <div style="border-top:1px solid #333;padding-top:6px;font-size:11px;text-align:left;">
-          <strong>${assinatura.nome}</strong><br/>
-          ${assinatura.cargo?`${assinatura.cargo}<br/>`:""}
-          ${(assinatura.registroProfissional||assinatura.crf||assinatura.registro)?`<span style="color:#777;font-size:10px;">Registro profissional: ${assinatura.registroProfissional||assinatura.crf||assinatura.registro}</span><br/>`:""}
-          <span style="color:#666;font-size:10px;">✔ Assinado eletronicamente em ${assinatura.data} às ${assinatura.hora}</span><br/>
-          <span style="color:#999;font-size:9px;font-family:monospace;">Cód. verificação: ${sigCodigo(assinatura, `RNC|${rnc.num||rnc.id||""}`)}</span>
-          ${assinatura.hash?`<br/><span style="color:#aaa;font-size:8px;font-family:monospace;">Hash: ${String(assinatura.hash).slice(0,24)}...</span>`:""}
+          <strong>${assElab.nome}</strong><br/>
+          ${assElab.cargo?`${assElab.cargo}<br/>`:""}
+          ${(assElab.registroProfissional||assElab.crf||assElab.registro)?`<span style="color:#777;font-size:10px;">Registro profissional: ${assElab.registroProfissional||assElab.crf||assElab.registro}</span><br/>`:""}
+          <span style="color:#666;font-size:10px;">✔ Assinado eletronicamente (Elaborador) em ${assElab.data} às ${assElab.hora}</span><br/>
+          <span style="color:#999;font-size:9px;font-family:monospace;">Cód. verificação: ${sigCodigo(assElab, `RNC|${rnc.num||rnc.id||""}`)}</span>
+          ${assElab.hash?`<br/><span style="color:#aaa;font-size:8px;font-family:monospace;">Hash: ${String(assElab.hash).slice(0,24)}...</span>`:""}
         </div>
-      ` : `<div style="border-top:1px solid #333;padding-top:6px;margin-top:56px;font-size:11px;">______________________<br/>Responsável pela análise</div>`}
+      ` : `<div style="border-top:1px dashed #bbb;padding-top:6px;margin-top:56px;font-size:11px;color:#b8860b;">⏳ Assinatura do elaborador pendente<br/><span style="font-size:9px;color:#999;">Elaborador${rnc.criadoPor?`: ${rnc.criadoPor}`:""}</span></div>`}
     </div>
     <div style="flex:1;text-align:center;">
       <div style="border-top:1px solid #333;padding-top:6px;margin-top:56px;font-size:11px;">
