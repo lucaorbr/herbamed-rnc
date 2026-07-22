@@ -19,6 +19,7 @@
     "prebuild": "node scripts/genVersion.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:server": "node --test server/*.test.js",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
