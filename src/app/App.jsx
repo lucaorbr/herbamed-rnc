@@ -23,6 +23,7 @@ import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab"
 import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
+import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
@@ -413,6 +414,7 @@ export default function App() {
     home: "Home", lista: "Registros de Não Conformidades",
     nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
     "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
+    reunioes: "Reuniões de Análise Crítica de NCs",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
@@ -655,6 +657,7 @@ export default function App() {
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}

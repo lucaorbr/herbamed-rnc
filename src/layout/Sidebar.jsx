@@ -79,6 +79,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
     { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
       ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
+      { id:"reunioes", icon:"🗓️", label:"Reuniões" },
     ]},
     { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
       { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },

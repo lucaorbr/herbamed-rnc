@@ -6,6 +6,7 @@ export const PERMS_GRUPOS = [
     { key: "analisarRNC",        label: "Ishikawa / 5W2H / Eficácia" },
     { key: "aprovarRNC",         label: "Aprovar como RT (RNC crítica)" },
     { key: "excluirRNC",         label: "Excluir RNC" },
+    { key: "gerenciarReunioesRNC", label: "Conduzir reunião de análise crítica" },
   ]},
   { grupo: "Desvios", items: [
     { key: "verDesvios",   label: "Visualizar registros de desvio" },
@@ -60,7 +61,7 @@ export function userHasPerm(u, key) {
 
 export const PERMS_PADRAO = {
   viewer: {
-    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:false,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:true, criarLaudos:false,
@@ -69,7 +70,7 @@ export const PERMS_PADRAO = {
     editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:false, editarIPCProdutos:false,
   },
   user: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:true, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:true, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
@@ -78,7 +79,7 @@ export const PERMS_PADRAO = {
     editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:true, editarIPCProdutos:false,
   },
   rt: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -87,7 +88,7 @@ export const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:false,
   },
   keyuser: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -96,7 +97,7 @@ export const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
   },
   admin: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -105,7 +106,7 @@ export const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
   },
   exec: {
-    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false,
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:false,
     verCQMateriais:false, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,

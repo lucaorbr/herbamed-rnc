@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { createElectronicSignature } from "../../firebase";
 import { useTheme } from "../../core/theme";
-import { fmt, past, sigCodigo } from "../../core/utils";
+import { fmt, past, seloAssHTML, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
 
@@ -431,6 +431,82 @@ export function exportAuditoriaPDF(a) {
     <div class="sign-box"><div class="sign-line">${a.auditores||"Auditor"}<br/>Auditor</div></div>
     <div class="sign-box"><div class="sign-line">______________________<br/>Responsável da Área</div></div>
     <div class="sign-box"><div class="sign-line">______________________<br/>Gerente de Qualidade</div></div>
+  </div>`,
+  }));
+}
+
+// Ata da Reunião de Análise Crítica de RNCs — a evidência de que a direção analisou as
+// não conformidades. Cada item traz a RNC, o motivo pelo qual entrou na pauta e a
+// deliberação tomada; a deliberação em si já foi gravada no histórico da própria RNC.
+export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberacaoLabel = (d) => d } = {}) {
+  const presentes = (reuniao.participantes || []).filter(p => p.presente);
+  const ausentes = (reuniao.participantes || []).filter(p => !p.presente);
+  const pauta = reuniao.pauta || [];
+
+  openPDFWindow(`Ata ${reuniao.num} — Herbamed®`, buildPDFShell({
+    titulo: "Ata de Reunião de Análise Crítica",
+    numero: reuniao.num,
+    meta: `Realizada em ${fmt(reuniao.realizadaEm || reuniao.data)} · ${pauta.length} item(ns) de pauta`,
+    rodapeEsq: "Herbamed® · SGQ · Análise Crítica de NCs · Confidencial",
+    corpo: `
+  <div class="section">
+    <div class="stitle">Identificação</div>
+    <div class="grid3">
+      <div class="field"><div class="flabel">Reunião</div><div class="fval">${reuniao.num}</div></div>
+      <div class="field"><div class="flabel">Data de realização</div><div class="fval">${fmt(reuniao.realizadaEm || reuniao.data)}</div></div>
+      <div class="field"><div class="flabel">Facilitador</div><div class="fval">${reuniao.facilitador || "—"}</div></div>
+      <div class="field"><div class="flabel">Período de referência</div><div class="fval">${reuniao.periodoRef?.de ? `${fmt(reuniao.periodoRef.de)} a ${fmt(reuniao.periodoRef.ate)}` : "—"}</div></div>
+      <div class="field"><div class="flabel">Presentes</div><div class="fval">${presentes.length} de ${(reuniao.participantes || []).length}</div></div>
+      <div class="field"><div class="flabel">Próxima reunião</div><div class="fval">${reuniao.proximaReuniao ? fmt(reuniao.proximaReuniao) : "—"}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="stitle">Participantes</div>
+    <table>
+      <thead><tr><th>Nome</th><th>Cargo</th><th style="width:90px">Presença</th></tr></thead>
+      <tbody>
+        ${(reuniao.participantes || []).length === 0 ? `<tr><td colspan="3" style="text-align:center;color:#999">Nenhum participante registrado</td></tr>` :
+          (reuniao.participantes || []).map(p => `<tr>
+            <td>${p.nome || "—"}</td>
+            <td>${p.cargo || "—"}</td>
+            <td style="font-weight:700;color:${p.presente ? "#1a7a3c" : "#999"}">${p.presente ? "Presente" : "Ausente"}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+    ${ausentes.length > 0 ? `<div style="margin-top:6px;font-size:10px;color:#777;">Ausências registradas: ${ausentes.map(p => p.nome).join(", ")}</div>` : ""}
+  </div>
+
+  <div class="section">
+    <div class="stitle">Pauta e deliberações (${pauta.length})</div>
+    ${pauta.length === 0 ? `<div class="box-orange">Nenhum item levado à pauta.</div>` : pauta.map((it, i) => `
+      <div class="w2h-item" style="border:1px solid #e8e8e8;border-radius:7px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:12px;font-weight:700;color:#1a4a2e;">Item ${i + 1} — RNC ${it.rncNum || "—"}${it.sev ? ` · ${it.sev}` : ""}</div>
+          <div style="font-size:10px;font-weight:700;color:${it.itemStatus === "deliberado" ? "#1a7a3c" : "#8a6000"};">${it.itemStatus === "deliberado" ? "Deliberado" : "Sem deliberação"}</div>
+        </div>
+        <div style="font-size:10px;color:#777;margin-bottom:6px;">
+          Situação na reunião: <strong>${it.situacao || "—"}</strong>
+          ${it.motivoEntrada?.length ? ` · Entrou na pauta por: ${it.motivoEntrada.map(motivoLabel).join(", ")}` : ""}
+        </div>
+        ${it.desc ? `<div style="font-size:11px;color:#333;margin-bottom:6px;">${it.desc}</div>` : ""}
+        <div class="box-green">
+          <div style="font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;">Deliberação</div>
+          <div style="font-size:12px;font-weight:600;color:#1a4a2e;margin-top:2px;">${it.deliberacao ? deliberacaoLabel(it.deliberacao) : "—"}</div>
+          ${it.encaminhamento ? `<div style="font-size:11px;color:#333;margin-top:5px;"><strong>Encaminhamento:</strong> ${it.encaminhamento}</div>` : ""}
+          ${it.novoResponsavel ? `<div style="font-size:11px;color:#333;margin-top:3px;"><strong>Responsável:</strong> ${it.novoResponsavel}</div>` : ""}
+          ${it.novoPrazo ? `<div style="font-size:11px;color:#333;margin-top:3px;"><strong>Novo prazo:</strong> ${fmt(it.novoPrazo)}</div>` : ""}
+        </div>
+      </div>`).join("")}
+  </div>
+
+  ${reuniao.observacoesGerais ? `<div class="section"><div class="stitle">Observações gerais</div><div class="box-green">${reuniao.observacoesGerais}</div></div>` : ""}
+
+  <div class="section">
+    <div class="stitle">Assinatura</div>
+    <div style="max-width:320px;">
+      ${seloAssHTML(reuniao.ata?.assinatura, "Facilitador da Análise Crítica", "#1a4a2e", `RAC|${reuniao.num || reuniao.id || ""}`)}
+    </div>
   </div>`,
   }));
 }
