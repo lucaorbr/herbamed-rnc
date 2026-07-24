@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { deleteFromCollection, saveCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, tod } from "../../core/utils";
+import { rncAtiva } from "../../core/status";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
 import { AssinaturaModal, exportAtaReuniaoPDF } from "../pdf/pdfExports";
@@ -36,8 +37,8 @@ function motivosDaRnc(r) {
   // Ação corretiva que falhou na verificação: o item mais importante para a gestão
   // discutir, independente de severidade — entra na pauta por direito próprio.
   if (r.status === "Ineficaz") m.push("ineficaz");
-  if (past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz") m.push("vencida");
-  if (r.sev === "Crítica" && !r.assinaturaRT && r.status !== "Eficaz") m.push("critica");
+  if (past(r.prazoAC) && rncAtiva(r.status)) m.push("vencida");
+  if (r.sev === "Crítica" && !r.assinaturaRT && rncAtiva(r.status)) m.push("critica");
   if (r.status === "Pendente verificação") m.push("pendente_verif");
   if (r.status === "Aberta" || r.status === "Em andamento") m.push("aberta");
   return m;

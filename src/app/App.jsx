@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
+import { rncAtiva } from "../core/status";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
 import { AuditLogTab } from "../features/audit/AuditLogTab";
@@ -209,8 +210,8 @@ export default function App() {
     const hoje = tod();
     const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
     const amanhaStr = amanha.toISOString().split("T")[0];
-    const vencendoHoje = rncs.filter(r => r.prazoAC === hoje && r.status !== "Eficaz" && r.status !== "Ineficaz" && r.resp === user.name);
-    const vencendoAmanha = rncs.filter(r => r.prazoAC === amanhaStr && r.status !== "Eficaz" && r.status !== "Ineficaz" && r.resp === user.name);
+    const vencendoHoje = rncs.filter(r => r.prazoAC === hoje && rncAtiva(r.status) && r.resp === user.name);
+    const vencendoAmanha = rncs.filter(r => r.prazoAC === amanhaStr && rncAtiva(r.status) && r.resp === user.name);
     if (vencendoHoje.length > 0 || vencendoAmanha.length > 0) {
       const lastAlert = localStorage.getItem("hm_last_alert");
       if (lastAlert !== hoje) {
@@ -384,7 +385,7 @@ export default function App() {
   const isAdmin = user.role === "admin";
 
   // Notificações — RNCs com prazo vencido
-  const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
+  const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && rncAtiva(r.status));
   // Notificações — documentos (rota de assinatura, vigência etc.)
   const docNotifsUnread = docNotifs.filter(n => !n.lida);
   const totalNotifs = notifs.length + docNotifsUnread.length;

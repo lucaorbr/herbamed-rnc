@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { saveCollection, deleteFromCollection } from "../../firebase";
-import { SMETA } from "../../core/status";
+import { SMETA, rncAtiva } from "../../core/status";
 import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -75,7 +75,7 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
   };
   const riskLevel = (nome) => {
     const n = rncsForn(nome).length;
-    const venc = rncsForn(nome).filter(x => x.prazoAC && x.prazoAC < tod() && x.status !== "Eficaz").length;
+    const venc = rncsForn(nome).filter(x => x.prazoAC && x.prazoAC < tod() && rncAtiva(x.status)).length;
     if (venc > 0 || n >= 5) return { label:"Alto", color:"#ff4f6a" };
     if (n >= 3) return { label:"Médio", color:"#ff8c42" };
     if (n >= 1) return { label:"Baixo", color:"#ffd166" };

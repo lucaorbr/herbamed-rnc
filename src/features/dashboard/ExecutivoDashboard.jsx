@@ -6,6 +6,7 @@ import {
 import { logoutUser, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
+import { rncAtiva } from "../../core/status";
 import { HerbamedLogo } from "../../shared/ui";
 
 export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onClose }) {
@@ -28,8 +29,8 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
 
   // ── KPIs principais ──
   const rncsAbertas    = rncs.filter(r => r.status === "Aberta").length;
-  const rncsCriticas   = rncs.filter(r => r.sev === "Crítica" && r.status !== "Eficaz" && r.status !== "Ineficaz").length;
-  const rncsVencidas   = rncs.filter(r => r.prazoAC && r.prazoAC < hoje && r.status !== "Eficaz" && r.status !== "Ineficaz").length;
+  const rncsCriticas   = rncs.filter(r => r.sev === "Crítica" && rncAtiva(r.status)).length;
+  const rncsVencidas   = rncs.filter(r => r.prazoAC && r.prazoAC < hoje && rncAtiva(r.status)).length;
   const eficaz         = rncs.filter(r => r.status === "Eficaz").length;
   const ineficaz       = rncs.filter(r => r.status === "Ineficaz").length;
   const taxaEficacia   = eficaz + ineficaz > 0 ? Math.round(eficaz / (eficaz + ineficaz) * 100) : null;
@@ -92,7 +93,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   };
 
   // RNCs críticas abertas
-  const rncsCriticasLista = rncs.filter(r => r.sev === "Crítica" && r.status !== "Eficaz" && r.status !== "Ineficaz").slice(0, 4);
+  const rncsCriticasLista = rncs.filter(r => r.sev === "Crítica" && rncAtiva(r.status)).slice(0, 4);
 
   // RNCs do mês selecionado
   const rncsMesSel = mesSel ? rncs.filter(r => r.data && r.data.startsWith(mesSel.key)) : [];

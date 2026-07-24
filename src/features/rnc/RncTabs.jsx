@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC } from "../../core/status";
+import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -40,6 +40,26 @@ export function calcGut(r) {
 export const gutRank = (rncs) =>
   rncs.filter(x => x.status === "Aberta" || x.status === "Em andamento").map(calcGut).sort((a, b) => b.gut - a.gut);
 
+// Disposição do material/lote (padrão farma / SE Suite). `libera` marca as decisões que
+// liberam material NÃO CONFORME para uso — por isso exigem assinatura do RT (segregação:
+// quem libera NC ≠ quem detectou). As demais gravam só justificativa + autor.
+export const DISPOSICOES = [
+  { key: "liberar",    label: "Liberar (uso normal)",    libera: true,  cor: "#2ab84a" },
+  { key: "concessao",  label: "Liberar sob concessão",   libera: true,  cor: "#ffd166" },
+  { key: "segregar",   label: "Segregar / Quarentena",   libera: false, cor: "#4fc3f7" },
+  { key: "retrabalho", label: "Retrabalho / Reprocesso", libera: false, cor: "#a78bfa" },
+  { key: "reprovar",   label: "Reprovar / Descartar",    libera: false, cor: "#ff4f6a" },
+  { key: "devolver",   label: "Devolver ao fornecedor",  libera: false, cor: "#ff8c42" },
+];
+export const dispMeta = (key) => DISPOSICOES.find(d => d.key === key) || null;
+
+// A RNC "toca material/lote" quando o tipo é de material OU quando há produto/lote
+// preenchido. Só nesses casos a disposição é obrigatória antes de encerrar como Eficaz.
+const TIPOS_MATERIAL = ["Matéria-prima", "Material de embalagem", "Insumo", "Produto acabado"];
+export function rncTemMaterial(r) {
+  return !!(r && (TIPOS_MATERIAL.includes(r.tipo) || (r.lote || "").trim() || (r.produto || "").trim()));
+}
+
 export function HomeTab({ rncs, user, setTab }) {
   const formal = useFormal();
   const [ipcPendentes, setIpcPendentes] = useState(0);
@@ -68,11 +88,11 @@ export function HomeTab({ rncs, user, setTab }) {
 
   // Stats
   const abertas   = rncs.filter(x => x.status === "Aberta").length;
-  const vencidas  = rncs.filter(x => x.prazoAC && x.prazoAC < tod() && x.status !== "Eficaz" && x.status !== "Ineficaz").length;
+  const vencidas  = rncs.filter(x => x.prazoAC && x.prazoAC < tod() && rncAtiva(x.status)).length;
   const eficazes  = rncs.filter(x => x.status === "Eficaz").length;
-  const criticas  = rncs.filter(x => x.sev === "Crítica" && x.status !== "Eficaz").length;
+  const criticas  = rncs.filter(x => x.sev === "Crítica" && rncAtiva(x.status)).length;
   const taxaEf    = rncs.length > 0 ? Math.round(eficazes / rncs.length * 100) : 0;
-  const minhas    = rncs.filter(x => x.resp === user.name && x.status !== "Eficaz" && x.status !== "Ineficaz");
+  const minhas    = rncs.filter(x => x.resp === user.name && rncAtiva(x.status));
   const recentes  = [...rncs].sort((a, b) => (b.createdAt||0) - (a.createdAt||0)).slice(0, 5);
 
   // Saudação
@@ -212,7 +232,7 @@ export function HomeTab({ rncs, user, setTab }) {
               { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
               { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
               { l:"Taxa de eficácia",ok:taxaEf>=70,    val:`${taxaEf}%${taxaEf>=70?" ✓":""}`},
-              { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0, val:rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&x.status!=="Eficaz").length} sem responsável` },
+              { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0, val:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length} sem responsável` },
               { l:"IPC — Liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
               { l:"Laudos aguardando RT", ok:laudosPendentes===0, val:laudosPendentes===0?"✓ Todos assinados":`${laudosPendentes} aguardando assinatura`, link:"laudos" },
             ].map(({ l, ok, val, link }) => (
@@ -278,6 +298,12 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
   const [assinaturaModal, setAssinaturaModal] = useState(null);
+  // Disposição do material
+  const [dispForm, setDispForm] = useState(false);
+  const [dispDec, setDispDec] = useState("");
+  const [dispJust, setDispJust] = useState("");
+  const [dispSign, setDispSign] = useState(null); // disposição pendente de assinatura RT
+  useEffect(() => { setDispForm(false); setDispDec(""); setDispJust(""); setDispSign(null); }, [sel?.id]);
 
   const list = rncs.filter(r =>
     (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) &&
@@ -318,6 +344,52 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
     await doUpdateRNC(r.id, { assinaturaRT: ass, historico: updated.historico });
     setSel(updated);
     toast_("RNC aprovada pelo RT!", "green");
+  };
+
+  // Quem pode registrar disposição (não libera): analisarRNC. Liberar/concessão exige aprovarRNC.
+  const canDispor = () => !isViewer && (isAdmin || (perm && perm("analisarRNC")));
+
+  const gravarDisposicao = async (decisao, justificativa, assinaturaRT) => {
+    const r = rncs.find(x => x.id === sel.id) || sel;
+    const meta = dispMeta(decisao);
+    const disposicao = { decisao, justificativa: (justificativa || "").trim(), data: tod(), por: user.name, assinaturaRT: assinaturaRT || null };
+    const h = {
+      data: tod(), hora: new Date().toLocaleTimeString("pt-BR"),
+      acao: `Disposição do material: ${meta?.label || decisao}${assinaturaRT ? " (assinada pelo RT)" : ""}`,
+      detalhes: [disposicao.justificativa].filter(Boolean), resp: user.name, tipo: "disposicao",
+    };
+    const hist = [...(r.historico || []), h];
+    await doUpdateRNC(sel.id, { disposicao, historico: hist });
+    setSel(p => p ? { ...p, disposicao, historico: hist } : p);
+    setDispForm(false); setDispDec(""); setDispJust("");
+    toast_("Disposição do material registrada.", "green");
+  };
+
+  // Encerramento leve: RNC resolvida pela disposição do material, sem passar pelo ciclo
+  // de eficácia (caso pontual, sem CAPA formal). Status terminal próprio "Encerrada".
+  const encerrarPorDisposicao = async () => {
+    const r = rncs.find(x => x.id === sel.id) || sel;
+    if (!r.disposicao?.decisao) { alert("Registre a disposição do material antes de encerrar."); return; }
+    const pend = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
+    const aviso = pend.length > 0 ? `\n\nAtenção: há ${pend.length} ação(ões) de CAPA pendente(s) — o encerramento por disposição dispensa o ciclo de eficácia.` : "";
+    if (!window.confirm(`Encerrar a RNC ${r.num} como resolvida por disposição do material (${dispMeta(r.disposicao.decisao)?.label})?\n\nA RNC vai para o status "Encerrada", sem passar pela verificação de eficácia.${aviso}`)) return;
+    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `RNC encerrada por disposição do material (${dispMeta(r.disposicao.decisao)?.label})`, resp: user.name, tipo: "status" };
+    const hist = [...(r.historico || []), h];
+    await doUpdateRNC(sel.id, { status: "Encerrada", historico: hist });
+    setSel(p => p ? { ...p, status: "Encerrada", historico: hist } : p);
+    toast_("RNC encerrada por disposição.", "green");
+  };
+
+  const submitDisposicao = () => {
+    if (!dispDec) { alert("Selecione a decisão de disposição."); return; }
+    if (!dispJust.trim()) { alert("A justificativa técnica da disposição é obrigatória."); return; }
+    const meta = dispMeta(dispDec);
+    if (meta?.libera) {
+      if (!(isAdmin || (perm && perm("aprovarRNC")))) { alert("Liberar material não conforme exige assinatura do RT (permissão \"Aprovar como RT\")."); return; }
+      setDispSign({ decisao: dispDec, justificativa: dispJust });
+    } else {
+      gravarDisposicao(dispDec, dispJust, null);
+    }
   };
 
   const startEdit = (r) => {
@@ -441,7 +513,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
             <tbody>
               {_rncs.map((r, idx) => {
                 const step = getRNCStep(r);
-                const vencido = past(r.prazoAC) && r.status !== "Eficaz" && r.status !== "Ineficaz";
+                const vencido = past(r.prazoAC) && rncAtiva(r.status);
                 return (
                   <tr key={r.id} className="rnc-row" onClick={()=>{setSel(r);setEditing(false);}} style={{ background: idx%2===0?T.card:T.surf, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, cursor:"pointer", transition:"background .15s" }}>
                     <td style={{ padding:"10px 14px", fontSize:11, fontWeight:700, color:T.accent, whiteSpace:"nowrap" }}>{r.num}</td>
@@ -605,15 +677,71 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                   </div>
                 )}
 
+                {/* Disposição do material / lote */}
+                {(sel.disposicao?.decisao || rncTemMaterial(sel) || canDispor()) && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📦 Disposição do material</div>
+                    {sel.disposicao?.decisao ? (
+                      <div style={{ background: T.surf, border: `1px solid ${dispMeta(sel.disposicao.decisao)?.cor || T.border}44`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: dispMeta(sel.disposicao.decisao)?.cor || T.text, padding: "3px 12px", borderRadius: 20, background: `${dispMeta(sel.disposicao.decisao)?.cor || T.text3}18` }}>
+                            {dispMeta(sel.disposicao.decisao)?.label || sel.disposicao.decisao}
+                          </span>
+                          <span style={{ fontSize: 10, color: T.text3 }}>por {sel.disposicao.por} · {fmt(sel.disposicao.data)}</span>
+                        </div>
+                        {sel.disposicao.justificativa && <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5, marginBottom: sel.disposicao.assinaturaRT ? 8 : 0 }}>{sel.disposicao.justificativa}</div>}
+                        {sel.disposicao.assinaturaRT && (
+                          <div style={{ fontSize: 10, color: "#2ab84a", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                            ✅ Liberação assinada pelo RT: {sel.disposicao.assinaturaRT.nome} · {sel.disposicao.assinaturaRT.timestamp ? new Date(sel.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR") : sel.disposicao.assinaturaRT.dataHora}
+                          </div>
+                        )}
+                        {canDispor() && !dispForm && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                            <button onClick={() => { setDispForm(true); setDispDec(sel.disposicao.decisao); setDispJust(sel.disposicao.justificativa || ""); }} style={{ ...s.btn, fontSize: 10, padding: "4px 10px" }}>✏️ Alterar disposição</button>
+                            {rncAtiva(sel.status) && (
+                              <button onClick={encerrarPorDisposicao} style={{ ...s.btn, fontSize: 10, padding: "4px 10px", color: "#2ab84a", borderColor: "#2ab84a44", background: "#2ab84a12" }}>✅ Encerrar RNC (resolvida por disposição)</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : rncTemMaterial(sel) && (
+                      <div style={{ fontSize: 11, color: T.yellow, background: "#ffd16612", border: "1px solid #ffd16633", borderRadius: 8, padding: "8px 12px", marginBottom: dispForm ? 10 : 0 }}>
+                        ⚠️ RNC envolve material/lote — registre a disposição antes de encerrar como <b>Eficaz</b>.
+                      </div>
+                    )}
+
+                    {canDispor() && (dispForm || !sel.disposicao?.decisao) && (
+                      <div style={{ ...s.card, marginTop: 10 }}>
+                        <F lbl="Decisão de disposição" ch={
+                          <Sel value={dispDec} onChange={e => setDispDec(e.target.value)}>
+                            <option value="">— Selecione —</option>
+                            {DISPOSICOES.map(d => <option key={d.key} value={d.key}>{d.label}{d.libera ? " (exige RT)" : ""}</option>)}
+                          </Sel>
+                        } />
+                        <F lbl="Justificativa técnica" tip="Por que esta é a decisão correta para o lote? Ex.: liberado sob concessão porque o desvio de rótulo não afeta a identificação nem a segurança; avaliação de impacto sem risco ao produto." ch={
+                          <TA rows={3} value={dispJust} onChange={e => setDispJust(e.target.value)} placeholder="Justificativa da disposição do lote..." />
+                        } />
+                        {dispMeta(dispDec)?.libera && (
+                          <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>🔏 Liberar material não conforme exige assinatura eletrônica do RT ao registrar.</div>
+                        )}
+                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                          {dispForm && <button style={s.btn} onClick={() => { setDispForm(false); setDispDec(""); setDispJust(""); }}>Cancelar</button>}
+                          <button style={s.btnA} onClick={submitDisposicao}>{dispMeta(dispDec)?.libera ? "🔏 Assinar e registrar" : "Registrar disposição"}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Alterar status — só para não visualizadores */}
                 {!isViewer && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Alterar status</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {Object.keys(SMETA).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
+                      {Object.keys(SMETA).filter(st => !rncEncerrada(st)).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
                     </div>
                     <div style={{ fontSize: 10, color: T.text3, marginTop: 8, lineHeight: 1.5 }}>
-                      A RNC passa de <b>Aberta</b> para <b>Em andamento</b> automaticamente no 1º ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar a análise de causa). Os botões acima permitem ajuste manual quando necessário.
+                      A RNC passa de <b>Aberta</b> para <b>Em andamento</b> automaticamente no 1º ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar a análise de causa). O encerramento (<b>Eficaz</b> / <b>Ineficaz</b>) é feito apenas na aba <b>Verificação de eficácia</b>, após concluir as ações de CAPA e registrar a disposição do material.
                     </div>
                   </div>
                 )}
@@ -759,6 +887,17 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
             setAssinaturaModal(null);
             toast_("Assinatura do elaborador registrada na RNC.", "green");
           }}
+        />
+      )}
+
+      {dispSign && (
+        <AssinaturaModal
+          user={user}
+          titulo={`RNC ${sel?.num} — disposição: ${dispMeta(dispSign.decisao)?.label}`}
+          contexto={`RNC-DISP|${sel?.num||sel?.id||""}`}
+          papel="Responsavel Tecnico"
+          onClose={() => setDispSign(null)}
+          onConfirm={async (ass) => { await gravarDisposicao(dispSign.decisao, dispSign.justificativa, ass); setDispSign(null); }}
         />
       )}
     </div>
@@ -1401,6 +1540,11 @@ Responda APENAS em JSON sem markdown:
 
   const save = async () => {
     if (!r) return;
+    // Trava: RNC de material/lote não fecha como Eficaz sem disposição registrada.
+    if (f.resultado === "Eficaz" && rncTemMaterial(r) && !r.disposicao?.decisao) {
+      alert("Esta RNC envolve material/lote. Registre a Disposição do material (aba Registros → abra a RNC) antes de encerrar como Eficaz.");
+      return;
+    }
     const ns = f.resultado === "Eficaz" ? "Eficaz" : f.resultado === "Ineficaz" ? "Ineficaz" : "Pendente verificação";
     await doUpdateRNC(r.id, { eficacia: f, status: ns, historico: [...(r.historico || []), { data: tod(), acao: `Eficácia: ${f.resultado}`, resp: f.resp || "—" }] });
     toast_("Verificação registrada!", "green");
@@ -1461,7 +1605,7 @@ export function DashTab({ rncs }) {
   const tot = rncs.length;
   const ef = rncs.filter(x=>x.status==="Eficaz").length;
   const ab = rncs.filter(x=>x.status==="Aberta").length;
-  const venc = rncs.filter(r=>r.prazoAC&&r.prazoAC<tod()&&r.status!=="Eficaz"&&r.status!=="Ineficaz");
+  const venc = rncs.filter(r=>r.prazoAC&&r.prazoAC<tod()&&rncAtiva(r.status));
   const critica = rncs.filter(x=>x.sev==="Crítica").length;
   const taxaEf = tot>0?Math.round(ef/tot*100):0;
 
@@ -1810,7 +1954,7 @@ export function RelatoriosTab({ rncs, users, user, toast_ }) {
   const critica = filtered.filter(x=>x.sev==="Crítica").length;
   const maior = filtered.filter(x=>x.sev==="Maior").length;
   const menor = filtered.filter(x=>x.sev==="Menor").length;
-  const vencidas = filtered.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz"&&x.status!=="Ineficaz").length;
+  const vencidas = filtered.filter(x=>x.prazoAC&&x.prazoAC<tod()&&rncAtiva(x.status)).length;
   const taxaEficacia = total>0?Math.round(eficaz/total*100):0;
   const taxaAberto = total>0?Math.round((abertas+emAndamento)/total*100):0;
 
@@ -1879,7 +2023,7 @@ ${"─".repeat(50)}
 ${Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([r,list])=>{
   const ab=list.filter(x=>x.status==="Aberta").length;
   const ef=list.filter(x=>x.status==="Eficaz").length;
-  const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz").length;
+  const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&rncAtiva(x.status)).length;
   return `${r}\n  Total: ${list.length} | Abertas: ${ab} | Eficazes: ${ef}${vc>0?` | ⚠ ${vc} vencida(s)`:""}`;
 }).join("\n\n")}
 
@@ -2070,7 +2214,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([resp,list])=>{
             const ab=list.filter(x=>x.status==="Aberta").length;
             const ef=list.filter(x=>x.status==="Eficaz").length;
-            const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&x.status!=="Eficaz").length;
+            const vc=list.filter(x=>x.prazoAC&&x.prazoAC<tod()&&rncAtiva(x.status)).length;
             const taxa=list.length>0?Math.round(ef/list.length*100):0;
             const max=Math.max(...Object.values(porResp).map(l=>l.length),1);
             return <div key={resp} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:12, padding:"1rem", marginBottom:10 }}>
@@ -2166,7 +2310,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
                   <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{r.num}</span>
                   <SevB s={r.sev}/>
                   <Badge s={r.status}/>
-                  {past(r.prazoAC)&&r.status!=="Eficaz"&&<span style={{ fontSize:10, color:"#ff4f6a", fontWeight:700, background:"#ff4f6a18", padding:"2px 8px", borderRadius:20 }}>⚠ VENCIDO</span>}
+                  {past(r.prazoAC)&&rncAtiva(r.status)&&<span style={{ fontSize:10, color:"#ff4f6a", fontWeight:700, background:"#ff4f6a18", padding:"2px 8px", borderRadius:20 }}>⚠ VENCIDO</span>}
                   {r.respostaFornecedor&&<span style={{ fontSize:10, color:"#1a7a3c", fontWeight:700, background:"#1a7a3c18", padding:"2px 8px", borderRadius:20 }}>✓ RESPOSTA FORNECEDOR</span>}
                 </div>
                 <span style={{ fontSize:11, color:T.text3 }}>{fmt(r.data)}</span>

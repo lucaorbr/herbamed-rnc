@@ -236,12 +236,26 @@ export function exportRNCPDF(rnc, assinatura = null) {
     </div>
   </div>`:""}
 
+  <!-- DISPOSIÇÃO DO MATERIAL -->
+  ${rnc.disposicao?.decisao?(()=>{
+    const DL={liberar:"Liberar (uso normal)",concessao:"Liberar sob concessão",segregar:"Segregar / Quarentena",retrabalho:"Retrabalho / Reprocesso",reprovar:"Reprovar / Descartar",devolver:"Devolver ao fornecedor"};
+    return `
+  <div class="section">
+    <div class="section-title">📦 Disposição do material</div>
+    <div class="contencao-box">
+      <div style="font-size:13px;font-weight:bold;">${DL[rnc.disposicao.decisao]||rnc.disposicao.decisao}</div>
+      ${rnc.disposicao.justificativa?`<div style="margin-top:4px;">${rnc.disposicao.justificativa}</div>`:""}
+      <div style="margin-top:6px;font-size:11px;color:#666;">Por: <strong>${rnc.disposicao.por||"—"}</strong> &nbsp;|&nbsp; Data: <strong>${fmt(rnc.disposicao.data)}</strong></div>
+      ${rnc.disposicao.assinaturaRT?`<div style="margin-top:4px;font-size:11px;color:#2ab84a;">✔ Liberação assinada pelo RT: ${rnc.disposicao.assinaturaRT.nome} — ${rnc.disposicao.assinaturaRT.timestamp?new Date(rnc.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.disposicao.assinaturaRT.dataHora}</div>`:""}
+    </div>
+  </div>`;})():""}
+
   <!-- PRAZOS -->
   <div class="section">
     <div class="section-title">Prazos</div>
     <div class="grid3">
       <div class="field"><div class="field-label">Análise de Causa</div><div class="field-value">${fmt(rnc.prazoCausa)}</div></div>
-      <div class="field"><div class="field-label">Ação Corretiva</div><div class="field-value" style="color:${past(rnc.prazoAC)&&rnc.status!=="Eficaz"?"#cc2244":"inherit"}">${fmt(rnc.prazoAC)}${past(rnc.prazoAC)&&rnc.status!=="Eficaz"?" ⚠":""}  </div></div>
+      <div class="field"><div class="field-label">Ação Corretiva</div><div class="field-value" style="color:${past(rnc.prazoAC)&&rnc.status!=="Eficaz"&&rnc.status!=="Encerrada"?"#cc2244":"inherit"}">${fmt(rnc.prazoAC)}${past(rnc.prazoAC)&&rnc.status!=="Eficaz"&&rnc.status!=="Encerrada"?" ⚠":""}  </div></div>
       <div class="field"><div class="field-label">Verificação Eficácia</div><div class="field-value">${fmt(rnc.prazoEfic)}</div></div>
     </div>
   </div>
