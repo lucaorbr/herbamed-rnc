@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
+import { rncAtiva } from "../core/status";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
 import { AuditLogTab } from "../features/audit/AuditLogTab";
@@ -23,6 +24,7 @@ import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab"
 import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
+import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
@@ -208,8 +210,8 @@ export default function App() {
     const hoje = tod();
     const amanha = new Date(); amanha.setDate(amanha.getDate() + 1);
     const amanhaStr = amanha.toISOString().split("T")[0];
-    const vencendoHoje = rncs.filter(r => r.prazoAC === hoje && r.status !== "Eficaz" && r.status !== "Ineficaz" && r.resp === user.name);
-    const vencendoAmanha = rncs.filter(r => r.prazoAC === amanhaStr && r.status !== "Eficaz" && r.status !== "Ineficaz" && r.resp === user.name);
+    const vencendoHoje = rncs.filter(r => r.prazoAC === hoje && rncAtiva(r.status) && r.resp === user.name);
+    const vencendoAmanha = rncs.filter(r => r.prazoAC === amanhaStr && rncAtiva(r.status) && r.resp === user.name);
     if (vencendoHoje.length > 0 || vencendoAmanha.length > 0) {
       const lastAlert = localStorage.getItem("hm_last_alert");
       if (lastAlert !== hoje) {
@@ -383,7 +385,7 @@ export default function App() {
   const isAdmin = user.role === "admin";
 
   // Notificações — RNCs com prazo vencido
-  const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && r.status !== "Eficaz" && r.status !== "Ineficaz");
+  const notifs = rncs.filter(r => r.prazoAC && r.prazoAC < tod() && rncAtiva(r.status));
   // Notificações — documentos (rota de assinatura, vigência etc.)
   const docNotifsUnread = docNotifs.filter(n => !n.lida);
   const totalNotifs = notifs.length + docNotifsUnread.length;
@@ -413,6 +415,7 @@ export default function App() {
     home: "Home", lista: "Registros de Não Conformidades",
     nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
     "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
+    reunioes: "Reuniões de Análise Crítica de NCs",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
@@ -655,6 +658,7 @@ export default function App() {
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}

@@ -11,6 +11,7 @@ function New-Secret {
 
 $postgresPassword = New-Secret
 $jwtSecret = New-Secret
+$rncIntegrationApiKey = New-Secret
 $arecoPassword = if ($env:ARECO_SQLSERVER_PASSWORD) { $env:ARECO_SQLSERVER_PASSWORD } else { "" }
 
 @"
@@ -19,6 +20,7 @@ POSTGRES_USER=sgqherbamed
 POSTGRES_PASSWORD=$postgresPassword
 
 JWT_SECRET=$jwtSecret
+RNC_INTEGRATION_API_KEY=$rncIntegrationApiKey
 INITIAL_ADMIN_EMAIL=admin
 INITIAL_ADMIN_PASSWORD=Herba@123
 INITIAL_ADMIN_NAME=Administrador SGQ
@@ -47,7 +49,7 @@ ARECO_MATERIAIS_QUERY=
 ARECO_MATERIAIS_LIMIT=0
 "@ | Set-Content -Path ".env" -Encoding UTF8
 
-Write-Host ".env criado com POSTGRES_PASSWORD e JWT_SECRET fortes."
+Write-Host ".env criado com POSTGRES_PASSWORD, JWT_SECRET e RNC_INTEGRATION_API_KEY fortes."
 if (-not $arecoPassword) {
   Write-Host "Aviso: ARECO_SQLSERVER_PASSWORD ficou vazio. Preencha no .env para ativar a sincronizacao com o Areco."
 }

@@ -16,6 +16,7 @@ secret() {
 
 POSTGRES_PASSWORD_VALUE="$(secret)"
 JWT_SECRET_VALUE="$(secret)"
+RNC_INTEGRATION_API_KEY_VALUE="$(secret)"
 
 cat > .env <<EOF
 POSTGRES_DB=sgqherbamed
@@ -23,6 +24,7 @@ POSTGRES_USER=sgqherbamed
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD_VALUE}
 
 JWT_SECRET=${JWT_SECRET_VALUE}
+RNC_INTEGRATION_API_KEY=${RNC_INTEGRATION_API_KEY_VALUE}
 INITIAL_ADMIN_EMAIL=admin
 INITIAL_ADMIN_PASSWORD=Herba@123
 INITIAL_ADMIN_NAME=Administrador SGQ
@@ -53,7 +55,7 @@ EOF
 
 chmod 600 .env 2>/dev/null || true
 
-echo ".env criado com POSTGRES_PASSWORD e JWT_SECRET fortes."
+echo ".env criado com POSTGRES_PASSWORD, JWT_SECRET e RNC_INTEGRATION_API_KEY fortes."
 if [ -z "${ARECO_SQLSERVER_PASSWORD:-}" ]; then
   echo "Aviso: ARECO_SQLSERVER_PASSWORD ficou vazio. Preencha no .env para ativar a sincronizacao com o Areco."
 fi

@@ -17,6 +17,7 @@ const {
   verifyPassword,
 } = require("./auth");
 const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
+const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegration");
 
 const PORT = Number(process.env.PORT || 9028);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -31,7 +32,7 @@ function sendJson(res, status, payload, headers = {}) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
     "Access-Control-Allow-Credentials": "true",
     ...headers,
   });
@@ -107,7 +108,7 @@ function sendBuffer(res, status, buffer, headers = {}) {
   res.writeHead(status, {
     "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
     "Access-Control-Allow-Credentials": "true",
     ...headers,
   });
@@ -486,6 +487,56 @@ async function handleRncs(req, res, pathname) {
   }
 
   return false;
+}
+
+async function handleRncIntegration(req, res, pathname, url) {
+  if (pathname === "/api/integrations/rncs") {
+    if (req.method !== "GET") {
+      return sendJson(res, 405, { error: "Method not allowed" }, { Allow: "GET" });
+    }
+
+    requireIntegrationKey(req);
+    const payload = await getRncIntegrationPage(
+      query,
+      url.searchParams.get("cursor"),
+      url.searchParams.get("limit")
+    );
+    return sendJson(res, 200, payload, { "Cache-Control": "no-store" });
+  }
+
+  const fileMatch = pathname.match(/^\/api\/integrations\/rnc-files\/([0-9a-f-]{36})$/i);
+  if (!fileMatch) return false;
+  if (req.method !== "GET") {
+    return sendJson(res, 405, { error: "Method not allowed" }, { Allow: "GET" });
+  }
+  requireIntegrationKey(req);
+  const fileId = fileMatch[1].toLowerCase();
+  const result = await query(`
+    SELECT sf.original_name, sf.mime_type, sf.size_bytes, sf.data
+    FROM stored_files sf
+    WHERE sf.id = $1
+      AND EXISTS (
+        SELECT 1
+        FROM rncs r
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(r.data->'anexos') = 'array'
+            THEN r.data->'anexos'
+            ELSE '[]'::jsonb
+          END
+        ) anexo
+        WHERE anexo->>'id' = $1::text
+           OR anexo->>'url' = $2
+      )
+  `, [fileId, `/api/files/${fileId}`]);
+  if (!result.rowCount) return sendJson(res, 404, { error: "Anexo de RNC nao encontrado" });
+
+  const file = result.rows[0];
+  return sendBuffer(res, 200, file.data, {
+    "Content-Type": file.mime_type || "application/octet-stream",
+    "Content-Length": String(file.size_bytes || file.data.length),
+    "Content-Disposition": `attachment; filename="${encodeURIComponent(file.original_name)}"`,
+    "Cache-Control": "no-store",
+  });
 }
 
 async function handleCounters(req, res, pathname) {
@@ -1467,6 +1518,9 @@ async function route(req, res) {
   // Supplier link: endpoints públicos ANTES dos handlers autenticados
   const supplierHandled = await handleSupplierRNC(req, res, pathname);
   if (supplierHandled !== false) return supplierHandled;
+
+  const integrationHandled = await handleRncIntegration(req, res, pathname, url);
+  if (integrationHandled !== false) return integrationHandled;
 
   const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
