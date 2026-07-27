@@ -506,6 +506,19 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // Usuários elegíveis para Revisor/Aprovador: precisam de permissão de assinar revisor/aprovador.
   const usuariosRevAprov = (users || []).filter(u => userHasPerm(u, "assinarRevisorAprovador"));
   const nomeUsuario = (uid) => (users || []).find(u => String(u.id) === String(uid))?.name || "";
+  // Fallback visual de cargo: assinaturas antigas (anteriores ao campo "Cargo" no cadastro)
+  // foram gravadas sem cargo. Só nesses casos buscamos o cargo atual do cadastro para exibir.
+  // A assinatura em si NUNCA é reescrita — snapshot imutável — e o código de verificação
+  // (sigCodigo) continua sendo calculado sobre o objeto gravado, sem este fallback.
+  const cargoCadastroAtual = (ass) => {
+    if (!ass || ass.cargo) return "";
+    const u = (users || []).find(x =>
+      (ass.userId && String(x.id) === String(ass.userId)) ||
+      (ass.uid    && String(x.id) === String(ass.uid))    ||
+      (ass.email  && String(x.email || "").toLowerCase() === String(ass.email).toLowerCase())
+    );
+    return u?.cargo || "";
+  };
   // Fase 5 — permissões granulares de Gestão de Documentos.
   const podeCriarDoc                 = perm?.("criarDocumento")            ?? false;
   const podeBaixarFonte              = perm?.("baixarArquivoFonte")        ?? false;
@@ -1531,7 +1544,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 <div style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase",marginBottom:10}}>{label}</div>
                 {campo?(<>
                   <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
-                  {campo.cargo&&<div style={{fontSize:11,color:T.text2}}>{campo.cargo}</div>}
+                  {(campo.cargo||cargoCadastroAtual(campo))&&(
+                    <div style={{fontSize:11,color:T.text2}} title={campo.cargo?"Cargo gravado na assinatura":"Cargo atual do cadastro — esta assinatura foi feita antes de o cargo existir no perfil"}>
+                      {campo.cargo||cargoCadastroAtual(campo)}
+                      {!campo.cargo&&<span style={{fontSize:9,color:T.text3}}> · cadastro atual</span>}
+                    </div>
+                  )}
                   {(campo.registroProfissional||campo.crf)&&<div style={{fontSize:10,color:T.text3}}>Registro profissional: {campo.registroProfissional||campo.crf}</div>}
                   <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
                   <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
