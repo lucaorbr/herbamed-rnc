@@ -847,6 +847,42 @@ function pdfSafe(str) {
   }).join("");
 }
 
+// Fallback visual de cargo na capa: assinaturas antigas (anteriores ao campo "Cargo"
+// no cadastro) foram gravadas sem cargo. Só nesses casos buscamos o cargo atual do
+// cadastro para EXIBIR. A assinatura gravada nunca é reescrita (snapshot imutável) e o
+// sigCodigoServer continua sendo calculado sobre o objeto original, sem este fallback.
+async function cargosCadastroAtual(assinaturas) {
+  const mapa = new Map();
+  const semCargo = (assinaturas || []).filter(a => a && !a.cargo);
+  if (!semCargo.length) return mapa;
+  const ids = [...new Set(semCargo.map(a => a.userId || a.uid).filter(Boolean).map(String))];
+  const emails = [...new Set(semCargo.map(a => String(a.email || "").toLowerCase()).filter(Boolean))];
+  if (!ids.length && !emails.length) return mapa;
+  try {
+    const result = await query(
+      `SELECT id, email, data->>'cargo' AS cargo FROM users
+        WHERE id::text = ANY($1::text[]) OR lower(email) = ANY($2::text[])`,
+      [ids, emails]
+    );
+    for (const row of result.rows) {
+      if (!row.cargo) continue;
+      mapa.set(`id:${row.id}`, row.cargo);
+      if (row.email) mapa.set(`em:${String(row.email).toLowerCase()}`, row.cargo);
+    }
+  } catch (error) {
+    console.error("Falha ao buscar cargo atual para assinaturas sem cargo:", error);
+  }
+  return mapa;
+}
+
+function cargoExibidoAss(ass, mapa) {
+  if (!ass) return "";
+  if (ass.cargo) return ass.cargo;
+  const porId = mapa.get(`id:${ass.userId || ass.uid}`);
+  if (porId) return porId;
+  return mapa.get(`em:${String(ass.email || "").toLowerCase()}`) || "";
+}
+
 // Porte do sigCodigo do front (core/utils) para gerar o mesmo código de
 // verificação das assinaturas no PDF renderizado.
 function sigCodigoServer(ass, ctx = "") {
@@ -1173,6 +1209,7 @@ async function handleDocumentRender(req, res, pathname, url) {
       ["Revisor", doc.assinaturaRevisor],
       ["Aprovador", doc.assinaturaAprovador],
     ];
+    const mapaCargos = await cargosCadastroAtual(assinaturas.map(([, ass]) => ass));
     assinaturas.forEach(([papel, ass], idx) => {
       const bx = 40 + idx * (boxW + 12);
       const by = boxTop - boxH;
@@ -1182,7 +1219,8 @@ async function handleDocumentRender(req, res, pathname, url) {
       ty -= 16;
       if (ass) {
         draw(capa, ass.nome || "—", bx + 8, ty, 10, fontB, cinzaC); ty -= 13;
-        if (ass.cargo) { draw(capa, ass.cargo, bx + 8, ty, 8, fontR, cinza); ty -= 11; }
+        const cargoAss = pdfSafe(cargoExibidoAss(ass, mapaCargos));
+        if (cargoAss) { draw(capa, cargoAss, bx + 8, ty, 8, fontR, cinza); ty -= 11; }
         const reg = ass.registroProfissional || ass.crf || ass.registro || "";
         if (reg) { draw(capa, `Reg.: ${reg}`, bx + 8, ty, 8, fontR, cinza); ty -= 11; }
         const quando = ass.timestamp ? new Date(ass.timestamp).toLocaleString("pt-BR") : (ass.dataHora || "");
