@@ -1010,6 +1010,7 @@ export function AnexosUpload({ anexos, setAnexos, inputId = "anexo-input" }) {
 export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
+  const modoPrazo = f.modoPrazo || "definicao";
   const [origemDesvio, setOrigemDesvio] = useState(null);
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
@@ -1067,6 +1068,11 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   // (em finalizarSalvar), evitando "queimar" número se o elaborador desistir de assinar.
   const salvar = () => {
     if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
+    if (modoPrazo === "definicao") {
+      if (!f.justificativaPrazo?.trim()) { alert("Informe a justificativa para o prazo em definicao."); return; }
+      if (!f.proximaReavaliacao) { alert("Defina a proxima data de reavaliacao."); return; }
+      f.prazoAC = "2099-12-31";
+    }
     if (!f.sev)                 { alert("Selecione a severidade (Crítica / Maior / Menor)."); return; }
     if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
     if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
@@ -1078,6 +1084,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
     const nc = await incrementCounter();
     const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
     setAssinaturaModal(false);
+    if (modoPrazo === "definicao") { rnc.prazoAC = ""; rnc.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" }); }
     await doSaveRNC(rnc);
     // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
     if (origemDesvio && doSaveDesvio) {
@@ -1194,6 +1201,10 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       {novaAba==="prazos" && (
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
+        <div style={{marginBottom:12,padding:10,border:`1px solid ${T.border}`,borderRadius:8}}>
+          <F lbl="Planejamento do prazo" ch={<select value={modoPrazo} onChange={e=>set("modoPrazo",e.target.value)} style={{...s.inp,width:"100%"}}><option value="definicao">Prazo em definicao</option><option value="definido">Prazo definido</option></select>} />
+          {modoPrazo==="definicao" && <><F lbl="Justificativa" ch={<TA rows={2} value={f.justificativaPrazo||""} onChange={e=>set("justificativaPrazo",e.target.value)} />} /><F lbl="Proxima reavaliacao" ch={<Inp type="date" value={f.proximaReavaliacao||""} onChange={e=>set("proximaReavaliacao",e.target.value)} />} /></>}
+        </div>
         <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
         <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
@@ -1397,7 +1408,12 @@ Responda APENAS em JSON sem markdown:
     if (!r) return;
     if (!whysOk) { alert("Preencha ao menos 3 dos 5 Porquês antes de salvar o plano CAPA."); return; }
     await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `CAPA — ${acts.length} ação(ões)`, resp: user.name }] });
+    const ativas = acts.filter(a => !String(a.status || "").startsWith("Concl") && a.status !== "Cancelada");
+    if (ativas.some(a => !a.what?.trim() || !a.who?.trim() || !a.when)) { alert("Cada acao ativa precisa de descricao, responsavel e prazo."); return; }
+    const prazoACCalculado = [...ativas.map(a=>a.when)].sort().at(-1) || "";
+    const prorrogacoes = acts.filter(a => { const anterior=(r.w2h||[]).find(x=>x.id===a.id); return anterior?.when && a.when && anterior.when !== a.when; }).map(a => { const anterior=(r.w2h||[]).find(x=>x.id===a.id); return `Acao ${a.what || a.id}: prazo alterado`; });
     toast_("CAPA salvo!", "green");
+    await doUpdateRNC(r.id, { prazoAC:prazoACCalculado, modoPrazo:"definido", justificativaPrazo:"", proximaReavaliacao:"", historico:[...(r.historico||[]), {data:tod(),acao:"Prazo geral calculado pelas acoes CAPA",detalhes:[`Prazo calculado: ${prazoACCalculado}`,...prorrogacoes],resp:user.name,tipo:"prazo_capa"}] });
     openEmail({ ...r, w2h: acts }, "5w2h");
   };
 
