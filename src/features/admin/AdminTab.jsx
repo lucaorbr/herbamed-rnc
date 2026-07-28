@@ -10,7 +10,7 @@ import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/
 import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
 import { TIPOS_REVALIDACAO_SEED } from "../revalidacao/RevalidacaoTabs";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -55,6 +55,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const mkDefaultTiposReval = (cat) => cat && cat.length > 0
     ? cat.map(t => ({ nome:t.nome, ativo:t.ativo!==false, grafico:!!t.grafico, checklist:Array.isArray(t.checklist)?t.checklist:[] }))
     : TIPOS_REVALIDACAO_SEED.map(t => ({ nome:t.nome, ativo:true, grafico:!!t.grafico, checklist:[...(t.checklist||[])] }));
+  const mkDefaultAreasDistrib = (cat) => (cat || []).map(a => ({
+    id:a.id || "", label:a.label || "", ativo:a.ativo !== false,
+    setores:(a.setores || []).map(sx => ({ id:sx.id || `setor-${Date.now()}`, nome:sx.nome || "", ativo:sx.ativo !== false })),
+  }));
 
   const [abaAdmin, setAbaAdmin] = useState("usuarios");
   const [catAba, setCatAba] = useState("deptos");
@@ -85,12 +89,17 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [expandTrIdx, setExpandTrIdx] = useState(null);
   const [novoItemTr, setNovoItemTr] = useState("");
   const [savingTr, setSavingTr] = useState(false);
+  const [listaAreasDistrib, setListaAreasDistrib] = useState(() => mkDefaultAreasDistrib(catalogoAreasSetoresDistribuicao));
+  const [novoAreaDistrib, setNovoAreaDistrib] = useState({ id:"", label:"" });
+  const [novoSetorDistrib, setNovoSetorDistrib] = useState({});
+  const [savingAreasDistrib, setSavingAreasDistrib] = useState(false);
 
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
   useEffect(() => { setListaTiposDesvio(mkDefaultTiposDesvio(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
   useEffect(() => { setListaSetoresDesvio(mkDefaultSetoresDesvio(catalogoSetoresDesvio)); }, [catalogoSetoresDesvio.length]);
   useEffect(() => { setListaTiposReval(mkDefaultTiposReval(catalogoTiposRevalidacao)); }, [catalogoTiposRevalidacao.length]);
+  useEffect(() => { setListaAreasDistrib(mkDefaultAreasDistrib(catalogoAreasSetoresDistribuicao)); }, [catalogoAreasSetoresDistribuicao.length]);
 
   const persistDeptos = async (lista) => {
     if (!isAdmin) return;
@@ -158,6 +167,22 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       toast_("Catálogo de tipos de revalidação salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingTr(false);
+  };
+
+  const persistAreasDistrib = async (lista) => {
+    if (!isAdmin) return;
+    const ids = lista.map(a => a.id.trim());
+    if (lista.some(a => !a.id.trim() || !a.label.trim())) { toast_("Todas as áreas precisam de código e nome.", "red"); return; }
+    if (new Set(ids).size !== ids.length) { toast_("Não pode haver códigos de área repetidos.", "red"); return; }
+    if (lista.some(a => a.setores.some(sx => !sx.nome.trim()))) { toast_("Todo setor precisa de um nome.", "red"); return; }
+    if (lista.some(a => new Set(a.setores.map(sx => sx.nome.trim().toLowerCase())).size !== a.setores.length)) { toast_("Não pode haver setores repetidos na mesma área.", "red"); return; }
+    setSavingAreasDistrib(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_areas_setores_distribuicao", { items: lista });
+      await auditLog("Atualizou Catálogo de Áreas e Setores de Distribuição", "configuracoes", "catalogo_areas_setores_distribuicao", "Catálogo", null, { totalAreas:lista.length, totalSetores:lista.reduce((n,a)=>n+a.setores.length,0) });
+      toast_("Catálogo de áreas e setores salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingAreasDistrib(false);
   };
 
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
@@ -434,7 +459,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         <SecTitle icon="🗂️" ch="Catálogos" />
         {/* Tabs */}
         <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["distribuicao","🗂️ Áreas e Setores de Distribuição"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
             <button key={k} onClick={()=>setCatAba(k)}
               style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
                 background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -752,6 +777,50 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               {savingSd?"Salvando...":"💾 Salvar setores de desvio"}
             </button>
           </div>
+        </>)}
+
+        {/* ── ÁREAS E SETORES DE DISTRIBUIÇÃO FÍSICA ── */}
+        {catAba==="distribuicao" && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Destinos de cópias físicas controladas. Este catálogo é separado dos departamentos responsáveis pelos documentos: uma área pode receber a cópia inteira ou direcioná-la a um setor específico.
+          </div>
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Código (ex: PRO)" maxLength={5} value={novoAreaDistrib.id}
+              onChange={e=>setNovoAreaDistrib(p=>({...p,id:e.target.value.toUpperCase()}))} style={{ ...s.inp, width:110, fontSize:12 }} />
+            <input placeholder="Nome da área (ex: Produção)" value={novoAreaDistrib.label}
+              onChange={e=>setNovoAreaDistrib(p=>({...p,label:e.target.value}))} style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button style={s.btnA} onClick={()=>{
+              const area = { id:novoAreaDistrib.id.trim(), label:novoAreaDistrib.label.trim(), ativo:true, setores:[] };
+              if (!area.id || !area.label) return;
+              if (listaAreasDistrib.some(a=>a.id.toLowerCase()===area.id.toLowerCase())) { toast_("Esse código de área já existe.", "red"); return; }
+              const next=[...listaAreasDistrib,area]; setListaAreasDistrib(next); setNovoAreaDistrib({id:"",label:""}); persistAreasDistrib(next);
+            }}>+ Adicionar área</button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:480, overflowY:"auto" }}>
+            {listaAreasDistrib.length===0 && <div style={{fontSize:12,color:T.text3,padding:"12px 0"}}>Nenhuma área cadastrada ainda.</div>}
+            {listaAreasDistrib.map((area, ai)=>(
+              <div key={area.id||ai} style={{ padding:12, border:`1px solid ${T.border}`, borderRadius:10, background:T.surf }}>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+                  <input value={area.id} maxLength={5} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,id:e.target.value.toUpperCase()}:a))} style={{...s.inp,width:90,fontSize:12}} />
+                  <input value={area.label} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,label:e.target.value}:a))} style={{...s.inp,flex:1,fontSize:12}} />
+                  <button style={{...s.btn,fontSize:11}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,ativo:!a.ativo}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>{area.ativo?"Desativar área":"Ativar área"}</button>
+                </div>
+                <div style={{fontSize:11,fontWeight:700,color:T.text2,marginBottom:6}}>Setores da área</div>
+                {area.setores.map((setor,si)=>(
+                  <div key={setor.id||si} style={{display:"flex",gap:8,alignItems:"center",marginBottom:5}}>
+                    <input value={setor.nome} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,setores:a.setores.map((sx,j)=>j===si?{...sx,nome:e.target.value}:sx)}:a))} style={{...s.inp,flex:1,fontSize:12}} />
+                    <button style={{...s.btn,fontSize:11}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:a.setores.map((sx,j)=>j===si?{...sx,ativo:!sx.ativo}:sx)}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>{setor.ativo?"Desativar":"Ativar"}</button>
+                    <button style={{...s.btn,fontSize:11,color:"#ff4f6a"}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:a.setores.filter((_,j)=>j!==si)}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>Excluir</button>
+                  </div>
+                ))}
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <input placeholder="Novo setor (ex: Encapsulamento 1)" value={novoSetorDistrib[area.id]||""} onChange={e=>setNovoSetorDistrib(p=>({...p,[area.id]:e.target.value}))} style={{...s.inp,flex:1,fontSize:12}} />
+                  <button style={{...s.btnA,fontSize:11}} onClick={()=>{ const nome=(novoSetorDistrib[area.id]||"").trim(); if(!nome)return; if(area.setores.some(sx=>sx.nome.toLowerCase()===nome.toLowerCase())){toast_("Esse setor já existe nesta área.","red");return;} const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:[...a.setores,{id:`${a.id}-${Date.now()}`,nome,ativo:true}]}:a); setListaAreasDistrib(next); setNovoSetorDistrib(p=>({...p,[area.id]:""})); persistAreasDistrib(next); }}>+ Setor</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{textAlign:"right",marginTop:12}}><button style={{...s.btnA,opacity:(!isAdmin||savingAreasDistrib)?0.6:1}} disabled={!isAdmin||savingAreasDistrib} onClick={()=>persistAreasDistrib(listaAreasDistrib)}>{savingAreasDistrib?"Salvando...":"Salvar áreas e setores"}</button></div>
         </>)}
 
         {/* ── ABA TIPOS DE REVALIDAÇÃO ── */}
