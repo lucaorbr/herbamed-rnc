@@ -23,6 +23,39 @@ const RA_STYLE = `<style>
   .ra-selos > div{flex:1;}
 </style>`;
 
+const textoIdentidade = valor => String(valor || "").trim().toLocaleLowerCase("pt-BR");
+
+function localizarUsuarioAnalista(registro, users = []) {
+  const userId = registro?.respUserId || registro?.analistaUserId;
+  if (userId) {
+    const porId = users.find(u => String(u.uid || u.id || "") === String(userId));
+    if (porId) return porId;
+  }
+
+  const email = textoIdentidade(registro?.respEmail || registro?.analistaEmail);
+  if (email) {
+    const porEmail = users.find(u => textoIdentidade(u.email) === email);
+    if (porEmail) return porEmail;
+  }
+
+  const nome = textoIdentidade(registro?.resp || registro?.criadoPor);
+  if (!nome) return null;
+  const porNome = users.filter(u => textoIdentidade(u.name) === nome);
+  return porNome.length === 1 ? porNome[0] : null;
+}
+
+function montarIdentidadeAnalista(registro, users = []) {
+  const perfil = localizarUsuarioAnalista(registro, users);
+  return {
+    nome: registro?.resp || registro?.criadoPor || perfil?.name || "",
+    cargo: registro?.respCargo || perfil?.cargo || "",
+    registroProfissional: registro?.respRegistro || perfil?.crf || perfil?.registroProfissional || "",
+    email: registro?.respEmail || perfil?.email || "",
+    userId: registro?.respUserId || perfil?.uid || perfil?.id || "",
+    data: registro?.criadoEm || registro?.dataAnalise || "",
+  };
+}
+
 function abrirRA_PDF({ num, dataAnalise, identFields, tableHead, tableRows, extraSecoes = "", conclusao, coa, selo, disp }) {
   const concColor = conclusao === "Aprovado" ? "#1a7a3c" : conclusao === "Reprovado" ? "#cc2244" : "#8a6000";
   const concTxt = conclusao === "Aprovado" ? "✅ APROVADO" : conclusao === "Reprovado" ? "❌ REPROVADO" : "⏳ ANÁLISE PENDENTE";
@@ -172,7 +205,7 @@ export const ENSAIOS_PADRAO = {
   ],
 };
 
-export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill, config = {} }) {
+export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill, config = {} }) {
   const T = useTheme(); const s = useS();
   const CQ_KEY = "cq_fichas";
   const [fichas, setFichas] = useState([]);
@@ -271,7 +304,8 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
     if(!form.material.trim()) { alert("Informe o material."); return; }
     const conc = conclusao();
     const num = `RA-${new Date().getFullYear()}-${String(fichas.length+1).padStart(3,"0")}`;
-    const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, respCargo: user.cargo || "", respRegistro: user.crf || "", criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    const identidadeAnterior = selFicha?._editando ? montarIdentidadeAnalista(selFicha, users) : null;
+    const ficha = { id:Date.now(), num, ...form, qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade), ensaios, coa, conclusao:conc, respCargo: selFicha?._editando ? identidadeAnterior.cargo : (user.cargo || ""), respRegistro: selFicha?._editando ? identidadeAnterior.registroProfissional : (user.crf || ""), respEmail: selFicha?._editando ? identidadeAnterior.email : (user.email || ""), respUserId: selFicha?._editando ? identidadeAnterior.userId : (user.uid || user.id || ""), criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     // Record edit history if editing existing analysis
     if (selFicha?._editando) {
       const hist = selFicha.historicoEdicoes || [];
@@ -307,7 +341,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
       { label: "Nota Fiscal", value: ficha.nf },
       { label: "Data Recebimento", value: fmt(ficha.dataRecebimento) },
       { label: "Data Análise", value: fmt(ficha.dataAnalise) },
-      { label: "Analista", value: ficha.resp || user?.name || "" },
+      { label: "Analista", value: montarIdentidadeAnalista(ficha, users).nome },
     ],
     tableHead: `<tr><th>Ensaio</th><th>Método</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Situação</th><th>Obs.</th></tr>`,
     tableRows: ficha.ensaios.map(e => {
@@ -318,7 +352,7 @@ export function CQTab({ user, toast_, fornecedores, doSaveRNC, setTab, rncs = []
     conclusao: ficha.conclusao,
     coa: ficha.coa,
     selo: {
-      resp: { nome: ficha.resp || user?.name || "", cargo: ficha.respCargo || user?.cargo || "", registroProfissional: ficha.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: ficha.criadoEm },
+      resp: montarIdentidadeAnalista(ficha, users),
       respCtx: `FICHA|${ficha.num || ficha.id || ""}`,
     },
     disp: ficha.aprovacaoDisposicao ? {
@@ -1306,7 +1340,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
   );
 }
 
-export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill, config = {} }) {
+export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill, config = {} }) {
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -1385,6 +1419,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     const isEditando = selAnalise?._editando === true;
     const num = isEditando ? (selAnalise.num || `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`) : `RA-${new Date().getFullYear()}-${String(analises.length+1).padStart(3,"0")}`;
     const { _editando: _ed, ...baseAnalise } = isEditando ? selAnalise : {};
+    const identidadeAnterior = isEditando ? montarIdentidadeAnalista(selAnalise, users) : null;
     const analise = {
       ...baseAnalise,
       id: isEditando ? selAnalise.id : Date.now(), num,
@@ -1393,7 +1428,8 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
       qtdRecebida: fmtQtd(form.qtdRecebidaValor, form.qtdRecebidaUnidade),
       resultados, coa,
       conclusao: reprovado ? "Reprovado" : resultados.some(r=>r.conforme===null&&r.resultado==="") ? "Pendente" : "Aprovado",
-      respCargo: isEditando ? selAnalise.respCargo : (user.cargo || ""), respRegistro: isEditando ? selAnalise.respRegistro : (user.crf || ""),
+      respCargo: isEditando ? identidadeAnterior.cargo : (user.cargo || ""), respRegistro: isEditando ? identidadeAnterior.registroProfissional : (user.crf || ""),
+      respEmail: isEditando ? identidadeAnterior.email : (user.email || ""), respUserId: isEditando ? identidadeAnterior.userId : (user.uid || user.id || ""),
       criadoPor: isEditando ? selAnalise.criadoPor : user.name, criadoEm: isEditando ? selAnalise.criadoEm : tod(), criadoTs: isEditando ? selAnalise.criadoTs : Date.now(),
       atualizadoPor: isEditando ? user.name : undefined, atualizadoEm: isEditando ? tod() : undefined,
     };
@@ -1491,7 +1527,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
       { label: "Nota Fiscal", value: a.nf },
       { label: "Data Recebimento", value: fmt(a.dataRecebimento) },
       { label: "Data Análise", value: fmt(a.dataAnalise) },
-      { label: "Analista", value: a.resp || user?.name || "" },
+      { label: "Analista", value: montarIdentidadeAnalista(a, users).nome },
     ],
     tableHead: `<tr><th>Ensaio</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Referência</th><th>Situação</th></tr>`,
     tableRows: (a.resultados || []).map(r => `<tr><td><strong>${r.nome}</strong></td><td>${r.espec || "—"}</td><td>${r.resultado || "—"}</td><td>${r.unidade || "—"}</td><td>${r.ref || "—"}</td><td>${r.conforme === true ? '<span class="ra-conf">✓ Conforme</span>' : r.conforme === false ? '<span class="ra-nconf">✗ N.C.</span>' : '<span class="ra-pend">—</span>'}</td></tr>`).join(""),
@@ -1499,7 +1535,7 @@ export function CQAnalisesTab({ user, toast_, fornecedores, setTab, perm, auditL
     conclusao: a.conclusao,
     coa: a.coa,
     selo: {
-      resp: { nome: a.resp || user?.name || "", cargo: a.respCargo || user?.cargo || "", registroProfissional: a.respRegistro || user?.crf || "", email: user?.email || "", userId: user?.uid || user?.id || "", data: a.dataAnalise },
+      resp: montarIdentidadeAnalista(a, users),
       respCtx: `ANALISE|${a.num || a.id || ""}`,
     },
     disp: a.aprovacaoDisposicao ? {
