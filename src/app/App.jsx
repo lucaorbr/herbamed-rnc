@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
-import { capitalizeDescriptiveInput, fmt, tod } from "../core/utils";
+import { fmt, tod } from "../core/utils";
 import { rncAtiva } from "../core/status";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
@@ -29,6 +29,8 @@ import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
+import { AutocorrectNotice } from "../shared/AutocorrectNotice";
+import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
 
 // Migração única (por sessão): copia registros da collection legada
@@ -59,6 +61,18 @@ export default function App() {
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
   const toggleFormal = () => { const v = !formalMode; setFormalMode(v); localStorage.setItem("hm_formal", String(v)); };
   useFormalDomScrub(formalMode);
+
+  // Captura no documento para cobrir também modais, portais e a rota pública do fornecedor.
+  useEffect(() => {
+    document.addEventListener("focusin", prepareAutocorrectField, true);
+    document.addEventListener("input", handleWritingInput, true);
+    document.addEventListener("keydown", handleAutocorrectUndo, true);
+    return () => {
+      document.removeEventListener("focusin", prepareAutocorrectField, true);
+      document.removeEventListener("input", handleWritingInput, true);
+      document.removeEventListener("keydown", handleAutocorrectUndo, true);
+    };
+  }, []);
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -376,7 +390,7 @@ export default function App() {
   // Rota pública: fornecedor responde RNC via link com token
   const supplierToken = new URLSearchParams(window.location.search).get("rnc_token");
   if (supplierToken && /^[a-f0-9]{64}$/.test(supplierToken)) {
-    return <ThemeCtx.Provider value={T}><SupplierRNCPage token={supplierToken} /></ThemeCtx.Provider>;
+    return <ThemeCtx.Provider value={T}><SupplierRNCPage token={supplierToken} /><AutocorrectNotice /></ThemeCtx.Provider>;
   }
 
   if (!user) return <ThemeCtx.Provider value={T}><Login onLogin={setUser} /></ThemeCtx.Provider>;
@@ -449,7 +463,10 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={T}>
     <FormalCtx.Provider value={formalMode}>
-      <div data-formal={formalMode ? "true" : "false"} onInputCapture={capitalizeDescriptiveInput} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, height: "100vh", overflow:"hidden", fontSize: 14, display: "flex", flexDirection: "column" }}>
+      <div
+        data-formal={formalMode ? "true" : "false"}
+        style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, height: "100vh", overflow:"hidden", fontSize: 14, display: "flex", flexDirection: "column" }}
+      >
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
@@ -693,6 +710,7 @@ export default function App() {
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
         <AtualizacaoDisponivel />
+        <AutocorrectNotice />
 
         {/* Modal voluntário — "Mudar senha" no avatar */}
         {pwModalOpen && !user?.senhaTemporaria && (
