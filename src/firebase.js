@@ -124,6 +124,9 @@ export const getAllUsers = async () => {
   return users.map(normalizeUser);
 };
 
+export const createRNC = data =>
+  api("/api/rncs", { method: "POST", body: data });
+
 export const saveRNC = (id, data) =>
   api(`/api/rncs/${encodeURIComponent(id)}`, { method: "PUT", body: data });
 

@@ -46,6 +46,71 @@ export const past = d => d && d < tod();
 
 export const genNum = c => String(c);
 
+export const upperFirstLetter = value => {
+  if (typeof value !== "string" || !value) return value;
+  const index = value.search(/[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]/);
+  if (index < 0) return value;
+  return value.slice(0, index)
+    + value[index].toLocaleUpperCase("pt-BR")
+    + value.slice(index + 1);
+};
+
+const TECHNICAL_TEXT_FIELD = [
+  "busca", "buscar", "pesquisa", "pesquisar", "filtro",
+  "email", "e-mail", "senha", "password", "login",
+  "lote", "nota fiscal", "nf", "cnpj", "cpf", "cep",
+  "telefone", "celular", "whatsapp", "url", "link", "site",
+  "codigo", "referencia", "registro",
+  "numero", "versao", "crf", "id areco",
+];
+
+export const isDescriptiveTextField = element => {
+  if (!element) return false;
+  if (element.dataset?.autoCapitalize === "off") return false;
+  if (element.dataset?.autoCapitalize === "on") return true;
+
+  const tag = String(element.tagName || "").toLowerCase();
+  if (tag === "textarea") return true;
+  if (tag !== "input") return false;
+
+  const type = String(element.type || "text").toLowerCase();
+  if (type !== "text") return false;
+
+  const nearbyLabels = [];
+  let parent = element.parentElement;
+  for (let level = 0; parent && level < 4; level += 1, parent = parent.parentElement) {
+    const label = Array.from(parent.children || []).find(child => child.tagName?.toLowerCase() === "label");
+    if (label?.textContent) {
+      nearbyLabels.push(label.textContent);
+      break;
+    }
+  }
+
+  const identity = [
+    element.name,
+    element.id,
+    element.placeholder,
+    element.getAttribute?.("aria-label"),
+    ...nearbyLabels,
+  ].filter(Boolean).join(" ")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  return !TECHNICAL_TEXT_FIELD.some(term => {
+    if (term.length <= 3) {
+      return new RegExp(`(^|[^a-z])${term}([^a-z]|$)`, "i").test(identity);
+    }
+    return identity.includes(term);
+  });
+};
+
+export const capitalizeDescriptiveInput = event => {
+  const element = event?.target;
+  if (!isDescriptiveTextField(element)) return;
+  const normalized = upperFirstLetter(element.value);
+  if (normalized !== element.value) element.value = normalized;
+};
+
 export const applyMask = (tipo, val) => {
   const d = (val || "").replace(/\D/g, "");
   if (tipo === "cnpj") {

@@ -440,11 +440,69 @@ async function handleUsers(req, res, pathname) {
   return false;
 }
 
+function dailyRncPrefix(now = new Date()) {
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  return `${dd}${mm}${yy}`;
+}
+
+async function lockRncNumber(client, num) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`rnc-num:${num}`]);
+}
+
+async function ensureRncNumberAvailable(client, num, id) {
+  if (!num) return;
+  await lockRncNumber(client, num);
+  const duplicate = await client.query(
+    "SELECT id FROM rncs WHERE num = $1 AND id <> $2 LIMIT 1",
+    [String(num), String(id)]
+  );
+  if (duplicate.rowCount) {
+    const error = new Error(`O numero da RNC ${num} ja esta em uso`);
+    error.status = 409;
+    throw error;
+  }
+}
+
+async function reserveRncNumber(client, now = new Date()) {
+  const prefix = dailyRncPrefix(now);
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`rnc-day:${prefix}`]);
+  const result = await client.query(`
+    SELECT COALESCE(MAX(substring(num from 7)::integer), 0) + 1 AS value
+    FROM rncs
+    WHERE num ~ $1
+  `, [`^${prefix}[0-9]+$`]);
+  const num = `${prefix}${result.rows[0].value}`;
+  await lockRncNumber(client, num);
+  return num;
+}
+
 async function handleRncs(req, res, pathname) {
   if (pathname === "/api/rncs" && req.method === "GET") {
     await requireUser(req);
     const result = await query("SELECT data FROM rncs ORDER BY updated_at DESC");
     return sendJson(res, 200, result.rows.map(row => row.data));
+  }
+
+  if (pathname === "/api/rncs" && req.method === "POST") {
+    await requireUser(req);
+    const body = sanitize(await readBody(req));
+    const created = await transaction(async client => {
+      const id = String(body.id || crypto.randomUUID());
+      const existing = await client.query("SELECT data FROM rncs WHERE id = $1", [id]);
+      if (existing.rowCount) return existing.rows[0].data;
+
+      const num = await reserveRncNumber(client);
+      const data = { ...body, id, num };
+      await client.query(`
+        INSERT INTO rncs (id, num, status, sev, resp, prazo_ac, data, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,now())
+      `, [id, num, data.status || null, data.sev || null, data.resp || null,
+        data.prazoAC || null, JSON.stringify(data)]);
+      return data;
+    });
+    return sendJson(res, 201, created);
   }
 
   const match = pathname.match(/^\/api\/rncs\/([^/]+)$/);
@@ -453,31 +511,44 @@ async function handleRncs(req, res, pathname) {
   const id = decodeURIComponent(match[1]);
 
   if (req.method === "PUT" || req.method === "POST") {
-    const data = sanitize(await readBody(req));
-    await query(`
-      INSERT INTO rncs (id, num, status, sev, resp, prazo_ac, data, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,now())
-      ON CONFLICT (id) DO UPDATE SET
-        num = EXCLUDED.num,
-        status = EXCLUDED.status,
-        sev = EXCLUDED.sev,
-        resp = EXCLUDED.resp,
-        prazo_ac = EXCLUDED.prazo_ac,
-        data = EXCLUDED.data,
-        updated_at = now()
-    `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null, data.prazoAC || null, JSON.stringify({ ...data, id })]);
+    const body = sanitize(await readBody(req));
+    const data = { ...body, id };
+    await transaction(async client => {
+      await ensureRncNumberAvailable(client, data.num, id);
+      await client.query(`
+        INSERT INTO rncs (id, num, status, sev, resp, prazo_ac, data, updated_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,now())
+        ON CONFLICT (id) DO UPDATE SET
+          num = EXCLUDED.num,
+          status = EXCLUDED.status,
+          sev = EXCLUDED.sev,
+          resp = EXCLUDED.resp,
+          prazo_ac = EXCLUDED.prazo_ac,
+          data = EXCLUDED.data,
+          updated_at = now()
+      `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null,
+        data.prazoAC || null, JSON.stringify(data)]);
+    });
     return sendJson(res, 200, { ok: true });
   }
 
   if (req.method === "PATCH") {
     const patch = sanitize(await readBody(req));
-    const existing = await query("SELECT data FROM rncs WHERE id = $1", [id]);
-    if (!existing.rowCount) return sendJson(res, 404, { error: "RNC nao encontrada" });
-    const data = { ...(existing.rows[0].data || {}), ...patch, id };
-    await query(`
-      UPDATE rncs SET num=$2,status=$3,sev=$4,resp=$5,prazo_ac=$6,data=$7::jsonb,updated_at=now()
-      WHERE id=$1
-    `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null, data.prazoAC || null, JSON.stringify(data)]);
+    await transaction(async client => {
+      const existing = await client.query("SELECT data FROM rncs WHERE id = $1", [id]);
+      if (!existing.rowCount) {
+        const error = new Error("RNC nao encontrada");
+        error.status = 404;
+        throw error;
+      }
+      const data = { ...(existing.rows[0].data || {}), ...patch, id };
+      await ensureRncNumberAvailable(client, data.num, id);
+      await client.query(`
+        UPDATE rncs SET num=$2,status=$3,sev=$4,resp=$5,prazo_ac=$6,data=$7::jsonb,updated_at=now()
+        WHERE id=$1
+      `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null,
+        data.prazoAC || null, JSON.stringify(data)]);
+    });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -488,7 +559,6 @@ async function handleRncs(req, res, pathname) {
 
   return false;
 }
-
 async function handleRncIntegration(req, res, pathname, url) {
   if (pathname === "/api/integrations/rncs") {
     if (req.method !== "GET") {
