@@ -1,6 +1,6 @@
 {
   "name": "herbamed-rnc",
-  "version": "2.27.0",
+  "version": "2.28.0",
   "private": true,
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -17,6 +17,7 @@
   "scripts": {
     "start": "react-scripts start",
     "prebuild": "node scripts/genVersion.js",
+    "lexico": "node scripts/genLexico.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "test:server": "node --test server/*.test.js",
@@ -36,5 +37,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "dictionary-pt-br": "^2.0.1"
   }
 }
