@@ -74,7 +74,7 @@ export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }
   );
 }
 
-export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin }) {
+export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin, perm = () => true }) {
   const GRUPOS = [
     { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
@@ -132,7 +132,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
         {GRUPOS.map(grupo=>(
           <SidebarGrupo
             key={grupo.id}
-            grupo={grupo}
+            grupo={{ ...grupo, items:grupo.items.filter(item => item.id !== "laudos" || perm("verLaudos")) }}
             tab={tab}
             setTab={setTab}
             sidebarOpen={sidebarOpen}

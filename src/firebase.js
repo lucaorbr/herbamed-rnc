@@ -149,6 +149,11 @@ export const incrementCounter = async () => {
   return value;
 };
 
+export const incrementLaudoCounter = async () => {
+  const { value } = await api("/api/counters/increment-laudo", { method: "POST", body: {} });
+  return value;
+};
+
 export const peekDailyCounter = async () => {
   const { value } = await api("/api/counters/peek-daily");
   return value;
