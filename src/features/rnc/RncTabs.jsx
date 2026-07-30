@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { createElectronicSignature, incrementCounter, peekDailyCounter, subscribeCollection } from "../../firebase";
+import { createElectronicSignature, subscribeCollection } from "../../firebase";
 import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
-import { fmt, genNum, past, sigCodigo, tod } from "../../core/utils";
+import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { askClaude } from "../../services/aiClient";
@@ -1017,13 +1017,10 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const [w2h, setW2h] = useState([]);
   const [fornSearch, setFornSearch] = useState("");
   const [fornOpen, setFornOpen] = useState(false);
-  const [numPreview, setNumPreview] = useState("...");
   const [novaAba, setNovaAba] = useState("ident");
   const [assinaturaModal, setAssinaturaModal] = useState(false);
+  const [draftId] = useState(() => globalThis.crypto?.randomUUID?.() || `rnc-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-  useEffect(() => {
-    peekDailyCounter().then(n => setNumPreview(n)).catch(() => setNumPreview("—"));
-  }, []);
 
   useEffect(() => {
     if (!rncPrefill) return;
@@ -1081,26 +1078,27 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
   const finalizarSalvar = async (assinaturaElaborador) => {
     try {
-    const nc = await incrementCounter();
-    const rnc = { id: String(Date.now()), num: genNum(nc), ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
-    setAssinaturaModal(false);
-    if (modoPrazo === "definicao") { rnc.prazoAC = ""; rnc.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" }); }
-    await doSaveRNC(rnc);
-    // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
-    if (origemDesvio && doSaveDesvio) {
-      await doSaveDesvio({ ...origemDesvio, status: "Convertido em RNC", convertidoPor: user.name, convertidoEm: tod(), rncId: rnc.id, rncNum: rnc.num,
-        historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
-      setOrigemDesvio(null);
-    }
-    toast_(`${rnc.num} registrada!`, "green");
-    openEmail(rnc, "abertura");
-    setTab("lista");
+      const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+      if (modoPrazo === "definicao") {
+        draft.prazoAC = "";
+        draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
+      }
+      const rnc = await doSaveRNC(draft);
+      setAssinaturaModal(false);
+      // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
+      if (origemDesvio && doSaveDesvio) {
+        await doSaveDesvio({ ...origemDesvio, status: "Convertido em RNC", convertidoPor: user.name, convertidoEm: tod(), rncId: rnc.id, rncNum: rnc.num,
+          historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
+        setOrigemDesvio(null);
+      }
+      toast_(`${rnc.num} registrada!`, "green");
+      openEmail(rnc, "abertura");
+      setTab("lista");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
     }
   };
-
   const rncPreview = { ...f, ishikawa, w2h };
 
   return (
@@ -1121,7 +1119,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
           <SecTitle icon="🪪" ch="Identificação" />
           <span style={{ fontSize:13, fontWeight:600, color:"#6366f1", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:8, padding:"4px 12px" }}>
-            Nº previsto: {numPreview}
+            Nº atribuído ao salvar
           </span>
         </div>
         <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
@@ -1218,8 +1216,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       {assinaturaModal && (
         <AssinaturaModal
           user={user}
-          titulo={`Nova RNC ${numPreview} — assinatura do elaborador`}
-          contexto={`RNC|${numPreview}`}
+          titulo="Nova RNC — assinatura do elaborador"
+          contexto={`RNC|${draftId}`}
           papel="Elaborador"
           onClose={() => setAssinaturaModal(false)}
           onConfirm={finalizarSalvar}

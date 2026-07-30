@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
-import { fmt, tod } from "../core/utils";
+import { capitalizeDescriptiveInput, fmt, tod } from "../core/utils";
 import { rncAtiva } from "../core/status";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
@@ -308,11 +308,15 @@ export default function App() {
   const openEmail = useCallback((rnc, evento) => setEmailCtx({ rnc, evento }), []);
   const doSaveRNC = useCallback(async (rnc) => {
     try {
-      const isNew = !rncs.find(r => r.id === rnc.id);
-      await saveRNC(rnc.id, rnc);
-      await auditLog(isNew ? "Criou RNC" : "Editou RNC", "rncs", rnc.id, rnc.num || rnc.id, isNew ? null : rncs.find(r=>r.id===rnc.id), rnc);
-    } catch(e) { console.error(e); }
-  }, []);
+      const anterior = rncs.find(item => item.id === rnc.id);
+      const salvo = anterior ? (await saveRNC(rnc.id, rnc), rnc) : await createRNC(rnc);
+      await auditLog(anterior ? "Editou RNC" : "Criou RNC", "rncs", salvo.id, salvo.num || salvo.id, anterior || null, salvo);
+      return salvo;
+    } catch(e) {
+      console.error(e);
+      throw e;
+    }
+  }, [rncs, auditLog]);
   const doUpdateRNC = useCallback(async (id, data) => {
     try {
       const antes = rncs.find(r => r.id === id);
@@ -445,7 +449,7 @@ export default function App() {
   return (
     <ThemeCtx.Provider value={T}>
     <FormalCtx.Provider value={formalMode}>
-      <div data-formal={formalMode ? "true" : "false"} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, height: "100vh", overflow:"hidden", fontSize: 14, display: "flex", flexDirection: "column" }}>
+      <div data-formal={formalMode ? "true" : "false"} onInputCapture={capitalizeDescriptiveInput} style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, color: T.text, height: "100vh", overflow:"hidden", fontSize: 14, display: "flex", flexDirection: "column" }}>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
