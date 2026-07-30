@@ -1848,7 +1848,13 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
               <div style={{ display:"flex", gap:8 }}>
                 <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}>{selAnalise.conclusao==="Pendente"?<><span className="btn-emoji">📝 </span>Lançar Resultados</>:<><span className="btn-emoji">✏️ </span>Editar</>}</button>
                 <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}><span className="btn-emoji">📄 </span>PDF</button>
-                <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{ setTab("laudos"); setTimeout(()=>{ window._laudoPreFill = { produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima", ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })) }; }, 300); }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>
+                {perm("criarLaudos") && <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{
+                  sessionStorage.setItem("sgq_laudo_prefill", JSON.stringify({
+                  produto:selAnalise.materialNome||"", lote:selAnalise.lote||"", tipo:"materia_prima",
+                  ensaios:(selAnalise.resultados||[]).map(r=>({ label:r.nome||r.ensaio||"", categoria:"Geral", unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" }))
+                  }));
+                  setTab("laudos");
+                }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>}
                 <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
                 <button onClick={()=>setSelAnalise(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>

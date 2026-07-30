@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { createElectronicSignature, saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
+import { createElectronicSignature, incrementLaudoCounter, saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, seloAssHTML, sigCodigo, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -53,18 +53,41 @@ export const BIBLIOTECA_ENSAIOS = [
   { label:"Código de barras",          unidade:"—",     especificacao:"Leitura correta",                categoria:"Embalagem" },
 ];
 
-export function LaudosTab({ user, toast_, users, auditLog }) {
+const DEFAULT_ARMAZENAMENTO = `\u2022 Armazenar em local seco e fresco com temperatura de 15 a 30\u00b0C e umidade relativa de 30% a 80%.
+\u2022 Armazenar o produto sobre palete ou paleteira, deixando espa\u00e7o lateral de 15 cm em cada extremidade. Observar a altura m\u00e1xima de empilhamento.`;
+
+const novoFormLaudo = (dados = {}) => ({
+  tipo:"produto_acabado", clienteId:"", produto:"", produtoId:"", linha:"", lote:"", op:"",
+  data:tod(), obs:"", armazenamento:DEFAULT_ARMAZENAMENTO, ensaios:[], modeloId:"", modeloVersao:null,
+  ...dados,
+});
+
+const ensaiosComoModelo = (ensaios = []) => ensaios.map((e, ordem) => ({
+  categoria:e.categoria||"Geral", label:e.label||e.nome||e.ensaio||"", unidade:e.unidade||"",
+  especificacao:e.especificacao||e.espec||"", ordem,
+}));
+
+const ensaiosDoModelo = (ensaios = []) => ensaios.slice().sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(e=>({
+  categoria:e.categoria||"Geral", label:e.label||"", unidade:e.unidade||"", especificacao:e.especificacao||"", resultado:"", conforme:null, obs:""
+}));
+
+const normalizarProduto = (valor = "") => valor.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+const fbErr = (e) => e?.message || "Erro ao salvar. Tente novamente.";
+
+
+export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) {
   const T = useTheme(); const s = useS();
   const [laudos, setLaudos] = useState([]);
+  const [modelos, setModelos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [analises, setAnalises] = useState([]);
   const [ipcRegs, setIpcRegs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("lista");
   const [sel, setSel] = useState(null);
+  const [modeloSel, setModeloSel] = useState("");
 
-  const [form, setForm] = useState({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
-• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
+  const [form, setForm] = useState(()=>novoFormLaudo());
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [busca, setBusca] = useState("");
   // Modal biblioteca de ensaios
@@ -74,6 +97,7 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
   const [bibSel, setBibSel] = useState({});
 
   const isRT = user?.role === "rt" || user?.role === "admin";
+  const podeGerenciar = perm("criarLaudos");
   const rtUsers = users?.filter(u => u.role === "rt") || [];
 
   const TIPOS = [
@@ -84,11 +108,15 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
 
   // Capturar prefill vindo do CQ Análises
   useEffect(() => {
-    if (window._laudoPreFill) {
-      const pf = window._laudoPreFill;
-      setForm(f => ({ ...f, ...pf }));
+    let pf = null;
+    try {
+      const salvo = sessionStorage.getItem("sgq_laudo_prefill");
+      if (salvo) pf = JSON.parse(salvo);
+    } catch {}
+    if (pf) {
+      setForm(novoFormLaudo(pf));
       setView("novo");
-      delete window._laudoPreFill;
+      sessionStorage.removeItem("sgq_laudo_prefill");
     }
   }, []);
 
@@ -99,7 +127,8 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
     const u2 = subscribeCollection("clientes_terceiros", list => setClientes(list.sort((a,b)=>(a.nome||"").localeCompare(b.nome||""))));
     const u3 = subscribeCollection("cq_analises", list => setAnalises(list));
     const u4 = subscribeCollection("ipc_registros", list => setIpcRegs(list));
-    return () => { clearTimeout(t); u1&&u1(); u2&&u2(); u3&&u3(); u4&&u4(); };
+    const u5 = subscribeCollection("laudo_modelos", list => setModelos(list.filter(m=>m.ativo!==false).sort((a,b)=>(a.nome||"").localeCompare(b.nome||""))));
+    return () => { clearTimeout(t); u1&&u1(); u2&&u2(); u3&&u3(); u4&&u4(); u5&&u5(); };
   }, []);
 
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
@@ -110,7 +139,113 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
     if (!nome) return "Geral";
     const match = BIBLIOTECA_ENSAIOS.find(b => b.label.toLowerCase() === nome.toLowerCase());
     return match?.categoria || "Geral";
+
   };
+  const aplicarModelo = (modeloId, silencioso = false) => {
+    if (!modeloId) { setModeloSel(""); return; }
+    const modelo = modelos.find(m=>String(m.id)===String(modeloId));
+    if (!modelo) return;
+    if (!silencioso && form.ensaios?.length && !confirm(`Substituir os ensaios atuais pelo modelo "${modelo.nome}"?`)) return;
+    setForm(f=>novoFormLaudo({
+      ...f,
+      tipo:modelo.tipo||f.tipo,
+      clienteId:modelo.clienteId||f.clienteId||"",
+      produtoId:modelo.produtoId||"",
+      produto:modelo.produto||f.produto,
+      linha:modelo.linha||"",
+      obs:modelo.observacaoPadrao||"",
+      armazenamento:modelo.armazenamento||DEFAULT_ARMAZENAMENTO,
+      ensaios:ensaiosDoModelo(modelo.ensaios),
+      modeloId:String(modelo.id),
+      modeloVersao:modelo.versao||1,
+    }));
+    setModeloSel(String(modelo.id));
+    if (!silencioso) toast_(`Modelo "${modelo.nome}" carregado!`, "green");
+  };
+
+  const tentarModeloDoProduto = () => {
+    if (!form.produto?.trim() || form.ensaios?.length) return;
+    const chave = normalizarProduto(form.produto);
+    const modelo = modelos.find(m =>
+      (m.produtoChave||normalizarProduto(m.produto))===chave
+      && (!m.tipo || m.tipo===form.tipo)
+      && (!m.clienteId || String(m.clienteId)===String(form.clienteId||""))
+    );
+    if (modelo) {
+      aplicarModelo(modelo.id, true);
+      toast_(`Modelo "${modelo.nome}" aplicado automaticamente.`, "green");
+    }
+  };
+
+  const salvarModelo = async (origem = form, novo = false) => {
+    if (!podeGerenciar) return;
+    if (!origem.produto?.trim()) { alert("Informe o produto antes de salvar o modelo."); return; }
+    if (!origem.ensaios?.length) { alert("Adicione ao menos um ensaio antes de salvar o modelo."); return; }
+    const atual = !novo && modeloSel ? modelos.find(m=>String(m.id)===String(modeloSel)) : null;
+    const nome = prompt("Nome do modelo:", atual?.nome || `${origem.produto} - padrao`);
+    if (!nome?.trim()) return;
+    try {
+      const id = atual?.id ? String(atual.id) : String(Date.now());
+      const modelo = {
+        id,
+        nome:nome.trim(),
+        produtoId:origem.produtoId||"",
+        produto:origem.produto.trim(),
+        produtoChave:normalizarProduto(origem.produto),
+        clienteId:origem.clienteId||"",
+        tipo:origem.tipo||"produto_acabado",
+        linha:origem.linha||"",
+        armazenamento:origem.armazenamento||"",
+        observacaoPadrao:origem.observacaoPadrao||"",
+        ensaios:ensaiosComoModelo(origem.ensaios),
+        versao:(atual?.versao||0)+1,
+        ativo:true,
+        criadoPor:atual?.criadoPor||user.name,
+        criadoEm:atual?.criadoEm||tod(),
+        atualizadoPor:user.name,
+        atualizadoEm:tod(),
+      };
+      await saveCollection("laudo_modelos", id, modelo);
+      await auditLog(atual ? "Atualizou Modelo de Laudo" : "Criou Modelo de Laudo", "laudo_modelos", id, modelo.nome, atual||null, { produto:modelo.produto, versao:modelo.versao, ensaios:modelo.ensaios.length });
+      setModeloSel(id);
+      setForm(f=>({...f,modeloId:id,modeloVersao:modelo.versao}));
+      toast_(atual ? "Modelo atualizado!" : "Modelo salvo!", "green");
+    } catch(e) {
+      toast_(fbErr(e), "red");
+    }
+  };
+
+  const excluirModelo = async () => {
+    const modelo = modelos.find(m=>String(m.id)===String(modeloSel));
+    if (!modelo || !confirm(`Excluir o modelo "${modelo.nome}"? Os laudos ja criados nao serao alterados.`)) return;
+    try {
+      await deleteFromCollection("laudo_modelos", String(modelo.id));
+      await auditLog("Excluiu Modelo de Laudo", "laudo_modelos", String(modelo.id), modelo.nome, modelo, null);
+      setModeloSel("");
+      setForm(f=>({...f,modeloId:"",modeloVersao:null}));
+      toast_("Modelo excluido. Laudos historicos foram preservados.", "red");
+    } catch(e) { toast_(fbErr(e), "red"); }
+  };
+
+  const novoAPartirDoLaudo = (laudo) => {
+    setSel(null);
+    setModeloSel(laudo.modeloId||"");
+    setForm(novoFormLaudo({
+      tipo:laudo.tipo, clienteId:laudo.clienteId||"", produtoId:laudo.produtoId||"", produto:laudo.produto,
+      linha:laudo.linha||"", obs:"", armazenamento:laudo.armazenamento||DEFAULT_ARMAZENAMENTO,
+      ensaios:ensaiosDoModelo(ensaiosComoModelo(laudo.ensaios)), modeloId:laudo.modeloId||"", modeloVersao:laudo.modeloVersao||null,
+    }));
+    setView("novo");
+  };
+  const editarLaudo = (laudo) => {
+    setSel(laudo);
+    setModeloSel(laudo.modeloId||"");
+    setForm(novoFormLaudo({ tipo:laudo.tipo, clienteId:laudo.clienteId||"", produtoId:laudo.produtoId||"", produto:laudo.produto, linha:laudo.linha||"", lote:laudo.lote||"", op:laudo.op||"", data:laudo.data||tod(), obs:laudo.obs||"", armazenamento:laudo.armazenamento||DEFAULT_ARMAZENAMENTO, ensaios:laudo.ensaios||[], modeloId:laudo.modeloId||"", modeloVersao:laudo.modeloVersao||null }));
+    setView("novo");
+  };
+
+
+  const abrirNovo = () => { setSel(null); setModeloSel(""); setForm(novoFormLaudo()); setView("novo"); };
 
   const importarEnsaios = () => {
     if (form.tipo === "processo") {
@@ -146,16 +281,15 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
     const status = calcStatus(form.ensaios);
     // Gerar número sequencial LA-AAAA-NNN
     // Número sequencial: LA-AAAA-NNN baseado na contagem de laudos
-    const ano = new Date().getFullYear();
-    const numLaudo = sel ? sel.numLaudo : `LA-${ano}-${String(laudos.filter(l=>l.numLaudo?.startsWith(`LA-${ano}`)).length + 1).padStart(3,"0")}`;
+    const numLaudo = sel ? sel.numLaudo : await incrementLaudoCounter();
     const id = sel ? sel.id : Date.now();
-    const laudo = { id, numLaudo, ...form, status, assinaturaAnalista:null, assinaturaRT:null, criadoPor:user.name, criadoEm:tod(), criadoTs:sel?sel.criadoTs:Date.now(), atualizadoEm:tod() };
+    const laudo = { id, numLaudo, ...form, modeloId:form.modeloId||sel?.modeloId||"", modeloVersao:form.modeloVersao||sel?.modeloVersao||null, status, assinaturaAnalista:sel?.assinaturaAnalista||null, assinaturaRT:sel?.assinaturaRT||null, criadoPor:sel?.criadoPor||user.name, criadoEm:sel?.criadoEm||tod(), criadoTs:sel?sel.criadoTs:Date.now(), atualizadoEm:tod() };
     await saveCollection("laudos", String(id), laudo);
     await auditLog(sel ? "Editou Laudo" : "Criou Laudo", "laudos", String(id), `${numLaudo} — ${laudo.produto}`, sel || null, { numLaudo, produto: laudo.produto, status: laudo.status, cliente: laudo.clienteId });
     toast_(sel?"Laudo atualizado!":"Laudo criado!", "green");
     setView("lista"); setSel(null);
-    setForm({ tipo:"produto_acabado", clienteId:"", produto:"", linha:"", lote:"", op:"", data:tod(), obs:"", armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
-• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`, ensaios:[] });
+    setForm(novoFormLaudo());
+    setModeloSel("");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -289,12 +423,36 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
         <button style={s.btn} onClick={()=>{setView("lista");setSel(null);}}>← Voltar</button>
         <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>{sel?"Editar Laudo":"Novo Laudo Analítico"}</h2>
       </div>
+      {!sel && <div style={{ ...s.card, background:T.accent+"0d", border:`1px solid ${T.accent}33` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+          <div style={{ minWidth:180 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:T.accent }}>{"Modelo de laudo"}</div>
+            <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{"Carrega ensaios, especificacoes e textos padrao."}</div>
+          </div>
+          <Sel value={modeloSel} onChange={e=>aplicarModelo(e.target.value)} sx={{ flex:"1 1 260px", maxWidth:420 }}>
+            <option value="">Selecionar modelo salvo...</option>
+            {modelos.map(m=><option key={m.id} value={m.id}>{m.nome} {m.versao?`(v${m.versao})`:""}</option>)}
+          </Sel>
+          <button style={{ ...s.btn, fontSize:11 }} onClick={()=>salvarModelo(form)}>
+            {modeloSel ? "Atualizar modelo" : "Salvar como modelo"}
+          </button>
+          {modeloSel && <button style={{ ...s.btnD, fontSize:11 }} onClick={excluirModelo}>Excluir modelo</button>}
+        </div>
+        {modelos.length===0 && <div style={{ fontSize:11, color:T.text3, marginTop:8 }}>
+          {"Ainda nao ha modelos. Preencha este laudo ou use um laudo antigo para criar o primeiro."}
+        </div>}
+        {form.modeloId && <div style={{ fontSize:10, color:T.accent, marginTop:8 }}>
+          {`Este laudo usara o modelo selecionado na versao ${form.modeloVersao||1}. Resultados, lote, OP e assinaturas permanecem vazios.`}
+        </div>}
+      </div>}
       <div style={s.card}>
+
         <SecTitle icon="📋" ch="Identificação" />
         <G2 ch={<>
           <F lbl="Tipo de laudo *" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{TIPOS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</Sel>} />
           <F lbl="Cliente *" ch={<Sel value={form.clienteId} onChange={e=>setF("clienteId",e.target.value)}><option value="">Selecione o cliente...</option>{clientes.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}</Sel>} />
-          <F lbl="Produto *" ch={<Inp placeholder="Nome do produto" value={form.produto} onChange={e=>setF("produto",e.target.value)} />} />
+          <F lbl="Produto *" ch={<Inp list="laudo-produtos-modelos" placeholder="Nome do produto" value={form.produto} onChange={e=>setF("produto",e.target.value)} onBlur={tentarModeloDoProduto} />} />
+          <datalist id="laudo-produtos-modelos">{modelos.map(m=><option key={m.id} value={m.produto}>{m.nome}</option>)}</datalist>
           <F lbl="Linha" ch={<Inp placeholder="Ex: Supra, Verde..." value={form.linha} onChange={e=>setF("linha",e.target.value)} />} />
           <F lbl="Lote" ch={<Inp placeholder="Número do lote" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
           <F lbl="OP" ch={<Inp placeholder="Ordem de produção" value={form.op} onChange={e=>setF("op",e.target.value)} />} />
@@ -439,8 +597,8 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
     const lSel = laudos.find(l=>l.id===sel.id)||sel;
     const cliente = clientes.find(c=>String(c.id)===String(lSel.clienteId));
     const tipo = TIPOS.find(t=>t.id===lSel.tipo)?.label||lSel.tipo;
-    const podeAssinarAnalista = !lSel.assinaturaAnalista && (user.role!=="rt");
-    const podeAssinarRT = !lSel.assinaturaRT && isRT;
+    const podeAssinarAnalista = podeGerenciar && !lSel.assinaturaAnalista && (user.role!=="rt");
+    const podeAssinarRT = podeGerenciar && !!lSel.assinaturaAnalista && !lSel.assinaturaRT && isRT && String(lSel.assinaturaAnalista.userId||lSel.assinaturaAnalista.uid||"")!==String(user.uid||user.id||"");
     return (
       <div>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20, flexWrap:"wrap" }}>
@@ -451,11 +609,17 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
             {podeAssinarAnalista && <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>assinarAnalista(lSel)}><span className="btn-emoji">✍️ </span>Assinar como Analista</button>}
             {podeAssinarRT && <button style={{ ...s.btnA, fontSize:12, background:T.orange||"#ff9800" }} onClick={()=>assinarRT(lSel)}><span className="btn-emoji">🔬 </span>Assinar como RT</button>}
             <button style={{ ...s.btn, fontSize:12 }} onClick={()=>exportPDF(lSel)}><span className="btn-emoji">🖨️ </span>Exportar PDF</button>
-            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>{setSel(lSel);setForm({tipo:lSel.tipo,clienteId:lSel.clienteId,produto:lSel.produto,linha:lSel.linha||"",lote:lSel.lote||"",op:lSel.op||"",data:lSel.data,obs:lSel.obs||"",armazenamento:lSel.armazenamento||`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
-• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:lSel.ensaios||[]});setView("novo");}}><span className="btn-emoji">✏️ </span>Editar</button>
+            {podeGerenciar && <button style={{ ...s.btn, fontSize:12, color:T.accent }} onClick={()=>novoAPartirDoLaudo(lSel)}>Criar novo com base neste</button>}
+            {podeGerenciar && <button style={{ ...s.btn, fontSize:12 }} onClick={()=>salvarModelo(lSel, true)}>Salvar como novo modelo</button>}
+            {podeGerenciar && !lSel.assinaturaAnalista && !lSel.assinaturaRT && (<>
+            <button style={{ ...s.btn, fontSize:12 }} onClick={()=>editarLaudo(lSel)}><span className="btn-emoji">✏️ </span>Editar</button>
             <button style={{ ...s.btnD, fontSize:12 }} onClick={()=>deletar(lSel.id)}>🗑️</button>
+            </>)}
           </div>
         </div>
+        {(lSel.assinaturaAnalista||lSel.assinaturaRT) && <div style={{ ...s.card, padding:"10px 14px", borderLeft:`3px solid ${T.accent}`, color:T.text2, fontSize:11 }}>
+          Registro assinado e bloqueado para edicao ou exclusao. Para reaproveitar a estrutura, use "Criar novo com base neste".
+        </div>}
         <div style={s.card}>
           <SecTitle icon="📋" ch="Identificação" />
           <G3 ch={<>
@@ -558,10 +722,9 @@ export function LaudosTab({ user, toast_, users, auditLog }) {
             <option value="Finalizado">🏆 Finalizado</option>
           </Sel>
         </div>
-        <button style={s.btnA} onClick={()=>{setSel(null);setForm({tipo:"produto_acabado",clienteId:"",produto:"",linha:"",lote:"",op:"",data:tod(),obs:"",armazenamento:`• Armazenar em local seco e fresco com temperatura de 15 a 30°C e umidade relativa de 30% a 80%.
-• Armazenar o produto sobre palete ou paleteira, deixando espaço lateral de 15 cm em cada extremidade. Observar a altura máxima de empilhamento.`,ensaios:[]});setView("novo");}}>
+        {podeGerenciar && <button style={s.btnA} onClick={abrirNovo}>
           + Novo Laudo
-        </button>
+        </button>}
       </div>
 
       {loading ? (

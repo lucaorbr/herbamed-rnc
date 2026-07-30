@@ -627,7 +627,7 @@ export default function App() {
 
           {/* SIDEBAR */}
           <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} />
+            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
           </div>
 
           {/* MAIN CONTENT */}
@@ -674,7 +674,7 @@ export default function App() {
               {tab==="cq-analises"  && <CQAnalisesTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
-              {tab==="laudos"       && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} />}
+              {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
               {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} doSaveRNC={doSaveRNC} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}

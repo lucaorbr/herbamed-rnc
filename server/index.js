@@ -563,6 +563,30 @@ async function handleCounters(req, res, pathname) {
     return sendJson(res, 200, { value: dailyCounterNumber(value) });
   }
 
+  if (pathname === "/api/counters/increment-laudo" && req.method === "POST") {
+    const user = await requireUser(req);
+    requireLaudoPermission(user, "criarLaudos");
+    const ano = new Date().getFullYear();
+    const value = await transaction(async client => {
+      const result = await client.query(`
+        INSERT INTO counters (key, value, updated_at)
+        VALUES (
+          $1,
+          COALESCE((
+            SELECT MAX((substring(data->>'numLaudo' from '([0-9]+)$'))::int)
+            FROM generic_documents
+            WHERE collection = 'laudos' AND data->>'numLaudo' LIKE $2
+          ), 0) + 1,
+          now()
+        )
+        ON CONFLICT (key) DO UPDATE SET value = GREATEST(counters.value + 1, EXCLUDED.value), updated_at = now()
+        RETURNING value
+      `, [`laudo:${ano}`, `LA-${ano}-%`]);
+      return result.rows[0].value;
+    });
+    return sendJson(res, 200, { value: `LA-${ano}-${String(value).padStart(3, "0")}` });
+  }
+
   return false;
 }
 
@@ -775,12 +799,81 @@ async function reconcileArecoRecebimentoForAnalise(analiseId, data = {}) {
   return matched.rows[0] || null;
 }
 
+const LAUDO_ROLE_PERMISSIONS = {
+  viewer: { verLaudos: true, criarLaudos: false },
+  user: { verLaudos: false, criarLaudos: false },
+  rt: { verLaudos: true, criarLaudos: true },
+  keyuser: { verLaudos: true, criarLaudos: true },
+  admin: { verLaudos: true, criarLaudos: true },
+  exec: { verLaudos: false, criarLaudos: false },
+};
+
+function hasLaudoPermission(user, key) {
+  if (user?.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, key)) {
+    return user.permissoes[key] === true;
+  }
+  return LAUDO_ROLE_PERMISSIONS[user?.role]?.[key] === true;
+}
+
+function requireLaudoPermission(user, key) {
+  if (hasLaudoPermission(user, key)) return;
+  const error = new Error("Sem permissao para esta operacao");
+  error.status = 403;
+  throw error;
+}
+
+function withoutKeys(value, keys) {
+  const copy = { ...(value || {}) };
+  keys.forEach(key => delete copy[key]);
+  return copy;
+}
+
+function sameJson(a, b) {
+  const canonical = value => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((acc, key) => {
+        acc[key] = canonical(value[key]);
+        return acc;
+      }, {});
+    }
+    return value;
+  };
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+function validateLaudoUpdate(oldData, newData) {
+  if (!oldData) return;
+  if (oldData.assinaturaRT) {
+    const error = new Error("Laudo finalizado nao pode ser alterado");
+    error.status = 409;
+    throw error;
+  }
+  if (oldData.assinaturaAnalista) {
+    const baseAntiga = withoutKeys(oldData, ["assinaturaRT", "status"]);
+    const baseNova = withoutKeys(newData, ["assinaturaRT", "status"]);
+    const somenteAssinaturaRT = sameJson(baseAntiga, baseNova)
+      && !oldData.assinaturaRT
+      && !!newData.assinaturaRT;
+    if (!somenteAssinaturaRT) {
+      const error = new Error("Laudo assinado pelo analista nao pode ser editado");
+      error.status = 409;
+      throw error;
+    }
+  }
+}
+
 async function handleCollections(req, res, pathname) {
   const match = pathname.match(/^\/api\/collections\/([^/]+)(?:\/(.+))?$/);
   if (!match) return false;
-  await requireUser(req);
+  const user = await requireUser(req);
   const collection = decodeURIComponent(match[1]);
   const id = match[2] ? decodeURIComponent(match[2]) : null;
+  const isLaudoCollection = collection === "laudos" || collection === "laudo_modelos";
+
+  if (isLaudoCollection) {
+    requireLaudoPermission(user, req.method === "GET" ? "verLaudos" : "criarLaudos");
+  }
 
   if (!id && req.method === "GET") {
     const result = await query(`
@@ -795,13 +888,15 @@ async function handleCollections(req, res, pathname) {
     const data = sanitize(await readBody(req));
 
     let oldData = null;
-    if (collection === "gestao_docs") {
+    if (collection === "gestao_docs" || collection === "laudos") {
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
         [collection, id]
       );
       oldData = prev.rows[0]?.data || null;
     }
+
+    if (collection === "laudos") validateLaudoUpdate(oldData, data);
 
     await query(`
       INSERT INTO generic_documents (collection, id, data, updated_at)
@@ -821,6 +916,18 @@ async function handleCollections(req, res, pathname) {
   }
 
   if (id && req.method === "DELETE") {
+    if (collection === "laudos") {
+      const prev = await query(
+        "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
+        [collection, id]
+      );
+      const oldData = prev.rows[0]?.data;
+      if (oldData?.assinaturaAnalista || oldData?.assinaturaRT) {
+        const error = new Error("Laudo assinado nao pode ser excluido");
+        error.status = 409;
+        throw error;
+      }
+    }
     await query("DELETE FROM generic_documents WHERE collection = $1 AND id = $2", [collection, id]);
     return sendJson(res, 200, { ok: true });
   }
