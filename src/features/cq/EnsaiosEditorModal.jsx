@@ -191,7 +191,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                   <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, alignItems:"center" }}>
                     <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev => updEnsaio(e.id, "nome", ev.target.value)} sx={{ fontSize:12 }} />
                     <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev => updEnsaio(e.id, "espec", ev.target.value)} sx={{ fontSize:12 }} />
-                    <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev => updEnsaio(e.id, "unidade", ev.target.value)} sx={{ fontSize:12 }} />
+                    <Inp placeholder="Ex: %, pH" value={e.unidade} onChange={ev => updEnsaio(e.id, "unidade", ev.target.value)} sx={{ fontSize:12 }} data-auto-capitalize="off" />
                     <Inp placeholder="Ex: EI-001" value={e.ref || ""} onChange={ev => updEnsaio(e.id, "ref", ev.target.value)} sx={{ fontSize:12 }} />
                     <Sel value={e.tipo || "numero"} onChange={ev => updEnsaio(e.id, "tipo", ev.target.value)} sx={{ fontSize:11, padding:"5px 6px" }}>
                       <option value="numero">🔢 Numérico</option>
