@@ -1,4 +1,5 @@
 import { isDescriptiveTextField, upperFirstLetter } from "../core/utils";
+import { ALVOS, PROTEGIDAS } from "./lexico.generated";
 
 // Somente trocas de alta confiança. Evitamos palavras dependentes de contexto
 // (por exemplo: esta/está, tem/têm) para não alterar o sentido do registro.
@@ -113,6 +114,81 @@ const preserveCase = (source, correction) => {
   return correction;
 };
 
+// Abaixo deste comprimento, distância 1 deixa de ser erro de digitação e vira
+// outra palavra ("esta"/"está", "lote"/"love"). Palavras curtas ficam a cargo
+// exclusivo de SAFE_CORRECTIONS.
+const MIN_DIFUSA = 5;
+
+const ALVOS_SET = new Set(ALVOS);
+const PROTEGIDAS_SET = new Set(PROTEGIDAS);
+
+/** A própria palavra mais cada variante com um caractere removido. */
+const variantes = palavra => {
+  const saida = [palavra];
+  for (let i = 0; i < palavra.length; i += 1) saida.push(palavra.slice(0, i) + palavra.slice(i + 1));
+  return saida;
+};
+
+/** Distância de edição ≤ 1, contando transposição de adjacentes (Damerau). */
+const distanciaAte1 = (a, b) => {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+
+  if (a.length === b.length) {
+    let dif = -1;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] === b[i]) continue;
+      if (dif >= 0) {
+        return dif === i - 1 && a[dif] === b[i] && a[i] === b[dif] && a.slice(i + 1) === b.slice(i + 1);
+      }
+      dif = i;
+    }
+    return true;
+  }
+
+  const [curta, longa] = a.length < b.length ? [a, b] : [b, a];
+  let i = 0;
+  while (i < curta.length && curta[i] === longa[i]) i += 1;
+  return curta.slice(i) === longa.slice(i + 1);
+};
+
+// Índice de deleções (SymSpell): cada alvo entra indexado por si mesmo e por
+// cada variante com um caractere a menos. Duas palavras a distância 1 sempre
+// compartilham ao menos uma dessas chaves, então achar candidatos vira lookup
+// de hash em vez de comparar o que foi digitado com todo o vocabulário.
+const INDICE = new Map();
+for (const alvo of ALVOS) {
+  for (const chave of variantes(alvo)) {
+    const atual = INDICE.get(chave);
+    if (atual) atual.push(alvo);
+    else INDICE.set(chave, [alvo]);
+  }
+}
+
+/**
+ * Correção por distância de edição, restrita ao vocabulário do SGQ.
+ * Três travas contra falso positivo, nesta ordem:
+ *   1. palavra que já é um alvo    — está certa, não se mexe;
+ *   2. palavra listada em PROTEGIDAS — existe em português ("produtor"), não se mexe;
+ *   3. candidato tem de ser único   — havendo empate, não há como saber a intenção.
+ */
+export const getFuzzyCorrection = word => {
+  const alvo = word.toLocaleLowerCase("pt-BR");
+  if (alvo.length < MIN_DIFUSA || ALVOS_SET.has(alvo) || PROTEGIDAS_SET.has(alvo)) return null;
+
+  const candidatos = new Set();
+  for (const chave of variantes(alvo)) {
+    const encontrados = INDICE.get(chave);
+    if (!encontrados) continue;
+    for (const candidato of encontrados) {
+      if (distanciaAte1(alvo, candidato)) candidatos.add(candidato);
+    }
+  }
+
+  if (candidatos.size !== 1) return null;
+  return preserveCase(word, [...candidatos][0]);
+};
+
 export const isAutocorrectField = element => {
   if (!element) return false;
   if (element.dataset?.autocorrect === "off") return false;
@@ -123,7 +199,9 @@ export const isAutocorrectField = element => {
 export const getAutocorrection = word => {
   if (!word || !LETTER_ONLY.test(word)) return null;
   const correction = SAFE_CORRECTIONS[word.toLocaleLowerCase("pt-BR")];
-  return correction ? preserveCase(word, correction) : null;
+  // A tabela manual tem precedência: são trocas conferidas uma a uma, que devem
+  // ganhar do algoritmo. O difuso cobre o resto — os erros que ninguém previu.
+  return correction ? preserveCase(word, correction) : getFuzzyCorrection(word);
 };
 
 export const autocorrectCompletedWord = (value, cursor) => {

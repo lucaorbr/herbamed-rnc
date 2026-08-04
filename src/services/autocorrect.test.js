@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import {
   autocorrectCompletedWord,
   getAutocorrection,
+  getFuzzyCorrection,
   handleAutocorrectUndo,
   handleWritingInput,
   isAutocorrectField,
@@ -30,6 +31,46 @@ describe("autocorreção em português", () => {
     expect(getAutocorrection("Herbamed")).toBeNull();
     expect(getAutocorrection("RNC")).toBeNull();
     expect(getAutocorrection("esta")).toBeNull();
+  });
+
+  test("corrige erros não previstos na tabela, por distância de edição", () => {
+    expect(getAutocorrection("prduto")).toBe("produto");      // letra faltando
+    expect(getAutocorrection("prodduto")).toBe("produto");    // letra sobrando
+    expect(getAutocorrection("prdouto")).toBe("produto");     // letras invertidas
+    expect(getAutocorrection("produro")).toBe("produto");     // letra trocada
+    expect(getAutocorrection("Prduto")).toBe("Produto");      // preserva caixa
+    expect(getAutocorrection("relatrio")).toBe("relatório");
+    expect(getAutocorrection("qualdade")).toBe("qualidade");
+  });
+
+  test("nunca reescreve palavra que existe em português", () => {
+    // Todas estão a distância 1 de um alvo e seriam destruídas sem a trava:
+    // produtor→produto, revisar→revisor, analista→analistas, amostral→amostra.
+    expect(getAutocorrection("produtor")).toBeNull();
+    expect(getAutocorrection("revisar")).toBeNull();
+    expect(getAutocorrection("analista")).toBeNull();
+    expect(getAutocorrection("amostral")).toBeNull();
+    expect(getFuzzyCorrection("processa")).toBeNull();
+    // "amostar" parece erro de "amostra", mas é forma real de mostrar — e é
+    // exatamente esse tipo de armadilha que a lista de protegidas existe para pegar.
+    expect(getAutocorrection("amostar")).toBeNull();
+  });
+
+  test("não corrige quando há empate entre candidatos", () => {
+    // "aprovadx" está a distância 1 de "aprovado" e de "aprovada": sem saber a
+    // intenção, o certo é não mexer no registro.
+    expect(getAutocorrection("aprovadx")).toBeNull();
+  });
+
+  test("não aplica correção difusa em palavras curtas", () => {
+    // Com 4 letras, distância 1 já é outra palavra — fica só com a tabela manual.
+    expect(getFuzzyCorrection("lote")).toBeNull();
+    expect(getFuzzyCorrection("area")).toBeNull();
+  });
+
+  test("a tabela manual tem precedência sobre o algoritmo", () => {
+    expect(getAutocorrection("nao")).toBe("não");
+    expect(getAutocorrection("materia")).toBe("matéria");
   });
 
   test("corrige somente depois que a palavra é finalizada", () => {

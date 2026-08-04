@@ -492,7 +492,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
                       </Sel>
                     </td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.label} onChange={ev=>setEnsaio(i,"label",ev.target.value)} placeholder="Nome..." sx={{ fontSize:11, padding:"4px 6px" }} /></td>
-                    <td style={{ padding:"6px 8px" }}><Inp value={e.unidade} onChange={ev=>setEnsaio(i,"unidade",ev.target.value)} placeholder="g/mL..." sx={{ fontSize:11, padding:"4px 6px", width:60 }} /></td>
+                    <td style={{ padding:"6px 8px" }}><Inp value={e.unidade} onChange={ev=>setEnsaio(i,"unidade",ev.target.value)} placeholder="g/mL..." sx={{ fontSize:11, padding:"4px 6px", width:60 }} data-auto-capitalize="off" /></td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.especificacao} onChange={ev=>setEnsaio(i,"especificacao",ev.target.value)} placeholder="Especificação..." sx={{ fontSize:11, padding:"4px 6px" }} /></td>
                     <td style={{ padding:"6px 8px" }}><Inp value={e.resultado} onChange={ev=>setEnsaio(i,"resultado",ev.target.value)} placeholder="Resultado..." sx={{ fontSize:11, padding:"4px 6px" }} /></td>
                     <td style={{ padding:"6px 8px" }}>
