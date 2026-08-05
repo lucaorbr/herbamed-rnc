@@ -9,7 +9,9 @@ import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { userHasPerm } from "../permissions/permissions";
-import { reabrirLeitura, treinoAtual } from "./treinamento";
+import { reabrirLeitura, exigidosDoDocumento, indexarEvidencias, statusCelula, novaEvidencia, documentoExigeTreinamento, pendentesDoUsuario, MODOS_TREINAMENTO, PRAZO_TREINAMENTO_PADRAO } from "./treinamento";
+import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
+import { cargosAtivos } from "../admin/cargos";
 
 export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
   const T = useTheme();
@@ -378,7 +380,7 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrit
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], doSaveRNC }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], doSaveRNC }) {
   const T = useTheme();
   const s = useS();
 
@@ -391,8 +393,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [filtroTipo,   setFiltroTipo]   = useState("todos");
   const [filtroDepto,  setFiltroDepto]  = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
-  const [treinamentos, setTreinamentos] = useState([]);
-  const [novoTreino,   setNovoTreino]   = useState({ userId:"", dataRealizacao:tod(), obs:"" });
+  const [evidencias, setEvidencias] = useState([]);
+  const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
+  const [novaEvid, setNovaEvid] = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
   const [assinarGD, setAssinarGD] = useState(null);
@@ -409,10 +412,6 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [rotaForm, setRotaForm]     = useState({ revisorId:"", aprovadorId:"" });
   const [modalTrocarRota, setModalTrocarRota] = useState(null); // { doc } — admin remaneja designados
   // Fase 6 — modal de designação de leitura obrigatória
-  const [modalDesignacao, setModalDesignacao] = useState(null); // { doc }
-  const [designados, setDesignados]           = useState([]);
-  const [filtroDesigDepto, setFiltroDesigDepto] = useState("todos");
-  const [filtroDesigRole, setFiltroDesigRole]   = useState("todos");
   // Fase 7 — log de distribuição
   const [distLog,     setDistLog]     = useState([]);
   const [distLogLoading, setDistLogLoading] = useState(false);
@@ -549,7 +548,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       // Fase 8 — promover documentos "Aguardando Vigência" cuja data chegou
       list.forEach(async doc => {
         if (doc.status === "Aguardando Vigência" && doc.dataVigencia && doc.dataVigencia <= hoje) {
-          const promoted = { ...doc, status: "Vigente", atualizadoEm: hoje, atualizadoTs: Date.now() };
+          const promoted = { ...doc, status: "Vigente", atualizadoEm: hoje, atualizadoTs: Date.now(),
+            treinamento: doc.treinamento ? { ...doc.treinamento, desdeEm: doc.treinamento.desdeEm || hoje } : doc.treinamento };
           try { await saveCollection("gestao_docs", String(doc.id), promoted); } catch {}
         }
       });
@@ -559,13 +559,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     return () => { clearTimeout(t); unsub && unsub(); };
   }, []);
 
+
+  // Evidências de treinamento — coleção plana, um poll só para a matriz inteira.
+  // O mecanismo antigo (subcoleção por documento) só é lido pela migração.
   useEffect(() => {
-    if (!sel) return;
-    const unsub = subscribeCollection(`gestao_docs/${sel.id}/treinos`, list => {
-      setTreinamentos(list.sort((a,b) => (b.ts||0)-(a.ts||0)));
-    });
+    const unsub = subscribeCollection("treinamentos", list => setEvidencias(list || []));
     return () => unsub && unsub();
-  }, [sel?.id]);
+  }, []);
 
   useEffect(() => {
     if (!sel?.id) { setDistLog([]); return; }
@@ -680,15 +680,22 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             ...updated,
             dataVigencia: dataVig || hoje,
             status: agendado ? "Aguardando Vigência" : "Vigente",
+            // O prazo de treinamento começa a correr quando a versão entra em vigor.
+            treinamento: updated.treinamento
+              ? { ...updated.treinamento, desdeEm: agendado ? (dataVig || hoje) : hoje }
+              : updated.treinamento,
           };
           await saveCollection("gestao_docs", String(doc.id), docFinal);
           await auditLog(`Assinou como ${papelLabel}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { status: docFinal.status, dataVigencia: docFinal.dataVigencia });
           toast_(agendado ? `Documento aprovado — vigência agendada para ${fmt(dataVig)}.` : `Assinado como ${papelLabel}! Documento Vigente.`, "green");
           setSel(docFinal);
           setModalVigencia(null);
-          if (!agendado) {
-            setDesignados([]); setFiltroDesigDepto("todos"); setFiltroDesigRole("todos");
-            setModalDesignacao({ doc: docFinal });
+          // Antes abria-se aqui a designação nominal de leitura. Agora a exigência
+          // vem do cargo e é configurada na seção Treinamento do documento — se
+          // ainda não houver cargos vinculados, a seção avisa em vez de exigir
+          // que alguém monte uma lista de nomes a cada revisão.
+          if (!agendado && !docFinal.treinamento?.exigido) {
+            setEditTreino({ exigido:true, modo:"leitura", cargos:[], pessoasExtra:[], prazoDias:PRAZO_TREINAMENTO_PADRAO });
           }
         },
       });
@@ -847,7 +854,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const recolhaPendente = copiasAnteriores.length
       ? [...(doc.recolhaPendente||[]), ...copiasAnteriores.map(c => ({ ...c, versaoAnterior: versaoAtual }))]
       : (doc.recolhaPendente || null);
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, leituraObrigatoria:leituraReaberta, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, leituraObrigatoria:leituraReaberta,
+      // A exigência de treinamento continua valendo, mas o relógio do prazo só
+      // recomeça quando a nova versão entrar em vigor (a evidência já é por versão).
+      treinamento: doc.treinamento ? { ...doc.treinamento, desdeEm: null } : doc.treinamento,
+      historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão", leituraReaberta: leituraReaberta?.atribuido ? (leituraReaberta.designados||[]).length : 0 });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -858,40 +869,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
   };
 
-  // Fase 6 — salva designados no documento e fecha o modal
-  const salvarDesignacao = async (doc, listaDesignados) => {
-    try {
-      const leitura = {
-        atribuido: true,
-        atribuidoEm: tod(),
-        atribuidoPor: user?.name || "",
-        designados: listaDesignados.map(u => ({ userId: u.id, userName: u.name, setor: u.setor||"", confirmou: false, confirmedoEm: null })),
-      };
-      const updated = { ...doc, leituraObrigatoria: leitura };
-      await saveCollection("gestao_docs", String(doc.id), updated);
-      await auditLog("Designou Leitura Obrigatória", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { designados: leitura.designados.length });
-      toast_(`Leitura obrigatória atribuída a ${leitura.designados.length} pessoa(s).`, "green");
-      setSel(updated);
-      setModalDesignacao(null);
-    } catch(e) { toast_("Erro ao salvar designação.", "red"); console.error(e); }
-  };
 
-  // Fase 6 — usuário confirma "Li e entendi"
-  const confirmarLeitura = async (doc) => {
-    try {
-      const leitura = doc.leituraObrigatoria || {};
-      const designados = (leitura.designados || []).map(d =>
-        d.userId === user?.uid || d.userId === user?.id
-          ? { ...d, confirmou: true, confirmedoEm: new Date().toISOString() }
-          : d
-      );
-      const updated = { ...doc, leituraObrigatoria: { ...leitura, designados } };
-      await saveCollection("gestao_docs", String(doc.id), updated);
-      await auditLog("Confirmou Leitura", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { userId: user?.uid||user?.id, userName: user?.name });
-      toast_("Leitura confirmada!", "green");
-      setSel(updated);
-    } catch(e) { toast_("Erro ao confirmar leitura.", "red"); console.error(e); }
-  };
 
   const tornarObsoleto = async (doc) => {
     try {
@@ -991,22 +969,48 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
   };
 
-  const salvarTreino = async () => {
+  // ── Treinamento por cargo (Fase 2) ────────────────────────────────────────
+  // Salva a exigência no documento. `desdeEm` marca desde quando ela vale para a
+  // versão vigente — é o relógio do prazo e do atraso na matriz.
+  const salvarExigencia = async (doc, cfg) => {
     try {
-    if (!novoTreino.userId) { alert("Selecione o colaborador."); return; }
-    const u = users?.find(x => x.id===novoTreino.userId);
-    // Treinamento é sempre de uma versão do documento: sem o carimbo, um registro da
-    // Rev.00 seguia valendo visualmente na Rev.02 (mesma falha da leitura obrigatória).
-    const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", versao:sel.versao||"01", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
-    await saveCollection(`gestao_docs/${sel.id}/treinos`, String(t.id), t);
-    await auditLog("Registrou Treinamento", "gestao_docs", sel.id, `${sel.codigo} — ${sel.titulo}`, null, { colaborador: t.userName, data: t.dataRealizacao, versao: t.versao });
-    toast_("Treinamento registrado!", "green");
-    setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
-    } catch(e) {
-      toast_(fbErr(e), "red");
-      console.error(e);
-    }
+      const treinamento = {
+        exigido: !!cfg.exigido,
+        modo: cfg.modo || "leitura",
+        cargos: cfg.cargos || [],
+        pessoasExtra: cfg.pessoasExtra || [],
+        prazoDias: Number(cfg.prazoDias) || PRAZO_TREINAMENTO_PADRAO,
+        desdeEm: doc.treinamento?.desdeEm || tod(),
+        definidoPor: user?.name || "",
+        definidoEm: tod(),
+      };
+      const updated = { ...doc, treinamento };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Configurou Treinamento", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, doc.treinamento || null, treinamento);
+      toast_(treinamento.exigido ? "Exigência de treinamento salva!" : "Exigência de treinamento removida.", "green");
+      setSel(updated); setEditTreino(null);
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
+
+  // Registra a evidência — a própria pessoa confirmando leitura, ou o instrutor
+  // lançando um presencial. Formato único via `novaEvidencia`.
+  const registrarEvidencia = async (doc, alvoUserId, { modo, dataRealizacao, obs }) => {
+    try {
+      const alvo = (users || []).find(u => String(u.id) === String(alvoUserId));
+      if (!alvo) { toast_("Selecione o colaborador.", "red"); return; }
+      const ex = exigidosDoDocumento(doc, users, catalogoCargos).find(e => e.userId === String(alvoUserId));
+      const ev = novaEvidencia({
+        doc, user: alvo, cargoNome: ex?.cargoNome, modo,
+        dataRealizacao: dataRealizacao || tod(), obs, registradoPor: user?.name,
+      });
+      await saveCollection("treinamentos", ev.id, ev);
+      await auditLog(modo === "leitura" ? "Confirmou Treinamento" : "Registrou Treinamento", "treinamentos", ev.id,
+        `${doc.codigo} Rev.${doc.versao} — ${alvo.name}`, null, { docId: doc.id, versao: doc.versao, modo });
+      toast_("Treinamento registrado!", "green");
+      setNovaEvid({ userId:"", dataRealizacao:tod(), obs:"" });
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
+  };
+
 
   const gerarComIA = async () => {
     if (!form.titulo || !form.tipo) { alert("Preencha título e tipo antes de usar a IA."); return; }
@@ -1334,7 +1338,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos} />
             <BadgeStatusGD status={d.status} />
-            {d.treinamentoObrigatorio && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
+            {(d.treinamento?.exigido || d.treinamentoObrigatorio) && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
           </div>
         </div>
         {/* ── ARQUIVO OFICIAL ── */}
@@ -1711,54 +1715,6 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           </div>
         )}
-        {/* ── FASE 6: MODAL DE DESIGNAÇÃO DE LEITURA ── */}
-        {modalDesignacao && (
-          <div onClick={()=>setModalDesignacao(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:640,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div>
-                  <div style={{fontSize:16,fontWeight:700,color:T.text}}>📖 Designar leitura obrigatória</div>
-                  <div style={{fontSize:12,color:T.text2,marginTop:2}}>{modalDesignacao.doc.codigo} — {modalDesignacao.doc.titulo}</div>
-                </div>
-                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDesignacao(null)}>✕ Fechar</button>
-              </div>
-              <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-                <select value={filtroDesigDepto} onChange={e=>setFiltroDesigDepto(e.target.value)} style={{...s.inp,fontSize:12,flex:1}}>
-                  <option value="todos">Todos os setores</option>
-                  {[...new Set((users||[]).map(u=>u.setor).filter(Boolean))].map(s=><option key={s} value={s}>{s}</option>)}
-                </select>
-                <select value={filtroDesigRole} onChange={e=>setFiltroDesigRole(e.target.value)} style={{...s.inp,fontSize:12,flex:1}}>
-                  <option value="todos">Todos os perfis</option>
-                  {["admin","keyuser","rt","user","viewer","exec"].map(r=><option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div style={{maxHeight:300,overflowY:"auto",marginBottom:14,display:"flex",flexDirection:"column",gap:4}}>
-                {(users||[]).filter(u=>
-                  (filtroDesigDepto==="todos" || u.setor===filtroDesigDepto) &&
-                  (filtroDesigRole==="todos"  || u.role===filtroDesigRole)
-                ).map(u=>{
-                  const sel2 = designados.some(x=>x.id===u.id);
-                  return (
-                    <label key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:sel2?T.accentDim:T.surf,border:`1px solid ${sel2?T.accent+"44":T.border}`,borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
-                      <input type="checkbox" checked={sel2} onChange={()=>setDesignados(p=>sel2?p.filter(x=>x.id!==u.id):[...p,u])} style={{accentColor:T.accent,width:14,height:14,flexShrink:0}}/>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{u.name}</div>
-                        <div style={{fontSize:11,color:T.text2}}>{u.setor||"—"} · {u.role}</div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-              <div style={{fontSize:12,color:T.text2,marginBottom:12}}>{designados.length} pessoa(s) selecionada(s)</div>
-              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                <button style={s.btn} onClick={()=>setModalDesignacao(null)}>Pular (sem designar)</button>
-                <button style={{...s.btnA,opacity:designados.length===0?0.5:1}} disabled={designados.length===0} onClick={()=>salvarDesignacao(modalDesignacao.doc, designados)}>
-                  ✅ Designar leitura ✓
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         {assinarGD && (
           <AssinaturaModal
             user={user}
@@ -1879,113 +1835,214 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           </div>
         )}
-        {/* ── FASE 6: LEITURA OBRIGATÓRIA ── */}
+        {/* ── TREINAMENTO POR CARGO (Fase 2) ──
+            Substitui os dois controles paralelos anteriores (leitura obrigatória
+            nominal + subcoleção de treinos). A exigência é DERIVADA do cargo; a
+            evidência é gravada por versão do documento. */}
         {(()=>{
-          const leit = d.leituraObrigatoria;
-          if (!leit?.atribuido) return null;
-          const uid = user?.uid || user?.id;
-          const euNaLista = leit.designados?.some(x => x.userId === uid);
-          const podeVer = (perm?.("gerenciarTreinamento") ?? false) || euNaLista;
-          if (!podeVer) return null;
-          const total = leit.designados?.length || 0;
-          const confirmados = leit.designados?.filter(x=>x.confirmou).length || 0;
-          const euJaConfirmei = leit.designados?.find(x => x.userId === uid)?.confirmou;
-          const pct = total > 0 ? Math.round((confirmados/total)*100) : 0;
+          const podeGerirTreino = isAdmin || (perm?.("gerenciarTreinamento") ?? false);
+          const podeRegistrar   = isAdmin || (perm?.("registrarTreinamento") ?? false);
+          const tr = d.treinamento;
+          const legado = !tr && (d.leituraObrigatoria?.atribuido || d.treinamentoObrigatorio);
+          if (!tr && !legado && !podeGerirTreino) return null;
+
+          const meuId = String(user?.uid || user?.id || "");
+          const exigidos = exigidosDoDocumento(d, users, catalogoCargos);
+          const indice = indexarEvidencias(evidencias);
+          const vigente = documentoExigeTreinamento(d);
+          const linhas = exigidos.map(ex => ({ ...ex, cel: statusCelula({ doc:d, userId:ex.userId, indice, hoje:tod() }) }));
+          const treinados = linhas.filter(l => l.cel.status === "treinado").length;
+          const pct = linhas.length ? Math.round((treinados/linhas.length)*100) : 0;
+          const eu = linhas.find(l => l.userId === meuId);
+          const cargosDisp = cargosAtivos(catalogoCargos);
+          const cfg = editTreino || {
+            exigido: tr?.exigido ?? true,
+            modo: tr?.modo || "leitura",
+            cargos: tr?.cargos || [],
+            pessoasExtra: tr?.pessoasExtra || [],
+            prazoDias: tr?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO,
+          };
+
           return (
             <div style={{ ...s.card, border:`1px solid ${T.accent}33` }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-                <SecTitle icon="📖" ch="Leitura Obrigatória" />
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <span style={{ fontSize:12, color:T.text2 }}>{confirmados}/{total} confirmações ({pct}%)</span>
-                  <div style={{ width:120, height:8, borderRadius:8, background:T.border, overflow:"hidden" }}>
-                    <div style={{ width:`${pct}%`, height:"100%", background:pct===100?T.accent:"#ffd166", borderRadius:8, transition:"width .3s" }} />
+                <SecTitle icon="📚" ch="Treinamento" />
+                {tr?.exigido && linhas.length > 0 && (
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ fontSize:12, color:T.text2 }}>{treinados}/{linhas.length} treinados ({pct}%)</span>
+                    <div style={{ width:120, height:8, borderRadius:8, background:T.border, overflow:"hidden" }}>
+                      <div style={{ width:`${pct}%`, height:"100%", background:pct===100?T.accent:"#ffd166", borderRadius:8, transition:"width .3s" }} />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-              <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-                Atribuído por {leit.atribuidoPor} em {fmt(leit.atribuidoEm)} · confirmações referentes à Rev.{d.versao}
-              </div>
-              {leit.reabertoEm && (
-                <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:8, padding:"8px 12px", marginBottom:10, fontSize:11, color:T.text2 }}>
-                  🔄 Leitura reaberta na Rev.{leit.reabertoNaVersao} em {fmt(leit.reabertoEm)} — as confirmações da versão anterior ficam registradas no histórico de revisões.
+
+              {legado && (
+                <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, fontSize:12, color:T.text2 }}>
+                  <strong style={{ color:T.text }}>Controle antigo neste documento.</strong> Ele ainda usa a designação nominal de leitura
+                  {d.treinamentoObrigatorio ? " e o registro de treinamento por documento" : ""}. Um administrador pode trazer tudo para a
+                  matriz em <strong>📚 Matriz de Treinamento → 🔄 Migrar controles antigos</strong>, ou configurar a exigência por cargo abaixo.
                 </div>
               )}
-              {euNaLista && !euJaConfirmei && (
-                <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12 }}>
-                  <span style={{ fontSize:22 }}>📖</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Leitura obrigatória — {d.codigo}</div>
-                    <div style={{ fontSize:11, color:T.text2 }}>Você foi designado para ler este documento. Confirme após a leitura.</div>
-                  </div>
-                  <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>confirmarLeitura(d)}>✅ Li e entendi</button>
+
+              {!tr?.exigido && !editTreino && (
+                <div style={{ fontSize:12, color:T.text3, padding:"10px 0" }}>
+                  Este documento não exige treinamento.
+                  {podeGerirTreino && " Configure abaixo para exigir por cargo."}
                 </div>
               )}
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {(leit.designados||[]).map((des,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
-                    <div style={{ width:28, height:28, borderRadius:"50%", background:des.confirmou?T.accent:T.border, color:des.confirmou?"#fff":T.text3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>
-                      {des.confirmou ? "✓" : "✗"}
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{des.userName}</div>
-                      {des.setor && <div style={{ fontSize:11, color:T.text2 }}>{des.setor}</div>}
-                    </div>
-                    {des.confirmou
-                      ? <span style={{ fontSize:11, color:T.accent, fontWeight:700 }}>✓ Confirmado em {fmt(des.confirmedoEm?.split?.("T")[0] || des.confirmedoEm)}</span>
-                      : <span style={{ fontSize:11, color:T.text3 }}>Pendente</span>
-                    }
+
+              {tr?.exigido && !editTreino && (
+                <>
+                  <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+                    {MODOS_TREINAMENTO.find(m=>m.id===tr.modo)?.label || tr.modo}
+                    {" · prazo de "}{tr.prazoDias ?? PRAZO_TREINAMENTO_PADRAO} dias
+                    {tr.desdeEm ? ` · valendo desde ${fmt(tr.desdeEm)}` : " · começa a valer quando a versão entrar em vigor"}
+                    {" · confirmações referentes à Rev."}{d.versao}
                   </div>
-                ))}
-              </div>
-              {(perm?.("gerenciarTreinamento") ?? false) && (
+                  {!vigente && (
+                    <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", marginBottom:10, fontSize:11, color:T.text3 }}>
+                      A exigência só passa a contar quando o documento estiver <strong>Vigente</strong> — não se treina em versão não aprovada.
+                    </div>
+                  )}
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                    {(tr.cargos||[]).map(cid => (
+                      <span key={cid} style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:T.accent+"18", color:T.accent, fontWeight:700 }}>
+                        👔 {cargosDisp.find(c=>c.id===cid)?.nome || catalogoCargos.find(c=>c.id===cid)?.nome || cid}
+                      </span>
+                    ))}
+                    {(tr.pessoasExtra||[]).length > 0 && (
+                      <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:T.border, color:T.text2, fontWeight:700 }}>
+                        + {tr.pessoasExtra.length} pessoa(s) nominal(is)
+                      </span>
+                    )}
+                    {!(tr.cargos||[]).length && !(tr.pessoasExtra||[]).length && (
+                      <span style={{ fontSize:11, color:"#e8a33d" }}>⚠ Nenhum cargo vinculado — ninguém é exigido ainda.</span>
+                    )}
+                  </div>
+
+                  {eu && eu.cel.status !== "treinado" && tr.modo === "leitura" && vigente && (
+                    <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:22 }}>📖</span>
+                      <div style={{ flex:1, minWidth:180 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Treinamento pendente — {d.codigo} Rev.{d.versao}</div>
+                        <div style={{ fontSize:11, color:T.text2 }}>Você é exigido neste documento pelo cargo {eu.cargoNome}. Confirme após a leitura.</div>
+                      </div>
+                      <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>registrarEvidencia(d, meuId, { modo:"leitura", dataRealizacao:tod(), obs:"Confirmado pelo próprio colaborador" })}>
+                        ✅ Li e entendi
+                      </button>
+                    </div>
+                  )}
+
+                  {podeRegistrar && tr.modo === "presencial" && vigente && (
+                    <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginBottom:12 }}>
+                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:10 }}>Registrar treinamento presencial — Rev.{d.versao}</div>
+                      <G2 ch={<>
+                        <F lbl="Colaborador" ch={
+                          <Sel value={novaEvid.userId} onChange={e=>setNovaEvid(p=>({...p,userId:e.target.value}))}>
+                            <option value="">Selecione...</option>
+                            {linhas.filter(l=>l.cel.status!=="treinado").map(l=><option key={l.userId} value={l.userId}>{l.userName} — {l.cargoNome}</option>)}
+                          </Sel>
+                        } />
+                        <F lbl="Data do treinamento" ch={<Inp type="date" value={novaEvid.dataRealizacao} onChange={e=>setNovaEvid(p=>({...p,dataRealizacao:e.target.value}))} />} />
+                      </>} />
+                      <F lbl="Observações" ch={<Inp placeholder="Ex: turma 2, sala de treinamento" value={novaEvid.obs} onChange={e=>setNovaEvid(p=>({...p,obs:e.target.value}))} />} />
+                      <div style={{ textAlign:"right", marginTop:8 }}>
+                        <button style={s.btnA} onClick={()=>registrarEvidencia(d, novaEvid.userId, { modo:"presencial", dataRealizacao:novaEvid.dataRealizacao, obs:novaEvid.obs })}>Registrar ✓</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                    {linhas.length === 0 && (
+                      <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:12 }}>
+                        Ninguém exigido ainda — vincule cargos à exigência.
+                      </div>
+                    )}
+                    {linhas.map(l => {
+                      const cor = l.cel.status === "treinado" ? T.accent : l.cel.status === "atrasado" ? "#ff4f6a" : "#e8a33d";
+                      return (
+                        <div key={l.userId} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                          <div style={{ width:28, height:28, borderRadius:"50%", background:cor+"22", color:cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }}>
+                            {l.cel.status === "treinado" ? "✓" : l.cel.status === "atrasado" ? "!" : "○"}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{l.userName}</div>
+                            <div style={{ fontSize:11, color:T.text2 }}>
+                              {l.cargoNome}{l.setor ? ` · ${l.setor}` : ""}
+                              {l.origem === "extra" && <span style={{ color:T.text3 }}> · nominal</span>}
+                            </div>
+                          </div>
+                          {l.cel.status === "treinado"
+                            ? <span style={{ fontSize:11, color:T.accent, fontWeight:700 }}>✓ {fmt(l.cel.evidencia?.dataRealizacao)}</span>
+                            : <span style={{ fontSize:11, color:cor, fontWeight:700 }}>{l.cel.status === "atrasado" ? `Atrasado há ${l.cel.dias}d` : "Pendente"}</span>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Configuração da exigência */}
+              {podeGerirTreino && !editTreino && (
                 <div style={{ textAlign:"right", marginTop:10 }}>
-                  <button style={{ ...s.btn, fontSize:11 }} onClick={()=>{ setDesignados([]); setFiltroDesigDepto("todos"); setFiltroDesigRole("todos"); setModalDesignacao({ doc: d }); }}>
-                    ✏️ Reatribuir leitura
+                  <button style={{ ...s.btn, fontSize:11 }} onClick={()=>setEditTreino(cfg)}>
+                    {tr?.exigido ? "✏️ Editar exigência" : "➕ Exigir treinamento"}
                   </button>
+                </div>
+              )}
+              {podeGerirTreino && editTreino && (
+                <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginTop:10 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:10 }}>Exigência de treinamento</div>
+                  <label style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, cursor:"pointer" }}>
+                    <input type="checkbox" checked={editTreino.exigido} onChange={e=>setEditTreino(p=>({...p,exigido:e.target.checked}))} style={{ width:16, height:16, accentColor:T.accent }} />
+                    <span style={{ fontSize:13, color:T.text }}>Este documento exige treinamento</span>
+                  </label>
+                  {editTreino.exigido && (<>
+                    <G2 ch={<>
+                      <F lbl="Modo" ch={
+                        <Sel value={editTreino.modo} onChange={e=>setEditTreino(p=>({...p,modo:e.target.value}))}>
+                          {MODOS_TREINAMENTO.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
+                        </Sel>
+                      } />
+                      <F lbl="Prazo (dias)" tip="Depois deste prazo, contado da entrada em vigor da versão, a pendência vira atraso na matriz." ch={
+                        <Inp type="number" min="1" value={editTreino.prazoDias} onChange={e=>setEditTreino(p=>({...p,prazoDias:e.target.value}))} />
+                      } />
+                    </>} />
+                    <div style={{ fontSize:12, fontWeight:600, color:T.text, margin:"10px 0 6px" }}>Cargos exigidos</div>
+                    <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
+                      Quem ocupa estes cargos passa a ser exigido automaticamente — inclusive quem for contratado depois.
+                    </div>
+                    {cargosDisp.length === 0 ? (
+                      <div style={{ fontSize:12, color:"#e8a33d", marginBottom:10 }}>
+                        ⚠ Nenhum cargo ativo no catálogo. Cadastre em Admin → Catálogos → 👔 Cargos.
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+                        {cargosDisp.map(c => {
+                          const on = editTreino.cargos.includes(c.id);
+                          const n = (users||[]).filter(u=>u.cargoId===c.id).length;
+                          return (
+                            <button key={c.id} onClick={()=>setEditTreino(p=>({ ...p, cargos: on ? p.cargos.filter(x=>x!==c.id) : [...p.cargos, c.id] }))}
+                              style={{ padding:"6px 12px", borderRadius:20, border:`1px solid ${on?T.accent:T.border}`, cursor:"pointer", fontFamily:"inherit",
+                                fontSize:11, fontWeight:600, background:on?T.accent+"22":"transparent", color:on?T.accent:T.text2 }}>
+                              {on ? "✓ " : ""}{c.nome} <span style={{ opacity:.7 }}>({n})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>)}
+                  <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                    <button style={s.btn} onClick={()=>setEditTreino(null)}>Cancelar</button>
+                    <button style={s.btnA} onClick={()=>salvarExigencia(d, editTreino)}>Salvar exigência</button>
+                  </div>
                 </div>
               )}
             </div>
           );
         })()}
-        {d.treinamentoObrigatorio && (
-          <div style={s.card}>
-            <SecTitle icon="📚" ch="Controle de Treinamentos" />
-            <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:T.accent}}>
-              📋 Este documento requer treinamento formal dos colaboradores antes da execução.
-            </div>
-            {(isAdmin || (perm?.("registrarTreinamento") ?? false)) && (
-              <div style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"1rem",marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Registrar novo treinamento — Rev.{d.versao}</div>
-                <G2 ch={<>
-                  <F lbl="Colaborador" ch={<Sel value={novoTreino.userId} onChange={e=>setNovoTreino(p=>({...p,userId:e.target.value}))}><option value="">Selecione...</option>{(users||[]).map(u=><option key={u.id} value={u.id}>{u.name} — {u.setor}</option>)}</Sel>} />
-                  <F lbl="Data do treinamento" ch={<Inp type="date" value={novoTreino.dataRealizacao} onChange={e=>setNovoTreino(p=>({...p,dataRealizacao:e.target.value}))} />} />
-                </>} />
-                <F lbl="Observações" ch={<Inp placeholder="Ex: treinamento presencial..." value={novoTreino.obs} onChange={e=>setNovoTreino(p=>({...p,obs:e.target.value}))} />} />
-                <div style={{textAlign:"right",marginTop:8}}><button style={s.btnA} onClick={salvarTreino}>Registrar ✓</button></div>
-              </div>
-            )}
-            {treinamentos.length===0 ? (
-              <div style={{textAlign:"center",padding:"1.5rem",color:T.text3,fontSize:12}}>Nenhum treinamento registrado.</div>
-            ) : treinamentos.map(t=>{
-              // Registro anterior à versão vigente (ou sem versão, de antes deste carimbo)
-              // não comprova treinamento no documento atual — marca como desatualizado.
-              const atual = treinoAtual(t, d.versao);
-              return (
-              <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:6}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:atual?T.accent:T.border,color:atual?"#fff":T.text3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>📚</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t.userName}</div>
-                  <div style={{fontSize:11,color:T.text2}}>{t.userSetor} · {fmt(t.dataRealizacao)} · {t.versao?`Rev.${t.versao}`:"revisão não registrada"}</div>
-                  {t.obs&&<div style={{fontSize:11,color:T.text3,marginTop:2}}>{t.obs}</div>}
-                </div>
-                {atual
-                  ? <span style={{fontSize:10,color:T.accent,background:T.accentDim,padding:"2px 8px",borderRadius:12,fontWeight:700}}>✓ Treinado</span>
-                  : <span style={{fontSize:10,color:"#e8a33d",background:"#e8a33d18",padding:"2px 8px",borderRadius:12,fontWeight:700}}>⚠ Desatualizado</span>
-                }
-              </div>
-            );})}
-          </div>
-        )}
         {recusaModal}
       </div>
     );
@@ -2174,9 +2231,12 @@ ${docHtml.slice(0,9000)}`}]})
           })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
           {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs,form.versao)}</strong></div>}
-          <div style={{display:"flex",alignItems:"center",gap:12,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
-            <input type="checkbox" id="treino-gd" checked={form.treinamentoObrigatorio} onChange={e=>setF("treinamentoObrigatorio",e.target.checked)} style={{width:16,height:16,accentColor:T.accent}} />
-            <label htmlFor="treino-gd" style={{fontSize:13,color:T.text,cursor:"pointer"}}>Treinamento obrigatório antes da execução</label>
+          {/* A exigência de treinamento deixou de ser um checkbox aqui: ela é
+              configurada por CARGO na seção Treinamento do documento, onde dá
+              para escolher modo, cargos e prazo. */}
+          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text3}}>
+            <span style={{fontSize:16}}>📚</span>
+            <span>O treinamento obrigatório é definido por cargo na seção <strong style={{color:T.text2}}>Treinamento</strong>, depois de salvar o documento.</span>
           </div>
           <F lbl="Data de vigência (deixe em branco para entrar em vigor no dia da aprovação)"
             ch={<Inp type="date" value={form.dataVigencia||""} onChange={e=>setF("dataVigencia",e.target.value)} />} />
@@ -2389,6 +2449,18 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
   }
 
   /* ── LISTA MESTRA ── */
+  /* ── MATRIZ DE TREINAMENTO ── */
+  if (view==="matriz") {
+    return (
+      <MatrizTreinamentoTab
+        docs={docs} users={users} treinamentos={evidencias} catalogoCargos={catalogoCargos}
+        user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
+        onVoltar={()=>setView("lista")}
+        onAbrirDoc={(doc)=>{ setSel(doc); setView("detalhe"); }}
+      />
+    );
+  }
+
   if (view==="lista-mestra") {
     return (
       <div>
@@ -2556,6 +2628,21 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
         <div style={{display:"flex",gap:8}}>
           <button style={s.btn} onClick={()=>setView("lista-mestra")}>📋 Lista Mestra</button>
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
+          {(()=>{
+            // Badge com as pendências da própria pessoa — a matriz é acionável, não só relatório.
+            const meus = pendentesDoUsuario({ docs, users, evidencias, catalogoCargos, userId:String(user?.uid||user?.id||""), hoje:tod() });
+            return (
+              <button style={s.btn} onClick={()=>setView("matriz")}>
+                📚 Matriz de Treinamento
+                {meus.length > 0 && (
+                  <span style={{ marginLeft:6, fontSize:10, fontWeight:800, padding:"1px 7px", borderRadius:20,
+                    background: meus.some(m=>m.status==="atrasado") ? "#ff4f6a" : "#e8a33d", color:"#fff" }}>
+                    {meus.length}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
           {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
       </div>
@@ -2582,7 +2669,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               </div>
               <div style={{fontSize:11,color:T.text2,marginTop:2}}>
                 {d.depto} · Rev.{d.versao} · {d.criadoPor} · {fmt(d.criadoEm)}
-                {d.treinamentoObrigatorio&&<span style={{marginLeft:8,color:T.blue||"#4fc3f7"}}>📚</span>}
+                {(d.treinamento?.exigido||d.treinamentoObrigatorio)&&<span style={{marginLeft:8,color:T.blue||"#4fc3f7"}}>📚</span>}
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>

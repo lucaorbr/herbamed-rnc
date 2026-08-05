@@ -38,3 +38,234 @@ export function pendentesLeitura(leitura) {
   if (!leitura?.atribuido) return 0;
   return (leitura.designados || []).filter(d => !d.confirmou).length;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MATRIZ DE TREINAMENTO — exigência por cargo
+//
+// Decisão central de arquitetura: EXIGÊNCIA É DERIVADA, EVIDÊNCIA É GRAVADA.
+//
+// A exigência (quem deve treinar) não se armazena — calcula-se de
+// `doc.treinamento.cargos` × usuários que ocupam esses cargos. Assim, trocou
+// alguém de cargo, entrou gente nova, saiu outro: a matriz já está certa, sem
+// job de sincronização e sem lista de designados envelhecendo no documento.
+//
+// A evidência (quem treinou) é gravada e imutável, sempre carimbada com a VERSÃO
+// do documento. É isso que faz a revisão reabrir o treinamento automaticamente,
+// sem lógica de reset: a evidência da Rev.01 simplesmente não responde pela Rev.02.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const MODOS_TREINAMENTO = [
+  { id: "leitura",    label: "Leitura e entendimento", desc: "O colaborador lê o documento e confirma no sistema." },
+  { id: "presencial", label: "Treinamento presencial", desc: "Instrutor registra quem participou." },
+];
+
+export const PRAZO_TREINAMENTO_PADRAO = 30;
+
+/** Documento só exige treinamento quando está Vigente — não se treina em rascunho. */
+export function documentoExigeTreinamento(doc) {
+  return !!doc?.treinamento?.exigido && doc?.status === "Vigente";
+}
+
+/**
+ * Quem deve treinar este documento. Deriva de cargo (herança) e admite exceções
+ * nominais. Sem duplicar: quem entra pelo cargo não reaparece como exceção.
+ */
+export function exigidosDoDocumento(doc, users = [], catalogoCargos = []) {
+  if (!doc?.treinamento?.exigido) return [];
+  const { cargos = [], pessoasExtra = [] } = doc.treinamento;
+  const nomeCargo = (id) => (catalogoCargos || []).find(c => c.id === id)?.nome || id;
+  const vistos = new Set();
+  const out = [];
+  for (const u of users || []) {
+    if (!u?.cargoId || !cargos.includes(u.cargoId)) continue;
+    vistos.add(String(u.id));
+    out.push({ userId: String(u.id), userName: u.name || "—", setor: u.setor || "", cargoId: u.cargoId, cargoNome: nomeCargo(u.cargoId), origem: "cargo" });
+  }
+  for (const uid of pessoasExtra) {
+    if (vistos.has(String(uid))) continue;
+    const u = (users || []).find(x => String(x.id) === String(uid));
+    if (!u) continue;
+    vistos.add(String(uid));
+    out.push({ userId: String(uid), userName: u.name || "—", setor: u.setor || "", cargoId: u.cargoId || null, cargoNome: u.cargoId ? nomeCargo(u.cargoId) : "—", origem: "extra" });
+  }
+  return out.sort((a, b) => a.userName.localeCompare(b.userName));
+}
+
+/** Chave lógica da evidência: um treinamento vale para (documento, versão, pessoa). */
+export function chaveEvidencia(docId, versao, userId) {
+  return `${docId}|${versao}|${userId}`;
+}
+
+/** Índice das evidências para consulta O(1) ao montar a matriz. */
+export function indexarEvidencias(evidencias = []) {
+  const mapa = new Map();
+  for (const e of evidencias || []) {
+    if (!e?.docId || !e?.userId) continue;
+    const k = chaveEvidencia(e.docId, e.versao, e.userId);
+    // Mantém a evidência mais recente em caso de registro duplicado.
+    const atual = mapa.get(k);
+    if (!atual || (e.ts || 0) > (atual.ts || 0)) mapa.set(k, e);
+  }
+  return mapa;
+}
+
+const diasEntre = (de, ate) => {
+  if (!de || !ate) return 0;
+  const ms = new Date(`${ate}T12:00:00`) - new Date(`${de}T12:00:00`);
+  return Math.floor(ms / 86400000);
+};
+
+/**
+ * Status de uma célula da matriz. `atrasado` é pendência que estourou o prazo
+ * contado desde quando a exigência passou a valer para a versão vigente.
+ */
+export function statusCelula({ doc, userId, indice, hoje }) {
+  const ev = indice?.get(chaveEvidencia(doc.id, doc.versao, String(userId))) || null;
+  if (ev) return { status: "treinado", evidencia: ev, dias: 0 };
+  const desde = doc?.treinamento?.desdeEm || doc?.atualizadoEm || null;
+  const dias = desde ? diasEntre(desde, hoje) : 0;
+  const prazo = Number(doc?.treinamento?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO);
+  return { status: dias > prazo ? "atrasado" : "pendente", evidencia: null, dias };
+}
+
+/**
+ * Monta a matriz completa: documentos vigentes que exigem treinamento × pessoas
+ * exigidas. Linhas sem nenhuma exigência não aparecem — a matriz mostra quem
+ * deve algo, não o cadastro inteiro.
+ */
+export function montarMatriz({ docs = [], users = [], evidencias = [], catalogoCargos = [], hoje }) {
+  const colunas = (docs || []).filter(documentoExigeTreinamento);
+  const indice = indexarEvidencias(evidencias);
+  const linhasPorUser = new Map();
+
+  for (const doc of colunas) {
+    for (const ex of exigidosDoDocumento(doc, users, catalogoCargos)) {
+      if (!linhasPorUser.has(ex.userId)) {
+        linhasPorUser.set(ex.userId, { ...ex, celulas: new Map(), treinado: 0, pendente: 0, atrasado: 0 });
+      }
+      const linha = linhasPorUser.get(ex.userId);
+      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje });
+      linha.celulas.set(String(doc.id), cel);
+      linha[cel.status] += 1;
+    }
+  }
+
+  const linhas = [...linhasPorUser.values()].sort((a, b) =>
+    (a.cargoNome || "").localeCompare(b.cargoNome || "") || a.userName.localeCompare(b.userName));
+
+  const total = linhas.reduce((n, l) => n + l.celulas.size, 0);
+  const treinado = linhas.reduce((n, l) => n + l.treinado, 0);
+  const atrasado = linhas.reduce((n, l) => n + l.atrasado, 0);
+  return {
+    colunas, linhas, indice,
+    resumo: {
+      total, treinado, atrasado,
+      pendente: total - treinado - atrasado,
+      conformidade: total > 0 ? Math.round((treinado / total) * 100) : 100,
+    },
+  };
+}
+
+/** As exigências em aberto de uma pessoa — alimenta "meus treinamentos pendentes". */
+export function pendentesDoUsuario({ docs = [], users = [], evidencias = [], catalogoCargos = [], userId, hoje }) {
+  const indice = indexarEvidencias(evidencias);
+  const out = [];
+  for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
+    const exigido = exigidosDoDocumento(doc, users, catalogoCargos).some(e => e.userId === String(userId));
+    if (!exigido) continue;
+    const cel = statusCelula({ doc, userId, indice, hoje });
+    if (cel.status !== "treinado") out.push({ doc, ...cel });
+  }
+  return out.sort((a, b) => b.dias - a.dias);
+}
+
+// ── Migração dos dois mecanismos antigos ─────────────────────────────────────
+// Antes desta fase havia dois controles paralelos e desconexos, ambos nominais:
+//   1. `doc.leituraObrigatoria.designados[]` — lista de pessoas escolhida à mão
+//   2. `gestao_docs/{id}/treinos` (subcoleção) — registro de treinamento presencial
+// Ambos viram evidência na coleção `treinamentos`, e a designação nominal vira
+// `pessoasExtra` (não dá para inferir cargo do passado — quem designou escolheu
+// pessoas, não cargos). A migração é IDEMPOTENTE: evidência que já existe não
+// é recriada, então rodar de novo é seguro.
+
+/**
+ * Calcula o que a migração faria, sem efeito colateral.
+ * @param docs        documentos atuais
+ * @param treinosPorDoc  { [docId]: [registros da subcoleção] }
+ * @param evidencias  evidências já existentes na coleção nova
+ * @returns { evidencias: [...], patches: [{ docId, treinamento }], jaMigrados }
+ */
+export function planoMigracaoTreinamento({ docs = [], treinosPorDoc = {}, evidencias = [] }) {
+  const indice = indexarEvidencias(evidencias);
+  const novas = [];
+  const patches = [];
+  let jaMigrados = 0;
+
+  const push = (doc, userId, userName, modo, dataRealizacao, obs) => {
+    const k = chaveEvidencia(String(doc.id), doc.versao || "01", String(userId));
+    if (indice.has(k) || novas.some(n => chaveEvidencia(n.docId, n.versao, n.userId) === k)) { jaMigrados++; return; }
+    novas.push({
+      id: `mig-${doc.id}-${doc.versao || "01"}-${userId}`,
+      docId: String(doc.id), docCodigo: doc.codigo || "", docTitulo: doc.titulo || "",
+      versao: doc.versao || "01",
+      userId: String(userId), userName: userName || "—",
+      cargoNome: "", modo,
+      dataRealizacao: dataRealizacao || null,
+      obs: obs || "", registradoPor: "",
+      origem: "migracao", ts: Date.now(),
+    });
+  };
+
+  for (const doc of docs || []) {
+    const leitura = doc.leituraObrigatoria;
+    const treinos = treinosPorDoc[String(doc.id)] || [];
+    const temLeitura = !!leitura?.atribuido;
+    const temTreinos = treinos.length > 0 || !!doc.treinamentoObrigatorio;
+    if (!temLeitura && !temTreinos) continue;
+
+    // Confirmações de leitura da versão vigente viram evidência de leitura.
+    for (const d of (leitura?.designados || [])) {
+      if (!d?.confirmou) continue;
+      push(doc, d.userId, d.userName, "leitura", (d.confirmedoEm || "").split("T")[0] || null, "Migrado da confirmação de leitura");
+    }
+    // Registros presenciais só valem para a versão em que foram feitos. Sem carimbo
+    // de versão (registros anteriores à v2.28.1) não podem ser presumidos atuais.
+    for (const t of treinos) {
+      if (!t?.versao || String(t.versao) !== String(doc.versao)) continue;
+      push(doc, t.userId, t.userName, "presencial", t.dataRealizacao, t.obs || "Migrado do controle de treinamentos");
+    }
+
+    if (!doc.treinamento) {
+      patches.push({
+        docId: String(doc.id),
+        treinamento: {
+          exigido: true,
+          modo: temLeitura ? "leitura" : "presencial",
+          cargos: [],
+          pessoasExtra: (leitura?.designados || []).map(d => String(d.userId)).filter(Boolean),
+          prazoDias: PRAZO_TREINAMENTO_PADRAO,
+          desdeEm: doc.atualizadoEm || doc.criadoEm || null,
+          migradoEm: new Date().toISOString(),
+        },
+      });
+    }
+  }
+  return { evidencias: novas, patches, jaMigrados };
+}
+
+/** Uma evidência nova, pronta para gravar. Formato único — não repetir por aí. */
+export function novaEvidencia({ doc, user, cargoNome, modo, dataRealizacao, obs, registradoPor, origem = "sistema" }) {
+  const ts = Date.now();
+  return {
+    id: String(ts) + "-" + String(user.id).slice(0, 8),
+    docId: String(doc.id), docCodigo: doc.codigo || "", docTitulo: doc.titulo || "",
+    versao: doc.versao || "01",
+    userId: String(user.id), userName: user.name || "—",
+    cargoNome: cargoNome || "",
+    modo: modo || "leitura",
+    dataRealizacao: dataRealizacao || null,
+    obs: obs || "",
+    registradoPor: registradoPor || "",
+    origem, ts,
+  };
+}
