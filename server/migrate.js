@@ -267,6 +267,11 @@ async function seedAdmin() {
   if (!email || !password) return;
 
   const passwordHash = await bcrypt.hash(password, 12);
+  // `data` é MESCLADO, nunca substituído: ele guarda campos do cadastro que não têm
+  // coluna própria (cargo, cargoId, ...). Com `data = EXCLUDED.data` o admin perdia
+  // o cargo a cada restart do backend — e cargo vai para o snapshot imutável da
+  // assinatura eletrônica, além de definir a herança de treinamento por cargo.
+  // As chaves do seed continuam vencendo; o resto do cadastro sobrevive ao deploy.
   await query(`
     INSERT INTO users (name, email, password_hash, role, setor, data)
     VALUES ($1, lower($2), $3, 'admin', 'Qualidade', $4::jsonb)
@@ -274,7 +279,7 @@ async function seedAdmin() {
       name = EXCLUDED.name,
       role = 'admin',
       setor = EXCLUDED.setor,
-      data = EXCLUDED.data,
+      data = COALESCE(users.data, '{}'::jsonb) || EXCLUDED.data,
       updated_at = now()
   `, [name, email, passwordHash, JSON.stringify({ name, email, role: "admin", setor: "Qualidade" })]);
 

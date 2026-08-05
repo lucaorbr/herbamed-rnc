@@ -9,8 +9,9 @@ import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/GestaoDocumentosTab";
 import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
 import { TIPOS_REVALIDACAO_SEED } from "../revalidacao/RevalidacaoTabs";
+import { cargosAtivos, cargoDoUsuario, cargosParaImportar, novoCargoId, pendentesDeMigracao, acharCargoPorNome, usuariosParaVincular } from "./cargos";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -89,6 +90,11 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [expandTrIdx, setExpandTrIdx] = useState(null);
   const [novoItemTr, setNovoItemTr] = useState("");
   const [savingTr, setSavingTr] = useState(false);
+  const [listaCargos, setListaCargos] = useState(() => [...(catalogoCargos || [])]);
+  const [editCargoIdx, setEditCargoIdx] = useState(null);
+  const [editCargoNome, setEditCargoNome] = useState("");
+  const [novoCargo, setNovoCargo] = useState("");
+  const [savingCargos, setSavingCargos] = useState(false);
   const [listaAreasDistrib, setListaAreasDistrib] = useState(() => mkDefaultAreasDistrib(catalogoAreasSetoresDistribuicao));
   const [novoAreaDistrib, setNovoAreaDistrib] = useState({ id:"", label:"" });
   const [novoSetorDistrib, setNovoSetorDistrib] = useState({});
@@ -100,6 +106,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   useEffect(() => { setListaSetoresDesvio(mkDefaultSetoresDesvio(catalogoSetoresDesvio)); }, [catalogoSetoresDesvio.length]);
   useEffect(() => { setListaTiposReval(mkDefaultTiposReval(catalogoTiposRevalidacao)); }, [catalogoTiposRevalidacao.length]);
   useEffect(() => { setListaAreasDistrib(mkDefaultAreasDistrib(catalogoAreasSetoresDistribuicao)); }, [catalogoAreasSetoresDistribuicao.length]);
+  useEffect(() => { setListaCargos([...(catalogoCargos || [])]); }, [catalogoCargos.length]);
 
   const persistDeptos = async (lista) => {
     if (!isAdmin) return;
@@ -169,6 +176,68 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     setSavingTr(false);
   };
 
+  // Catálogo de cargos (configuracoes/catalogo_cargos) — { id, nome, ativo }.
+  // O `id` é slug estável: renomear o cargo não desvincula quem aponta para ele.
+  // Fundação da Matriz de Treinamento — é por cargo que a exigência será herdada.
+  const persistCargos = async (lista) => {
+    if (!isAdmin) return;
+    if (lista.some(c => !c.nome.trim())) { toast_("Todos os cargos precisam de um nome.", "red"); return; }
+    setSavingCargos(true);
+    try {
+      await saveCollection("configuracoes", "catalogo_cargos", { items: lista });
+      await auditLog("Atualizou Catálogo de Cargos", "configuracoes", "catalogo_cargos", "Catálogo", null, { total: lista.length });
+      toast_("Catálogo de cargos salvo!", "green");
+    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
+    setSavingCargos(false);
+  };
+
+  // Importa os cargos que já estão no cadastro dos usuários como texto livre,
+  // deduplicando grafias equivalentes, e vincula cada usuário ao cargo criado.
+  const importarCargosLegados = async () => {
+    if (!isAdmin) return;
+    const aImportar = cargosParaImportar(users, listaCargos);
+    const aVincular = usuariosParaVincular(users, listaCargos);
+    // Duas metades do mesmo problema: cargo que ainda não existe precisa ser criado;
+    // cargo que já existe só precisa do vínculo. A ação é re-executável — rodar de
+    // novo só pega o que sobrou.
+    if (!aImportar.length && !aVincular.length) { toast_("Nada pendente de migração.", "green"); return; }
+    const linhas = [
+      aImportar.length ? `Criar ${aImportar.length} cargo(s):\n` + aImportar.map(c => `• ${c.nome} (${c.quantidade} usuário${c.quantidade>1?"s":""})`).join("\n") : "",
+      aVincular.length ? `Vincular ${aVincular.length} usuário(s) a cargos já existentes:\n` + aVincular.map(x => `• ${x.user.name} → ${x.cargo.nome}`).join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+    if (!window.confirm(`${linhas}\n\nGrafias equivalentes são agrupadas. Continuar?`)) return;
+    setSavingCargos(true);
+    try {
+      let lista = [...listaCargos];
+      for (const c of aImportar) lista = [...lista, { id: novoCargoId(c.nome, lista), nome: c.nome, ativo: true }];
+      if (aImportar.length) await saveCollection("configuracoes", "catalogo_cargos", { items: lista });
+      setListaCargos(lista);
+      // Vincula cada usuário com texto livre ao cargo recém-criado. O rótulo `cargo`
+      // é reescrito com a grafia canônica — o snapshot da assinatura depende dele.
+      let vinculados = 0;
+      for (const u of users || []) {
+        if (u?.cargoId || !(u?.cargo || "").trim()) continue;
+        const alvo = acharCargoPorNome(u.cargo, lista);
+        if (!alvo) continue;
+        await updateUser(u.id, { cargoId: alvo.id, cargo: alvo.nome });
+        vinculados++;
+      }
+      setUsers(prev => prev.map(u => {
+        if (u?.cargoId || !(u?.cargo || "").trim()) return u;
+        const alvo = acharCargoPorNome(u.cargo, lista);
+        return alvo ? { ...u, cargoId: alvo.id, cargo: alvo.nome } : u;
+      }));
+      const restantes = pendentesDeMigracao(users) - vinculados;
+      await auditLog("Importou Cargos do Cadastro", "configuracoes", "catalogo_cargos", "Catálogo de Cargos", null, { cargosCriados: aImportar.length, usuariosVinculados: vinculados, naoVinculados: Math.max(0, restantes) });
+      toast_(
+        `${aImportar.length} cargo(s) criado(s), ${vinculados} usuário(s) vinculado(s).` +
+        (restantes > 0 ? ` ${restantes} sem correspondência — verifique o cadastro.` : ""),
+        restantes > 0 ? "orange" : "green"
+      );
+    } catch(e) { toast_("Erro ao importar cargos.", "red"); console.error(e); }
+    setSavingCargos(false);
+  };
+
   const persistAreasDistrib = async (lista) => {
     if (!isAdmin) return;
     const ids = lista.map(a => a.id.trim());
@@ -185,7 +254,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     setSavingAreasDistrib(false);
   };
 
-  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
+  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
@@ -200,11 +269,11 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     if(users.find(u=>u.email===nu.email)) { alert("E-mail já cadastrado."); return; }
     try {
       const cred = await createAuthUser(nu.email, nu.pw);
-      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", cargo:nu.cargo||"", permissoes:nuPermissoes };
+      const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", cargo:nu.cargo||"", cargoId:nu.cargoId||"", permissoes:nuPermissoes };
       const savedUser = await saveUser(cred.user.uid, userData);
       await auditLog("Criou Usuário", "usuarios", cred.user.uid, `${userData.name} (${userData.email})`, null, { name: userData.name, email: userData.email, role: userData.role, setor: userData.setor });
       setUsers([...users, savedUser]);
-      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"" });
+      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
       toast_("Usuário criado com sucesso!", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
@@ -212,7 +281,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
 
   const startEdit = (u) => {
     setEditing(u.id);
-    setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"", cargo:u.cargo||"" });
+    setEditData({ name:u.name, setor:u.setor||"", role:u.role, crf:u.crf||"", cargo:u.cargo||"", cargoId:u.cargoId||"" });
     // Merge: default do perfil + perms armazenadas (as armazenadas prevalecem)
     setEditPerms({ ...(PERMS_PADRAO[u.role]||{}), ...(u.permissoes||{}) });
   };
@@ -276,7 +345,19 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
                   <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
                   <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />
-                  <F lbl="Cargo" ch={<Inp placeholder="Ex: Analista de Controle de Qualidade" value={editData.cargo||""} onChange={e=>setEditData(p=>({...p,cargo:e.target.value}))} />} />
+                  <F lbl="Cargo" tip="Vem do catálogo de cargos (Admin → Catálogos → Cargos). O cargo define quais treinamentos a pessoa herda." ch={
+                    <Sel value={editData.cargoId||""} onChange={e=>{
+                      const alvo = listaCargos.find(c=>c.id===e.target.value);
+                      // Grava o id (vínculo) e o rótulo (snapshot da assinatura depende dele).
+                      setEditData(p=>({...p, cargoId:e.target.value, cargo: alvo?alvo.nome:""}));
+                    }}>
+                      <option value="">— sem cargo —</option>
+                      {cargosAtivos(listaCargos).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
+                      {editData.cargoId && !listaCargos.some(c=>c.id===editData.cargoId) && (
+                        <option value={editData.cargoId}>{editData.cargo||editData.cargoId} (fora do catálogo)</option>
+                      )}
+                    </Sel>
+                  } />
                   <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
                     <option value="admin">Admin — acesso total</option>
                     <option value="user">Usuário — cria e edita suas RNCs</option>
@@ -338,7 +419,15 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                         );
                       })()}
                     </div>
-                    <div style={{ fontSize:11, color:T.text2 }}>{u.email} · {u.setor||"—"}</div>
+                    <div style={{ fontSize:11, color:T.text2 }}>
+                      {u.email} · {u.setor||"—"}
+                      {(()=>{
+                        const c = cargoDoUsuario(u, listaCargos);
+                        if (!c) return null;
+                        // Cargo em texto livre ainda não herda treinamento — sinaliza a pendência.
+                        return <> · {c.nome}{c.origem!=="catalogo" && <span title="Cargo fora do catálogo — não herda treinamento por cargo" style={{ color:"#e8a33d" }}> ⚠</span>}</>;
+                      })()}
+                    </div>
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -367,7 +456,16 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
           <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />
-          <F lbl="Cargo" ch={<Inp placeholder="Ex: Analista de Controle de Qualidade" value={nu.cargo} onChange={e=>set("cargo",e.target.value)} />} />
+          <F lbl="Cargo" tip="Vem do catálogo de cargos (Admin → Catálogos → Cargos). O cargo define quais treinamentos a pessoa herda." ch={
+            <Sel value={nu.cargoId} onChange={e=>{
+              const alvo = listaCargos.find(c=>c.id===e.target.value);
+              set("cargoId", e.target.value);
+              set("cargo", alvo?alvo.nome:"");
+            }}>
+              <option value="">— sem cargo —</option>
+              {cargosAtivos(listaCargos).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
+            </Sel>
+          } />
           <F lbl="Perfil de acesso" tip="Selecione o perfil base — as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
             <option value="user">Usuário — cria e edita suas RNCs</option>
             <option value="admin">Admin — acesso total</option>
@@ -459,7 +557,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         <SecTitle icon="🗂️" ch="Catálogos" />
         {/* Tabs */}
         <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["distribuicao","🗂️ Áreas e Setores de Distribuição"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
+          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["cargos","👔 Cargos"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["distribuicao","🗂️ Áreas e Setores de Distribuição"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
             <button key={k} onClick={()=>setCatAba(k)}
               style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
                 background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -632,6 +730,112 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         </>)}
 
         {/* ── ABA TIPOS DE DESVIO ── */}
+        {/* ── ABA CARGOS ── */}
+        {catAba==="cargos" && (()=>{
+          const pendentes = pendentesDeMigracao(users);
+          const aImportar = cargosParaImportar(users, listaCargos);
+          const aVincular = usuariosParaVincular(users, listaCargos);
+          const ocupantes = (id) => (users||[]).filter(u=>u?.cargoId===id).length;
+          return (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
+            Cargos/funções dos colaboradores. É por <strong>cargo</strong> que a exigência de treinamento
+            será herdada: ao vincular um documento a um cargo, todo mundo que o ocupa passa a ser exigido
+            automaticamente — inclusive quem for contratado depois. Manter lista fechada evita que o mesmo
+            cargo apareça com grafias diferentes e quebre a matriz. Apenas cargos ativos aparecem no
+            cadastro de usuários. As alterações são salvas automaticamente.
+          </div>
+          {pendentes > 0 && (
+            <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+              <span style={{ fontSize:22 }}>👔</span>
+              <div style={{ flex:1, minWidth:220 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text }}>
+                  {pendentes} usuário(s) com cargo em texto livre
+                </div>
+                <div style={{ fontSize:11, color:T.text2 }}>
+                  {[
+                    aImportar.length ? `${aImportar.length} cargo(s) a criar` : "",
+                    aVincular.length ? `${aVincular.length} vínculo(s) a fazer` : "",
+                  ].filter(Boolean).join(" · ") || "Nenhuma correspondência automática — ajuste o cadastro de cada usuário."}
+                </div>
+              </div>
+              {(aImportar.length > 0 || aVincular.length > 0) && (
+                <button style={{ ...s.btnA, fontSize:12, opacity:savingCargos?0.6:1 }} disabled={savingCargos} onClick={importarCargosLegados}>
+                  ⬇️ Importar e vincular
+                </button>
+              )}
+            </div>
+          )}
+          {/* Adicionar novo */}
+          <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+            <input placeholder="Nome do cargo (ex: Analista de Controle de Qualidade)" value={novoCargo}
+              onChange={e=>setNovoCargo(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter") document.getElementById("cargo-add-btn")?.click(); }}
+              style={{ ...s.inp, flex:1, fontSize:12 }} />
+            <button id="cargo-add-btn" style={s.btnA} onClick={()=>{
+              const nome = novoCargo.trim();
+              if (!nome) return;
+              if (acharCargoPorNome(nome, listaCargos)) { toast_("Esse cargo já existe.", "red"); return; }
+              const next = [...listaCargos, { id:novoCargoId(nome, listaCargos), nome, ativo:true }];
+              setListaCargos(next);
+              setNovoCargo("");
+              persistCargos(next);
+            }}>+ Adicionar</button>
+          </div>
+          {/* Lista */}
+          <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:380, overflowY:"auto" }}>
+            {listaCargos.length===0 && (
+              <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:12 }}>
+                Nenhum cargo cadastrado ainda.
+              </div>
+            )}
+            {listaCargos.map((c, i)=>{
+              const n = ocupantes(c.id);
+              return (
+              <div key={c.id||i} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
+                {editCargoIdx===i ? (<>
+                  <input value={editCargoNome} autoFocus
+                    onChange={e=>setEditCargoNome(e.target.value)}
+                    style={{ ...s.inp, flex:1, fontSize:12 }} />
+                  <button style={s.btnA} onClick={()=>{
+                    const nome = editCargoNome.trim();
+                    if (!nome) return;
+                    if (listaCargos.some((x,j)=>j!==i && acharCargoPorNome(nome,[x]))) { toast_("Esse cargo já existe.", "red"); return; }
+                    // Só o nome muda — o id fica, para não desvincular ninguém.
+                    const next = listaCargos.map((x,j)=>j===i?{ ...x, nome }:x);
+                    setListaCargos(next);
+                    setEditCargoIdx(null);
+                    persistCargos(next);
+                  }}>✓</button>
+                  <button style={s.btn} onClick={()=>setEditCargoIdx(null)}>✕</button>
+                </>) : (<>
+                  <span style={{ flex:1, fontSize:12, color:T.text }}>{c.nome}</span>
+                  <span style={{ fontSize:10, color:T.text3 }} title="Usuários que ocupam este cargo">
+                    {n} {n===1?"pessoa":"pessoas"}
+                  </span>
+                  <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:c.ativo!==false?T.accent+"22":"#ff4f6a22", color:c.ativo!==false?T.accent:"#ff4f6a", fontWeight:700 }}>
+                    {c.ativo!==false?"Ativo":"Inativo"}
+                  </span>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ setEditCargoIdx(i); setEditCargoNome(c.nome); }}>✏️</button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px" }} onClick={()=>{ const next=listaCargos.map((x,j)=>j===i?{...x,ativo:x.ativo===false}:x); setListaCargos(next); persistCargos(next); }}>
+                    {c.ativo!==false?"🔒 Desativar":"🔓 Ativar"}
+                  </button>
+                  <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
+                    title="Excluir cargo do catálogo"
+                    onClick={()=>{
+                      if (n > 0) { toast_(`"${c.nome}" tem ${n} ocupante(s) — desative em vez de excluir.`, "red"); return; }
+                      if(window.confirm(`Excluir o cargo "${c.nome}" do catálogo?\n\nPrefira desativar se o cargo já foi usado.`)) { const next=listaCargos.filter((_,j)=>j!==i); setListaCargos(next); persistCargos(next); }
+                    }}>🗑️</button>
+                </>)}
+              </div>
+            );})}
+          </div>
+          <div style={{ textAlign:"right", marginTop:12 }}>
+            <button style={{ ...s.btnA, opacity:(!isAdmin||savingCargos)?0.6:1 }} disabled={!isAdmin||savingCargos} onClick={()=>persistCargos(listaCargos)}>
+              {savingCargos?"Salvando...":"💾 Salvar cargos"}
+            </button>
+          </div>
+        </>);})()}
+
         {catAba==="desvios" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
             Nomes dos tipos usados ao registrar um desvio (ex: BPF, Processo, Equipamento). Manter uma lista fechada evita

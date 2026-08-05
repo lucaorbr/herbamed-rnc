@@ -93,6 +93,7 @@ export default function App() {
   const [catalogoSetoresDesvio, setCatalogoSetoresDesvio] = useState([]);
   const [catalogoTiposRevalidacao, setCatalogoTiposRevalidacao] = useState([]);
   const [catalogoAreasSetoresDistribuicao, setCatalogoAreasSetoresDistribuicao] = useState([]);
+  const [catalogoCargos, setCatalogoCargos] = useState([]);
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -217,6 +218,8 @@ export default function App() {
       setCatalogoTiposRevalidacao(ctr?.items || []);
       const casd = list.find(c => c.id === "catalogo_areas_setores_distribuicao");
       setCatalogoAreasSetoresDistribuicao(casd?.items || []);
+      const cc = list.find(c => c.id === "catalogo_cargos");
+      setCatalogoCargos(cc?.items || []);
     });
     return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
   }, [user]);
@@ -702,7 +705,7 @@ export default function App() {
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} />}
             </div>
           </div>
         </div>
