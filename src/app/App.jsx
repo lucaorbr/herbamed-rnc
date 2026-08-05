@@ -3,6 +3,7 @@ import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { rncAtiva } from "../core/status";
+import { pendentesDoUsuario } from "../features/documentos/treinamento";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
 import { AuditLogTab } from "../features/audit/AuditLogTab";
@@ -254,6 +255,50 @@ export default function App() {
       }
     }
   }, [rncs, user]);
+
+  // ── Alerta de treinamento — atrasado ou com reciclagem vencida ────────────
+  // Mesmo desenho do alerta de prazo das RNCs acima: dispara no máximo uma vez
+  // por dia (trava em localStorage) e usa a MESMA regra de exigência da matriz,
+  // importada de `treinamento.js` — nada de reimplementar a herança por cargo.
+  // Busca one-shot (não assina): o alerta não precisa ser tempo real, e assim
+  // não duplica o polling que a aba de Documentos já faz.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const hoje = tod();
+    if (localStorage.getItem("hm_last_alert_treino") === hoje) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const [docs, evid] = await Promise.all([
+          getCollection("gestao_docs"),
+          getCollection("treinamentos"),
+        ]);
+        if (!vivo) return;
+        const meus = pendentesDoUsuario({
+          docs: docs || [], users, evidencias: evid || [],
+          catalogoCargos: catalogoCargos, userId: String(user.uid), hoje,
+        });
+        const criticos = meus.filter(m => m.status === "atrasado" || m.status === "vencido");
+        if (!criticos.length) return;
+        localStorage.setItem("hm_last_alert_treino", hoje);
+        const linha = (m) => `• ${m.doc.codigo} — ${m.doc.titulo} (Rev.${m.doc.versao})\n  ${m.status === "vencido" ? `Reciclagem vencida há ${m.dias} dia(s)` : `Sem treinamento há ${m.dias} dia(s)`}`;
+        fetch("https://api.emailjs.com/api/v1.0/email/send", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            service_id: "service_gxhicii", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
+            template_params: {
+              to_email: user.email, to_name: user.name,
+              from_name: "SGQ Herbamed® · Alertas Automáticos",
+              subject: `📚 SGQ Herbamed — ${criticos.length} treinamento(s) em atraso`,
+              message: `Olá ${user.name},\n\nVocê tem treinamento obrigatório pendente nos documentos abaixo:\n\n${criticos.map(linha).join("\n\n")}\n\nAcesse Gestão de Documentos → Matriz de Treinamento para regularizar.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
+              reply_to: user.email,
+            }
+          })
+        }).catch(() => {});
+      } catch { /* alerta é best-effort: falha não pode atrapalhar o login */ }
+    })();
+    return () => { vivo = false; };
+  }, [user?.uid, users, catalogoCargos]);
 
   // ── Heartbeat — atualiza online status a cada 2 minutos ──────────────────
   useEffect(() => {

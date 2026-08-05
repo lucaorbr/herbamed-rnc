@@ -1,6 +1,7 @@
 import {
   documentoExigeTreinamento, exigidosDoDocumento, indexarEvidencias, statusCelula,
   montarMatriz, pendentesDoUsuario, planoMigracaoTreinamento, chaveEvidencia,
+  somarMeses, vencimentoDaEvidencia, filaDeReciclagem,
 } from "./treinamento";
 
 const cargos = [
