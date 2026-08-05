@@ -9,6 +9,7 @@ import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { userHasPerm } from "../permissions/permissions";
+import { reabrirLeitura, treinoAtual } from "./treinamento";
 
 export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
   const T = useTheme();
@@ -819,6 +820,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     // Snapshot do conteúdo completo da versão que está sendo arquivada (rastreabilidade BPF).
     const snapshotConteudo = { titulo: doc.titulo, etapas: doc.etapas||[], materiais: doc.materiais||[], arquivo: doc.arquivo || null, arquivoFonte: doc.arquivoFonte || null };
     CAPITULOS_GD.filter(c=>!c.special).forEach(c=>{ snapshotConteudo[c.id] = doc[c.id] ?? ""; });
+    // Confirmação de leitura é sempre da versão lida: as confirmações da versão que
+    // está sendo arquivada ficam no histórico (evidência BPF de quem leu a Rev. anterior).
+    const leituraAnterior = doc.leituraObrigatoria || null;
     const historico   = [...(doc.historicoRevisoes||[]), {
       versao: versaoAtual,
       versaoAlvo: novaVersao,
@@ -830,7 +834,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       descricao,
       aprovador,
       conteudo: snapshotConteudo,
+      leituraObrigatoria: leituraAnterior,
     }];
+    // ...e a nova revisão reabre a leitura para os mesmos designados. Sem isto, quem
+    // confirmou a Rev. anterior seguia exibido como "✓ Confirmado" numa versão que
+    // nunca leu — registro de treinamento falso num documento controlado.
+    const leituraReaberta = reabrirLeitura(leituraAnterior, { novaVersao, hoje: tod(), por: user?.name });
     // Arquivo controlado (PDF) da versão anterior fica no snapshot; nova revisão exige novo upload.
     // O arquivo fonte é mantido: o elaborador baixa o fonte anterior, edita e substitui.
     // Cópias físicas da versão anterior viram pendência de recolha na nova revisão.
@@ -838,9 +847,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const recolhaPendente = copiasAnteriores.length
       ? [...(doc.recolhaPendente||[]), ...copiasAnteriores.map(c => ({ ...c, versaoAnterior: versaoAtual }))]
       : (doc.recolhaPendente || null);
-    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, leituraObrigatoria:leituraReaberta, historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão" });
+    await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão", leituraReaberta: leituraReaberta?.atribuido ? (leituraReaberta.designados||[]).length : 0 });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
     setSel(updated);
     } catch(e) {
@@ -986,9 +995,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     try {
     if (!novoTreino.userId) { alert("Selecione o colaborador."); return; }
     const u = users?.find(x => x.id===novoTreino.userId);
-    const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
+    // Treinamento é sempre de uma versão do documento: sem o carimbo, um registro da
+    // Rev.00 seguia valendo visualmente na Rev.02 (mesma falha da leitura obrigatória).
+    const t = { id:Date.now(), userId:novoTreino.userId, userName:u?.name||"—", userSetor:u?.setor||"—", versao:sel.versao||"01", dataRealizacao:novoTreino.dataRealizacao, obs:novoTreino.obs, registradoPor:user?.name, ts:Date.now() };
     await saveCollection(`gestao_docs/${sel.id}/treinos`, String(t.id), t);
-    await auditLog("Registrou Treinamento", "gestao_docs", sel.id, `${sel.codigo} — ${sel.titulo}`, null, { colaborador: t.userName, data: t.dataRealizacao });
+    await auditLog("Registrou Treinamento", "gestao_docs", sel.id, `${sel.codigo} — ${sel.titulo}`, null, { colaborador: t.userName, data: t.dataRealizacao, versao: t.versao });
     toast_("Treinamento registrado!", "green");
     setNovoTreino({ userId:"", dataRealizacao:tod(), obs:"" });
     } catch(e) {
@@ -1892,8 +1903,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                 </div>
               </div>
               <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-                Atribuído por {leit.atribuidoPor} em {fmt(leit.atribuidoEm)}
+                Atribuído por {leit.atribuidoPor} em {fmt(leit.atribuidoEm)} · confirmações referentes à Rev.{d.versao}
               </div>
+              {leit.reabertoEm && (
+                <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:8, padding:"8px 12px", marginBottom:10, fontSize:11, color:T.text2 }}>
+                  🔄 Leitura reaberta na Rev.{leit.reabertoNaVersao} em {fmt(leit.reabertoEm)} — as confirmações da versão anterior ficam registradas no histórico de revisões.
+                </div>
+              )}
               {euNaLista && !euJaConfirmei && (
                 <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12 }}>
                   <span style={{ fontSize:22 }}>📖</span>
@@ -1937,9 +1953,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 14px",marginBottom:12,fontSize:12,color:T.accent}}>
               📋 Este documento requer treinamento formal dos colaboradores antes da execução.
             </div>
-            {isAdmin && (
+            {(isAdmin || (perm?.("registrarTreinamento") ?? false)) && (
               <div style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"1rem",marginBottom:12}}>
-                <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Registrar novo treinamento</div>
+                <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Registrar novo treinamento — Rev.{d.versao}</div>
                 <G2 ch={<>
                   <F lbl="Colaborador" ch={<Sel value={novoTreino.userId} onChange={e=>setNovoTreino(p=>({...p,userId:e.target.value}))}><option value="">Selecione...</option>{(users||[]).map(u=><option key={u.id} value={u.id}>{u.name} — {u.setor}</option>)}</Sel>} />
                   <F lbl="Data do treinamento" ch={<Inp type="date" value={novoTreino.dataRealizacao} onChange={e=>setNovoTreino(p=>({...p,dataRealizacao:e.target.value}))} />} />
@@ -1950,17 +1966,24 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             )}
             {treinamentos.length===0 ? (
               <div style={{textAlign:"center",padding:"1.5rem",color:T.text3,fontSize:12}}>Nenhum treinamento registrado.</div>
-            ) : treinamentos.map(t=>(
+            ) : treinamentos.map(t=>{
+              // Registro anterior à versão vigente (ou sem versão, de antes deste carimbo)
+              // não comprova treinamento no documento atual — marca como desatualizado.
+              const atual = treinoAtual(t, d.versao);
+              return (
               <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,marginBottom:6}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>📚</div>
+                <div style={{width:32,height:32,borderRadius:"50%",background:atual?T.accent:T.border,color:atual?"#fff":T.text3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>📚</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:600,color:T.text}}>{t.userName}</div>
-                  <div style={{fontSize:11,color:T.text2}}>{t.userSetor} · {fmt(t.dataRealizacao)}</div>
+                  <div style={{fontSize:11,color:T.text2}}>{t.userSetor} · {fmt(t.dataRealizacao)} · {t.versao?`Rev.${t.versao}`:"revisão não registrada"}</div>
                   {t.obs&&<div style={{fontSize:11,color:T.text3,marginTop:2}}>{t.obs}</div>}
                 </div>
-                <span style={{fontSize:10,color:T.accent,background:T.accentDim,padding:"2px 8px",borderRadius:12,fontWeight:700}}>✓ Treinado</span>
+                {atual
+                  ? <span style={{fontSize:10,color:T.accent,background:T.accentDim,padding:"2px 8px",borderRadius:12,fontWeight:700}}>✓ Treinado</span>
+                  : <span style={{fontSize:10,color:"#e8a33d",background:"#e8a33d18",padding:"2px 8px",borderRadius:12,fontWeight:700}}>⚠ Desatualizado</span>
+                }
               </div>
-            ))}
+            );})}
           </div>
         )}
         {recusaModal}
