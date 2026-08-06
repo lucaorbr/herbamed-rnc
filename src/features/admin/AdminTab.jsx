@@ -508,7 +508,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
 
       {abaAdmin==="colaboradores" && (
         <ColaboradoresTab
-          colaboradores={colaboradores} users={users} catalogoCargos={catalogoCargos}
+          colaboradores={colaboradores} users={users} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao}
           toast_={toast_} auditLog={auditLog} isAdmin
         />
       )}

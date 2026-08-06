@@ -67,8 +67,47 @@ export function documentoExigeTreinamento(doc) {
 }
 
 /**
- * Quem deve treinar este documento. Deriva de cargo (herança) e admite exceções
- * nominais. Sem duplicar: quem entra pelo cargo não reaparece como exceção.
+ * Onde a pessoa trabalha, resolvido no catálogo hierárquico Área → Setor
+ * (`catalogo_areas_setores_distribuicao`, o mesmo da distribuição de cópias:
+ * o setor que recebe a cópia controlada é onde as pessoas trabalham).
+ * Devolve `{ setorId, setorNome, areaId, areaNome }` ou null.
+ */
+export function localDaPessoa(pessoa, catalogoAreas = []) {
+  const alvo = pessoa?.setorId;
+  if (!alvo) return null;
+  for (const area of catalogoAreas || []) {
+    for (const s of area?.setores || []) {
+      if (s?.id === alvo) return { setorId: s.id, setorNome: s.nome, areaId: area.id, areaNome: area.label };
+    }
+  }
+  return { setorId: alvo, setorNome: pessoa.setor || alvo, areaId: null, areaNome: null };
+}
+
+/**
+ * A pessoa está em algum dos locais exigidos? Vincular a ÁREA alcança todos os
+ * setores dela; vincular o SETOR alcança só ele. Por isso a comparação testa os
+ * dois níveis.
+ */
+export function pessoaEmSetores(pessoa, setoresAlvo = [], catalogoAreas = []) {
+  if (!setoresAlvo?.length) return false;
+  const loc = localDaPessoa(pessoa, catalogoAreas);
+  if (!loc) return false;
+  return setoresAlvo.includes(loc.setorId) || (!!loc.areaId && setoresAlvo.includes(loc.areaId));
+}
+
+/**
+ * Quem deve treinar este documento. Duas dimensões de herança + exceções nominais.
+ *
+ * REGRA (Fase 7):
+ *   só cargos  → todos daquele cargo, em qualquer setor
+ *   só setores → todos daqueles setores, em qualquer cargo
+ *   ambos      → INTERSEÇÃO: quem tem aquele cargo NAQUELE setor
+ *   nominais   → sempre somam por fora
+ *
+ * A interseção existe porque hoje o cargo não discrimina: encapsulamento,
+ * compressão, envase e mistura são todos "Auxiliar de Produção". Quem separa é o
+ * setor. Quando o RH desmembrar os cargos, o filtro de setor pode ser removido e
+ * a regra continua valendo.
  *
  * `pessoas` são COLABORADORES (cadastro de funcionários), não usuários do sistema:
  * numa fábrica a maioria de quem treina em POP não tem login. Aceita tanto `nome`
@@ -77,27 +116,44 @@ export function documentoExigeTreinamento(doc) {
  * Desligado (`ativo: false`) fica de fora — some do cálculo de conformidade, mas a
  * evidência dele continua gravada e consultável, que é o que a inspeção pede.
  */
-export function exigidosDoDocumento(doc, pessoas = [], catalogoCargos = []) {
+export function exigidosDoDocumento(doc, pessoas = [], catalogoCargos = [], catalogoAreas = []) {
   if (!doc?.treinamento?.exigido) return [];
-  const { cargos = [], pessoasExtra = [] } = doc.treinamento;
+  const { cargos = [], setores = [], pessoasExtra = [] } = doc.treinamento;
   const nomeCargo = (id, fallback) => (catalogoCargos || []).find(c => c.id === id)?.nome || fallback || id;
   const nomeDe = (p) => p?.nome || p?.name || "—";
   const ativos = (pessoas || []).filter(p => p && p.ativo !== false);
   const vistos = new Set();
   const out = [];
-  const linha = (p, origem) => ({
-    userId: String(p.id), userName: nomeDe(p), setor: p.setor || "",
-    cargoId: p.cargoId || null,
-    cargoNome: p.cargoId ? nomeCargo(p.cargoId, p.cargoNome) : "—",
-    // Relógio do prazo respeita a admissão: novo contratado não nasce atrasado.
-    admissao: p.dataAdmissao || null,
-    temLogin: !!p.userId,
-    origem,
-  });
+  const linha = (p, origem) => {
+    const loc = localDaPessoa(p, catalogoAreas);
+    return {
+      userId: String(p.id), userName: nomeDe(p),
+      setor: loc?.setorNome || p.setor || "",
+      setorId: p.setorId || null,
+      areaNome: loc?.areaNome || "",
+      cargoId: p.cargoId || null,
+      cargoNome: p.cargoId ? nomeCargo(p.cargoId, p.cargoNome) : "—",
+      // Relógio do prazo respeita a admissão: novo contratado não nasce atrasado.
+      admissao: p.dataAdmissao || null,
+      temLogin: !!p.userId,
+      origem,
+    };
+  };
+
+  const temCargo = cargos.length > 0;
+  const temSetor = setores.length > 0;
+  const casaCargo = (p) => !!p?.cargoId && cargos.includes(p.cargoId);
+  const casaSetor = (p) => pessoaEmSetores(p, setores, catalogoAreas);
+
   for (const p of ativos) {
-    if (!p?.cargoId || !cargos.includes(p.cargoId)) continue;
+    let entra;
+    if (temCargo && temSetor) entra = casaCargo(p) && casaSetor(p);
+    else if (temCargo) entra = casaCargo(p);
+    else if (temSetor) entra = casaSetor(p);
+    else entra = false;
+    if (!entra) continue;
     vistos.add(String(p.id));
-    out.push(linha(p, "cargo"));
+    out.push(linha(p, temCargo && temSetor ? "cargo+setor" : temCargo ? "cargo" : "setor"));
   }
   for (const uid of pessoasExtra) {
     if (vistos.has(String(uid))) continue;
@@ -117,9 +173,9 @@ export function exigidosDoDocumento(doc, pessoas = [], catalogoCargos = []) {
  * sozinho — basta vincular um cargo operacional a um documento de leitura. A tela
  * usa isto para avisar e sugerir o modo presencial, que tem a lista de presença.
  */
-export function exigidosSemLogin(doc, pessoas = [], catalogoCargos = []) {
+export function exigidosSemLogin(doc, pessoas = [], catalogoCargos = [], catalogoAreas = []) {
   if (doc?.treinamento?.modo !== "leitura") return [];
-  return exigidosDoDocumento(doc, pessoas, catalogoCargos).filter(e => !e.temLogin);
+  return exigidosDoDocumento(doc, pessoas, catalogoCargos, catalogoAreas).filter(e => !e.temLogin);
 }
 
 /** Chave lógica da evidência: um treinamento vale para (documento, versão, pessoa). */
@@ -205,13 +261,13 @@ export function statusCelula({ doc, userId, indice, hoje, admissao = null }) {
  * exigidas. Linhas sem nenhuma exigência não aparecem — a matriz mostra quem
  * deve algo, não o cadastro inteiro.
  */
-export function montarMatriz({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], hoje }) {
+export function montarMatriz({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], catalogoAreas = [], hoje }) {
   const colunas = (docs || []).filter(documentoExigeTreinamento);
   const indice = indexarEvidencias(evidencias);
   const linhasPorUser = new Map();
 
   for (const doc of colunas) {
-    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos)) {
+    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos, catalogoAreas)) {
       if (!linhasPorUser.has(ex.userId)) {
         linhasPorUser.set(ex.userId, { ...ex, celulas: new Map(), treinado: 0, pendente: 0, atrasado: 0, vencido: 0 });
       }
@@ -244,12 +300,12 @@ export function montarMatriz({ docs = [], pessoas = [], evidencias = [], catalog
  * Fila de reciclagem: treinamentos ainda válidos que vencem dentro da janela.
  * É o equivalente à revisão periódica dos documentos, aplicada à competência.
  */
-export function filaDeReciclagem({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], hoje, janelaDias = 60 }) {
+export function filaDeReciclagem({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], catalogoAreas = [], hoje, janelaDias = 60 }) {
   const indice = indexarEvidencias(evidencias);
   const out = [];
   for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
     if (!Number(doc?.treinamento?.reciclagemMeses)) continue;
-    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos)) {
+    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos, catalogoAreas)) {
       const cel = statusCelula({ doc, userId: ex.userId, indice, hoje, admissao: ex.admissao });
       if (cel.status !== "treinado" || cel.diasParaVencer == null) continue;
       if (cel.diasParaVencer <= janelaDias) out.push({ doc, ...ex, ...cel });
@@ -259,11 +315,11 @@ export function filaDeReciclagem({ docs = [], pessoas = [], evidencias = [], cat
 }
 
 /** As exigências em aberto de uma pessoa — alimenta "meus treinamentos pendentes". */
-export function pendentesDoUsuario({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], userId, hoje }) {
+export function pendentesDoUsuario({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], catalogoAreas = [], userId, hoje }) {
   const indice = indexarEvidencias(evidencias);
   const out = [];
   for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
-    const eu = exigidosDoDocumento(doc, pessoas, catalogoCargos).find(e => e.userId === String(userId));
+    const eu = exigidosDoDocumento(doc, pessoas, catalogoCargos, catalogoAreas).find(e => e.userId === String(userId));
     if (!eu) continue;
     const cel = statusCelula({ doc, userId, indice, hoje, admissao: eu.admissao });
     if (cel.status !== "treinado") out.push({ doc, ...cel });

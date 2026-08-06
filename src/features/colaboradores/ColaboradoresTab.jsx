@@ -7,14 +7,14 @@ import { saveCollection } from "../../firebase";
 import { cargosAtivos } from "../admin/cargos";
 import {
   novoColaborador, planoMigracaoColaboradores, planoImportacaoColaboradores,
-  parseCSVColaboradores, normMatricula, normNome,
+  parseCSVColaboradores, normMatricula, normNome, opcoesDeLocal,
 } from "./colaboradores";
 
 // Cadastro de Colaboradores — a lista de PESSOAS da fábrica, separada dos usuários
 // do sistema. É daqui que a Matriz de Treinamento deriva a exigência desde a Fase 6:
 // operador não tem login, mas é justamente quem precisa treinar em POP.
 
-export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargos = [], toast_, auditLog, isAdmin }) {
+export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargos = [], catalogoAreas = [], toast_, auditLog, isAdmin }) {
   const T = useTheme(); const s = useS();
   const [busca, setBusca] = useState("");
   const [filtroCargo, setFiltroCargo] = useState("todos");
@@ -25,6 +25,8 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
   const fileRef = useRef(null);
 
   const cargos = cargosAtivos(catalogoCargos);
+  const locais = opcoesDeLocal(catalogoAreas);
+  const nomeLocal = (id) => locais.find(l => l.id === id)?.rotulo || null;
   const nomeCargo = (id) => catalogoCargos.find(c => c.id === id)?.nome || "—";
 
   const visiveis = useMemo(() => {
@@ -45,6 +47,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
       comLogin: ativos.filter(c => c.userId).length,
       semLogin: ativos.filter(c => !c.userId).length,
       semCargo: ativos.filter(c => !c.cargoId).length,
+      semSetor: ativos.filter(c => !c.setorId).length,
       inativos: colaboradores.length - ativos.length,
     };
   }, [colaboradores]);
@@ -114,7 +117,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
         toast_?.("Não encontrei a coluna 'nome' no arquivo. Confira o cabeçalho.", "red");
         return;
       }
-      setPrevia({ arquivo: f.name, ...planoImportacaoColaboradores({ linhas, colaboradores, catalogoCargos }) });
+      setPrevia({ arquivo: f.name, ...planoImportacaoColaboradores({ linhas, colaboradores, catalogoCargos, catalogoAreas }) });
     } catch { toast_?.("Não consegui ler o arquivo.", "red"); }
   };
 
@@ -157,6 +160,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
         <KPI label="Sem login" valor={resumo.semLogin} cor="#4fc3f7" sub="treinam presencialmente" />
         <KPI label="Com login" valor={resumo.comLogin} sub="podem confirmar leitura" />
         <KPI label="Sem cargo" valor={resumo.semCargo} cor={resumo.semCargo ? "#e8a33d" : T.text3} sub="não herdam treinamento" />
+        <KPI label="Setor não vinculado" valor={resumo.semSetor} cor={resumo.semSetor ? "#e8a33d" : T.text3} sub="fora do filtro por setor" />
         <KPI label="Desligados" valor={resumo.inativos} cor={T.text3} sub="histórico preservado" />
       </div>
 
@@ -216,7 +220,9 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
                   </div>
                   <div style={{ fontSize: 11, color: T.text2 }}>
                     {c.cargoId ? nomeCargo(c.cargoId) : <span style={{ color: "#e8a33d" }}>sem cargo</span>}
-                    {c.setor ? ` · ${c.setor}` : ""}
+                    {c.setorId
+                      ? ` · ${nomeLocal(c.setorId) || c.setor}`
+                      : c.setor ? <span style={{ color: "#e8a33d" }}> · {c.setor} (setor não vinculado)</span> : ""}
                     {c.dataAdmissao ? ` · admissão ${fmt(c.dataAdmissao)}` : ""}
                   </div>
                 </div>
@@ -256,7 +262,17 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
                   {cargos.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </Sel>
               } />
-              <F lbl="Setor" ch={<Inp value={edit.setor || ""} onChange={e => setEdit(p => ({ ...p, setor: e.target.value }))} />} />
+              <F lbl="Setor de trabalho"
+                tip="Onde a pessoa efetivamente trabalha. Junto com o cargo, define quais documentos ela precisa treinar — hoje é o setor que separa encapsulamento de compressão, já que ambos são Auxiliar de Produção."
+                ch={
+                  <Sel value={edit.setorId || ""} onChange={e => {
+                    const alvo = locais.find(l => l.id === e.target.value);
+                    setEdit(p => ({ ...p, setorId: e.target.value || null, setor: alvo?.rotulo || p.setor || "" }));
+                  }}>
+                    <option value="">{edit.setor ? `— não vinculado (${edit.setor}) —` : "— sem setor —"}</option>
+                    {locais.map(l => <option key={l.id} value={l.id}>{l.rotulo}</option>)}
+                  </Sel>
+                } />
               <F lbl="Data de admissão" tip="O prazo de treinamento passa a contar da admissão, para quem entra depois da versão vigente não nascer atrasado." ch={
                 <Inp type="date" value={edit.dataAdmissao || ""} onChange={e => setEdit(p => ({ ...p, dataAdmissao: e.target.value || null }))} />
               } />

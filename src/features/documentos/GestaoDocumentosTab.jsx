@@ -12,6 +12,7 @@ import { userHasPerm } from "../permissions/permissions";
 import { reabrirLeitura, exigidosDoDocumento, exigidosSemLogin, indexarEvidencias, statusCelula, novaEvidencia, documentoExigeTreinamento, pendentesDoUsuario, MODOS_TREINAMENTO, PRAZO_TREINAMENTO_PADRAO } from "./treinamento";
 import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
 import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
+import { opcoesDeLocal } from "../colaboradores/colaboradores";
 import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
 
@@ -988,6 +989,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         exigido: !!cfg.exigido,
         modo: cfg.modo || "leitura",
         cargos: cfg.cargos || [],
+        setores: cfg.setores || [],
         pessoasExtra: cfg.pessoasExtra || [],
         prazoDias: Number(cfg.prazoDias) || PRAZO_TREINAMENTO_PADRAO,
         reciclagemMeses: Number(cfg.reciclagemMeses) || null,
@@ -1010,7 +1012,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       // Busca no cadastro de pessoas, não em `users`: quem é treinado pode não ter login.
       const alvo = (colaboradores || []).find(c => String(c.id) === String(alvoUserId));
       if (!alvo) { toast_("Selecione o colaborador.", "red"); return; }
-      const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos).find(e => e.userId === String(alvoUserId));
+      const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao).find(e => e.userId === String(alvoUserId));
       const ev = novaEvidencia({
         doc, user: { id: alvo.id, name: alvo.nome || alvo.name }, cargoNome: ex?.cargoNome || alvo.cargoNome, modo,
         dataRealizacao: dataRealizacao || tod(), obs, registradoPor: user?.name,
@@ -1859,7 +1861,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           if (!tr && !legado && !podeGerirTreino) return null;
 
           const meuId = String(user?.uid || user?.id || "");
-          const exigidos = exigidosDoDocumento(d, colaboradores, catalogoCargos);
+          const exigidos = exigidosDoDocumento(d, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao);
           const indice = indexarEvidencias(evidencias);
           const vigente = documentoExigeTreinamento(d);
           const linhas = exigidos.map(ex => ({ ...ex, cel: statusCelula({ doc:d, userId:ex.userId, indice, hoje:tod() }) }));
@@ -1867,10 +1869,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           const pct = linhas.length ? Math.round((treinados/linhas.length)*100) : 0;
           const eu = linhas.find(l => l.userId === meuId);
           const cargosDisp = cargosAtivos(catalogoCargos);
+          const locaisDisp = opcoesDeLocal(catalogoAreasSetoresDistribuicao);
           const cfg = editTreino || {
             exigido: tr?.exigido ?? true,
             modo: tr?.modo || "leitura",
             cargos: tr?.cargos || [],
+            setores: tr?.setores || [],
             pessoasExtra: tr?.pessoasExtra || [],
             prazoDias: tr?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO,
             reciclagemMeses: tr?.reciclagemMeses ?? "",
@@ -1922,7 +1926,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   {/* Pendência impossível: modo leitura exige confirmar no sistema, e
                       operador não tem login. Sem este aviso a matriz acumularia atraso
                       que ninguém consegue resolver. */}
-                  {(()=>{ const semLogin = exigidosSemLogin(d, colaboradores, catalogoCargos); return semLogin.length > 0 && (
+                  {(()=>{ const semLogin = exigidosSemLogin(d, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao); return semLogin.length > 0 && (
                     <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:10, fontSize:12, color:T.text2 }}>
                       <strong style={{ color:T.text }}>{semLogin.length} pessoa(s) exigida(s) não têm login</strong> e este documento está no modo
                       <strong> Leitura e entendimento</strong>, que depende de a própria pessoa confirmar no sistema — elas nunca conseguiriam.
@@ -2095,6 +2099,59 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                         })}
                       </div>
                     )}
+
+                    {/* Setores (Fase 7) — a dimensão que hoje realmente separa as
+                        pessoas, já que encapsulamento, compressão e envase são todos
+                        "Auxiliar de Produção". */}
+                    <div style={{ fontSize:12, fontWeight:600, color:T.text, margin:"10px 0 6px" }}>Setores exigidos</div>
+                    <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
+                      Vincular a <strong>área</strong> alcança todos os setores dela; vincular o <strong>setor</strong> alcança só ele.
+                      {(editTreino.cargos||[]).length > 0 && (editTreino.setores||[]).length > 0 &&
+                        <> Com cargo <em>e</em> setor preenchidos, vale a <strong>interseção</strong>: quem tem aquele cargo <em>naquele</em> setor.</>}
+                    </div>
+                    {locaisDisp.length === 0 ? (
+                      <div style={{ fontSize:12, color:"#e8a33d", marginBottom:10 }}>
+                        ⚠ Nenhuma área/setor no catálogo. Cadastre em Admin → Catálogos → Áreas e Setores.
+                      </div>
+                    ) : (
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
+                        {locaisDisp.map(l => {
+                          const on = (editTreino.setores||[]).includes(l.id);
+                          const n = (colaboradores||[]).filter(c => c.ativo !== false && (c.setorId === l.id || (l.tipo === "area" && (catalogoAreasSetoresDistribuicao.find(a=>a.id===l.id)?.setores||[]).some(s=>s.id===c.setorId)))).length;
+                          return (
+                            <button key={l.id} onClick={()=>setEditTreino(p=>({ ...p, setores: on ? (p.setores||[]).filter(x=>x!==l.id) : [...(p.setores||[]), l.id] }))}
+                              style={{ padding:"6px 12px", borderRadius:20, border:`1px solid ${on?T.accent:T.border}`, cursor:"pointer", fontFamily:"inherit",
+                                fontSize:11, fontWeight:600, background:on?T.accent+"22":"transparent", color:on?T.accent:T.text2 }}>
+                              {on ? "✓ " : ""}{l.rotulo} <span style={{ opacity:.7 }}>({n})</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Prévia ao vivo — o que impede errar a configuração: você vê
+                        exatamente quem será exigido ANTES de salvar. */}
+                    {(()=>{
+                      const previa = exigidosDoDocumento({ treinamento: { ...editTreino, exigido: true } }, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao);
+                      const vazio = previa.length === 0;
+                      return (
+                        <div style={{ background: vazio ? "#ff4f6a12" : T.accent+"10", border:`1px solid ${vazio ? "#ff4f6a44" : T.accent+"33"}`, borderRadius:10, padding:"12px 16px", marginBottom:12 }}>
+                          <div style={{ fontSize:12, fontWeight:700, color: vazio ? "#ff4f6a" : T.text }}>
+                            {vazio ? "⚠ Nenhuma pessoa seria exigida com esta configuração" : `${previa.length} pessoa(s) serão exigidas`}
+                          </div>
+                          {vazio ? (
+                            <div style={{ fontSize:11, color:T.text2, marginTop:4 }}>
+                              A combinação escolhida não alcança ninguém no cadastro atual. Se você acabou de mudar cargos ou setores,
+                              revise — documento que exige treinamento de zero pessoas some da conformidade sem avisar.
+                            </div>
+                          ) : (
+                            <div style={{ fontSize:11, color:T.text2, marginTop:4, maxHeight:70, overflowY:"auto" }}>
+                              {previa.slice(0,25).map(p=>p.userName).join(", ")}{previa.length>25?` e mais ${previa.length-25}`:""}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </>)}
                   <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                     <button style={s.btn} onClick={()=>setEditTreino(null)}>Cancelar</button>
@@ -2515,7 +2572,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
   if (view==="matriz") {
     return (
       <MatrizTreinamentoTab
-        docs={docs} colaboradores={colaboradores} treinamentos={evidencias} catalogoCargos={catalogoCargos}
+        docs={docs} colaboradores={colaboradores} treinamentos={evidencias} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao}
         user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
         onVoltar={()=>setView("lista")}
         onAbrirDoc={(doc)=>{ setSel(doc); setView("detalhe"); }}
@@ -2527,7 +2584,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
   if (view==="sessoes" && sel) {
     return (
       <SessoesTreinamentoTab
-        doc={sel} sessoes={sessoes} colaboradores={colaboradores} evidencias={evidencias} catalogoCargos={catalogoCargos}
+        doc={sel} sessoes={sessoes} colaboradores={colaboradores} evidencias={evidencias} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao}
         user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
         onVoltar={()=>setView("detalhe")}
       />
@@ -2703,7 +2760,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
           {(()=>{
             // Badge com as pendências da própria pessoa — a matriz é acionável, não só relatório.
-            const meus = pendentesDoUsuario({ docs, pessoas: colaboradores, evidencias, catalogoCargos, userId:String(user?.uid||user?.id||""), hoje:tod() });
+            const meus = pendentesDoUsuario({ docs, pessoas: colaboradores, evidencias, catalogoCargos, catalogoAreas: catalogoAreasSetoresDistribuicao, userId:String(user?.uid||user?.id||""), hoje:tod() });
             return (
               <button style={s.btn} onClick={()=>setView("matriz")}>
                 📚 Matriz de Treinamento
