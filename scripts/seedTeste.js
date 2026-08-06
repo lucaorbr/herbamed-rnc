@@ -1,17 +1,18 @@
 /* eslint-disable no-console */
 // Cenário de teste realista para a Matriz de Treinamento.
 //
-// Espelha o perfil do sistema oficial (49 documentos: 13 Vigentes, 31 Em Revisão,
-// 5 Rascunho) e a realidade de chão de fábrica: a maioria das pessoas exigidas em
-// POP é operador. Serve para exercitar a matriz com volume real, e para tornar
-// visíveis dois limites do desenho atual:
+// Espelha o perfil do sistema oficial (49 documentos: 13 Vigentes, 1 Em Revisão,
+// 35 Rascunho — conferido com o usuário em 2026-08-06) e a realidade de chão de
+// fábrica: a maioria das pessoas exigidas em POP é operador.
 //
-//   1. Só documento VIGENTE entra na matriz (`documentoExigeTreinamento`). Com 31
-//      dos 49 em revisão, a maior parte do acervo fica fora do cálculo — e nada na
-//      tela avisa que ficou.
-//   2. Toda pessoa exigida precisa ser um USUÁRIO do sistema. Aqui os operadores
-//      são criados como usuários só para o teste rodar; em produção eles não têm
-//      login, e é justamente esse o problema a resolver.
+// Só documento VIGENTE entra na matriz (`documentoExigeTreinamento`), e isso está
+// certo: não se treina em documento não aprovado. Os 35 rascunhos são documentos
+// em elaboração inicial, que nunca vigoraram — eles entram na matriz quando forem
+// aprovados. O único Em Revisão é uma Rev.02 de documento que já vigorou.
+//
+// O limite real que este cenário expõe é outro: toda pessoa exigida precisa ser um
+// USUÁRIO do sistema. Aqui os operadores são criados como usuários só para o teste
+// rodar; em produção eles não têm login — é o problema que a Fase 6 resolve.
 //
 // Uso:  node scripts/seedTeste.js          (popula)
 //       node scripts/seedTeste.js --limpar (remove só o que este script criou)
@@ -184,7 +185,16 @@ async function main() {
   // ── Limpeza do que este script criou (sempre roda antes de repopular) ──
   const delDocs = await client.query(`DELETE FROM generic_documents WHERE data->>'${MARCA}' = 'true'`);
   const delUsers = await client.query(`DELETE FROM users WHERE data->>'${MARCA}' = 'true'`);
-  console.log(`Limpeza: ${delDocs.rowCount} registro(s) e ${delUsers.rowCount} usuário(s) do seed removidos.`);
+  // Recriar os usuários gera ids novos, então colaboradores vinculados aos antigos
+  // ficariam órfãos — apontando para conta inexistente e fora de sincronia com as
+  // evidências. Some com eles aqui para o cenário nascer coerente.
+  const delColab = await client.query(
+    `DELETE FROM generic_documents g
+      WHERE g.collection = 'colaboradores'
+        AND g.data->>'userId' IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id::text = g.data->>'userId')`
+  );
+  console.log(`Limpeza: ${delDocs.rowCount} registro(s), ${delUsers.rowCount} usuário(s) e ${delColab.rowCount} colaborador(es) órfão(s) removidos.`);
   if (limpar) {
     // O catálogo de cargos é compartilhado: devolve só o cargo original.
     await client.query(
@@ -243,26 +253,29 @@ async function main() {
     docsVigentes.push(d);
   }
 
-  for (const [codigo, titulo, tipo, depto, cargos] of EM_REVISAO) {
-    // Estes JÁ FORAM vigentes: a Rev. anterior está no histórico e segue em vigor
-    // na prática, mas a matriz não os enxerga (status ≠ Vigente).
-    const d = docBase(codigo, titulo, tipo, depto, cargos, "Em Revisão", "03", {
+  // Um único Em Revisão, como no sistema oficial: documento que JÁ vigorou e está
+  // sendo revisado para a Rev.02. Enquanto a revisão não é aprovada ele fica fora
+  // da matriz — janela pequena e conhecida, não é lacuna a corrigir.
+  {
+    const [codigo, titulo, tipo, depto, cargos] = EM_REVISAO[0];
+    await insertDoc(docBase(codigo, titulo, tipo, depto, cargos, "Em Revisão", "02", {
       desdeEm: null,
       doc: {
         historicoRevisoes: [{
-          versao: "02", versaoAlvo: "03", status: "Vigente", data: diasAtras(400),
+          versao: "01", versaoAlvo: "02", status: "Vigente", data: diasAtras(400),
           responsavel: "Seed de Teste", motivo: "Revisão periódica",
           itemModificado: "Documento completo", descricao: "Atualização de rotina",
         }],
       },
-    });
-    await insertDoc(d);
+    }));
   }
 
-  for (const [codigo, titulo, tipo, depto, cargos] of RASCUNHOS) {
+  // O resto é rascunho: documento em elaboração inicial, que nunca vigorou.
+  const rascunhos = [...EM_REVISAO.slice(1), ...RASCUNHOS];
+  for (const [codigo, titulo, tipo, depto, cargos] of rascunhos) {
     await insertDoc(docBase(codigo, titulo, tipo, depto, cargos, "Rascunho", "00", { desdeEm: null }));
   }
-  console.log(`Documentos: ${VIGENTES.length} Vigentes, ${EM_REVISAO.length} Em Revisão, ${RASCUNHOS.length} Rascunho (${VIGENTES.length + EM_REVISAO.length + RASCUNHOS.length} no total)`);
+  console.log(`Documentos: ${VIGENTES.length} Vigentes, 1 Em Revisão, ${rascunhos.length} Rascunho (${VIGENTES.length + 1 + rascunhos.length} no total)`);
 
   // ── Evidências ──
   // Cobertura parcial e desigual, como na vida real: parte treinada em dia, parte
@@ -296,7 +309,7 @@ async function main() {
 
   await client.end();
   console.log("\nCenário pronto. Abra Gestão de Docs → 📚 Matriz de Treinamento.");
-  console.log("Repare: a matriz mostra só os 13 Vigentes — os 31 Em Revisão ficam fora do cálculo.");
+  console.log("A matriz mostra os 13 Vigentes — rascunho não exige treinamento, e isso está correto.");
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
