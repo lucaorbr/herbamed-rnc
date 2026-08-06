@@ -95,6 +95,9 @@ export default function App() {
   const [catalogoTiposRevalidacao, setCatalogoTiposRevalidacao] = useState([]);
   const [catalogoAreasSetoresDistribuicao, setCatalogoAreasSetoresDistribuicao] = useState([]);
   const [catalogoCargos, setCatalogoCargos] = useState([]);
+  // Cadastro de pessoas — inclui quem NÃO tem login (operadores). É a fonte da
+  // exigência de treinamento desde a Fase 6; `users` é só quem tem credencial.
+  const [colaboradores, setColaboradores] = useState([]);
   const [toast, setToast] = useState(null);
   const [rncPrefill, setRncPrefill] = useState(null);
   const [emailCtx, setEmailCtx] = useState(null);
@@ -222,7 +225,8 @@ export default function App() {
       const cc = list.find(c => c.id === "catalogo_cargos");
       setCatalogoCargos(cc?.items || []);
     });
-    return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); };
+    const unsubColab = subscribeCollection("colaboradores", list => setColaboradores(list || []));
+    return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); unsubColab && unsubColab(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -274,8 +278,10 @@ export default function App() {
           getCollection("treinamentos"),
         ]);
         if (!vivo) return;
+        // O alerta é por e-mail, então só alcança quem tem login — e o `colaborador.id`
+        // de quem tem login é o próprio `users.id`, então `user.uid` continua casando.
         const meus = pendentesDoUsuario({
-          docs: docs || [], users, evidencias: evid || [],
+          docs: docs || [], pessoas: colaboradores, evidencias: evid || [],
           catalogoCargos: catalogoCargos, userId: String(user.uid), hoje,
         });
         const criticos = meus.filter(m => m.status === "atrasado" || m.status === "vencido");
@@ -298,7 +304,7 @@ export default function App() {
       } catch { /* alerta é best-effort: falha não pode atrapalhar o login */ }
     })();
     return () => { vivo = false; };
-  }, [user?.uid, users, catalogoCargos]);
+  }, [user?.uid, colaboradores, catalogoCargos]);
 
   // ── Heartbeat — atualiza online status a cada 2 minutos ──────────────────
   useEffect(() => {
@@ -745,12 +751,12 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} doSaveRNC={doSaveRNC} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}
             </div>
           </div>
         </div>

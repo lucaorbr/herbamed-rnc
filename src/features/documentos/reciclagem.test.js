@@ -67,7 +67,7 @@ describe("statusCelula com reciclagem", () => {
 });
 
 describe("montarMatriz com vencidos", () => {
-  const base = { docs: [doc()], users, catalogoCargos: cargos };
+  const base = { docs: [doc()], pessoas: users, catalogoCargos: cargos };
   it("conta vencido separado de pendente e atrasado", () => {
     const m = montarMatriz({ ...base, evidencias: [ev()], hoje: "2027-02-01" });
     expect(m.resumo).toMatchObject({ total: 2, treinado: 0, vencido: 1, atrasado: 1, pendente: 0 });
@@ -80,17 +80,17 @@ describe("montarMatriz com vencidos", () => {
 
 describe("pendentesDoUsuario inclui reciclagem vencida", () => {
   it("quem venceu volta para a lista de pendências", () => {
-    const r = pendentesDoUsuario({ docs: [doc()], users, evidencias: [ev()], catalogoCargos: cargos, userId: "u1", hoje: "2027-02-01" });
+    const r = pendentesDoUsuario({ docs: [doc()], pessoas: users, evidencias: [ev()], catalogoCargos: cargos, userId: "u1", hoje: "2027-02-01" });
     expect(r).toHaveLength(1);
     expect(r[0].status).toBe("vencido");
   });
   it("dentro da validade não é pendência", () => {
-    expect(pendentesDoUsuario({ docs: [doc()], users, evidencias: [ev()], catalogoCargos: cargos, userId: "u1", hoje: "2026-06-01" })).toEqual([]);
+    expect(pendentesDoUsuario({ docs: [doc()], pessoas: users, evidencias: [ev()], catalogoCargos: cargos, userId: "u1", hoje: "2026-06-01" })).toEqual([]);
   });
 });
 
 describe("filaDeReciclagem", () => {
-  const base = { docs: [doc()], users, evidencias: [ev()], catalogoCargos: cargos };
+  const base = { docs: [doc()], pessoas: users, evidencias: [ev()], catalogoCargos: cargos };
   it("traz quem vence dentro da janela", () => {
     const r = filaDeReciclagem({ ...base, hoje: "2026-12-01", janelaDias: 60 });
     expect(r).toHaveLength(1);
