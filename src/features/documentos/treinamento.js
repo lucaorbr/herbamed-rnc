@@ -109,23 +109,58 @@ export function indexarEvidencias(evidencias = []) {
   return mapa;
 }
 
-const diasEntre = (de, ate) => {
+export const diasEntre = (de, ate) => {
   if (!de || !ate) return 0;
   const ms = new Date(`${ate}T12:00:00`) - new Date(`${de}T12:00:00`);
   return Math.floor(ms / 86400000);
 };
 
 /**
- * Status de uma célula da matriz. `atrasado` é pendência que estourou o prazo
- * contado desde quando a exigência passou a valer para a versão vigente.
+ * Soma meses a uma data ISO, sem estourar para o mês seguinte: 31/01 + 1 mês é
+ * 28/02 (ou 29/02), não 03/03 — que é o que o Date faria sozinho.
+ */
+export function somarMeses(dataISO, meses) {
+  if (!dataISO || !meses) return null;
+  const [a, m, d] = String(dataISO).split("T")[0].split("-").map(Number);
+  if (!a || !m || !d) return null;
+  const alvoMes = m - 1 + Number(meses);
+  const ano = a + Math.floor(alvoMes / 12);
+  const mes = ((alvoMes % 12) + 12) % 12;
+  const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+  const dia = Math.min(d, ultimoDia);
+  return `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** Quando este treinamento vence, se o documento exigir reciclagem periódica. */
+export function vencimentoDaEvidencia(evidencia, reciclagemMeses) {
+  const meses = Number(reciclagemMeses) || 0;
+  if (!evidencia?.dataRealizacao || meses <= 0) return null;
+  return somarMeses(evidencia.dataRealizacao, meses);
+}
+
+/**
+ * Status de uma célula da matriz.
+ *  - `treinado`: tem evidência da versão vigente e ela ainda está válida
+ *  - `vencido` : treinou, mas a reciclagem periódica expirou (BPF: competência
+ *                não é permanente — POP crítico se reeduca de tempos em tempos)
+ *  - `atrasado`: nunca treinou e o prazo estourou
+ *  - `pendente`: nunca treinou, ainda dentro do prazo
+ * `vencido` é distinto de `atrasado` de propósito: a ação é diferente (reciclar
+ * quem já sabia × treinar quem nunca foi treinado) e a inspeção olha diferente.
  */
 export function statusCelula({ doc, userId, indice, hoje }) {
   const ev = indice?.get(chaveEvidencia(doc.id, doc.versao, String(userId))) || null;
-  if (ev) return { status: "treinado", evidencia: ev, dias: 0 };
+  if (ev) {
+    const venceEm = vencimentoDaEvidencia(ev, doc?.treinamento?.reciclagemMeses);
+    if (venceEm && venceEm < hoje) {
+      return { status: "vencido", evidencia: ev, dias: diasEntre(venceEm, hoje), venceEm };
+    }
+    return { status: "treinado", evidencia: ev, dias: 0, venceEm, diasParaVencer: venceEm ? diasEntre(hoje, venceEm) : null };
+  }
   const desde = doc?.treinamento?.desdeEm || doc?.atualizadoEm || null;
   const dias = desde ? diasEntre(desde, hoje) : 0;
   const prazo = Number(doc?.treinamento?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO);
-  return { status: dias > prazo ? "atrasado" : "pendente", evidencia: null, dias };
+  return { status: dias > prazo ? "atrasado" : "pendente", evidencia: null, dias, venceEm: null };
 }
 
 /**
@@ -141,7 +176,7 @@ export function montarMatriz({ docs = [], users = [], evidencias = [], catalogoC
   for (const doc of colunas) {
     for (const ex of exigidosDoDocumento(doc, users, catalogoCargos)) {
       if (!linhasPorUser.has(ex.userId)) {
-        linhasPorUser.set(ex.userId, { ...ex, celulas: new Map(), treinado: 0, pendente: 0, atrasado: 0 });
+        linhasPorUser.set(ex.userId, { ...ex, celulas: new Map(), treinado: 0, pendente: 0, atrasado: 0, vencido: 0 });
       }
       const linha = linhasPorUser.get(ex.userId);
       const cel = statusCelula({ doc, userId: ex.userId, indice, hoje });
@@ -156,14 +191,34 @@ export function montarMatriz({ docs = [], users = [], evidencias = [], catalogoC
   const total = linhas.reduce((n, l) => n + l.celulas.size, 0);
   const treinado = linhas.reduce((n, l) => n + l.treinado, 0);
   const atrasado = linhas.reduce((n, l) => n + l.atrasado, 0);
+  const vencido  = linhas.reduce((n, l) => n + l.vencido, 0);
   return {
     colunas, linhas, indice,
     resumo: {
-      total, treinado, atrasado,
-      pendente: total - treinado - atrasado,
+      total, treinado, atrasado, vencido,
+      pendente: total - treinado - atrasado - vencido,
+      // Reciclagem vencida NÃO conta como conforme — é justamente o ponto.
       conformidade: total > 0 ? Math.round((treinado / total) * 100) : 100,
     },
   };
+}
+
+/**
+ * Fila de reciclagem: treinamentos ainda válidos que vencem dentro da janela.
+ * É o equivalente à revisão periódica dos documentos, aplicada à competência.
+ */
+export function filaDeReciclagem({ docs = [], users = [], evidencias = [], catalogoCargos = [], hoje, janelaDias = 60 }) {
+  const indice = indexarEvidencias(evidencias);
+  const out = [];
+  for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
+    if (!Number(doc?.treinamento?.reciclagemMeses)) continue;
+    for (const ex of exigidosDoDocumento(doc, users, catalogoCargos)) {
+      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje });
+      if (cel.status !== "treinado" || cel.diasParaVencer == null) continue;
+      if (cel.diasParaVencer <= janelaDias) out.push({ doc, ...ex, ...cel });
+    }
+  }
+  return out.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
 }
 
 /** As exigências em aberto de uma pessoa — alimenta "meus treinamentos pendentes". */

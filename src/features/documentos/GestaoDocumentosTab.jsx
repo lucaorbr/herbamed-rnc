@@ -695,7 +695,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           // ainda não houver cargos vinculados, a seção avisa em vez de exigir
           // que alguém monte uma lista de nomes a cada revisão.
           if (!agendado && !docFinal.treinamento?.exigido) {
-            setEditTreino({ exigido:true, modo:"leitura", cargos:[], pessoasExtra:[], prazoDias:PRAZO_TREINAMENTO_PADRAO });
+            setEditTreino({ exigido:true, modo:"leitura", cargos:[], pessoasExtra:[], prazoDias:PRAZO_TREINAMENTO_PADRAO, reciclagemMeses:"" });
           }
         },
       });
@@ -980,6 +980,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         cargos: cfg.cargos || [],
         pessoasExtra: cfg.pessoasExtra || [],
         prazoDias: Number(cfg.prazoDias) || PRAZO_TREINAMENTO_PADRAO,
+        reciclagemMeses: Number(cfg.reciclagemMeses) || null,
         desdeEm: doc.treinamento?.desdeEm || tod(),
         definidoPor: user?.name || "",
         definidoEm: tod(),
@@ -1861,6 +1862,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             cargos: tr?.cargos || [],
             pessoasExtra: tr?.pessoasExtra || [],
             prazoDias: tr?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO,
+            reciclagemMeses: tr?.reciclagemMeses ?? "",
           };
 
           return (
@@ -1897,6 +1899,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
                     {MODOS_TREINAMENTO.find(m=>m.id===tr.modo)?.label || tr.modo}
                     {" · prazo de "}{tr.prazoDias ?? PRAZO_TREINAMENTO_PADRAO} dias
+                    {tr.reciclagemMeses ? ` · reciclagem a cada ${tr.reciclagemMeses} meses` : " · sem reciclagem periódica"}
                     {tr.desdeEm ? ` · valendo desde ${fmt(tr.desdeEm)}` : " · começa a valer quando a versão entrar em vigor"}
                     {" · confirmações referentes à Rev."}{d.versao}
                   </div>
@@ -1960,11 +1963,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                       </div>
                     )}
                     {linhas.map(l => {
-                      const cor = l.cel.status === "treinado" ? T.accent : l.cel.status === "atrasado" ? "#ff4f6a" : "#e8a33d";
+                      const cor = l.cel.status === "treinado" ? T.accent : l.cel.status === "atrasado" ? "#ff4f6a" : l.cel.status === "vencido" ? "#9c6ade" : "#e8a33d";
                       return (
                         <div key={l.userId} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8 }}>
                           <div style={{ width:28, height:28, borderRadius:"50%", background:cor+"22", color:cor, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }}>
-                            {l.cel.status === "treinado" ? "✓" : l.cel.status === "atrasado" ? "!" : "○"}
+                            {l.cel.status === "treinado" ? "✓" : l.cel.status === "atrasado" ? "!" : l.cel.status === "vencido" ? "↻" : "○"}
                           </div>
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{l.userName}</div>
@@ -1974,8 +1977,15 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                             </div>
                           </div>
                           {l.cel.status === "treinado"
-                            ? <span style={{ fontSize:11, color:T.accent, fontWeight:700 }}>✓ {fmt(l.cel.evidencia?.dataRealizacao)}</span>
-                            : <span style={{ fontSize:11, color:cor, fontWeight:700 }}>{l.cel.status === "atrasado" ? `Atrasado há ${l.cel.dias}d` : "Pendente"}</span>
+                            ? <span style={{ fontSize:11, color:T.accent, fontWeight:700 }} title={l.cel.venceEm ? `Vence em ${fmt(l.cel.venceEm)}` : "Sem reciclagem periódica"}>
+                                ✓ {fmt(l.cel.evidencia?.dataRealizacao)}
+                                {l.cel.diasParaVencer != null && l.cel.diasParaVencer <= 60 ? ` · vence em ${l.cel.diasParaVencer}d` : ""}
+                              </span>
+                            : <span style={{ fontSize:11, color:cor, fontWeight:700 }}>
+                                {l.cel.status === "atrasado" ? `Atrasado há ${l.cel.dias}d`
+                                  : l.cel.status === "vencido" ? `Reciclar — venceu há ${l.cel.dias}d`
+                                  : "Pendente"}
+                              </span>
                           }
                         </div>
                       );
@@ -2010,6 +2020,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                         <Inp type="number" min="1" value={editTreino.prazoDias} onChange={e=>setEditTreino(p=>({...p,prazoDias:e.target.value}))} />
                       } />
                     </>} />
+                    <F lbl="Reciclagem periódica (meses) — deixe em branco para não vencer"
+                      tip="Competência não é permanente: em POP crítico, o treinamento se refaz de tempos em tempos mesmo sem revisão do documento. Vencida a validade, a pessoa volta à matriz como 'a reciclar'." ch={
+                      <Inp type="number" min="1" placeholder="Ex: 12" value={editTreino.reciclagemMeses ?? ""} onChange={e=>setEditTreino(p=>({...p,reciclagemMeses:e.target.value}))} />
+                    } />
                     <div style={{ fontSize:12, fontWeight:600, color:T.text, margin:"10px 0 6px" }}>Cargos exigidos</div>
                     <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
                       Quem ocupa estes cargos passa a ser exigido automaticamente — inclusive quem for contratado depois.

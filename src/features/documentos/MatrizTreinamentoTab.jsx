@@ -6,13 +6,15 @@ import { tod, fmt } from "../../core/utils";
 import { saveCollection, getCollection } from "../../firebase";
 import {
   montarMatriz, pendentesDoUsuario, planoMigracaoTreinamento,
-  exigidosDoDocumento, novaEvidencia,
+  exigidosDoDocumento, novaEvidencia, filaDeReciclagem,
 } from "./treinamento";
 
-// Cores do semáforo — mesmas três em toda a tela, para a leitura ser imediata.
-const COR = { treinado: "#2ab84a", pendente: "#e8a33d", atrasado: "#ff4f6a" };
-const ICONE = { treinado: "✓", pendente: "○", atrasado: "!" };
-const ROTULO = { treinado: "Treinado", pendente: "Pendente", atrasado: "Atrasado" };
+// Cores do semáforo — as mesmas em toda a tela, para a leitura ser imediata.
+// `vencido` tem cor própria (não vermelho) porque a ação é outra: reciclar quem
+// já sabia, em vez de treinar quem nunca foi treinado.
+const COR = { treinado: "#2ab84a", pendente: "#e8a33d", atrasado: "#ff4f6a", vencido: "#9c6ade" };
+const ICONE = { treinado: "✓", pendente: "○", atrasado: "!", vencido: "↻" };
+const ROTULO = { treinado: "Treinado", pendente: "Pendente", atrasado: "Atrasado", vencido: "Reciclagem vencida" };
 
 export function MatrizTreinamentoTab({
   docs = [], users = [], treinamentos = [], catalogoCargos = [],
@@ -46,6 +48,14 @@ export function MatrizTreinamentoTab({
     if (q) ls = ls.filter(l => l.userName.toLowerCase().includes(q) || (l.cargoNome || "").toLowerCase().includes(q));
     return ls;
   }, [matriz.linhas, podeGerir, meuId, filtroCargo, filtroStatus, busca]);
+
+  // Fila de reciclagem — o análogo da revisão periódica dos documentos, aplicado
+  // à competência: avisa antes de vencer, em vez de só constatar o vencido.
+  const fila = useMemo(
+    () => filaDeReciclagem({ docs, users, evidencias: treinamentos, catalogoCargos, hoje, janelaDias: 60 }),
+    [docs, users, treinamentos, catalogoCargos, hoje]
+  );
+  const filaVisivel = podeGerir ? fila : fila.filter(f => f.userId === meuId);
 
   const cargosNaMatriz = useMemo(() => {
     const m = new Map();
@@ -116,7 +126,7 @@ export function MatrizTreinamentoTab({
           l.userName, l.cargoNome || "—", l.setor || "—",
           doc.titulo || "", doc.codigo || "", `Rev.${doc.versao}`,
           ROTULO[cel.status], cel.status === "treinado" ? "" : cel.dias,
-          cel.evidencia?.dataRealizacao || "",
+          cel.evidencia?.dataRealizacao || "", cel.venceEm || "",
         ]);
       }
     }
@@ -157,12 +167,13 @@ export function MatrizTreinamentoTab({
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {meusPendentes.map(({ doc, status, dias }) => (
               <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 18 }}>{status === "atrasado" ? "🔴" : "📄"}</span>
+                <span style={{ fontSize: 18 }}>{status === "atrasado" ? "🔴" : status === "vencido" ? "↻" : "📄"}</span>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.codigo} — {doc.titulo}</div>
                   <div style={{ fontSize: 11, color: T.text2 }}>
-                    Rev.{doc.versao} · em aberto há {dias} dia(s)
+                    Rev.{doc.versao} · {status === "vencido" ? "reciclagem vencida" : "em aberto"} há {dias} dia(s)
                     {status === "atrasado" && <strong style={{ color: COR.atrasado }}> · prazo vencido</strong>}
+                    {status === "vencido" && <strong style={{ color: COR.vencido }}> · precisa reciclar</strong>}
                   </div>
                 </div>
                 <button style={s.btn} onClick={() => onAbrirDoc?.(doc)}>Abrir documento</button>
@@ -178,12 +189,42 @@ export function MatrizTreinamentoTab({
         </div>
       )}
 
+      {/* Fila de reciclagem — vence nos próximos 60 dias */}
+      {filaVisivel.length > 0 && (
+        <div style={{ ...s.card, border: `1px solid ${COR.vencido}55` }}>
+          <SecTitle icon="↻" ch={`Reciclagem vencendo nos próximos 60 dias (${filaVisivel.length})`} />
+          <div style={{ fontSize: 11, color: T.text3, marginBottom: 10 }}>
+            Treinamentos ainda válidos, mas com validade se aproximando. Programar agora evita que virem não conformidade.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {filaVisivel.slice(0, 12).map(f => (
+              <div key={`${f.doc.id}-${f.userId}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{f.userName}</div>
+                  <div style={{ fontSize: 11, color: T.text2 }}>{f.doc.codigo} — {f.doc.titulo} · {f.cargoNome}</div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: f.diasParaVencer <= 15 ? COR.atrasado : COR.vencido }}>
+                  vence em {f.diasParaVencer}d · {fmt(f.venceEm)}
+                </span>
+                <button style={s.btn} onClick={() => onAbrirDoc?.(f.doc)}>Abrir</button>
+              </div>
+            ))}
+            {filaVisivel.length > 12 && (
+              <div style={{ fontSize: 11, color: T.text3, textAlign: "center", paddingTop: 4 }}>
+                e mais {filaVisivel.length - 12} — use o CSV para a lista completa.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <KPI label="Conformidade" valor={`${matriz.resumo.conformidade}%`}
           cor={matriz.resumo.conformidade === 100 ? COR.treinado : matriz.resumo.atrasado > 0 ? COR.atrasado : COR.pendente}
           sub={`${matriz.resumo.treinado} de ${matriz.resumo.total} exigências`} />
-        <KPI label="Atrasados" valor={matriz.resumo.atrasado} cor={matriz.resumo.atrasado > 0 ? COR.atrasado : T.text3} sub="prazo vencido" />
+        <KPI label="Atrasados" valor={matriz.resumo.atrasado} cor={matriz.resumo.atrasado > 0 ? COR.atrasado : T.text3} sub="nunca treinaram" />
+        <KPI label="A reciclar" valor={matriz.resumo.vencido} cor={matriz.resumo.vencido > 0 ? COR.vencido : T.text3} sub="validade expirada" />
         <KPI label="Pendentes" valor={matriz.resumo.pendente} cor={COR.pendente} sub="dentro do prazo" />
         <KPI label="Documentos" valor={matriz.colunas.length} sub="vigentes que exigem treinamento" />
         <KPI label="Pessoas" valor={matriz.linhas.length} sub="com alguma exigência" />
@@ -201,6 +242,7 @@ export function MatrizTreinamentoTab({
           <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ ...s.inp, fontSize: 12 }}>
             <option value="todos">Qualquer situação</option>
             <option value="atrasado">Com atraso</option>
+            <option value="vencido">Com reciclagem vencida</option>
             <option value="pendente">Com pendência</option>
           </select>
         </div>
