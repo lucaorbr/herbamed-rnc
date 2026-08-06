@@ -116,7 +116,7 @@ export function MatrizTreinamentoTab({
   };
 
   const exportarCSV = () => {
-    const head = ["Colaborador", "Cargo", "Setor", "Documento", "Codigo", "Revisao", "Status", "Dias em aberto", "Data do treinamento"];
+    const head = ["Colaborador", "Cargo", "Setor", "Documento", "Codigo", "Revisao", "Status", "Dias em aberto", "Data do treinamento", "Vence em"];
     const linhas = [head];
     for (const l of linhasVisiveis) {
       for (const doc of matriz.colunas) {
