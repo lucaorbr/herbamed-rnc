@@ -524,3 +524,64 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
   </div>`,
   }));
 }
+
+// Lista de presença de treinamento presencial — o registro primário que uma inspeção
+// BPF pede: o que foi ministrado, por quem, quanto durou e quem esteve presente, com
+// a assinatura eletrônica do instrutor atestando a presença.
+export function exportListaPresencaPDF(sessao, doc = null) {
+  const participantes = sessao.participantes || [];
+  const presentes = participantes.filter(p => p.presente);
+  const ausentes  = participantes.filter(p => !p.presente);
+  const linha = (p) => `<tr>
+      <td>${p.userName || "—"}</td>
+      <td>${p.cargoNome || "—"}</td>
+      <td>${p.setor || "—"}</td>
+      <td style="text-align:center;font-weight:700;color:${p.presente ? "#1a4a2e" : "#999"}">${p.presente ? "Presente" : "Ausente"}</td>
+    </tr>`;
+
+  openPDFWindow(`Lista de Presença ${sessao.num} — Herbamed®`, buildPDFShell({
+    titulo: "Lista de Presença — Treinamento",
+    numero: sessao.num || "",
+    meta: `${fmt(sessao.data)} · ${presentes.length} presente(s) de ${participantes.length}`,
+    rodapeEsq: "Herbamed® · SGQ · Registro de Treinamento",
+    corpo: `
+  <div class="section">
+    <div class="stitle">Identificação</div>
+    <div class="grid3">
+      <div class="field"><div class="flabel">Sessão</div><div class="fval">${sessao.num || "—"}</div></div>
+      <div class="field"><div class="flabel">Data</div><div class="fval">${fmt(sessao.data)}</div></div>
+      <div class="field"><div class="flabel">Carga horária</div><div class="fval">${sessao.cargaHoraria ? `${sessao.cargaHoraria}h` : "—"}</div></div>
+      <div class="field"><div class="flabel">Documento</div><div class="fval">${sessao.docCodigo || "—"}</div></div>
+      <div class="field"><div class="flabel">Revisão</div><div class="fval">Rev.${sessao.versao || "—"}</div></div>
+      <div class="field"><div class="flabel">Local</div><div class="fval">${sessao.local || "—"}</div></div>
+      <div class="field"><div class="flabel">Instrutor</div><div class="fval">${sessao.instrutor?.nome || "—"}</div></div>
+      <div class="field"><div class="flabel">Cargo do instrutor</div><div class="fval">${sessao.instrutor?.cargo || "—"}</div></div>
+      <div class="field"><div class="flabel">Título do documento</div><div class="fval">${sessao.docTitulo || doc?.titulo || "—"}</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="stitle">Conteúdo ministrado</div>
+    <div class="box-green">${sessao.conteudo || "—"}</div>
+  </div>
+
+  <div class="section">
+    <div class="stitle">Participantes (${presentes.length} presente(s) · ${ausentes.length} ausente(s))</div>
+    <table>
+      <thead><tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th style="text-align:center">Presença</th></tr></thead>
+      <tbody>${participantes.length ? participantes.map(linha).join("") : `<tr><td colspan="4">Nenhum participante registrado.</td></tr>`}</tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="stitle">Atesto do instrutor</div>
+    <div style="font-size:11px;color:#333;margin-bottom:10px;">
+      O instrutor identificado abaixo atesta que ministrou o treinamento descrito nesta lista e que
+      os colaboradores marcados como presentes dele participaram.
+    </div>
+    <div style="max-width:320px;">
+      ${seloAssHTML(sessao.assinaturaInstrutor, "Instrutor do Treinamento", "#1a4a2e", `TRN|${sessao.num || sessao.id || ""}`)}
+    </div>
+  </div>`,
+  }));
+}

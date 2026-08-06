@@ -11,6 +11,8 @@ import { AssinaturaModal } from "../pdf/pdfExports";
 import { userHasPerm } from "../permissions/permissions";
 import { reabrirLeitura, exigidosDoDocumento, indexarEvidencias, statusCelula, novaEvidencia, documentoExigeTreinamento, pendentesDoUsuario, MODOS_TREINAMENTO, PRAZO_TREINAMENTO_PADRAO } from "./treinamento";
 import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
+import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
+import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
 
 export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
@@ -394,6 +396,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [filtroDepto,  setFiltroDepto]  = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [evidencias, setEvidencias] = useState([]);
+  const [sessoes, setSessoes] = useState([]);
   const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
   const [novaEvid, setNovaEvid] = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
@@ -564,6 +567,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // O mecanismo antigo (subcoleção por documento) só é lido pela migração.
   useEffect(() => {
     const unsub = subscribeCollection("treinamentos", list => setEvidencias(list || []));
+    return () => unsub && unsub();
+  }, []);
+
+  // Sessões de treinamento presencial (Fase 5). Coleção nova nasce funcionando —
+  // `handleCollections` no servidor atende qualquer nome, sem whitelist.
+  useEffect(() => {
+    const unsub = subscribeCollection("treinamento_sessoes", list => setSessoes(list || []));
     return () => unsub && unsub();
   }, []);
 
@@ -1937,9 +1947,33 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                     </div>
                   )}
 
+                  {/* Sessão de treinamento (Fase 5) — o caminho formal do presencial:
+                      lista de presença assinada pelo instrutor, que grava o treinamento
+                      de todos os presentes de uma vez. O lançamento avulso abaixo
+                      continua existindo para o caso pontual de uma pessoa só. */}
+                  {tr.modo === "presencial" && (
+                    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:T.accent+"10", border:`1px solid ${T.accent}33`, borderRadius:10, marginBottom:12, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:18 }}>📋</span>
+                      <div style={{ flex:1, minWidth:180 }}>
+                        <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Lista de presença</div>
+                        <div style={{ fontSize:11, color:T.text2 }}>
+                          {(() => {
+                            const ss = sessoesDoDocumento(sessoes, d.id);
+                            const daVersao = ss.filter(x => String(x.versao) === String(d.versao)).length;
+                            return ss.length
+                              ? `${ss.length} sessão(ões) registrada(s)${daVersao ? ` · ${daVersao} nesta revisão` : ""}`
+                              : "Registre a turma de uma vez, com assinatura do instrutor.";
+                          })()}
+                        </div>
+                      </div>
+                      <button style={s.btn} onClick={()=>setView("sessoes")}>Abrir sessões →</button>
+                    </div>
+                  )}
+
                   {podeRegistrar && tr.modo === "presencial" && vigente && (
                     <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginBottom:12 }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:10 }}>Registrar treinamento presencial — Rev.{d.versao}</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4 }}>Registrar treinamento avulso — Rev.{d.versao}</div>
+                      <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>Para uma pessoa só. Turma inteira: use a lista de presença acima.</div>
                       <G2 ch={<>
                         <F lbl="Colaborador" ch={
                           <Sel value={novaEvid.userId} onChange={e=>setNovaEvid(p=>({...p,userId:e.target.value}))}>
@@ -2471,6 +2505,17 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
         user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
         onVoltar={()=>setView("lista")}
         onAbrirDoc={(doc)=>{ setSel(doc); setView("detalhe"); }}
+      />
+    );
+  }
+
+  /* ── SESSÕES DE TREINAMENTO PRESENCIAL (lista de presença assinada) ── */
+  if (view==="sessoes" && sel) {
+    return (
+      <SessoesTreinamentoTab
+        doc={sel} sessoes={sessoes} users={users} evidencias={evidencias} catalogoCargos={catalogoCargos}
+        user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
+        onVoltar={()=>setView("detalhe")}
       />
     );
   }
