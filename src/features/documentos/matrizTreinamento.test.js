@@ -103,7 +103,7 @@ describe("indexarEvidencias", () => {
 
 describe("montarMatriz", () => {
   const docs = [doc(), doc({ id: "D2", codigo: "POP-002", treinamento: { ...doc().treinamento, cargos: ["operador"] } })];
-  const base = { docs, users, catalogoCargos: cargos, hoje: "2026-08-05" };
+  const base = { docs, pessoas: users, catalogoCargos: cargos, hoje: "2026-08-05" };
 
   it("colunas só com documentos que exigem treinamento", () => {
     const m = montarMatriz({ ...base, docs: [...docs, doc({ id: "D3", status: "Rascunho" })], evidencias: [] });
@@ -135,15 +135,15 @@ describe("montarMatriz", () => {
 describe("pendentesDoUsuario", () => {
   const docs = [doc(), doc({ id: "D2", codigo: "POP-002" })];
   it("lista o que a pessoa deve", () => {
-    const r = pendentesDoUsuario({ docs, users, evidencias: [], catalogoCargos: cargos, userId: "u1", hoje: "2026-08-05" });
+    const r = pendentesDoUsuario({ docs, pessoas: users, evidencias: [], catalogoCargos: cargos, userId: "u1", hoje: "2026-08-05" });
     expect(r).toHaveLength(2);
   });
   it("some da lista ao registrar a evidência", () => {
-    const r = pendentesDoUsuario({ docs, users, evidencias: [ev(), ev({ docId: "D2" })], catalogoCargos: cargos, userId: "u1", hoje: "2026-08-05" });
+    const r = pendentesDoUsuario({ docs, pessoas: users, evidencias: [ev(), ev({ docId: "D2" })], catalogoCargos: cargos, userId: "u1", hoje: "2026-08-05" });
     expect(r).toEqual([]);
   });
   it("quem não é exigido não tem pendência", () => {
-    expect(pendentesDoUsuario({ docs, users, evidencias: [], catalogoCargos: cargos, userId: "u4", hoje: "2026-08-05" })).toEqual([]);
+    expect(pendentesDoUsuario({ docs, pessoas: users, evidencias: [], catalogoCargos: cargos, userId: "u4", hoje: "2026-08-05" })).toEqual([]);
   });
 });
 

@@ -17,7 +17,7 @@ const ICONE = { treinado: "✓", pendente: "○", atrasado: "!", vencido: "↻" 
 const ROTULO = { treinado: "Treinado", pendente: "Pendente", atrasado: "Atrasado", vencido: "Reciclagem vencida" };
 
 export function MatrizTreinamentoTab({
-  docs = [], users = [], treinamentos = [], catalogoCargos = [],
+  docs = [], colaboradores = [], treinamentos = [], catalogoCargos = [],
   user, perm, isAdmin, toast_, auditLog, onAbrirDoc, onVoltar,
 }) {
   const T = useTheme(); const s = useS();
@@ -30,13 +30,13 @@ export function MatrizTreinamentoTab({
   const meuId = String(user?.uid || user?.id || "");
 
   const matriz = useMemo(
-    () => montarMatriz({ docs, users, evidencias: treinamentos, catalogoCargos, hoje }),
-    [docs, users, treinamentos, catalogoCargos, hoje]
+    () => montarMatriz({ docs, pessoas: colaboradores, evidencias: treinamentos, catalogoCargos, hoje }),
+    [docs, colaboradores, treinamentos, catalogoCargos, hoje]
   );
 
   const meusPendentes = useMemo(
-    () => pendentesDoUsuario({ docs, users, evidencias: treinamentos, catalogoCargos, userId: meuId, hoje }),
-    [docs, users, treinamentos, catalogoCargos, meuId, hoje]
+    () => pendentesDoUsuario({ docs, pessoas: colaboradores, evidencias: treinamentos, catalogoCargos, userId: meuId, hoje }),
+    [docs, colaboradores, treinamentos, catalogoCargos, meuId, hoje]
   );
 
   // Sem permissão de gestão, a pessoa vê só a própria régua — não o cadastro inteiro.
@@ -52,8 +52,8 @@ export function MatrizTreinamentoTab({
   // Fila de reciclagem — o análogo da revisão periódica dos documentos, aplicado
   // à competência: avisa antes de vencer, em vez de só constatar o vencido.
   const fila = useMemo(
-    () => filaDeReciclagem({ docs, users, evidencias: treinamentos, catalogoCargos, hoje, janelaDias: 60 }),
-    [docs, users, treinamentos, catalogoCargos, hoje]
+    () => filaDeReciclagem({ docs, pessoas: colaboradores, evidencias: treinamentos, catalogoCargos, hoje, janelaDias: 60 }),
+    [docs, colaboradores, treinamentos, catalogoCargos, hoje]
   );
   const filaVisivel = podeGerir ? fila : fila.filter(f => f.userId === meuId);
 
@@ -66,7 +66,7 @@ export function MatrizTreinamentoTab({
   // ── Confirmar a própria leitura ────────────────────────────────────────────
   const confirmarLeitura = async (doc) => {
     try {
-      const ex = exigidosDoDocumento(doc, users, catalogoCargos).find(e => e.userId === meuId);
+      const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos).find(e => e.userId === meuId);
       const ev = novaEvidencia({
         doc, user: { id: meuId, name: user?.name }, cargoNome: ex?.cargoNome,
         modo: "leitura", dataRealizacao: hoje, registradoPor: user?.name,

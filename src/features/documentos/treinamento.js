@@ -69,26 +69,57 @@ export function documentoExigeTreinamento(doc) {
 /**
  * Quem deve treinar este documento. Deriva de cargo (herança) e admite exceções
  * nominais. Sem duplicar: quem entra pelo cargo não reaparece como exceção.
+ *
+ * `pessoas` são COLABORADORES (cadastro de funcionários), não usuários do sistema:
+ * numa fábrica a maioria de quem treina em POP não tem login. Aceita tanto `nome`
+ * (colaborador) quanto `name` (usuário) para o período de transição.
+ *
+ * Desligado (`ativo: false`) fica de fora — some do cálculo de conformidade, mas a
+ * evidência dele continua gravada e consultável, que é o que a inspeção pede.
  */
-export function exigidosDoDocumento(doc, users = [], catalogoCargos = []) {
+export function exigidosDoDocumento(doc, pessoas = [], catalogoCargos = []) {
   if (!doc?.treinamento?.exigido) return [];
   const { cargos = [], pessoasExtra = [] } = doc.treinamento;
-  const nomeCargo = (id) => (catalogoCargos || []).find(c => c.id === id)?.nome || id;
+  const nomeCargo = (id, fallback) => (catalogoCargos || []).find(c => c.id === id)?.nome || fallback || id;
+  const nomeDe = (p) => p?.nome || p?.name || "—";
+  const ativos = (pessoas || []).filter(p => p && p.ativo !== false);
   const vistos = new Set();
   const out = [];
-  for (const u of users || []) {
-    if (!u?.cargoId || !cargos.includes(u.cargoId)) continue;
-    vistos.add(String(u.id));
-    out.push({ userId: String(u.id), userName: u.name || "—", setor: u.setor || "", cargoId: u.cargoId, cargoNome: nomeCargo(u.cargoId), origem: "cargo" });
+  const linha = (p, origem) => ({
+    userId: String(p.id), userName: nomeDe(p), setor: p.setor || "",
+    cargoId: p.cargoId || null,
+    cargoNome: p.cargoId ? nomeCargo(p.cargoId, p.cargoNome) : "—",
+    // Relógio do prazo respeita a admissão: novo contratado não nasce atrasado.
+    admissao: p.dataAdmissao || null,
+    temLogin: !!p.userId,
+    origem,
+  });
+  for (const p of ativos) {
+    if (!p?.cargoId || !cargos.includes(p.cargoId)) continue;
+    vistos.add(String(p.id));
+    out.push(linha(p, "cargo"));
   }
   for (const uid of pessoasExtra) {
     if (vistos.has(String(uid))) continue;
-    const u = (users || []).find(x => String(x.id) === String(uid));
-    if (!u) continue;
+    const p = ativos.find(x => String(x.id) === String(uid));
+    if (!p) continue;
     vistos.add(String(uid));
-    out.push({ userId: String(uid), userName: u.name || "—", setor: u.setor || "", cargoId: u.cargoId || null, cargoNome: u.cargoId ? nomeCargo(u.cargoId) : "—", origem: "extra" });
+    out.push(linha(p, "extra"));
   }
   return out.sort((a, b) => a.userName.localeCompare(b.userName));
+}
+
+/**
+ * Exigidos que não têm login, num documento configurado como "leitura".
+ *
+ * É uma pendência impossível: o modo leitura depende da pessoa confirmar no
+ * sistema, e quem não tem conta nunca vai conseguir. Numa fábrica isso acontece
+ * sozinho — basta vincular um cargo operacional a um documento de leitura. A tela
+ * usa isto para avisar e sugerir o modo presencial, que tem a lista de presença.
+ */
+export function exigidosSemLogin(doc, pessoas = [], catalogoCargos = []) {
+  if (doc?.treinamento?.modo !== "leitura") return [];
+  return exigidosDoDocumento(doc, pessoas, catalogoCargos).filter(e => !e.temLogin);
 }
 
 /** Chave lógica da evidência: um treinamento vale para (documento, versão, pessoa). */
@@ -148,7 +179,7 @@ export function vencimentoDaEvidencia(evidencia, reciclagemMeses) {
  * `vencido` é distinto de `atrasado` de propósito: a ação é diferente (reciclar
  * quem já sabia × treinar quem nunca foi treinado) e a inspeção olha diferente.
  */
-export function statusCelula({ doc, userId, indice, hoje }) {
+export function statusCelula({ doc, userId, indice, hoje, admissao = null }) {
   const ev = indice?.get(chaveEvidencia(doc.id, doc.versao, String(userId))) || null;
   if (ev) {
     const venceEm = vencimentoDaEvidencia(ev, doc?.treinamento?.reciclagemMeses);
@@ -157,7 +188,13 @@ export function statusCelula({ doc, userId, indice, hoje }) {
     }
     return { status: "treinado", evidencia: ev, dias: 0, venceEm, diasParaVencer: venceEm ? diasEntre(hoje, venceEm) : null };
   }
-  const desde = doc?.treinamento?.desdeEm || doc?.atualizadoEm || null;
+  // O relógio começa no mais TARDE entre a entrada em vigor da versão e a admissão
+  // da pessoa. Sem isso, quem é contratado hoje aparece atrasado há anos num POP
+  // antigo — e leva cobrança por e-mail no primeiro login, sem nunca ter tido chance.
+  const desdeDoc = doc?.treinamento?.desdeEm || doc?.atualizadoEm || null;
+  const desde = admissao && desdeDoc
+    ? (admissao > desdeDoc ? admissao : desdeDoc)
+    : (admissao || desdeDoc);
   const dias = desde ? diasEntre(desde, hoje) : 0;
   const prazo = Number(doc?.treinamento?.prazoDias ?? PRAZO_TREINAMENTO_PADRAO);
   return { status: dias > prazo ? "atrasado" : "pendente", evidencia: null, dias, venceEm: null };
@@ -168,18 +205,18 @@ export function statusCelula({ doc, userId, indice, hoje }) {
  * exigidas. Linhas sem nenhuma exigência não aparecem — a matriz mostra quem
  * deve algo, não o cadastro inteiro.
  */
-export function montarMatriz({ docs = [], users = [], evidencias = [], catalogoCargos = [], hoje }) {
+export function montarMatriz({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], hoje }) {
   const colunas = (docs || []).filter(documentoExigeTreinamento);
   const indice = indexarEvidencias(evidencias);
   const linhasPorUser = new Map();
 
   for (const doc of colunas) {
-    for (const ex of exigidosDoDocumento(doc, users, catalogoCargos)) {
+    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos)) {
       if (!linhasPorUser.has(ex.userId)) {
         linhasPorUser.set(ex.userId, { ...ex, celulas: new Map(), treinado: 0, pendente: 0, atrasado: 0, vencido: 0 });
       }
       const linha = linhasPorUser.get(ex.userId);
-      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje });
+      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje, admissao: ex.admissao });
       linha.celulas.set(String(doc.id), cel);
       linha[cel.status] += 1;
     }
@@ -207,13 +244,13 @@ export function montarMatriz({ docs = [], users = [], evidencias = [], catalogoC
  * Fila de reciclagem: treinamentos ainda válidos que vencem dentro da janela.
  * É o equivalente à revisão periódica dos documentos, aplicada à competência.
  */
-export function filaDeReciclagem({ docs = [], users = [], evidencias = [], catalogoCargos = [], hoje, janelaDias = 60 }) {
+export function filaDeReciclagem({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], hoje, janelaDias = 60 }) {
   const indice = indexarEvidencias(evidencias);
   const out = [];
   for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
     if (!Number(doc?.treinamento?.reciclagemMeses)) continue;
-    for (const ex of exigidosDoDocumento(doc, users, catalogoCargos)) {
-      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje });
+    for (const ex of exigidosDoDocumento(doc, pessoas, catalogoCargos)) {
+      const cel = statusCelula({ doc, userId: ex.userId, indice, hoje, admissao: ex.admissao });
       if (cel.status !== "treinado" || cel.diasParaVencer == null) continue;
       if (cel.diasParaVencer <= janelaDias) out.push({ doc, ...ex, ...cel });
     }
@@ -222,13 +259,13 @@ export function filaDeReciclagem({ docs = [], users = [], evidencias = [], catal
 }
 
 /** As exigências em aberto de uma pessoa — alimenta "meus treinamentos pendentes". */
-export function pendentesDoUsuario({ docs = [], users = [], evidencias = [], catalogoCargos = [], userId, hoje }) {
+export function pendentesDoUsuario({ docs = [], pessoas = [], evidencias = [], catalogoCargos = [], userId, hoje }) {
   const indice = indexarEvidencias(evidencias);
   const out = [];
   for (const doc of (docs || []).filter(documentoExigeTreinamento)) {
-    const exigido = exigidosDoDocumento(doc, users, catalogoCargos).some(e => e.userId === String(userId));
-    if (!exigido) continue;
-    const cel = statusCelula({ doc, userId, indice, hoje });
+    const eu = exigidosDoDocumento(doc, pessoas, catalogoCargos).find(e => e.userId === String(userId));
+    if (!eu) continue;
+    const cel = statusCelula({ doc, userId, indice, hoje, admissao: eu.admissao });
     if (cel.status !== "treinado") out.push({ doc, ...cel });
   }
   return out.sort((a, b) => b.dias - a.dias);

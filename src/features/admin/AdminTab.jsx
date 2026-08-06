@@ -10,8 +10,9 @@ import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/
 import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
 import { TIPOS_REVALIDACAO_SEED } from "../revalidacao/RevalidacaoTabs";
 import { cargosAtivos, cargoDoUsuario, cargosParaImportar, novoCargoId, pendentesDeMigracao, acharCargoPorNome, usuariosParaVincular } from "./cargos";
+import { ColaboradoresTab } from "../colaboradores/ColaboradoresTab";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -325,7 +326,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     <div>
       {/* ── Abas principais ── */}
       <div style={{ display:"flex", gap:6, marginBottom:16 }}>
-        {[["usuarios","👥 Usuários"],["config","⚙️ Configurações"],["catalogos","🗂️ Catálogos"]].map(([k,l])=>(
+        {[["usuarios","👥 Usuários"],["colaboradores","👷 Colaboradores"],["config","⚙️ Configurações"],["catalogos","🗂️ Catálogos"]].map(([k,l])=>(
           <button key={k} onClick={()=>setAbaAdmin(k)}
             style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
               background:abaAdmin===k?T.accent:T.surf, color:abaAdmin===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -504,6 +505,13 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         </div>
       </div>
       </>)}
+
+      {abaAdmin==="colaboradores" && (
+        <ColaboradoresTab
+          colaboradores={colaboradores} users={users} catalogoCargos={catalogoCargos}
+          toast_={toast_} auditLog={auditLog} isAdmin
+        />
+      )}
 
       {abaAdmin==="config" && (<>
       <div style={s.card}>

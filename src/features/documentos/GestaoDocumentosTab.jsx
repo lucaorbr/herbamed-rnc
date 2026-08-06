@@ -9,7 +9,7 @@ import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { userHasPerm } from "../permissions/permissions";
-import { reabrirLeitura, exigidosDoDocumento, indexarEvidencias, statusCelula, novaEvidencia, documentoExigeTreinamento, pendentesDoUsuario, MODOS_TREINAMENTO, PRAZO_TREINAMENTO_PADRAO } from "./treinamento";
+import { reabrirLeitura, exigidosDoDocumento, exigidosSemLogin, indexarEvidencias, statusCelula, novaEvidencia, documentoExigeTreinamento, pendentesDoUsuario, MODOS_TREINAMENTO, PRAZO_TREINAMENTO_PADRAO } from "./treinamento";
 import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
 import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
 import { sessoesDoDocumento } from "./sessoes";
@@ -382,7 +382,7 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrit
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], doSaveRNC }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC }) {
   const T = useTheme();
   const s = useS();
 
@@ -1007,16 +1007,17 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // lançando um presencial. Formato único via `novaEvidencia`.
   const registrarEvidencia = async (doc, alvoUserId, { modo, dataRealizacao, obs }) => {
     try {
-      const alvo = (users || []).find(u => String(u.id) === String(alvoUserId));
+      // Busca no cadastro de pessoas, não em `users`: quem é treinado pode não ter login.
+      const alvo = (colaboradores || []).find(c => String(c.id) === String(alvoUserId));
       if (!alvo) { toast_("Selecione o colaborador.", "red"); return; }
-      const ex = exigidosDoDocumento(doc, users, catalogoCargos).find(e => e.userId === String(alvoUserId));
+      const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos).find(e => e.userId === String(alvoUserId));
       const ev = novaEvidencia({
-        doc, user: alvo, cargoNome: ex?.cargoNome, modo,
+        doc, user: { id: alvo.id, name: alvo.nome || alvo.name }, cargoNome: ex?.cargoNome || alvo.cargoNome, modo,
         dataRealizacao: dataRealizacao || tod(), obs, registradoPor: user?.name,
       });
       await saveCollection("treinamentos", ev.id, ev);
       await auditLog(modo === "leitura" ? "Confirmou Treinamento" : "Registrou Treinamento", "treinamentos", ev.id,
-        `${doc.codigo} Rev.${doc.versao} — ${alvo.name}`, null, { docId: doc.id, versao: doc.versao, modo });
+        `${doc.codigo} Rev.${doc.versao} — ${alvo.nome || alvo.name}`, null, { docId: doc.id, versao: doc.versao, modo });
       toast_("Treinamento registrado!", "green");
       setNovaEvid({ userId:"", dataRealizacao:tod(), obs:"" });
     } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
@@ -1858,7 +1859,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           if (!tr && !legado && !podeGerirTreino) return null;
 
           const meuId = String(user?.uid || user?.id || "");
-          const exigidos = exigidosDoDocumento(d, users, catalogoCargos);
+          const exigidos = exigidosDoDocumento(d, colaboradores, catalogoCargos);
           const indice = indexarEvidencias(evidencias);
           const vigente = documentoExigeTreinamento(d);
           const linhas = exigidos.map(ex => ({ ...ex, cel: statusCelula({ doc:d, userId:ex.userId, indice, hoje:tod() }) }));
@@ -1918,6 +1919,19 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                       A exigência só passa a contar quando o documento estiver <strong>Vigente</strong> — não se treina em versão não aprovada.
                     </div>
                   )}
+                  {/* Pendência impossível: modo leitura exige confirmar no sistema, e
+                      operador não tem login. Sem este aviso a matriz acumularia atraso
+                      que ninguém consegue resolver. */}
+                  {(()=>{ const semLogin = exigidosSemLogin(d, colaboradores, catalogoCargos); return semLogin.length > 0 && (
+                    <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:10, fontSize:12, color:T.text2 }}>
+                      <strong style={{ color:T.text }}>{semLogin.length} pessoa(s) exigida(s) não têm login</strong> e este documento está no modo
+                      <strong> Leitura e entendimento</strong>, que depende de a própria pessoa confirmar no sistema — elas nunca conseguiriam.
+                      <div style={{ fontSize:11, color:T.text3, marginTop:5 }}>
+                        {semLogin.slice(0,6).map(p=>p.userName).join(", ")}{semLogin.length>6?` e mais ${semLogin.length-6}`:""}.
+                        {" "}Troque o modo para <strong>Treinamento presencial</strong> e registre pela lista de presença.
+                      </div>
+                    </div>
+                  ); })()}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
                     {(tr.cargos||[]).map(cid => (
                       <span key={cid} style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:T.accent+"18", color:T.accent, fontWeight:700 }}>
@@ -2501,7 +2515,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
   if (view==="matriz") {
     return (
       <MatrizTreinamentoTab
-        docs={docs} users={users} treinamentos={evidencias} catalogoCargos={catalogoCargos}
+        docs={docs} colaboradores={colaboradores} treinamentos={evidencias} catalogoCargos={catalogoCargos}
         user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
         onVoltar={()=>setView("lista")}
         onAbrirDoc={(doc)=>{ setSel(doc); setView("detalhe"); }}
@@ -2513,7 +2527,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
   if (view==="sessoes" && sel) {
     return (
       <SessoesTreinamentoTab
-        doc={sel} sessoes={sessoes} users={users} evidencias={evidencias} catalogoCargos={catalogoCargos}
+        doc={sel} sessoes={sessoes} colaboradores={colaboradores} evidencias={evidencias} catalogoCargos={catalogoCargos}
         user={user} perm={perm} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
         onVoltar={()=>setView("detalhe")}
       />
@@ -2689,7 +2703,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
           {(()=>{
             // Badge com as pendências da própria pessoa — a matriz é acionável, não só relatório.
-            const meus = pendentesDoUsuario({ docs, users, evidencias, catalogoCargos, userId:String(user?.uid||user?.id||""), hoje:tod() });
+            const meus = pendentesDoUsuario({ docs, pessoas: colaboradores, evidencias, catalogoCargos, userId:String(user?.uid||user?.id||""), hoje:tod() });
             return (
               <button style={s.btn} onClick={()=>setView("matriz")}>
                 📚 Matriz de Treinamento
