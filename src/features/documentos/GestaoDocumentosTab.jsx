@@ -1414,6 +1414,31 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           </div>
         )}
 
+        {/* ── FORMULÁRIO EM EXCEL PARA O FORNECEDOR ──
+            Documento que é formulário precisa ir ao fornecedor em formato
+            preenchível. O PDF não serve (não é editável) e o arquivo fonte cru
+            sai anônimo — sem código nem revisão, impossível de amarrar ao
+            documento controlado. O servidor carimba o fonte e registra quem
+            emitiu, no mesmo log das cópias não controladas. */}
+        {podeBaixarCopiaNaoControlada && d.status==="Vigente" && /\.xlsx?$/i.test(d.arquivoFonte?.nome || "") && (
+          <div style={s.card}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+              <SecTitle icon="📗" ch="Formulário para fornecedor" />
+              <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:"#8a5a0022", color:"#8a5a00" }}>CÓPIA NÃO CONTROLADA</span>
+            </div>
+            <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:10 }}>
+              Gera o Excel preenchível a partir do arquivo fonte, com código, revisão e vigência
+              carimbados no topo. Anexe ao seu e-mail para o fornecedor preencher e devolver.
+              A emissão fica registrada no log de distribuição.
+            </div>
+            <button
+              onClick={()=>abrirArquivoAutenticado(`/api/documents/${encodeURIComponent(d.id)}/formulario.xlsx`, true, `${d.codigo||"Formulario"}_Rev${d.versao||"01"}.xlsx`)}
+              style={{ ...s.btnA, fontSize:12 }}>
+              📗 Gerar formulário em Excel
+            </button>
+          </div>
+        )}
+
         {/* ── FASE 7: LOG DE DISTRIBUIÇÃO ── */}
         {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
           <div style={s.card}>
@@ -1438,7 +1463,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                         <td style={{ padding:"7px 10px", color:T.text2 }}>{row.data_download ? new Date(row.data_download).toLocaleString("pt-BR") : "—"}</td>
                         <td style={{ padding:"7px 10px", color:T.text }}>{row.usuario_nome || "—"}</td>
                         <td style={{ padding:"7px 10px" }}>
-                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12, background:T.border, color:T.text2 }}>{row.modo || "—"}</span>
+                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12,
+                            background:row.modo==="formulario_fornecedor" ? "#8a5a0022" : T.border,
+                            color:row.modo==="formulario_fornecedor" ? "#8a5a00" : T.text2 }}>
+                            {row.modo==="formulario_fornecedor" ? "📗 formulário p/ fornecedor" : (row.modo || "—")}
+                          </span>
                         </td>
                       </tr>
                     ))}
