@@ -330,9 +330,13 @@ async function abrirArquivoAutenticado(url, download = false, nome = "documento"
     const blob = await resp.blob();
     const objUrl = URL.createObjectURL(blob);
     if (download) {
+      // Quando o servidor nomeia o arquivo (Content-Disposition), o nome dele
+      // vence: é lá que a regra de nomeação vive, e duplicá-la aqui faria o
+      // arquivo entregue divergir do que o backend registrou.
+      const doServidor = /filename="?([^"]+)"?/i.exec(resp.headers.get("content-disposition") || "")?.[1];
       const a = document.createElement("a");
       a.href = objUrl;
-      a.download = nome;
+      a.download = doServidor || nome;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1427,9 +1431,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
               <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:"#8a5a0022", color:"#8a5a00" }}>CÓPIA NÃO CONTROLADA</span>
             </div>
             <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:10 }}>
-              Gera o Excel preenchível a partir do arquivo fonte, com código, revisão e vigência
-              carimbados no topo. Anexe ao seu e-mail para o fornecedor preencher e devolver.
-              A emissão fica registrada no log de distribuição.
+              Gera o Excel preenchível a partir do arquivo fonte, com a faixa verde de identificação
+              no topo (logo, título e código/revisão) e a faixa de rodapé ao final — a mesma
+              identidade do formulário em PDF. O formulário em si sai intacto. Anexe ao seu e-mail
+              para o fornecedor preencher e devolver. A emissão fica registrada no log de distribuição.
             </div>
             <button
               onClick={()=>abrirArquivoAutenticado(`/api/documents/${encodeURIComponent(d.id)}/formulario.xlsx`, true, `${d.codigo||"Formulario"}_Rev${d.versao||"01"}.xlsx`)}
