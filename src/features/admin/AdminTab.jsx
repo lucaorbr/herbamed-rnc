@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword } from "../../firebase";
+import React, { useState, useEffect, useMemo } from "react";
+import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
 import { useS } from "../../shared/styles";
@@ -10,9 +10,10 @@ import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "../documentos/
 import { TIPOS_DESVIO, SETORES_DESVIO } from "../desvios/DesviosTabs";
 import { TIPOS_REVALIDACAO_SEED } from "../revalidacao/RevalidacaoTabs";
 import { cargosAtivos, cargoDoUsuario, cargosParaImportar, novoCargoId, pendentesDeMigracao, acharCargoPorNome, usuariosParaVincular } from "./cargos";
+import { FAMILIAS, catalogosDaFamilia, acharCatalogo, contarUsos, resumoCatalogo, usoDoItem, podeExcluirItem } from "./catalogos";
 import { ColaboradoresTab } from "../colaboradores/ColaboradoresTab";
 
-export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [] }) {
+export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoTiposRevalidacao = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], desvios = [], revalidacoes = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
 
@@ -63,7 +64,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   }));
 
   const [abaAdmin, setAbaAdmin] = useState("usuarios");
-  const [catAba, setCatAba] = useState("deptos");
+  // `null` = tela índice. Catálogo só abre por escolha explícita: abrir direto no
+  // primeiro da lista era o que fazia a fileira de abas parecer um formulário só.
+  const [catAba, setCatAba] = useState(null);
   const [listaDeptos, setListaDeptos] = useState(() => mkDefaultDeptos(catalogoDeptos));
   const [editDeptoIdx, setEditDeptoIdx] = useState(null);
   const [editDeptoData, setEditDeptoData] = useState({ id:"", label:"" });
@@ -101,6 +104,57 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const [novoSetorDistrib, setNovoSetorDistrib] = useState({});
   const [savingAreasDistrib, setSavingAreasDistrib] = useState(false);
 
+  // Documentos não vinham por prop (só o GestaoDocumentosTab os assina). São
+  // necessários para dizer quantos registros dependem de cada item do catálogo —
+  // sem isso, excluir continua sendo decisão às cegas. Admin-only e ~50 registros.
+  const [docsUso, setDocsUso] = useState([]);
+  useEffect(() => {
+    if (abaAdmin !== "catalogos") return;
+    const unsub = subscribeCollection("gestao_docs", list => setDocsUso(list || []));
+    return () => unsub && unsub();
+  }, [abaAdmin]);
+
+  const usos = useMemo(
+    () => contarUsos({ docs: docsUso, desvios, revalidacoes, colaboradores }),
+    [docsUso, desvios, revalidacoes, colaboradores]
+  );
+
+  const itensDoCatalogo = {
+    deptos: listaDeptos, tipos: listaTipos, cargos: listaCargos,
+    distribuicao: listaAreasDistrib, desvios: listaTiposDesvio,
+    setores: listaSetoresDesvio, reval: listaTiposReval,
+  };
+  const salvandoCatalogo = {
+    deptos: savingDeptos, tipos: savingTipos, cargos: savingCargos,
+    distribuicao: savingAreasDistrib, desvios: savingTd,
+    setores: savingSd, reval: savingTr,
+  };
+
+  /** "· em uso por N" ao lado do item — o dado que faltava para decidir. */
+  const UsoTag = ({ catId, item }) => {
+    const n = usoDoItem(usos, catId, item);
+    if (!n) return null;
+    return (
+      <span style={{ fontSize:10, color:T.text3 }} title={`${n} registro(s) usam este item`}>
+        em uso por {n}
+      </span>
+    );
+  };
+
+  /**
+   * Exclusão só passa se ninguém usa. Item em uso vira desativação: apagá-lo
+   * tiraria o rótulo de registros já emitidos, e registro de SGQ não perde
+   * informação depois de criado.
+   */
+  const excluirItemCatalogo = (catId, item, rotulo, aplicar) => {
+    const { pode, usos:n } = podeExcluirItem(usos, catId, item);
+    if (!pode) {
+      toast_(`"${rotulo}" está em uso por ${n} registro(s) — desative em vez de excluir.`, "red");
+      return;
+    }
+    if (window.confirm(`Excluir "${rotulo}" do catálogo?\n\nNenhum registro usa este item hoje. Esta ação não pode ser desfeita.`)) aplicar();
+  };
+
   useEffect(() => { setListaDeptos(mkDefaultDeptos(catalogoDeptos)); }, [catalogoDeptos.length]);
   useEffect(() => { setListaTipos(mkDefaultTipos(catalogoTipos));   }, [catalogoTipos.length]);
   useEffect(() => { setListaTiposDesvio(mkDefaultTiposDesvio(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
@@ -120,7 +174,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingDeptos(false);
   };
-  const salvarCatDeptos = () => persistDeptos(listaDeptos);
 
   // Persiste a lista recebida (não a do state, que pode estar desatualizada num mesmo tick).
   const persistTipos = async (lista) => {
@@ -134,7 +187,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingTipos(false);
   };
-  const salvarCatTipos = () => persistTipos(listaTipos);
 
   // Catálogo de tipos de desvio (configuracoes/catalogo_tipos_desvio) — só nome + ativo.
   const persistTiposDesvio = async (lista) => {
@@ -563,21 +615,75 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       {/* ── CATÁLOGOS DE DOCUMENTOS ── */}
       <div style={s.card}>
         <SecTitle icon="🗂️" ch="Catálogos" />
-        {/* Tabs */}
-        <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-          {[["deptos","🏛️ Departamentos"],["tipos","📄 Tipos de Documento"],["cargos","👔 Cargos"],["desvios","⚠️ Tipos de Desvio"],["setores","🏭 Setores de Desvio"],["distribuicao","🗂️ Áreas e Setores de Distribuição"],["reval","🔁 Tipos de Revalidação"]].map(([k,l])=>(
-            <button key={k} onClick={()=>setCatAba(k)}
-              style={{ padding:"6px 16px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:600,
-                background:catAba===k?T.accent:T.surf, color:catAba===k?"#fff":T.text2, transition:"all .15s" }}>
-              {l}
-            </button>
+
+        {/* ── ÍNDICE — o mapa dos catálogos, agrupado por assunto ── */}
+        {!catAba && (<>
+          <div style={{ fontSize:11, color:T.text3, marginBottom:16 }}>
+            Listas fechadas que alimentam os formulários do sistema. Escolha uma para editar —
+            as alterações são salvas automaticamente. Item em uso por algum registro não pode ser
+            excluído, só desativado.
+          </div>
+          {FAMILIAS.map(fam=>(
+            <div key={fam.id} style={{ marginBottom:22 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:T.text2, textTransform:"uppercase", letterSpacing:.4 }}>{fam.titulo}</div>
+              <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>{fam.resumo}</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:10 }}>
+                {catalogosDaFamilia(fam.id).map(cat=>{
+                  const r = resumoCatalogo(cat.id, itensDoCatalogo[cat.id] || [], usos);
+                  return (
+                    <button key={cat.id} onClick={()=>setCatAba(cat.id)}
+                      style={{ textAlign:"left", cursor:"pointer", fontFamily:"inherit", background:T.surf,
+                        border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 14px", display:"flex", flexDirection:"column", gap:6, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ fontSize:16 }}>{cat.icone}</span>
+                        <span style={{ flex:1, fontSize:13, fontWeight:700, color:T.text, minWidth:0 }}>{cat.titulo}</span>
+                        <span style={{ fontSize:11, fontWeight:700, color:T.accent }}>{r.ativos}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:T.text3, lineHeight:1.4 }}>{cat.resumo}</div>
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:2 }}>
+                        {cat.usadoEm.map(u=>(
+                          <span key={u} style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:T.accentDim, color:T.accent, fontWeight:700 }}>{u}</span>
+                        ))}
+                      </div>
+                      <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>
+                        {r.ativos} ativo{r.ativos!==1?"s":""}{r.total!==r.ativos ? ` · ${r.total-r.ativos} inativo${r.total-r.ativos!==1?"s":""}` : ""}
+                        {r.registros>0 ? ` · usado por ${r.registros} registro${r.registros!==1?"s":""}` : ""}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           ))}
-        </div>
+        </>)}
+
+        {/* ── Cabeçalho do catálogo aberto ── */}
+        {catAba && (()=>{
+          const cat = acharCatalogo(catAba);
+          const salvando = salvandoCatalogo[catAba];
+          return (
+            <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:14, flexWrap:"wrap" }}>
+              <button onClick={()=>setCatAba(null)} style={{ ...s.btn, fontSize:11, padding:"5px 12px" }}>← Todos os catálogos</button>
+              <div style={{ flex:1, minWidth:220 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:T.text }}>{cat?.icone} {cat?.titulo}</div>
+                <div style={{ fontSize:11, color:T.text3, marginTop:2 }}>
+                  Usado em: {cat?.usadoEm.join(" · ")}
+                </div>
+              </div>
+              {/* Áreas e Setores é a exceção: os nomes são editados em input livre e
+                  só gravam no botão do rodapé — prometer auto-save ali seria mentira. */}
+              <span style={{ fontSize:10, padding:"3px 10px", borderRadius:12, fontWeight:700,
+                background:salvando?"#ffd16622":T.accent+"22", color:salvando?"#b8860b":T.accent }}>
+                {salvando ? "Salvando…" : catAba==="distribuicao" ? "✓ Salvo automaticamente (menos os nomes)" : "✓ Salvo automaticamente"}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* ── ABA DEPARTAMENTOS ── */}
         {catAba==="deptos" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Código (máx 5 letras maiúsculas) + nome completo. Apenas departamentos ativos aparecem nos formulários. As alterações são salvas automaticamente.
+            Código (máx 5 letras maiúsculas) + nome completo. Apenas departamentos ativos aparecem nos formulários.
           </div>
           {/* Adicionar novo */}
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
@@ -618,6 +724,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                 </>) : (<>
                   <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:6, background:T.accentDim, color:T.accent, minWidth:44, textAlign:"center" }}>{d.id}</span>
                   <span style={{ flex:1, fontSize:12, color:T.text }}>{d.label}</span>
+                  <UsoTag catId="deptos" item={d} />
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:d.ativo?T.accent+"22":"#ff4f6a22", color:d.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {d.ativo?"Ativo":"Inativo"}
                   </span>
@@ -627,22 +734,17 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   </button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir departamento do catálogo"
-                    onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} — ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) { const next=listaDeptos.filter((_,j)=>j!==i); setListaDeptos(next); persistDeptos(next); } }}>🗑️</button>
+                    onClick={()=>excluirItemCatalogo("deptos", d, `${d.id} — ${d.label}`, ()=>{ const next=listaDeptos.filter((_,j)=>j!==i); setListaDeptos(next); persistDeptos(next); })}>🗑️</button>
                 </>)}
               </div>
             ))}
-          </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingDeptos)?0.6:1 }} disabled={!isAdmin||savingDeptos} onClick={salvarCatDeptos}>
-              {savingDeptos?"Salvando...":"💾 Salvar departamentos"}
-            </button>
           </div>
         </>)}
 
         {/* ── ABA TIPOS DE DOCUMENTO ── */}
         {catAba==="tipos" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários. As alterações são salvas automaticamente.
+            Código (ex: PO, IT), descrição e prazo de revisão em anos. Apenas tipos ativos aparecem nos formulários.
             <br/><strong>Modelo Formulário</strong> (sem capa + sem marca d'água): para documentos impressos/xerocados, como formulários que acompanham OPs.
           </div>
           {/* Adicionar novo */}
@@ -716,6 +818,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     </span>
                   )}
                   <span style={{ fontSize:11, color:T.text3 }}>{t.prazoRevisaoAnos ?? 2} anos</span>
+                  <UsoTag catId="tipos" item={t} />
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {t.ativo?"Ativo":"Inativo"}
                   </span>
@@ -725,15 +828,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   </button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir tipo do catálogo"
-                    onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} — ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) { const next=listaTipos.filter((_,j)=>j!==i); setListaTipos(next); persistTipos(next); } }}>🗑️</button>
+                    onClick={()=>excluirItemCatalogo("tipos", t, `${t.id} — ${t.label}`, ()=>{ const next=listaTipos.filter((_,j)=>j!==i); setListaTipos(next); persistTipos(next); })}>🗑️</button>
                 </>)}
               </div>
             ))}
-          </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTipos)?0.6:1 }} disabled={!isAdmin||savingTipos} onClick={salvarCatTipos}>
-              {savingTipos?"Salvando...":"💾 Salvar tipos de documento"}
-            </button>
           </div>
         </>)}
 
@@ -750,7 +848,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             será herdada: ao vincular um documento a um cargo, todo mundo que o ocupa passa a ser exigido
             automaticamente — inclusive quem for contratado depois. Manter lista fechada evita que o mesmo
             cargo apareça com grafias diferentes e quebre a matriz. Apenas cargos ativos aparecem no
-            cadastro de usuários. As alterações são salvas automaticamente.
+            cadastro de usuários.
           </div>
           {pendentes > 0 && (
             <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
@@ -817,9 +915,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={s.btn} onClick={()=>setEditCargoIdx(null)}>✕</button>
                 </>) : (<>
                   <span style={{ flex:1, fontSize:12, color:T.text }}>{c.nome}</span>
-                  <span style={{ fontSize:10, color:T.text3 }} title="Usuários que ocupam este cargo">
+                  <span style={{ fontSize:10, color:T.text3 }} title="Pessoas que ocupam este cargo">
                     {n} {n===1?"pessoa":"pessoas"}
                   </span>
+                  <UsoTag catId="cargos" item={c} />
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:c.ativo!==false?T.accent+"22":"#ff4f6a22", color:c.ativo!==false?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {c.ativo!==false?"Ativo":"Inativo"}
                   </span>
@@ -829,18 +928,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   </button>
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir cargo do catálogo"
-                    onClick={()=>{
-                      if (n > 0) { toast_(`"${c.nome}" tem ${n} ocupante(s) — desative em vez de excluir.`, "red"); return; }
-                      if(window.confirm(`Excluir o cargo "${c.nome}" do catálogo?\n\nPrefira desativar se o cargo já foi usado.`)) { const next=listaCargos.filter((_,j)=>j!==i); setListaCargos(next); persistCargos(next); }
-                    }}>🗑️</button>
+                    onClick={()=>excluirItemCatalogo("cargos", c, c.nome, ()=>{ const next=listaCargos.filter((_,j)=>j!==i); setListaCargos(next); persistCargos(next); })}>🗑️</button>
                 </>)}
               </div>
             );})}
-          </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingCargos)?0.6:1 }} disabled={!isAdmin||savingCargos} onClick={()=>persistCargos(listaCargos)}>
-              {savingCargos?"Salvando...":"💾 Salvar cargos"}
-            </button>
           </div>
         </>);})()}
 
@@ -849,7 +940,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             Nomes dos tipos usados ao registrar um desvio (ex: BPF, Processo, Equipamento). Manter uma lista fechada evita
             que o mesmo tipo apareça com grafias diferentes e distorça o Pareto e a matriz Setor × Tipo dos indicadores.
             Apenas tipos ativos aparecem no formulário. <strong>Outros</strong> continua sempre disponível como texto livre.
-            As alterações são salvas automaticamente.
           </div>
           {/* Adicionar novo */}
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
@@ -887,6 +977,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={s.btn} onClick={()=>setEditTdIdx(null)}>✕</button>
                 </>) : (<>
                   <span style={{ flex:1, fontSize:12, color:T.text }}>{t.nome}</span>
+                  <UsoTag catId="desvios" item={t} />
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {t.ativo?"Ativo":"Inativo"}
                   </span>
@@ -901,7 +992,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   {t.nome!=="Outros" && (
                     <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                       title="Excluir tipo de desvio do catálogo"
-                      onClick={()=>{ if(confirm(`Excluir o tipo de desvio "${t.nome}" do catálogo?\n\nDesvios já registrados com este tipo não são afetados. Prefira desativar se o tipo já foi usado.`)) { const next=listaTiposDesvio.filter((_,j)=>j!==i); setListaTiposDesvio(next); persistTiposDesvio(next); } }}>🗑️</button>
+                      onClick={()=>excluirItemCatalogo("desvios", t, t.nome, ()=>{ const next=listaTiposDesvio.filter((_,j)=>j!==i); setListaTiposDesvio(next); persistTiposDesvio(next); })}>🗑️</button>
                   )}
                   {t.nome==="Outros" && (
                     <span style={{ fontSize:10, color:T.text3, fontStyle:"italic" }}>sempre disponível</span>
@@ -909,11 +1000,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                 </>)}
               </div>
             ))}
-          </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTd)?0.6:1 }} disabled={!isAdmin||savingTd} onClick={()=>persistTiposDesvio(listaTiposDesvio)}>
-              {savingTd?"Salvando...":"💾 Salvar tipos de desvio"}
-            </button>
           </div>
         </>)}
 
@@ -923,7 +1009,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             Setores/áreas do chão de fábrica usados ao registrar um desvio (ex: Mistura 1, Compressão, Envase 3).
             Manter uma lista fechada evita que o mesmo setor apareça com grafias diferentes e distorça os gráficos
             "Desvios por Setor" e a matriz Setor × Tipo dos indicadores. Apenas setores ativos aparecem no formulário.
-            <strong>Outros</strong> continua sempre disponível como texto livre. As alterações são salvas automaticamente.
+            <strong>Outros</strong> continua sempre disponível como texto livre.
           </div>
           {/* Adicionar novo */}
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
@@ -961,6 +1047,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={s.btn} onClick={()=>setEditSdIdx(null)}>✕</button>
                 </>) : (<>
                   <span style={{ flex:1, fontSize:12, color:T.text }}>{sx.nome}</span>
+                  <UsoTag catId="setores" item={sx} />
                   <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:sx.ativo?T.accent+"22":"#ff4f6a22", color:sx.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                     {sx.ativo?"Ativo":"Inativo"}
                   </span>
@@ -975,7 +1062,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   {sx.nome!=="Outros" && (
                     <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                       title="Excluir setor do catálogo"
-                      onClick={()=>{ if(confirm(`Excluir o setor "${sx.nome}" do catálogo?\n\nDesvios já registrados com este setor não são afetados. Prefira desativar se o setor já foi usado.`)) { const next=listaSetoresDesvio.filter((_,j)=>j!==i); setListaSetoresDesvio(next); persistSetoresDesvio(next); } }}>🗑️</button>
+                      onClick={()=>excluirItemCatalogo("setores", sx, sx.nome, ()=>{ const next=listaSetoresDesvio.filter((_,j)=>j!==i); setListaSetoresDesvio(next); persistSetoresDesvio(next); })}>🗑️</button>
                   )}
                   {sx.nome==="Outros" && (
                     <span style={{ fontSize:10, color:T.text3, fontStyle:"italic" }}>sempre disponível</span>
@@ -984,17 +1071,15 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               </div>
             ))}
           </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingSd)?0.6:1 }} disabled={!isAdmin||savingSd} onClick={()=>persistSetoresDesvio(listaSetoresDesvio)}>
-              {savingSd?"Salvando...":"💾 Salvar setores de desvio"}
-            </button>
-          </div>
         </>)}
 
         {/* ── ÁREAS E SETORES DE DISTRIBUIÇÃO FÍSICA ── */}
         {catAba==="distribuicao" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Destinos de cópias físicas controladas. Este catálogo é separado dos departamentos responsáveis pelos documentos: uma área pode receber a cópia inteira ou direcioná-la a um setor específico.
+            Estrutura física da fábrica. Serve a três usos: destino da cópia controlada impressa, local de
+            trabalho do colaborador e filtro de exigência de treinamento por setor. É separado dos
+            <strong> Departamentos</strong>, que são posição no organograma (o responsável pelo documento).
+            Uma área pode receber a cópia inteira ou direcioná-la a um setor específico.
           </div>
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
             <input placeholder="Código (ex: PRO)" maxLength={5} value={novoAreaDistrib.id}
@@ -1015,14 +1100,16 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                 <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
                   <input value={area.id} maxLength={5} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,id:e.target.value.toUpperCase()}:a))} style={{...s.inp,width:90,fontSize:12}} />
                   <input value={area.label} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,label:e.target.value}:a))} style={{...s.inp,flex:1,fontSize:12}} />
+                  <UsoTag catId="distribuicao" item={area} />
                   <button style={{...s.btn,fontSize:11}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,ativo:!a.ativo}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>{area.ativo?"Desativar área":"Ativar área"}</button>
                 </div>
                 <div style={{fontSize:11,fontWeight:700,color:T.text2,marginBottom:6}}>Setores da área</div>
                 {area.setores.map((setor,si)=>(
                   <div key={setor.id||si} style={{display:"flex",gap:8,alignItems:"center",marginBottom:5}}>
                     <input value={setor.nome} onChange={e=>setListaAreasDistrib(xs=>xs.map((a,i)=>i===ai?{...a,setores:a.setores.map((sx,j)=>j===si?{...sx,nome:e.target.value}:sx)}:a))} style={{...s.inp,flex:1,fontSize:12}} />
+                    <UsoTag catId="distribuicao" item={setor} />
                     <button style={{...s.btn,fontSize:11}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:a.setores.map((sx,j)=>j===si?{...sx,ativo:!sx.ativo}:sx)}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>{setor.ativo?"Desativar":"Ativar"}</button>
-                    <button style={{...s.btn,fontSize:11,color:"#ff4f6a"}} onClick={()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:a.setores.filter((_,j)=>j!==si)}:a); setListaAreasDistrib(next); persistAreasDistrib(next); }}>Excluir</button>
+                    <button style={{...s.btn,fontSize:11,color:"#ff4f6a"}} onClick={()=>excluirItemCatalogo("distribuicao", setor, `${area.label} › ${setor.nome}`, ()=>{ const next=listaAreasDistrib.map((a,i)=>i===ai?{...a,setores:a.setores.filter((_,j)=>j!==si)}:a); setListaAreasDistrib(next); persistAreasDistrib(next); })}>Excluir</button>
                   </div>
                 ))}
                 <div style={{display:"flex",gap:8,marginTop:8}}>
@@ -1032,7 +1119,9 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               </div>
             ))}
           </div>
-          <div style={{textAlign:"right",marginTop:12}}><button style={{...s.btnA,opacity:(!isAdmin||savingAreasDistrib)?0.6:1}} disabled={!isAdmin||savingAreasDistrib} onClick={()=>persistAreasDistrib(listaAreasDistrib)}>{savingAreasDistrib?"Salvando...":"Salvar áreas e setores"}</button></div>
+          {/* Renomear área/setor é edição livre nos inputs — aqui fica o único ponto
+              de gravação desta aba, já que não há evento de "sair do campo". */}
+          <div style={{textAlign:"right",marginTop:12}}><button style={{...s.btnA,opacity:(!isAdmin||savingAreasDistrib)?0.6:1}} disabled={!isAdmin||savingAreasDistrib} onClick={()=>persistAreasDistrib(listaAreasDistrib)}>{savingAreasDistrib?"Salvando...":"💾 Salvar nomes editados"}</button></div>
         </>)}
 
         {/* ── ABA TIPOS DE REVALIDAÇÃO ── */}
@@ -1041,7 +1130,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             Tipos usados no módulo <strong>Revalidações</strong> (Controle de Qualidade). Cada tipo carrega seu próprio
             checklist-semente ao ser escolhido no formulário. Marque <strong>Material gráfico</strong> nos tipos de embalagem impressa
             (cartucho, rótulo, bula) para exibir os campos específicos (categoria do material, nº de arte, comparação visual).
-            Apenas tipos ativos aparecem no formulário. Clique em ✏️/📋 para renomear ou editar o checklist. As alterações são salvas automaticamente.
+            Apenas tipos ativos aparecem no formulário. Clique em ✏️/📋 para renomear ou editar o checklist.
           </div>
           {/* Adicionar novo tipo */}
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
@@ -1080,6 +1169,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     <span style={{ flex:1, fontSize:12, color:T.text, fontWeight:600 }}>{t.nome}</span>
                     {t.grafico && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:T.accent+"22", color:T.accent, fontWeight:700 }}>Gráfico</span>}
                     <span style={{ fontSize:10, color:T.text3 }}>{(t.checklist||[]).length} itens</span>
+                    <UsoTag catId="reval" item={t} />
                     <span style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:t.ativo?T.accent+"22":"#ff4f6a22", color:t.ativo?T.accent:"#ff4f6a", fontWeight:700 }}>
                       {t.ativo?"Ativo":"Inativo"}
                     </span>
@@ -1090,7 +1180,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     </button>
                     <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                       title="Excluir tipo de revalidação do catálogo"
-                      onClick={()=>{ if(confirm(`Excluir o tipo de revalidação "${t.nome}" do catálogo?\n\nRevalidações já registradas com este tipo não são afetadas. Prefira desativar se o tipo já foi usado.`)) { const next=listaTiposReval.filter((_,j)=>j!==i); setListaTiposReval(next); if(expandTrIdx===i) setExpandTrIdx(null); persistTiposReval(next); } }}>🗑️</button>
+                      onClick={()=>excluirItemCatalogo("reval", t, t.nome, ()=>{ const next=listaTiposReval.filter((_,j)=>j!==i); setListaTiposReval(next); if(expandTrIdx===i) setExpandTrIdx(null); persistTiposReval(next); })}>🗑️</button>
                   </>)}
                 </div>
 
@@ -1129,11 +1219,6 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                 )}
               </div>
             ))}
-          </div>
-          <div style={{ textAlign:"right", marginTop:12 }}>
-            <button style={{ ...s.btnA, opacity:(!isAdmin||savingTr)?0.6:1 }} disabled={!isAdmin||savingTr} onClick={()=>persistTiposReval(listaTiposReval)}>
-              {savingTr?"Salvando...":"💾 Salvar tipos de revalidação"}
-            </button>
           </div>
         </>)}
       </div>
