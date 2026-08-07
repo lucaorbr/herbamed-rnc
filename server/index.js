@@ -18,6 +18,7 @@ const {
 } = require("./auth");
 const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
 const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegration");
+const { carimbarFormularioXlsx, nomeArquivoFormulario } = require("./formularioXlsx");
 
 const PORT = Number(process.env.PORT || 9028);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -1151,6 +1152,78 @@ async function handleDistributionLog(req, res, pathname, url) {
   return sendJson(res, 200, result.rows);
 }
 
+/**
+ * Formulário em Excel para envio ao fornecedor.
+ *
+ * Espelha o /render: pega o arquivo guardado e devolve com a identificação
+ * estampada — só que a estampa é no .xlsx fonte, que é o formato que o
+ * fornecedor consegue preencher. O PDF renderizado não serve para preencher, e
+ * o fonte cru sai anônimo (sem código, sem revisão), impossível de amarrar ao
+ * documento controlado numa inspeção.
+ *
+ * Cai no MESMO `distribution_log` das cópias não controladas — é o que responde
+ * "quem mandou esta planilha para o fornecedor, e quando".
+ */
+async function handleDocumentFormularioXlsx(req, res, pathname) {
+  const match = pathname.match(/^\/api\/documents\/([^/]+)\/formulario\.xlsx$/);
+  if (!match || req.method !== "GET") return false;
+  const reqUser = await requireUser(req);
+
+  // Cópia para circular fora da empresa é regida por `baixarCopiaNaoControlada`,
+  // não por `baixarArquivoFonte`: quem envia ao fornecedor normalmente não é
+  // quem edita o documento. Chave ausente cai no default do papel (cliente).
+  if (reqUser?.permissoes?.baixarCopiaNaoControlada === false) {
+    return sendJson(res, 403, { error: "Sem permissão para emitir cópia não controlada." });
+  }
+
+  const docId = decodeURIComponent(match[1]);
+  try {
+    const docRes = await query(
+      "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
+      [docId]
+    );
+    if (!docRes.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
+    const doc = docRes.rows[0].data || {};
+
+    // Só documento em vigor vira formulário para terceiro. Enviar rascunho ou
+    // obsoleto ao fornecedor é justamente o erro que o controle de documentos existe para evitar.
+    if (doc.status !== "Vigente") {
+      return sendJson(res, 409, { error: "Somente documento Vigente pode ser enviado como formulário." });
+    }
+
+    const fonteUrl = doc.arquivoFonte && doc.arquivoFonte.url ? String(doc.arquivoFonte.url) : "";
+    const fileId = fonteUrl.includes("/api/files/") ? fonteUrl.split("/api/files/").pop() : "";
+    if (!fileId) return sendJson(res, 422, { error: "Documento sem arquivo fonte anexado" });
+
+    const fileRes = await query(
+      "SELECT data, mime_type, original_name FROM stored_files WHERE id = $1",
+      [fileId]
+    );
+    if (!fileRes.rowCount) return sendJson(res, 404, { error: "Arquivo fonte não encontrado" });
+    const file = fileRes.rows[0];
+    if (!/\.xlsx?$/i.test(file.original_name || "")) {
+      return sendJson(res, 415, { error: "O arquivo fonte deste documento não é uma planilha Excel." });
+    }
+
+    const bytes = await carimbarFormularioXlsx(file.data, doc, { usuarioNome: reqUser?.name || "" });
+
+    query(
+      `INSERT INTO distribution_log (doc_id, doc_codigo, usuario_id, usuario_nome, modo)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [docId, doc.codigo || "", reqUser?.id || "", reqUser?.name || "", "formulario_fornecedor"]
+    ).catch(e => console.error("distribution_log insert failed:", e));
+
+    return sendBuffer(res, 200, Buffer.from(bytes), {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${nomeArquivoFormulario(doc)}"`,
+      "Cache-Control": "no-store",
+    });
+  } catch (error) {
+    console.error("Falha ao gerar formulário do fornecedor:", error);
+    return sendJson(res, 422, { error: `Não foi possível gerar o formulário: ${error.message}` });
+  }
+}
+
 async function handleDocumentRender(req, res, pathname, url) {
   const match = pathname.match(/^\/api\/documents\/([^/]+)\/render$/);
   if (!match || req.method !== "GET") return false;
@@ -1737,7 +1810,7 @@ async function route(req, res) {
   const integrationHandled = await handleRncIntegration(req, res, pathname, url);
   if (integrationHandled !== false) return integrationHandled;
 
-  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentFormularioXlsx, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;
