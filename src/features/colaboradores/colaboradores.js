@@ -18,6 +18,37 @@
 
 import { normCargo, acharCargoPorNome } from "../admin/cargos";
 
+/**
+ * Acha um local de trabalho no catálogo hierárquico Área → Setor pelo nome,
+ * ignorando caixa e acento. Procura primeiro no SETOR (mais específico) e só
+ * depois na ÁREA — "Produção" casa a área, "Encapsulamento" casa o setor.
+ */
+export function acharSetorPorNome(nome, catalogoAreas = []) {
+  const alvo = normCargo(nome);
+  if (!alvo) return null;
+  for (const a of catalogoAreas || []) {
+    for (const s of a?.setores || []) {
+      if (normCargo(s?.nome) === alvo) return { id: s.id, nome: s.nome, areaId: a.id, areaNome: a.label, tipo: "setor" };
+    }
+  }
+  for (const a of catalogoAreas || []) {
+    if (normCargo(a?.label) === alvo) return { id: a.id, nome: a.label, areaId: a.id, areaNome: a.label, tipo: "area" };
+  }
+  return null;
+}
+
+/** Opções achatadas do catálogo para o <select>, com a hierarquia visível. */
+export function opcoesDeLocal(catalogoAreas = []) {
+  const out = [];
+  for (const a of (catalogoAreas || []).filter(x => x?.ativo !== false)) {
+    out.push({ id: a.id, rotulo: `${a.label} (área inteira)`, tipo: "area" });
+    for (const s of (a.setores || []).filter(x => x?.ativo !== false)) {
+      out.push({ id: s.id, rotulo: `${a.label} › ${s.nome}`, tipo: "setor" });
+    }
+  }
+  return out;
+}
+
 /** Mesma normalização do catálogo de cargos — grafias equivalentes colapsam. */
 export const normNome = normCargo;
 
@@ -41,7 +72,7 @@ export function colaboradoresAtivos(lista = []) {
  * Um colaborador novo, pronto para gravar.
  * `id` é obrigatório vir de fora nos casos migrados (tem de ser o `users.id`).
  */
-export function novoColaborador({ id, nome, matricula, cargoId, cargoNome, setor, dataAdmissao, userId, origem = "manual" }) {
+export function novoColaborador({ id, nome, matricula, cargoId, cargoNome, setor, setorId, dataAdmissao, userId, origem = "manual" }) {
   return {
     id: id || `col-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     nome: String(nome || "").trim(),
@@ -49,6 +80,9 @@ export function novoColaborador({ id, nome, matricula, cargoId, cargoNome, setor
     cargoId: cargoId || null,
     // Rótulo denormalizado, mesmo motivo do `user.cargo`: sobrevive ao cargo sumir.
     cargoNome: cargoNome || "",
+    // `setorId` aponta para o catálogo Área → Setor; `setor` é o rótulo (e o texto
+    // livre legado, enquanto a vinculação não é feita).
+    setorId: setorId || null,
     setor: setor || "",
     dataAdmissao: dataAdmissao || null,
     userId: userId ? String(userId) : null,
@@ -109,7 +143,7 @@ export function planoMigracaoColaboradores({ users = [], colaboradores = [], cat
  * @param linhas [{ nome, matricula, cargo, setor, dataAdmissao }]
  * @returns { criar, atualizar, conflitos, ignorados, cargosDesconhecidos }
  */
-export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], catalogoCargos = [] }) {
+export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], catalogoCargos = [], catalogoAreas = [] }) {
   const porMatricula = new Map();
   const porNome = new Map();
   for (const c of colaboradores || []) {
@@ -121,6 +155,7 @@ export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], 
 
   const criar = [], atualizar = [], conflitos = [], ignorados = [];
   const cargosDesconhecidos = new Map();
+  const setoresDesconhecidos = new Map();
   const matriculasNaLeva = new Set();
   const nomesNaLeva = new Set();
 
@@ -144,12 +179,20 @@ export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], 
       continue;
     }
 
+    // Setor da planilha é resolvido no catálogo Área → Setor. Não achou, guarda o
+    // texto para não perder a informação, e a tela sinaliza como não vinculado —
+    // diferente do cargo, que barra a linha: sem setor a pessoa ainda é utilizável.
+    const setorTexto = String(linha?.setor || "").trim();
+    const local = setorTexto ? acharSetorPorNome(setorTexto, catalogoAreas) : null;
+    if (setorTexto && !local) setoresDesconhecidos.set(normCargo(setorTexto), setorTexto);
+
     const campos = {
       nome,
       matricula: mat,
       cargoId: cargo?.id || null,
       cargoNome: cargo?.nome || "",
-      setor: String(linha?.setor || "").trim(),
+      setorId: local?.id || null,
+      setor: local?.nome || setorTexto,
       dataAdmissao: linha?.dataAdmissao || null,
     };
 
@@ -168,7 +211,7 @@ export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], 
     if (mat) matriculasNaLeva.add(mat); else nomesNaLeva.add(nomeNorm);
   }
 
-  return { criar, atualizar, conflitos, ignorados, cargosDesconhecidos: [...cargosDesconhecidos.values()] };
+  return { criar, atualizar, conflitos, ignorados, cargosDesconhecidos: [...cargosDesconhecidos.values()], setoresDesconhecidos: [...setoresDesconhecidos.values()] };
 }
 
 /**

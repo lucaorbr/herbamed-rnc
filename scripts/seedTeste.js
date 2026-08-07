@@ -63,33 +63,62 @@ const CARGOS = [
   { id: "tecnico-de-manutencao",               nome: "Técnico de Manutenção" },
 ];
 
+// ── Setores de trabalho ───────────────────────────────────────────────────────
+// Reproduz o cenário real descrito pelo usuário: encapsulamento, compressão,
+// envase e mistura são TODOS "Auxiliar de Produção". O cargo não discrimina —
+// quem separa é o setor. É o caso que a regra de interseção da Fase 7 resolve.
+const SETORES_NECESSARIOS = {
+  PRO: { label: "Produção", setores: [
+    { id: "PRO-ENC",  nome: "Encapsulamento" },
+    { id: "PRO-COMP", nome: "Compressão" },
+    { id: "PRO-ENV",  nome: "Envase" },
+    { id: "PRO-MIST", nome: "Mistura" },
+  ]},
+  CQ:  { label: "Controle de Qualidade", setores: [{ id: "CQ-FQ", nome: "Físico-químico" }] },
+  ALM: { label: "Almoxarifado",          setores: [{ id: "ALM-REC", nome: "Recebimento" }] },
+  MAN: { label: "Manutenção",            setores: [{ id: "MAN-OF", nome: "Oficina" }] },
+  LIM: { label: "Serviços Gerais",       setores: [{ id: "LIM-GER", nome: "Limpeza Geral" }] },
+};
+
 // ── Pessoas ───────────────────────────────────────────────────────────────────
 // Proporção de fábrica: operação é a maioria. Em produção a maior parte destes
 // NÃO teria login — estão aqui como usuários só para o cenário rodar.
 const PESSOAS = [
-  ["Adriana Moreira",       "operador-de-encapsulamento",          "Produção"],
-  ["Bruno Cardoso",         "operador-de-encapsulamento",          "Produção"],
-  ["Cleber Antunes",        "operador-de-encapsulamento",          "Produção"],
-  ["Daniela Prado",         "operador-de-compressao",              "Produção"],
-  ["Edson Vilela",          "operador-de-compressao",              "Produção"],
-  ["Fabiana Rocha",         "operador-de-embalagem",               "Produção"],
-  ["Gilberto Nunes",        "operador-de-embalagem",               "Produção"],
-  ["Helena Marques",        "operador-de-embalagem",               "Produção"],
-  ["Ivan Siqueira",         "auxiliar-de-producao",                "Produção"],
-  ["Joana Ferraz",          "auxiliar-de-producao",                "Produção"],
-  ["Kleber Dias",           "auxiliar-de-producao",                "Produção"],
-  ["Larissa Amorim",        "supervisor-de-producao",              "Produção"],
-  ["Marcelo Tavares",       "supervisor-de-producao",              "Produção"],
-  ["Natália Bezerra",       "analista-de-controle-de-qualidade",   "Qualidade"],
-  ["Otávio Lins",           "analista-de-controle-de-qualidade",   "Qualidade"],
-  ["Paula Rezende",         "auxiliar-de-laboratorio",             "Qualidade"],
-  ["Quésia Martins",        "farmaceutico-responsavel-tecnico",    "Qualidade"],
-  ["Rafael Coutinho",       "assistente-de-garantia-da-qualidade", "Qualidade"],
-  ["Simone Barros",         "almoxarife",                          "Almoxarifado"],
-  ["Tiago Peixoto",         "almoxarife",                          "Almoxarifado"],
-  ["Vanessa Lopes",         "auxiliar-de-limpeza",                 "Serviços Gerais"],
-  ["Wagner Estevam",        "tecnico-de-manutencao",               "Manutenção"],
+  ["Adriana Moreira",       "operador-de-encapsulamento",          "Produção", "PRO-ENC"],
+  ["Bruno Cardoso",         "operador-de-encapsulamento",          "Produção", "PRO-ENC"],
+  ["Cleber Antunes",        "operador-de-encapsulamento",          "Produção", "PRO-ENC"],
+  ["Daniela Prado",         "operador-de-compressao",              "Produção", "PRO-COMP"],
+  ["Edson Vilela",          "operador-de-compressao",              "Produção", "PRO-COMP"],
+  ["Fabiana Rocha",         "operador-de-embalagem",               "Produção", "PRO-ENV"],
+  ["Gilberto Nunes",        "operador-de-embalagem",               "Produção", "PRO-ENV"],
+  ["Helena Marques",        "operador-de-embalagem",               "Produção", "PRO-ENV"],
+  ["Ivan Siqueira",         "auxiliar-de-producao",                "Produção", "PRO-MIST"],
+  ["Joana Ferraz",          "auxiliar-de-producao",                "Produção", "PRO-MIST"],
+  ["Kleber Dias",           "auxiliar-de-producao",                "Produção", "PRO-MIST"],
+  ["Larissa Amorim",        "supervisor-de-producao",              "Produção", "PRO-ENC"],
+  ["Marcelo Tavares",       "supervisor-de-producao",              "Produção", "PRO-COMP"],
+  ["Natália Bezerra",       "analista-de-controle-de-qualidade",   "Qualidade", "CQ-FQ"],
+  ["Otávio Lins",           "analista-de-controle-de-qualidade",   "Qualidade", "CQ-FQ"],
+  ["Paula Rezende",         "auxiliar-de-laboratorio",             "Qualidade", "CQ-FQ"],
+  ["Quésia Martins",        "farmaceutico-responsavel-tecnico",    "Qualidade", "CQ-FQ"],
+  ["Rafael Coutinho",       "assistente-de-garantia-da-qualidade", "Qualidade", "CQ-FQ"],
+  ["Simone Barros",         "almoxarife",                          "Almoxarifado", "ALM-REC"],
+  ["Tiago Peixoto",         "almoxarife",                          "Almoxarifado", "ALM-REC"],
+  ["Vanessa Lopes",         "auxiliar-de-limpeza",                 "Serviços Gerais", "LIM-GER"],
+  ["Wagner Estevam",        "tecnico-de-manutencao",               "Manutenção", "MAN-OF"],
 ];
+
+// Quais documentos exigem por SETOR (Fase 7). Vazio = só por cargo, como antes.
+const SETORES_POR_DOC = {
+  "POP-PRO-001": ["PRO"],        // área inteira: higienização vale para toda a produção
+  "POP-PRO-002": ["PRO-ENC"],    // interseção com o cargo: encapsuladora, só no encapsulamento
+  "POP-PRO-003": ["PRO-COMP"],   // interseção com o cargo: compressora, só na compressão
+  "EPI-SSM-001": ["PRO", "ALM", "MAN", "LIM"], // EPI: várias áreas, qualquer cargo
+};
+
+// Documentos que valem para TODO MUNDO do setor, independente do cargo — o filtro
+// de cargo é limpo para não virar interseção sem querer.
+const SO_POR_SETOR = new Set(["POP-PRO-001", "EPI-SSM-001"]);
 
 // ── Documentos ────────────────────────────────────────────────────────────────
 // [codigo, titulo, tipo, depto, cargos exigidos (vazio = não exige treinamento)]
@@ -154,7 +183,7 @@ const RASCUNHOS = [
 const MARCA = "seedTeste";
 
 function docBase(codigo, titulo, tipo, depto, cargos, status, versao, extra = {}) {
-  const exige = cargos.length > 0;
+  const exige = cargos.length > 0 || (extra.setores || []).length > 0;
   return {
     id: codigo, codigo, titulo, tipo, depto, versao, status,
     criadoEm: diasAtras(600), criadoPor: "Seed de Teste",
@@ -166,6 +195,7 @@ function docBase(codigo, titulo, tipo, depto, cargos, status, versao, extra = {}
       exigido: true,
       modo: extra.modo || "presencial",
       cargos,
+      setores: extra.setores || [],
       pessoasExtra: [],
       prazoDias: 30,
       reciclagemMeses: extra.reciclagemMeses ?? null,
@@ -215,10 +245,34 @@ async function main() {
   );
   console.log(`Cargos: ${CARGOS.length}`);
 
+  // ── Áreas e setores ──
+  // MERGE, não sobrescrita: este catálogo é compartilhado com a distribuição de
+  // cópias físicas (PR #56). Só acrescenta o que falta, preservando o que existe.
+  {
+    const atual = (await client.query(
+      `SELECT data FROM generic_documents WHERE collection='configuracoes' AND id='catalogo_areas_setores_distribuicao'`
+    )).rows[0]?.data || { id: "catalogo_areas_setores_distribuicao", items: [] };
+    const items = [...(atual.items || [])];
+    for (const [areaId, def] of Object.entries(SETORES_NECESSARIOS)) {
+      let area = items.find(a => a.id === areaId);
+      if (!area) { area = { id: areaId, label: def.label, ativo: true, setores: [] }; items.push(area); }
+      area.setores = area.setores || [];
+      for (const s of def.setores) {
+        if (!area.setores.some(x => x.id === s.id)) area.setores.push({ ...s, ativo: true });
+      }
+    }
+    await client.query(
+      `INSERT INTO generic_documents (collection, id, data) VALUES ('configuracoes','catalogo_areas_setores_distribuicao',$1)
+       ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data`,
+      [JSON.stringify({ ...atual, id: "catalogo_areas_setores_distribuicao", items })]
+    );
+    console.log(`Áreas/setores: ${items.length} área(s), ${items.reduce((n, a) => n + (a.setores || []).length, 0)} setor(es)`);
+  }
+
   // ── Pessoas ──
   const hash = await bcrypt.hash(SENHA_PADRAO, 10);
   const pessoasIds = [];
-  for (const [nome, cargoId, setor] of PESSOAS) {
+  for (const [nome, cargoId, setor, setorId] of PESSOAS) {
     const email = nome.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z ]/gu, "").trim().split(/\s+/).join(".") + "@teste.local";
     const cargoNome = CARGOS.find(c => c.id === cargoId)?.nome || "";
@@ -227,9 +281,30 @@ async function main() {
        VALUES ($1,$2,$3,'user',$4,'{}'::jsonb,$5) RETURNING id`,
       [nome, email, hash, setor, JSON.stringify({ cargo: cargoNome, cargoId, [MARCA]: true })]
     );
-    pessoasIds.push({ id: r.rows[0].id, nome, cargoId, cargoNome, setor });
+    pessoasIds.push({ id: r.rows[0].id, nome, cargoId, cargoNome, setor, setorId });
   }
   console.log(`Pessoas: ${pessoasIds.length} (senha padrão: ${SENHA_PADRAO})`);
+
+  // ── Colaboradores ──
+  // Criados direto, com o MESMO id do usuário — a invariante da Fase 6 que mantém
+  // toda evidência já gravada resolvendo. Aqui todos têm login porque é cenário de
+  // teste; em produção a maioria não teria.
+  for (const p of pessoasIds) {
+    const setorNome = Object.values(SETORES_NECESSARIOS)
+      .flatMap(a => a.setores).find(s => s.id === p.setorId)?.nome || p.setor;
+    await client.query(
+      `INSERT INTO generic_documents (collection, id, data) VALUES ('colaboradores',$1,$2)
+       ON CONFLICT (collection, id) DO UPDATE SET data = EXCLUDED.data`,
+      [String(p.id), JSON.stringify({
+        id: String(p.id), nome: p.nome, matricula: "",
+        cargoId: p.cargoId, cargoNome: p.cargoNome,
+        setorId: p.setorId || null, setor: setorNome || "",
+        dataAdmissao: null, userId: String(p.id), ativo: true,
+        origem: "seed", criadoEm: new Date().toISOString(), [MARCA]: true,
+      })]
+    );
+  }
+  console.log(`Colaboradores: ${pessoasIds.length} (com setor vinculado)`);
 
   // ── Documentos ──
   const insertDoc = (d) => client.query(
@@ -240,7 +315,8 @@ async function main() {
 
   const docsVigentes = [];
   for (let i = 0; i < VIGENTES.length; i++) {
-    const [codigo, titulo, tipo, depto, cargos] = VIGENTES[i];
+    const [codigo, titulo, tipo, depto, cargosOrig] = VIGENTES[i];
+    const cargos = SO_POR_SETOR.has(codigo) ? [] : cargosOrig;
     // Espalha o relógio do prazo: alguns dentro do prazo, outros já estourados.
     const desdeEm = diasAtras([10, 20, 45, 90, 200, 15, 60, 120, 25, 300, 40, 5, 180][i] || 30);
     const d = docBase(codigo, titulo, tipo, depto, cargos, "Vigente", "02", {
@@ -248,6 +324,12 @@ async function main() {
       // Reciclagem em POP crítico — gera "a reciclar" na matriz.
       reciclagemMeses: [12, 12, 12, null, null, null, 24, null, null, 12, null, 12, 12][i] ?? null,
       modo: ["POP-GQ-001", "POP-GQ-002", "MTA-CQ-001"].includes(codigo) ? "leitura" : "presencial",
+      // Exemplos das três formas de exigir (Fase 7), para o cenário exercitar a regra:
+      //  · POP-PRO-001 → só ÁREA: higienização vale para toda a produção, qualquer cargo
+      //  · POP-PRO-002 → INTERSEÇÃO: quem opera a encapsuladora é o pessoal DAQUELE setor
+      //  · POP-PRO-003 → INTERSEÇÃO: idem para a compressora
+      //  · demais      → só cargo, como antes
+      setores: SETORES_POR_DOC[codigo] || [],
     });
     await insertDoc(d);
     docsVigentes.push(d);
@@ -282,8 +364,16 @@ async function main() {
   // com reciclagem vencida, parte nunca treinada.
   let n = 0;
   for (const doc of docsVigentes) {
+    // Mesma regra da Fase 7: cargo ∩ setor quando os dois existem.
     const cargos = doc.treinamento?.cargos || [];
-    const exigidos = pessoasIds.filter(p => cargos.includes(p.cargoId));
+    const setores = doc.treinamento?.setores || [];
+    const areaDe = (sid) => Object.entries(SETORES_NECESSARIOS).find(([, a]) => a.setores.some(x => x.id === sid))?.[0] || null;
+    const casaSetor = (p) => !!p.setorId && (setores.includes(p.setorId) || setores.includes(areaDe(p.setorId)));
+    const casaCargo = (p) => cargos.includes(p.cargoId);
+    const exigidos = pessoasIds.filter(p =>
+      cargos.length && setores.length ? casaCargo(p) && casaSetor(p)
+      : cargos.length ? casaCargo(p)
+      : setores.length ? casaSetor(p) : false);
     for (let i = 0; i < exigidos.length; i++) {
       const p = exigidos[i];
       // ~25% nunca treinou; dos que treinaram, alguns com data antiga (vence a reciclagem).

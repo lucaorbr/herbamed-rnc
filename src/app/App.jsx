@@ -282,7 +282,7 @@ export default function App() {
         // de quem tem login é o próprio `users.id`, então `user.uid` continua casando.
         const meus = pendentesDoUsuario({
           docs: docs || [], pessoas: colaboradores, evidencias: evid || [],
-          catalogoCargos: catalogoCargos, userId: String(user.uid), hoje,
+          catalogoCargos: catalogoCargos, catalogoAreas: catalogoAreasSetoresDistribuicao, userId: String(user.uid), hoje,
         });
         const criticos = meus.filter(m => m.status === "atrasado" || m.status === "vencido");
         if (!criticos.length) return;
@@ -304,7 +304,7 @@ export default function App() {
       } catch { /* alerta é best-effort: falha não pode atrapalhar o login */ }
     })();
     return () => { vivo = false; };
-  }, [user?.uid, colaboradores, catalogoCargos]);
+  }, [user?.uid, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao]);
 
   // ── Heartbeat — atualiza online status a cada 2 minutos ──────────────────
   useEffect(() => {

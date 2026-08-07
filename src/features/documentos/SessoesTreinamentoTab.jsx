@@ -17,7 +17,7 @@ import {
 // coleção `treinamentos`, gravada no momento em que a lista é assinada.
 
 export function SessoesTreinamentoTab({
-  doc, sessoes = [], colaboradores = [], evidencias = [], catalogoCargos = [],
+  doc, sessoes = [], colaboradores = [], evidencias = [], catalogoCargos = [], catalogoAreas = [],
   user, perm, isAdmin, toast_, auditLog, onVoltar,
 }) {
   const T = useTheme(); const s = useS();
@@ -33,13 +33,13 @@ export function SessoesTreinamentoTab({
 
   // Quem o documento exige e como cada um está hoje — mesma fonte da matriz.
   const { exigidos, jaTreinados } = useMemo(() => {
-    const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos);
+    const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos, catalogoAreas);
     const indice = indexarEvidencias(evidencias);
     const ok = ex
       .filter(e => statusCelula({ doc, userId: e.userId, indice, hoje }).status === "treinado")
       .map(e => e.userId);
     return { exigidos: ex, jaTreinados: ok };
-  }, [doc, colaboradores, catalogoCargos, evidencias, hoje]);
+  }, [doc, colaboradores, catalogoCargos, catalogoAreas, evidencias, hoje]);
 
   const criar = () => {
     const nova = novaSessao({
