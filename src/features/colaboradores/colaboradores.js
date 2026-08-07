@@ -218,37 +218,69 @@ export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], 
  * Parser de CSV com separador `;` ou `,`, cabeçalho tolerante a acento e caixa.
  * Colunas aceitas: nome, matricula, cargo, setor, admissao (ou dataAdmissao).
  */
+/**
+ * Onde está cada campo, a partir da linha de cabeçalho. Fonte única para as duas
+ * portas de entrada (CSV e Excel) — se cada uma tivesse a sua, a planilha que
+ * funciona num formato passaria a falhar no outro sem ninguém entender por quê.
+ * Aceita sinônimos porque a planilha costuma vir do RH com nomes próprios.
+ */
+export function mapearColunasColaboradores(cabecalho = []) {
+  const cab = (cabecalho || []).map(c => normCargo(c).replace(/\s+/g, ""));
+  const idx = (...nomes) => {
+    for (const n of nomes) { const i = cab.indexOf(n); if (i >= 0) return i; }
+    return -1;
+  };
+  return {
+    iNome: idx("nome", "colaborador", "funcionario", "nomecompleto"),
+    iMat:  idx("matricula", "matr", "registro"),
+    iCar:  idx("cargo", "funcao"),
+    iSet:  idx("setor", "departamento", "area", "setordetrabalho"),
+    iAdm:  idx("admissao", "dataadmissao", "datadeadmissao", "dtadmissao"),
+  };
+}
+
+/** Uma célula da planilha vira texto limpo — Excel devolve número em matrícula. */
+const cel = (v) => {
+  if (v === null || v === undefined) return "";
+  if (v instanceof Date) return v;
+  if (typeof v === "object") return String(v.text || v.result || v.richText?.map(r => r.text).join("") || "").trim();
+  return String(v).trim();
+};
+
+/**
+ * Linhas normalizadas a partir de uma matriz [linha][coluna] — o formato comum
+ * depois de ler CSV ou XLSX. A primeira linha é o cabeçalho.
+ */
+export function linhasDeMatrizColaboradores(matriz = []) {
+  const linhas = (matriz || []).filter(l => Array.isArray(l) && l.some(c => cel(c) !== ""));
+  if (!linhas.length) return [];
+  const { iNome, iMat, iCar, iSet, iAdm } = mapearColunasColaboradores(linhas[0].map(cel));
+  if (iNome < 0) return [];
+
+  return linhas.slice(1).map(l => ({
+    nome: String(cel(l[iNome]) || ""),
+    matricula: iMat >= 0 ? String(cel(l[iMat]) || "") : "",
+    cargo: iCar >= 0 ? String(cel(l[iCar]) || "") : "",
+    setor: iSet >= 0 ? String(cel(l[iSet]) || "") : "",
+    dataAdmissao: iAdm >= 0 ? normData(cel(l[iAdm])) : null,
+  }));
+}
+
 export function parseCSVColaboradores(texto) {
   const linhas = String(texto || "").split(/\r?\n/).filter(l => l.trim());
   if (!linhas.length) return [];
   const sep = (linhas[0].match(/;/g) || []).length >= (linhas[0].match(/,/g) || []).length ? ";" : ",";
   const corta = (l) => l.split(sep).map(c => c.trim().replace(/^"|"$/g, ""));
-  const cab = corta(linhas[0]).map(c => normCargo(c).replace(/\s+/g, ""));
-  const idx = (...nomes) => {
-    for (const n of nomes) { const i = cab.indexOf(n); if (i >= 0) return i; }
-    return -1;
-  };
-  const iNome = idx("nome", "colaborador", "funcionario");
-  const iMat  = idx("matricula", "matr", "registro");
-  const iCar  = idx("cargo", "funcao");
-  const iSet  = idx("setor", "departamento", "area");
-  const iAdm  = idx("admissao", "dataadmissao", "dtadmissao");
-  if (iNome < 0) return [];
-
-  return linhas.slice(1).map(l => {
-    const c = corta(l);
-    return {
-      nome: c[iNome] || "",
-      matricula: iMat >= 0 ? c[iMat] || "" : "",
-      cargo: iCar >= 0 ? c[iCar] || "" : "",
-      setor: iSet >= 0 ? c[iSet] || "" : "",
-      dataAdmissao: iAdm >= 0 ? normData(c[iAdm]) : null,
-    };
-  });
+  return linhasDeMatrizColaboradores(linhas.map(corta));
 }
 
 /** Aceita dd/mm/aaaa ou aaaa-mm-dd; devolve sempre ISO curto, ou null. */
 export function normData(v) {
+  // Célula formatada como data no Excel chega como Date, não como texto. O Excel
+  // guarda em UTC; usar getUTC* evita o clássico "a data volta um dia".
+  if (v instanceof Date && !isNaN(v)) {
+    return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, "0")}-${String(v.getUTCDate()).padStart(2, "0")}`;
+  }
   const s = String(v || "").trim();
   if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
