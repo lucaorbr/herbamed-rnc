@@ -9,6 +9,7 @@ import {
   novoColaborador, planoMigracaoColaboradores, planoImportacaoColaboradores,
   parseCSVColaboradores, normMatricula, normNome, opcoesDeLocal,
 } from "./colaboradores";
+import { baixarModeloColaboradores, lerPlanilhaColaboradores } from "./planilhaColaboradores";
 
 // Cadastro de Colaboradores — a lista de PESSOAS da fábrica, separada dos usuários
 // do sistema. É daqui que a Matriz de Treinamento deriva a exigência desde a Fase 6:
@@ -111,8 +112,11 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
     e.target.value = "";
     if (!f) return;
     try {
-      const texto = await f.text();
-      const linhas = parseCSVColaboradores(texto);
+      // Excel é o formato em que o RH realmente trabalha. Lido direto, sem passar
+      // por CSV, o texto vem em Unicode — acento não chega quebrado e o nome do
+      // cargo continua casando com o catálogo.
+      const ehExcel = /\.xlsx?$/i.test(f.name);
+      const linhas = ehExcel ? await lerPlanilhaColaboradores(f) : parseCSVColaboradores(await f.text());
       if (!linhas.length) {
         toast_?.("Não encontrei a coluna 'nome' no arquivo. Confira o cabeçalho.", "red");
         return;
@@ -135,6 +139,15 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
       setPrevia(null);
     } catch (e) { toast_?.("Erro ao importar.", "red"); console.error(e); }
     setSalvando(false);
+  };
+
+  // O modelo sai com os cargos e setores ATIVOS do sistema já embutidos como
+  // listas suspensas: quem preenche escolhe em vez de digitar, e cargo digitado
+  // fora do catálogo (que faria a linha ser recusada) deixa de acontecer.
+  const baixarModeloExcel = async () => {
+    try {
+      await baixarModeloColaboradores({ catalogoCargos, catalogoAreas });
+    } catch (e) { toast_?.("Não consegui gerar o modelo.", "red"); console.error(e); }
   };
 
   const baixarModelo = () => {
@@ -176,14 +189,18 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
           <SecTitle icon="👷" ch={`Colaboradores (${visiveis.length})`} />
           {isAdmin && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={{ ...s.btn, fontSize: 11 }} onClick={baixarModelo}>📄 Modelo CSV</button>
+              <button style={{ ...s.btn, fontSize: 11 }} onClick={baixarModeloExcel}
+                title="Planilha .xlsx com os cargos e setores do sistema já em listas suspensas">
+                📗 Modelo Excel
+              </button>
+              <button style={{ ...s.btn, fontSize: 11 }} onClick={baixarModelo} title="Alternativa em texto puro">📄 Modelo CSV</button>
               <button style={{ ...s.btn, fontSize: 11 }} onClick={() => fileRef.current?.click()}>📥 Importar planilha</button>
               <button style={{ ...s.btn, fontSize: 11, opacity: salvando ? 0.6 : 1 }} disabled={salvando} onClick={migrar}
                 title="Cria cadastro para os usuários do sistema que ainda não têm, preservando o histórico de treinamento">
                 🔄 Migrar usuários
               </button>
               <button style={s.btnA} onClick={() => setEdit(novoColaborador({ nome: "" }))}>+ Novo</button>
-              <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={lerArquivo} />
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style={{ display: "none" }} onChange={lerArquivo} />
             </div>
           )}
         </div>

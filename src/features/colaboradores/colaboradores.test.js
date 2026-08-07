@@ -1,6 +1,7 @@
 import {
   normMatricula, normNome, temLogin, colaboradoresAtivos, novoColaborador,
   planoMigracaoColaboradores, planoImportacaoColaboradores, parseCSVColaboradores, normData,
+  mapearColunasColaboradores, linhasDeMatrizColaboradores,
 } from "./colaboradores";
 import { exigidosDoDocumento, statusCelula, indexarEvidencias, exigidosSemLogin, montarMatriz } from "../documentos/treinamento";
 
@@ -209,6 +210,78 @@ describe("parseCSVColaboradores", () => {
   it("arquivo vazio devolve lista vazia", () => {
     expect(parseCSVColaboradores("")).toEqual([]);
     expect(parseCSVColaboradores(null)).toEqual([]);
+  });
+});
+
+describe("mapearColunasColaboradores", () => {
+  it("aceita os nomes do modelo, com acento e caixa", () => {
+    const m = mapearColunasColaboradores(["Nome completo", "Matrícula", "Cargo", "Setor", "Data de admissão"]);
+    expect(m).toEqual({ iNome: 0, iMat: 1, iCar: 2, iSet: 3, iAdm: 4 });
+  });
+
+  it("aceita sinônimos que vêm da planilha do RH", () => {
+    const m = mapearColunasColaboradores(["FUNCIONARIO", "registro", "função", "departamento", "dt admissao"]);
+    expect(m).toEqual({ iNome: 0, iMat: 1, iCar: 2, iSet: 3, iAdm: 4 });
+  });
+
+  it("coluna ausente vira -1, não 0 — senão leria a coluna errada", () => {
+    const m = mapearColunasColaboradores(["nome"]);
+    expect(m.iNome).toBe(0);
+    expect(m.iMat).toBe(-1);
+    expect(m.iSet).toBe(-1);
+  });
+
+  it("ordem das colunas não importa", () => {
+    const m = mapearColunasColaboradores(["Cargo", "Nome", "Setor"]);
+    expect(m.iNome).toBe(1);
+    expect(m.iCar).toBe(0);
+  });
+});
+
+describe("linhasDeMatrizColaboradores (caminho do Excel)", () => {
+  it("lê a matriz como o CSV lê o texto", () => {
+    const matriz = [
+      ["Nome completo", "Matrícula", "Cargo", "Setor", "Data de admissão"],
+      ["Adriana Moreira", 100, "Operador de Encapsulamento", "Encapsulamento", "05/03/2024"],
+    ];
+    expect(linhasDeMatrizColaboradores(matriz)).toEqual([
+      { nome: "Adriana Moreira", matricula: "100", cargo: "Operador de Encapsulamento", setor: "Encapsulamento", dataAdmissao: "2024-03-05" },
+    ]);
+  });
+
+  it("matrícula numérica do Excel vira texto, não 100 vs '100'", () => {
+    const linhas = linhasDeMatrizColaboradores([["nome", "matricula"], ["Bruno", 200]]);
+    expect(linhas[0].matricula).toBe("200");
+  });
+
+  it("célula de data do Excel (Date) vira ISO sem voltar um dia", () => {
+    const linhas = linhasDeMatrizColaboradores([["nome", "admissao"], ["Cleber", new Date(Date.UTC(2024, 2, 5))]]);
+    expect(linhas[0].dataAdmissao).toBe("2024-03-05");
+  });
+
+  it("célula de texto rico do Excel é achatada", () => {
+    const rico = { richText: [{ text: "Daniela " }, { text: "Prado" }] };
+    const linhas = linhasDeMatrizColaboradores([["nome"], [rico]]);
+    expect(linhas[0].nome).toBe("Daniela Prado");
+  });
+
+  it("linha em branco no meio da planilha é ignorada", () => {
+    const linhas = linhasDeMatrizColaboradores([["nome"], ["Edson"], ["", null, undefined], ["Larissa"]]);
+    expect(linhas.map(l => l.nome)).toEqual(["Edson", "Larissa"]);
+  });
+
+  it("célula vazia não vira 'undefined' como texto", () => {
+    const linhas = linhasDeMatrizColaboradores([["nome", "cargo"], ["Marcelo", null]]);
+    expect(linhas[0].cargo).toBe("");
+  });
+});
+
+describe("normData com Date", () => {
+  it("converte Date do Excel", () => {
+    expect(normData(new Date(Date.UTC(2026, 0, 31)))).toBe("2026-01-31");
+  });
+  it("Date inválido não vira data torta", () => {
+    expect(normData(new Date("nada"))).toBeNull();
   });
 });
 
