@@ -538,10 +538,18 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           </div>
         </>);})()}
 
-        {/* ── ÁREAS E SETORES DE DISTRIBUIÇÃO FÍSICA ── */}
+        {/* ── ÁREAS E SETORES — cadastro único do lugar físico ── */}
         {catAba==="distribuicao" && (<>
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Destinos de cópias físicas controladas. Este catálogo é separado dos departamentos responsáveis pelos documentos: uma área pode receber a cópia inteira ou direcioná-la a um setor específico.
+            <strong>Onde as coisas acontecem</strong>, num cadastro só. Este catálogo alimenta quatro
+            usos: destino da <strong>cópia física controlada</strong> (uma área pode receber a cópia
+            inteira ou direcioná-la a um setor), <strong>local de trabalho</strong> do colaborador,
+            <strong> exigência de treinamento</strong> por setor e o <strong>setor do desvio</strong>.
+            <br/>Não confundir com <strong>Departamentos</strong> (em Gestão de Documentos → ⚙️
+            Configuração): aquele é posição no organograma e entra no código do documento; este é
+            lugar físico.
+            <br/>⚠️ Um setor usado por desvios não deve ser excluído — desative. A conferência do que
+            os Desvios ainda usam fica em <strong>Desvios → ⚙️ Configuração → 🏭 Setores</strong>.
           </div>
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
             <input placeholder="Código (ex: PRO)" maxLength={5} value={novoAreaDistrib.id}
