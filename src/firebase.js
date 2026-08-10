@@ -186,6 +186,9 @@ export const adminResetPassword = (uid) =>
 export const createElectronicSignature = ({ password, contexto = "", papel = "", docId = null }) =>
   api("/api/auth/signature", { method: "POST", body: { password, contexto, papel, docId } });
 
+export const getDocumentSummary = (docId, { refresh = false } = {}) =>
+  api(`/api/documents/${encodeURIComponent(docId)}/summary${refresh ? "?refresh=1" : ""}`);
+
 export const getArecoRecebimentos = (status = "pendente_analise") =>
   api(`/api/areco/recebimentos${status ? `?status=${encodeURIComponent(status)}` : ""}`);
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ExcelJS from 'exceljs';
-import { saveCollection, deleteFromCollection, subscribeCollection, getToken } from "../../firebase";
+import { saveCollection, deleteFromCollection, subscribeCollection, getDocumentSummary, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
 import { uploadAttachment } from "../rnc/RncTabs";
@@ -344,6 +344,105 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrit
   return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
+function ResumoRapidoDocumento({ resumo, loading, error, onRefresh, s, T }) {
+  const secoes = [
+    { titulo:"Onde se aplica", itens:resumo?.aplicacao, cor:T.blue || "#4fc3f7" },
+    { titulo:"Responsabilidades", itens:resumo?.responsaveis, cor:T.purple || "#a78bfa" },
+    { titulo:"Pontos de atenção", itens:resumo?.pontosAtencao, cor:T.orange || "#ff8c42" },
+    { titulo:"Registros e anexos", itens:resumo?.registros, cor:T.accent },
+  ].filter(secao => secao.itens?.length);
+
+  return (
+    <div style={{...s.card,border:`1px solid ${T.accent}33`,background:`${T.accent}06`}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:10}}>
+        <div>
+          <SecTitle icon="📖" ch="Resumo rápido" />
+          <div style={{fontSize:11,color:T.text2,marginTop:2}}>Leitura simplificada e gerada localmente, sem enviar o POP para serviços externos.</div>
+        </div>
+        <button type="button" onClick={onRefresh} disabled={loading} title="Gerar o resumo novamente" style={{...s.btn,fontSize:11,opacity:loading?.65:1}}>
+          ↻ {loading ? "Analisando..." : "Atualizar resumo"}
+        </button>
+      </div>
+
+      {loading && !resumo && (
+        <div style={{padding:"18px 0",fontSize:12,color:T.text2,display:"flex",alignItems:"center",gap:8}}>
+          <span>⏳</span> Lendo e organizando o conteúdo do documento...
+        </div>
+      )}
+
+      {error && !resumo && (
+        <div style={{padding:"10px 12px",borderLeft:`3px solid ${T.red}`,background:`${T.red}10`,fontSize:12,color:T.red}}>
+          {error}
+        </div>
+      )}
+
+      {resumo && !resumo.hasContent && (
+        <div style={{padding:"12px 14px",borderLeft:`3px solid ${T.yellow}`,background:`${T.yellow}10`,fontSize:12,color:T.text2,lineHeight:1.6}}>
+          Ainda não foi possível montar o resumo. O documento não possui campos preenchidos e o arquivo pode ser uma imagem digitalizada sem texto pesquisável.
+        </div>
+      )}
+
+      {resumo?.hasContent && (
+        <>
+          {resumo.visaoGeral && (
+            <div style={{padding:"2px 0 14px",fontSize:13,color:T.text,lineHeight:1.75}}>
+              <div style={{fontSize:10,color:T.accent,fontWeight:800,textTransform:"uppercase",marginBottom:5}}>Em poucas palavras</div>
+              {resumo.visaoGeral}
+            </div>
+          )}
+
+          {resumo.passos?.length > 0 && (
+            <div style={{borderTop:`1px solid ${T.border}`,padding:"14px 0"}}>
+              <div style={{fontSize:12,fontWeight:750,color:T.text,marginBottom:9}}>Como executar</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {resumo.passos.map((passo,i)=>(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"24px minmax(0,1fr)",gap:9,alignItems:"start",fontSize:12,color:T.text2,lineHeight:1.55}}>
+                    <span style={{width:24,height:24,borderRadius:6,background:T.accent,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+                    <span>{passo}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {secoes.length > 0 && (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",columnGap:24,rowGap:0,borderTop:`1px solid ${T.border}`}}>
+              {secoes.map(secao=>(
+                <div key={secao.titulo} style={{padding:"14px 0",borderBottom:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:11,fontWeight:800,color:secao.cor,marginBottom:7,textTransform:"uppercase"}}>{secao.titulo}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {secao.itens.map((item,i)=>(
+                      <div key={i} style={{display:"grid",gridTemplateColumns:"8px minmax(0,1fr)",gap:7,fontSize:12,color:T.text2,lineHeight:1.5}}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:secao.cor,marginTop:7}} />
+                        <span>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {resumo.materiais?.length > 0 && (
+            <div style={{padding:"12px 0 4px",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{fontSize:10,fontWeight:800,color:T.text3,textTransform:"uppercase",marginRight:3}}>Materiais:</span>
+              {resumo.materiais.map((item,i)=><span key={i} style={{fontSize:11,padding:"3px 8px",border:`1px solid ${T.border}`,borderRadius:6,color:T.text2}}>{item}</span>)}
+            </div>
+          )}
+        </>
+      )}
+
+      {resumo && (
+        <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${T.border}`,fontSize:10,color:T.text3,lineHeight:1.5}}>
+          <div><strong>Fonte:</strong> {resumo.fonte || "conteúdo cadastrado"}{resumo.cache ? " · resumo já processado" : ""}</div>
+          {resumo.avisoExtracao && <div style={{color:T.yellow,marginTop:3}}>{resumo.avisoExtracao}</div>}
+          <div style={{marginTop:5}}>{resumo.disclaimer}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC }) {
   const T = useTheme();
   const s = useS();
@@ -353,6 +452,10 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [view,      setView]      = useState("lista");
   const [sel,       setSel]       = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [docSummary, setDocSummary] = useState(null);
+  const [docSummaryLoading, setDocSummaryLoading] = useState(false);
+  const [docSummaryError, setDocSummaryError] = useState("");
+  const [docSummaryOpen, setDocSummaryOpen] = useState(false);
   const [buscaTxt,  setBuscaTxt]  = useState("");
   const [filtroTipo,   setFiltroTipo]   = useState("todos");
   const [filtroDepto,  setFiltroDepto]  = useState("todos");
@@ -397,6 +500,20 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [docArquivoFonte, setDocArquivoFonte] = useState(null);
   const [docArquivoFonteUploading, setDocArquivoFonteUploading] = useState(false);
   const [capitulosAberto, setCapitulosAberto] = useState(false);
+
+  const carregarResumoDocumento = async (doc, refresh = false) => {
+    if (!doc?.id) return;
+    setDocSummaryLoading(true);
+    setDocSummaryError("");
+    try {
+      const result = await getDocumentSummary(doc.id, { refresh });
+      setDocSummary(result);
+    } catch (error) {
+      setDocSummaryError(error?.message || "Não foi possível gerar o resumo deste documento.");
+    } finally {
+      setDocSummaryLoading(false);
+    }
+  };
 
   const tiposAtivos  = catalogoTipos.length  ? catalogoTipos.filter(t  => t.ativo  !== false) : TIPOS_DOC_GD;
   const deptosAtivos = catalogoDeptos.length ? catalogoDeptos.filter(d => d.ativo !== false) : DEPARTAMENTOS_GD;
@@ -1252,6 +1369,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {podeAssAprov && d.status==="Aguardando Aprovação" && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"aprovador",show:true}); }}>❌ Recusar</button>}
             {podeIniciarRevisao && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
+            <button
+              disabled={!d.arquivo}
+              title={d.arquivo ? "Ler o PDF e gerar um resumo rápido" : "Anexe o PDF oficial para gerar o resumo"}
+              style={{...s.btn,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}}
+              onClick={()=>{ setDocSummaryOpen(true); setDocSummary(null); carregarResumoDocumento(d); }}
+            >📖 Gerar resumo</button>
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
             {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||""}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0) && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir</button>}
@@ -2153,6 +2276,33 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           );
         })()}
+        {docSummaryOpen && (
+          <div
+            onClick={()=>setDocSummaryOpen(false)}
+            style={{position:"fixed",inset:0,zIndex:10000,background:"rgba(0,0,0,.58)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
+          >
+            <div
+              onClick={event=>event.stopPropagation()}
+              style={{width:"min(920px,100%)",maxHeight:"90vh",overflowY:"auto",background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:16,boxShadow:"0 20px 60px rgba(0,0,0,.35)"}}
+            >
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:10}}>
+                <div>
+                  <div style={{fontSize:15,fontWeight:700,color:T.text}}>Resumo do documento</div>
+                  <div style={{fontSize:11,color:T.text3,marginTop:2}}>{d.codigo} · Rev.{d.versao} · {d.titulo}</div>
+                </div>
+                <button type="button" style={{...s.btn,width:34,height:34,padding:0,fontSize:16}} title="Fechar" onClick={()=>setDocSummaryOpen(false)}>×</button>
+              </div>
+              <ResumoRapidoDocumento
+                resumo={docSummary}
+                loading={docSummaryLoading}
+                error={docSummaryError}
+                onRefresh={()=>carregarResumoDocumento(d, true)}
+                s={s}
+                T={T}
+              />
+            </div>
+          </div>
+        )}
         {recusaModal}
       </div>
     );

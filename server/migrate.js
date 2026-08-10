@@ -58,6 +58,23 @@ async function migrate() {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS document_summaries (
+      doc_id text NOT NULL,
+      document_version text NOT NULL DEFAULT '',
+      source_hash text NOT NULL,
+      summary jsonb NOT NULL,
+      generated_by uuid REFERENCES users(id) ON DELETE SET NULL,
+      generated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (doc_id, document_version, source_hash)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_document_summaries_doc
+    ON document_summaries (doc_id, generated_at DESC)
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS rncs (
       id text PRIMARY KEY,
       num text,

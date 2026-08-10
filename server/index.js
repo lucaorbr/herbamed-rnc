@@ -19,6 +19,11 @@ const {
 const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
 const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegration");
 const { carimbarFormularioXlsx, nomeArquivoFormulario } = require("./formularioXlsx");
+const {
+  buildDocumentSourceHash,
+  createLocalSummary,
+  extractTextFromStoredFile,
+} = require("./documentSummarizer");
 
 const PORT = Number(process.env.PORT || 9028);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -1224,6 +1229,103 @@ async function handleDocumentFormularioXlsx(req, res, pathname) {
   }
 }
 
+function storedFileId(fileRef) {
+  const match = String(fileRef?.url || "").match(/\/api\/files\/([0-9a-f-]{36})/i);
+  return match?.[1] || "";
+}
+
+async function handleDocumentSummary(req, res, pathname, url) {
+  const match = pathname.match(/^\/api\/documents\/([^/]+)\/summary$/);
+  if (!match || req.method !== "GET") return false;
+
+  const reqUser = await requireUser(req);
+  const docId = decodeURIComponent(match[1]);
+  const docResult = await query(
+    "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
+    [docId]
+  );
+  if (!docResult.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
+
+  const doc = { ...docResult.rows[0].data, id: docId };
+  if (reqUser?.permissoes?.acessoRestritoVigente === true && doc.status !== "Vigente") {
+    return sendJson(res, 403, { error: "Acesso restrito: somente documentos vigentes podem ser resumidos." });
+  }
+
+  const candidateIds = [storedFileId(doc.arquivo), storedFileId(doc.arquivoFonte)].filter(Boolean);
+  const filesById = new Map();
+  if (candidateIds.length) {
+    const filesResult = await query(
+      `SELECT id::text, original_name, mime_type, size_bytes, sha256, data
+       FROM stored_files WHERE id = ANY($1::uuid[])`,
+      [candidateIds]
+    );
+    filesResult.rows.forEach(file => filesById.set(file.id, file));
+  }
+
+  const fileHashes = candidateIds.map(id => filesById.get(id)?.sha256 || `ausente:${id}`);
+  const sourceHash = buildDocumentSourceHash(doc, fileHashes);
+  const version = String(doc.versao || "");
+  const refresh = url.searchParams.get("refresh") === "1";
+
+  if (!refresh) {
+    const cached = await query(
+      `SELECT summary, generated_at FROM document_summaries
+       WHERE doc_id = $1 AND document_version = $2 AND source_hash = $3`,
+      [docId, version, sourceHash]
+    );
+    if (cached.rowCount) {
+      return sendJson(res, 200, {
+        ...cached.rows[0].summary,
+        geradoEm: cached.rows[0].generated_at,
+        cache: true,
+      });
+    }
+  }
+
+  const extractionOptions = {
+    maxFileBytes: Number(process.env.DOCUMENT_SUMMARY_MAX_FILE_BYTES || 25 * 1024 * 1024),
+    maxTextChars: Number(process.env.DOCUMENT_SUMMARY_MAX_TEXT_CHARS || 180_000),
+    maxPages: Number(process.env.DOCUMENT_SUMMARY_MAX_PAGES || 80),
+  };
+  let extracted = { text: "", source: "", warning: "" };
+  const warnings = [];
+  for (const id of candidateIds) {
+    const file = filesById.get(id);
+    if (!file) continue;
+    const current = await extractTextFromStoredFile(file, extractionOptions);
+    if (current.warning) warnings.push(current.warning);
+    if (current.text) {
+      extracted = current;
+      break;
+    }
+  }
+
+  const hasStructuredContent = [
+    doc.objetivo, doc.alcance, doc.responsabilidades, doc.procedimento, doc.registros,
+  ].some(value => String(value || "").replace(/<[^>]*>/g, "").trim().length > 10);
+  const sourceParts = [];
+  if (hasStructuredContent) sourceParts.push("campos cadastrados");
+  if (extracted.source) sourceParts.push(extracted.source);
+
+  const summary = createLocalSummary(doc, extracted.text, {
+    source: sourceParts.join(" e ") || "metadados do documento",
+    warning: warnings.join(" "),
+  });
+
+  await query(
+    `INSERT INTO document_summaries
+      (doc_id, document_version, source_hash, summary, generated_by, generated_at)
+     VALUES ($1, $2, $3, $4::jsonb, $5, now())
+     ON CONFLICT (doc_id, document_version, source_hash) DO UPDATE SET
+       summary = EXCLUDED.summary,
+       generated_by = EXCLUDED.generated_by,
+       generated_at = now()`,
+    [docId, version, sourceHash, JSON.stringify(summary), reqUser.id]
+  );
+
+  return sendJson(res, 200, { ...summary, cache: false });
+}
+
 async function handleDocumentRender(req, res, pathname, url) {
   const match = pathname.match(/^\/api\/documents\/([^/]+)\/render$/);
   if (!match || req.method !== "GET") return false;
@@ -1810,7 +1912,7 @@ async function route(req, res) {
   const integrationHandled = await handleRncIntegration(req, res, pathname, url);
   if (integrationHandled !== false) return integrationHandled;
 
-  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentFormularioXlsx, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentFormularioXlsx, handleDocumentSummary, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;
