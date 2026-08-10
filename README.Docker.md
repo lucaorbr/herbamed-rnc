@@ -40,6 +40,22 @@ nginx corporativo: sgq-frontend:80 na rede herbamed_proxy
 O SGQ usa o PostgreSQL do proprio Docker como banco oficial. O banco do Areco e usado apenas para consulta/leitura quando a sincronizacao estiver ativada.
 Arquivos anexados, COAs, fichas tecnicas e documentos controlados tambem ficam no PostgreSQL local do Docker, na tabela `stored_files`. Novos uploads nao sao enviados para Cloudinary, Supabase ou outra plataforma externa.
 
+## Resumo local de POPs
+
+Na tela de detalhes de um documento, o botao `Gerar resumo` le o PDF oficial e abre o `Resumo rapido` em uma janela sobreposta. O formulario de cadastro e a estrutura das telas permanecem inalterados. O processamento ocorre no backend do proprio SGQ, sem API paga e sem enviar o conteudo para fora do Docker.
+
+O recurso organiza trechos reais do documento em objetivo, aplicacao, responsabilidades, etapas, pontos de atencao e registros. Ele usa os campos cadastrados e le arquivos PDF pesquisaveis ou Word `.docx`. O resumo fica em cache no PostgreSQL (`document_summaries`) e e invalidado automaticamente quando o conteudo ou o arquivo muda.
+
+PDFs compostos apenas por imagens precisam passar por OCR antes do envio para que o texto possa ser lido. Em todos os casos, o resumo e apenas apoio a leitura e nao substitui o documento oficial vigente ou o treinamento obrigatorio.
+
+Limites opcionais:
+
+```bash
+DOCUMENT_SUMMARY_MAX_FILE_BYTES=26214400
+DOCUMENT_SUMMARY_MAX_TEXT_CHARS=180000
+DOCUMENT_SUMMARY_MAX_PAGES=80
+```
+
 O script de setup ja gera `POSTGRES_PASSWORD` e `JWT_SECRET`. Para habilitar os recursos de IA que chamam `/api/claude`, defina:
 
 ```bash
