@@ -23,7 +23,9 @@ import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
 import { DesviosTab } from "../features/desvios/DesviosTabs";
+import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
+import { ConfiguracaoRevalidacaoTab } from "../features/revalidacao/ConfiguracaoRevalidacaoTab";
 import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
@@ -733,6 +735,8 @@ export default function App() {
               {tab==="indicadores-desvios" && perm("verDesvios") && <DesviosTab view="indicadores" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} />}
               {tab==="revalidacao"      && perm("verRevalidacao") && <RevalidacaoTab view="lista" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
               {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
+              {tab==="config-desvios" && isAdmin && <ConfiguracaoDesviosTab catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
+              {tab==="config-revalidacao" && isAdmin && <ConfiguracaoRevalidacaoTab catalogoTiposRevalidacao={catalogoTiposRevalidacao} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
               {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
@@ -756,7 +760,7 @@ export default function App() {
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
-              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoTiposRevalidacao={catalogoTiposRevalidacao} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}
+              {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}
             </div>
           </div>
         </div>
