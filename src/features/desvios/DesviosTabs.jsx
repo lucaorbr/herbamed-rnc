@@ -230,6 +230,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               <span style={{ background: "#ff8c42", color: "#fff", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{pendentesSetor}</span>
             </button>
           )}
+          {isAdmin && (
+            <button onClick={() => setTab("config-desvios")} title="Tipos e setores de desvio" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14 }}>⚙️ Configuração</button>
+          )}
           {perm("criarDesvio") && (
             <button onClick={() => setTab("novo-desvio")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Novo desvio</button>
           )}
