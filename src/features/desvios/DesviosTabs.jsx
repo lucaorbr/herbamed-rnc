@@ -6,6 +6,7 @@ import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA, usePagination } from "../../shared/ui";
 import { AnexosUpload } from "../rnc/RncTabs";
 import { DesviosIndicadores } from "./DesviosIndicadores";
+import { setoresDaHierarquia, normSetor } from "./fusaoSetores";
 
 // ── Lista-semente de setores (chão de fábrica Herbamed) ──
 // A lista efetiva vem do catálogo configurável (configuracoes/catalogo_setores_desvio,
@@ -21,14 +22,56 @@ export const SETORES_DESVIO = [
   "Outros",
 ];
 
-// Nomes de setor ativos a partir do catálogo (ou o padrão, se ainda não configurado).
-// "Outros" é sempre garantido como último item — é a válvula de escape do texto livre.
-export function setoresDesvioAtivos(catalogo) {
-  const base = (catalogo && catalogo.length)
-    ? catalogo.filter(sx => sx.ativo !== false).map(sx => sx.nome).filter(Boolean)
-    : SETORES_DESVIO;
-  const semOutros = base.filter(sx => sx !== "Outros");
-  return [...semOutros, "Outros"];
+/**
+ * Nomes de setor oferecidos no formulário de desvio.
+ *
+ * A fonte passou a ser a hierarquia Área › Setor (`catalogo_areas_setores_distribuicao`)
+ * — a mesma lista da distribuição de cópias, do cadastro de colaboradores e da
+ * exigência de treinamento. É a fusão: um cadastro só para o mesmo lugar físico.
+ *
+ * ⚠️ Enquanto a fusão não estiver concluída, a lista é a **união** com o catálogo
+ * plano antigo. Em produção a hierarquia já tem setores, então trocar de fonte de
+ * uma vez faria "Mistura 1" e companhia sumirem do formulário no dia do deploy,
+ * antes de o admin migrar — quebrando o registro de desvio de quem trabalha nesses
+ * setores. Com a união nada some: conforme o painel de fusão resolve as pendências,
+ * o legado deixa de acrescentar nomes e a união vira a hierarquia sozinha.
+ *
+ * "Outros" é sempre o último item — é a válvula de escape do texto livre.
+ */
+export function setoresDesvioAtivos(catalogoAreas, catalogoLegado) {
+  const daHierarquia = setoresDaHierarquia(catalogoAreas).map(sx => sx.nome);
+  const doLegado = (catalogoLegado && catalogoLegado.length)
+    ? catalogoLegado.filter(sx => sx.ativo !== false).map(sx => sx.nome).filter(Boolean)
+    : (daHierarquia.length ? [] : SETORES_DESVIO);
+
+  const vistos = new Set();
+  const base = [];
+  for (const nome of [...daHierarquia, ...doLegado]) {
+    const chave = normSetor(nome);
+    if (!chave || chave === "outros" || vistos.has(chave)) continue;
+    vistos.add(chave);
+    base.push(nome);
+  }
+  return [...base, "Outros"];
+}
+
+/**
+ * Opções do filtro de setor: os ativos **mais** qualquer setor ainda carimbado em
+ * desvio antigo. Sem isso, um setor que saiu da lista viraria registro impossível
+ * de filtrar — some da tela sem ninguém perceber.
+ */
+export function setoresParaFiltro(setoresAtivos = [], desvios = []) {
+  const vistos = new Set(setoresAtivos.map(normSetor));
+  const extras = [];
+  for (const d of (desvios || [])) {
+    const nome = String(d?.setor || "").trim();
+    if (!nome) continue;
+    const chave = normSetor(nome);
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    extras.push(nome);
+  }
+  return [...setoresAtivos, ...extras.sort((a, b) => a.localeCompare(b, "pt-BR"))];
 }
 
 // Lista-semente padrão. A lista efetiva vem do catálogo configurável
@@ -102,9 +145,9 @@ function descParaRNC(d) {
   return partes.filter(Boolean).join("");
 }
 
-export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, catalogoTiposDesvio = [], catalogoSetoresDesvio = [] }) {
+export function DesviosTab({ view = "lista", user, toast_, setTab, desvios = [], doSaveDesvio, doDeleteDesvio, perm, setRncPrefill, isAdmin, catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoAreasSetoresDistribuicao = [] }) {
   const tiposDesvio = tiposDesvioAtivos(catalogoTiposDesvio);
-  const setoresDesvio = setoresDesvioAtivos(catalogoSetoresDesvio);
+  const setoresDesvio = setoresDesvioAtivos(catalogoAreasSetoresDistribuicao, catalogoSetoresDesvio);
   if (view === "novo") {
     return <NovoDesvioForm user={user} toast_={toast_} setTab={setTab} doSaveDesvio={doSaveDesvio} tiposDesvio={tiposDesvio} setoresDesvio={setoresDesvio} />;
   }
@@ -213,7 +256,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             <F lbl="Status" ch={<Sel value={fStatus} onChange={e => setFStatus(e.target.value)}><option value="">Todos</option>{Object.keys(DESVIO_SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           <div style={{ flex: "1 1 150px" }}>
-            <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{setoresDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
+            <F lbl="Setor" ch={<Sel value={fSetor} onChange={e => setFSetor(e.target.value)}><option value="">Todos</option>{setoresParaFiltro(setoresDesvio, desvios).map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
           <div style={{ flex: "1 1 130px" }}>
             <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />

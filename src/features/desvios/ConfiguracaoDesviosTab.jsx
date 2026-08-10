@@ -4,10 +4,10 @@
 // onde disputavam espaço com listas de outros módulos. Vale a mesma regra da
 // Configuração de Documentos: cada módulo configura o próprio vocabulário.
 //
-// Tirar "Setores de Desvio" do Admin tem um efeito extra: a tela do Admin
-// deixa de ter duas listas de "onde" (esta e Áreas e Setores) lado a lado, que
-// era a dúvida real de onde cadastrar um setor novo. A fusão das duas é a
-// próxima etapa — até lá, esta continua sendo a lista dos desvios.
+// A aba de Setores deixou de ser um editor de lista: os setores de desvio foram
+// FUNDIDOS na hierarquia Áreas e Setores — mesma realidade física, dois cadastros
+// que divergiam. O que sobra aqui é o painel da fusão (FusaoSetoresPainel); o
+// cadastro em si vive em Admin -> Estrutura da empresa -> Areas e Setores.
 
 import React, { useState, useEffect } from "react";
 import { saveCollection } from "../../firebase";
@@ -15,30 +15,27 @@ import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { SecTitle } from "../../shared/ui";
 import { CatalogoSimples } from "../../shared/CatalogoSimples";
-import { TIPOS_DESVIO, SETORES_DESVIO } from "./DesviosTabs";
+import { TIPOS_DESVIO } from "./DesviosTabs";
+import { FusaoSetoresPainel } from "./FusaoSetoresPainel";
 
 const ABAS = [
   ["tipos",   "⚠️ Tipos de Desvio"],
-  ["setores", "🏭 Setores de Desvio"],
+  ["setores", "🏭 Setores"],
 ];
 
 export function ConfiguracaoDesviosTab({
-  catalogoTiposDesvio = [], catalogoSetoresDesvio = [],
-  isAdmin = false, toast_ = () => {}, auditLog = async () => {}, setTab,
+  catalogoTiposDesvio = [], catalogoSetoresDesvio = [], catalogoAreas = [], desvios = [],
+  isAdmin = false, user, toast_ = () => {}, auditLog = async () => {}, setTab, doSaveDesvio,
 }) {
   const T = useTheme(); const s = useS();
 
-  const mkTipos   = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DESVIO.map(nome => ({ nome, ativo:true }));
-  const mkSetores = (cat) => cat && cat.length > 0 ? [...cat] : SETORES_DESVIO.map(nome => ({ nome, ativo:true }));
+  const mkTipos = (cat) => cat && cat.length > 0 ? [...cat] : TIPOS_DESVIO.map(nome => ({ nome, ativo:true }));
 
   const [aba, setAba] = useState("tipos");
   const [listaTipos, setListaTipos] = useState(() => mkTipos(catalogoTiposDesvio));
-  const [listaSetores, setListaSetores] = useState(() => mkSetores(catalogoSetoresDesvio));
   const [savingTipos, setSavingTipos] = useState(false);
-  const [savingSetores, setSavingSetores] = useState(false);
 
   useEffect(() => { setListaTipos(mkTipos(catalogoTiposDesvio)); }, [catalogoTiposDesvio.length]);
-  useEffect(() => { setListaSetores(mkSetores(catalogoSetoresDesvio)); }, [catalogoSetoresDesvio.length]);
 
   const persistTipos = async (lista) => {
     if (!isAdmin) return;
@@ -51,19 +48,6 @@ export function ConfiguracaoDesviosTab({
       toast_("Catálogo de tipos de desvio salvo!", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
     setSavingTipos(false);
-  };
-
-  const persistSetores = async (lista) => {
-    if (!isAdmin) return;
-    if (lista.some(sx => !String(sx.nome||"").trim())) { toast_("Todos os setores precisam de um nome.", "red"); return; }
-    setListaSetores(lista);
-    setSavingSetores(true);
-    try {
-      await saveCollection("configuracoes", "catalogo_setores_desvio", { items: lista });
-      await auditLog("Atualizou Catálogo de Setores de Desvio", "configuracoes", "catalogo_setores_desvio", "Catálogo", null, { total: lista.length });
-      toast_("Catálogo de setores de desvio salvo!", "green");
-    } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
-    setSavingSetores(false);
   };
 
   return (
@@ -116,23 +100,12 @@ export function ConfiguracaoDesviosTab({
           />
         </>)}
 
-        {aba==="setores" && (<>
-          <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
-            Setores do chão de fábrica usados ao registrar um desvio (ex: Mistura 1, Compressão,
-            Envase 3). Apenas setores ativos aparecem no formulário. <strong>Outros</strong>
-            continua sempre disponível como texto livre.
-            <br/>⚠️ Esta lista ainda é <strong>separada</strong> das Áreas e Setores usadas pela
-            distribuição de cópias e pelo cadastro de colaboradores. Unificar as duas é a próxima
-            etapa — por ora, um setor novo do chão de fábrica precisa ser cadastrado nos dois lugares.
-          </div>
-          <CatalogoSimples
-            itens={listaSetores} onPersist={persistSetores} salvando={savingSetores}
-            isAdmin={isAdmin} toast_={toast_}
-            rotulo="setor" placeholder="Nome do setor (ex: Envase 7)"
-            avisoExclusao="Desvios já registrados neste setor não são afetados. Prefira desativar se o setor já foi usado."
-            textoSalvar="💾 Salvar setores de desvio"
+        {aba==="setores" && (
+          <FusaoSetoresPainel
+            catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreas={catalogoAreas} desvios={desvios}
+            isAdmin={isAdmin} user={user} toast_={toast_} auditLog={auditLog} doSaveDesvio={doSaveDesvio}
           />
-        </>)}
+        )}
       </div>
     </div>
   );
