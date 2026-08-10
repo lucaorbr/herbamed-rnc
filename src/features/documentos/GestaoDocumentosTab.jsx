@@ -15,6 +15,11 @@ import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
 import { opcoesDeLocal } from "../colaboradores/colaboradores";
 import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
+import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "./tiposDoc";
+import { ConfiguracaoDocumentosTab } from "./ConfiguracaoDocumentosTab";
+
+// Reexportados para não quebrar quem já importava daqui.
+export { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo };
 
 export function QuillEditor({ value, onChange, placeholder, minHeight = 400 }) {
   const T = useTheme();
@@ -171,45 +176,6 @@ export const HERBAMED_INFO_GD = {
   logo: "/logo-herbamed.png",
 };
 
-export const TIPOS_DOC_GD = [
-  { id: "PO",   label: "Procedimento Operacional",       icon: "📋", cor: "#2ab84a", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "IT",   label: "Instrução de Trabalho",           icon: "🔧", cor: "#4fc3f7", prazoRevisaoAnos: 2, departamentoResponsavel: "SGQ" },
-  { id: "MOP",  label: "Manual Operacional",              icon: "📖", cor: "#a78bfa", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "FO",   label: "Formulário",                     icon: "📝", cor: "#ffd166", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ", semCapa: true, semMarcaDagua: true },
-  { id: "ESP",  label: "Especificação",                   icon: "🧪", cor: "#ff8c42", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
-  { id: "MAN",  label: "Manual",                         icon: "📚", cor: "#ff4f6a", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "ANX",  label: "Anexo",                          icon: "📎", cor: "#5dd4b0", prazoRevisaoAnos: 3, departamentoResponsavel: "SGQ" },
-  { id: "EMP",  label: "Proc. de Embalagem",             icon: "📦", cor: "#64748b", prazoRevisaoAnos: 2, departamentoResponsavel: "PRO" },
-  { id: "EME",  label: "Proc. de Emergência",            icon: "🚨", cor: "#ef4444", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
-  { id: "EPA",  label: "Esp. de Produto Acabado",        icon: "🧴", cor: "#06b6d4", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
-  { id: "MTA",  label: "Método de Técnica Analítica",    icon: "🔬", cor: "#8b5cf6", prazoRevisaoAnos: 1, departamentoResponsavel: "SGQ" },
-  { id: "PCAL", label: "Plano de Calibração",            icon: "📏", cor: "#f59e0b", prazoRevisaoAnos: 1, departamentoResponsavel: "TEC" },
-  { id: "EPI",  label: "Controle de EPI",                icon: "🦺", cor: "#f97316", prazoRevisaoAnos: 2, departamentoResponsavel: "SSM" },
-];
-
-export const DEPARTAMENTOS_GD = [
-  { id: "ADM", label: "Administrativo",                   cor: "#5dd4b0" },
-  { id: "ALM", label: "Almoxarifado",                     cor: "#818cf8" },
-  { id: "COM", label: "Comercial",                        cor: "#ff4f6a" },
-  { id: "DIR", label: "Diretoria",                        cor: "#f59e0b" },
-  { id: "EXP", label: "Expedição",                        cor: "#10b981" },
-  { id: "FIN", label: "Financeiro",                       cor: "#3b82f6" },
-  { id: "LIM", label: "Serviços Gerais / Limpeza",        cor: "#6b7280" },
-  { id: "LOG", label: "Logística",                        cor: "#ff8c42" },
-  { id: "MAN", label: "Manutenção",                       cor: "#f97316" },
-  { id: "MKT", label: "Marketing",                        cor: "#ec4899" },
-  { id: "PCP", label: "PCP — Plan. e Controle de Prod.",  cor: "#8b5cf6" },
-  { id: "PED", label: "Pedidos / Atendimento ao Cliente", cor: "#06b6d4" },
-  { id: "PRO", label: "Produção",                         cor: "#ffd166" },
-  { id: "REG", label: "Regulatório / Assuntos Reg.",      cor: "#14b8a6" },
-  { id: "REH", label: "Recursos Humanos",                 cor: "#a78bfa" },
-  { id: "SGQ", label: "Sistema de Gestão da Qualidade",   cor: "#2ab84a" },
-  { id: "SSM", label: "Segurança e Saúde no Trabalho",    cor: "#ef4444" },
-  { id: "SUP", label: "Suprimentos / Compras",            cor: "#f59e0b" },
-  { id: "TEC", label: "Tecnologia da Informação",         cor: "#60a5fa" },
-  { id: "VEN", label: "Vendas",                           cor: "#fb923c" },
-];
-
 export const STATUS_DOC_GD = {
   "Rascunho":              { c: "#7a9c7e", bg: "#7a9c7e18", icon: "✏️" },
   "Em Revisão":            { c: "#ffd166", bg: "#ffd16618", icon: "🔄" },
@@ -264,15 +230,6 @@ export function calcProximaRevisaoGD(dataBase, prazoAnos = 3) {
   const d = new Date(dataBase + "T12:00:00");
   d.setFullYear(d.getFullYear() + (Number.isFinite(anos) && anos > 0 ? anos : 3));
   return d.toISOString().split("T")[0];
-}
-
-// Prazo de revisão (anos) efetivo para um tipo: usa o valor configurado no admin
-// (configuracoes/tipos_revisao) e, na ausência, o padrão do tipo. Fallback: 3 anos.
-export function prazoRevisaoTipo(tipoId, tiposRevisaoCfg) {
-  const cfg = tiposRevisaoCfg && tiposRevisaoCfg[tipoId];
-  if (cfg !== undefined && cfg !== null && cfg !== "" && Number(cfg) > 0) return Number(cfg);
-  const tipo = TIPOS_DOC_GD.find(t => t.id === tipoId);
-  return tipo?.prazoRevisaoAnos ?? 3;
 }
 
 export function diasParaRevisaoGD(proximaRevisao) {
@@ -719,7 +676,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     }
     const id  = sel ? sel.id : Date.now();
     const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs, form.versao);
-    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao));
+    const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao, catalogoTipos));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
       alert("Anexe o novo arquivo oficial do documento antes de salvar esta revisão.");
@@ -990,7 +947,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       // A exigência de treinamento continua valendo, mas o relógio do prazo só
       // recomeça quando a nova versão entrar em vigor (a evidência já é por versão).
       treinamento: doc.treinamento ? { ...doc.treinamento, desdeEm: null } : doc.treinamento,
-      historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+      historicoRevisoes:historico, proximaRevisao:calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao, catalogoTipos)), atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(`Nova Revisão — Rev.${novaVersao}`, "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { versao: versaoAtual, status: doc.status }, { versao: novaVersao, status: "Em Revisão", leituraReaberta: leituraReaberta?.atribuido ? (leituraReaberta.designados||[]).length : 0 });
     toast_(`Revisão ${novaVersao} iniciada!`, "green");
@@ -1023,7 +980,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     try {
       const obs = window.prompt("Observações da revisão (opcional):", "") || "";
       const revisaoRegistrada = { data: tod(), responsavel: user?.name || "", obs };
-      const novaProxima = calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao));
+      const novaProxima = calcProximaRevisaoGD(tod(), prazoRevisaoTipo(doc.tipo, tiposRevisao, catalogoTipos));
       const updated = { ...doc, revisaoRegistrada, proximaRevisao: novaProxima, atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name };
       await saveCollection("gestao_docs", String(doc.id), updated);
       await auditLog("Revisão sem alterações", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { proximaRevisao: doc.proximaRevisao }, { proximaRevisao: novaProxima, responsavel: revisaoRegistrada.responsavel });
@@ -2522,7 +2479,7 @@ ${docHtml.slice(0,9000)}`}]})
           </>} />
           {form.tipo && (()=>{
             const tp = tipoInfo(form.tipo);
-            const anos = prazoRevisaoTipo(form.tipo, tiposRevisao);
+            const anos = prazoRevisaoTipo(form.tipo, tiposRevisao, catalogoTipos);
             const depResp = deptoInfo(tp?.departamentoResponsavel);
             return (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",fontSize:11,color:T.text3,marginTop:-2,marginBottom:2}}>
@@ -2764,6 +2721,17 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
     );
   }
 
+  /* ── CONFIGURAÇÃO DO MÓDULO (tipos de documento + departamentos) ── */
+  if (view==="config") {
+    return (
+      <ConfiguracaoDocumentosTab
+        catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} tiposRevisao={tiposRevisao}
+        isAdmin={isAdmin} toast_={toast_} auditLog={auditLog}
+        onVoltar={()=>setView("lista")}
+      />
+    );
+  }
+
   /* ── SESSÕES DE TREINAMENTO PRESENCIAL (lista de presença assinada) ── */
   if (view==="sessoes" && sel) {
     return (
@@ -2870,17 +2838,25 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
           <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>🌳 Árvore de Documentos</h2>
         </div>
-        {DEPARTAMENTOS_GD.map(dep=>{
+        {(()=>{
+          // Departamentos ativos + os que já foram usados em algum documento mas
+          // saíram do catálogo — senão o documento sumiria da árvore sem aviso.
+          const extras = [...new Set(docs.map(d=>d.depto).filter(Boolean))]
+            .filter(id => !deptosAtivos.some(d=>d.id===id))
+            .map(id => deptoInfo(id));
+          return [...deptosAtivos, ...extras];
+        })().map(dep=>{
           const dd = docs.filter(d=>d.depto===dep.id);
           if (!dd.length) return null;
+          const cor = dep.cor || T.accent;
           return (
             <div key={dep.id} style={s.card}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                <div style={{width:10,height:10,borderRadius:"50%",background:dep.cor,flexShrink:0}}/>
+                <div style={{width:10,height:10,borderRadius:"50%",background:cor,flexShrink:0}}/>
                 <div style={{fontSize:14,fontWeight:700,color:T.text}}>{dep.id} — {dep.label}</div>
                 <span style={{fontSize:11,color:T.text3,background:T.surf,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>{dd.length} doc{dd.length!==1?"s":""}</span>
               </div>
-              <div style={{paddingLeft:20,borderLeft:`2px solid ${dep.cor}30`}}>
+              <div style={{paddingLeft:20,borderLeft:`2px solid ${cor}30`}}>
                 {tiposAtivos.map(tp=>{
                   const dt = dd.filter(d=>d.tipo===tp.id);
                   if (!dt.length) return null;
@@ -2932,7 +2908,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           </Sel>
           <Sel value={filtroDepto} onChange={e=>setFiltroDepto(e.target.value)}>
             <option value="todos">Todos os deptos</option>
-            {DEPARTAMENTOS_GD.map(d=><option key={d.id} value={d.id}>{d.id}</option>)}
+            {deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id}</option>)}
           </Sel>
           <Sel value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
             <option value="todos">Todos os status</option>
@@ -2957,6 +2933,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               </button>
             );
           })()}
+          {isAdmin&&<button style={s.btn} onClick={()=>setView("config")} title="Tipos de documento e departamentos">⚙️ Configuração</button>}
           {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
       </div>
