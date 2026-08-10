@@ -405,6 +405,9 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
           <div style={{ flex: "1 1 160px" }}>
             <F lbl="Parecer" ch={<Sel value={fParecer} onChange={e => setFParecer(e.target.value)}><option value="">Todos</option><option value="aprovado">Aprovado</option><option value="ressalvas">Aprovado c/ ressalvas</option><option value="reprovado">Reprovado</option></Sel>} />
           </div>
+          {isAdmin && (
+            <button onClick={() => setTab("config-revalidacao")} title="Tipos de revalidação e seus checklists" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14 }}>⚙️ Configuração</button>
+          )}
           {podeCriar && (
             <button onClick={() => setTab("nova-revalidacao")} style={{ ...s.btnA, padding: "9px 16px", marginBottom: 14 }}>+ Nova revalidação</button>
           )}
