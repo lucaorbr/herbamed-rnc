@@ -4,17 +4,26 @@ import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, TA } from "../../shared/ui";
 import { fmt, tod } from "../../core/utils";
 import { saveCollection, deleteFromCollection } from "../../firebase";
+import { AnexosUpload } from "../../shared/AnexosUpload";
 import { AssinaturaModal, exportListaPresencaPDF } from "../pdf/pdfExports";
 import { exigidosDoDocumento, indexarEvidencias, statusCelula, documentoExigeTreinamento } from "./treinamento";
 import {
   novaSessao, proxNumSessao, presentesDaSessao, podeEncerrar,
   evidenciasDaSessao, sessoesDoDocumento, STATUS_SESSAO,
+  SITUACAO, SITUACAO_LABEL, MOTIVOS_DISPENSA, situacaoParticipante, definirSituacao,
+  contagemSituacoes, motivoEmDia, comAnexos, semAnexo, pendenteDigitalizacao,
 } from "./sessoes";
 
 // Sessões de treinamento presencial de UM documento. A tela mora em arquivo próprio
 // pelo mesmo motivo que a Matriz (Fase 3): o GestaoDocumentosTab já passa de 2,7 mil
 // linhas. A sessão é a memória do evento; quem treinou continua sendo a evidência na
 // coleção `treinamentos`, gravada no momento em que a lista é assinada.
+
+const SIT_COR = {
+  [SITUACAO.PRESENTE]: "#2ab84a",
+  [SITUACAO.AUSENTE]: "#ff4f6a",
+  [SITUACAO.DISPENSADO]: "#8a8f98",
+};
 
 export function SessoesTreinamentoTab({
   doc, sessoes = [], colaboradores = [], evidencias = [], catalogoCargos = [], catalogoAreas = [],
@@ -32,19 +41,24 @@ export function SessoesTreinamentoTab({
   const minhas = useMemo(() => sessoesDoDocumento(sessoes, doc?.id), [sessoes, doc?.id]);
 
   // Quem o documento exige e como cada um está hoje — mesma fonte da matriz.
-  const { exigidos, jaTreinados } = useMemo(() => {
+  // `validadeTreino` guarda até quando o treino de quem está em dia vale: é o que
+  // entra no motivo da dispensa automática, para a lista dizer POR QUE a pessoa
+  // não foi convocada em vez de marcá-la como ausente.
+  const { exigidos, jaTreinados, validadeTreino } = useMemo(() => {
     const ex = exigidosDoDocumento(doc, colaboradores, catalogoCargos, catalogoAreas);
     const indice = indexarEvidencias(evidencias);
-    const ok = ex
-      .filter(e => statusCelula({ doc, userId: e.userId, indice, hoje }).status === "treinado")
-      .map(e => e.userId);
-    return { exigidos: ex, jaTreinados: ok };
+    const ok = []; const validade = {};
+    for (const e of ex) {
+      const st = statusCelula({ doc, userId: e.userId, indice, hoje, admissao: e.admissao });
+      if (st.status === "treinado") { ok.push(e.userId); validade[e.userId] = st.venceEm || null; }
+    }
+    return { exigidos: ex, jaTreinados: ok, validadeTreino: validade };
   }, [doc, colaboradores, catalogoCargos, catalogoAreas, evidencias, hoje]);
 
   const criar = () => {
     const nova = novaSessao({
       doc, instrutor: { id: user?.uid || user?.id, name: user?.name, cargo: user?.cargo },
-      exigidos, jaTreinados, num: proxNumSessao(sessoes, new Date().getFullYear()), hoje,
+      exigidos, jaTreinados, validadeTreino, num: proxNumSessao(sessoes, new Date().getFullYear()), hoje,
     });
     setSel(nova);
   };
@@ -69,15 +83,64 @@ export function SessoesTreinamentoTab({
     } catch (e) { toast_?.("Erro ao excluir.", "red"); console.error(e); }
   };
 
-  const togglePresenca = (userId) => {
+  const mudarSituacao = (userId, situacao) => {
     setSel(p => ({
       ...p,
-      participantes: p.participantes.map(x => (x.userId === userId ? { ...x, presente: !x.presente } : x)),
+      participantes: p.participantes.map(x => (x.userId === userId
+        ? definirSituacao(x, situacao,
+            // Ao dispensar quem já está em dia, o motivo vem pronto com a validade.
+            situacao === SITUACAO.DISPENSADO && x.jaTreinado && !x.motivoDispensa
+              ? motivoEmDia(validadeTreino[x.userId] || null)
+              : x.motivoDispensa)
+        : x)),
     }));
   };
 
-  const marcarTodos = (valor) => {
-    setSel(p => ({ ...p, participantes: p.participantes.map(x => ({ ...x, presente: valor })) }));
+  const mudarMotivo = (userId, motivo) => {
+    setSel(p => ({
+      ...p,
+      participantes: p.participantes.map(x => (x.userId === userId ? { ...x, motivoDispensa: motivo } : x)),
+    }));
+  };
+
+  const marcarTodos = (situacao) => {
+    setSel(p => ({ ...p, participantes: p.participantes.map(x => definirSituacao(x, situacao, x.motivoDispensa)) }));
+  };
+
+  // Atalho para o caso que motivou a mudança: quem já está treinado e em dia não foi
+  // convocado, e não pode sair como ausente na lista.
+  const dispensarQuemEstaEmDia = () => {
+    setSel(p => ({
+      ...p,
+      participantes: p.participantes.map(x => (x.jaTreinado && situacaoParticipante(x) !== SITUACAO.PRESENTE
+        ? definirSituacao(x, SITUACAO.DISPENSADO, x.motivoDispensa || motivoEmDia(validadeTreino[x.userId] || null))
+        : x)),
+    }));
+  };
+
+  // Anexo da folha assinada. Grava na hora — arquivo já subiu, o registro precisa
+  // acompanhar. Em sessão encerrada é acréscimo (nunca remoção), com histórico.
+  const setAnexosSessao = async (updater) => {
+    const atuais = sel.anexos || [];
+    const proximos = typeof updater === "function" ? updater(atuais) : updater;
+    let atualizada;
+    if (proximos.length > atuais.length) {
+      atualizada = comAnexos(sel, proximos.slice(atuais.length), user?.name || "");
+    } else {
+      if (sel.status === STATUS_SESSAO.REALIZADA) return;
+      const removido = atuais.find(a => !proximos.some(b => b.url === a.url));
+      if (!removido) return;
+      atualizada = semAnexo(sel, atuais.indexOf(removido));
+    }
+    setSel(atualizada);
+    try {
+      await saveCollection("treinamento_sessoes", atualizada.id, atualizada);
+      if (proximos.length > atuais.length) {
+        await auditLog?.("Anexou lista de presença digitalizada", "treinamento_sessoes", atualizada.id,
+          `${atualizada.num} — ${doc.codigo}`, null, { anexos: atualizada.anexos.length });
+        toast_?.("Lista digitalizada anexada.", "green");
+      }
+    } catch (e) { toast_?.("Erro ao salvar o anexo.", "red"); console.error(e); }
   };
 
   const pedirAssinatura = () => {
@@ -153,6 +216,7 @@ export function SessoesTreinamentoTab({
                 const presentes = presentesDaSessao(x).length;
                 const realizada = x.status === STATUS_SESSAO.REALIZADA;
                 const daVersao = String(x.versao) === String(doc?.versao);
+                const semDigitalizada = pendenteDigitalizacao(x);
                 return (
                   <div key={x.id} onClick={() => setSel(x)}
                     style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", flexWrap: "wrap" }}>
@@ -167,6 +231,12 @@ export function SessoesTreinamentoTab({
                         {x.cargaHoraria ? ` · ${x.cargaHoraria}h` : ""}
                       </div>
                     </div>
+                    {semDigitalizada && (
+                      <span title="A folha assinada de próprio punho ainda não foi digitalizada e anexada."
+                        style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: "#e8a33d22", color: "#e8a33d" }}>
+                        ⚠️ lista física não anexada
+                      </span>
+                    )}
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: realizada ? "#2ab84a22" : "#e8a33d22", color: realizada ? "#2ab84a" : "#e8a33d" }}>
                       {x.status}
                     </span>
@@ -183,8 +253,9 @@ export function SessoesTreinamentoTab({
   // ── Detalhe / edição da sessão ─────────────────────────────────────────────
   const realizada = sel.status === STATUS_SESSAO.REALIZADA;
   const editavel = podeRegistrar && !realizada;
-  const presentes = presentesDaSessao(sel);
+  const conta = contagemSituacoes(sel);
   const novaAindaNaoSalva = !sessoes.some(x => x.id === sel.id);
+  const anexos = sel.anexos || [];
 
   return (
     <div>
@@ -200,6 +271,12 @@ export function SessoesTreinamentoTab({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {!realizada && (
+              <button style={s.btnA} onClick={() => exportListaPresencaPDF(sel, doc, { modo: "coleta" })}
+                title="Folha para levar à sala: quadradinho de presença e linha de assinatura de próprio punho para cada convocado.">
+                🖨️ Folha para assinatura
+              </button>
+            )}
             {realizada && <button style={s.btnA} onClick={() => exportListaPresencaPDF(sel, doc)}>📄 Lista de presença (PDF)</button>}
             {editavel && !novaAindaNaoSalva && (
               <button style={{ ...s.btn, color: "#ff4f6a", borderColor: "#ff4f6a33" }} onClick={() => excluir(sel)}>🗑️</button>
@@ -240,13 +317,17 @@ export function SessoesTreinamentoTab({
           <F lbl="Cargo do instrutor" ch={<Inp value={sel.instrutor?.cargo || "—"} disabled readOnly />} />
         </>} />
 
-        <SecTitle icon="✅" ch={`Presença (${presentes.length} de ${sel.participantes.length})`} />
+        <SecTitle icon="✅" ch={`Presença (${conta.presente} presente(s) · ${conta.ausente} ausente(s) · ${conta.dispensado} não aplicável)`} />
         {editavel && (
           <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-            <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(true)}>Marcar todos</button>
-            <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(false)}>Limpar</button>
+            <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(SITUACAO.PRESENTE)}>Marcar todos presentes</button>
+            <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(SITUACAO.AUSENTE)}>Limpar</button>
+            <button style={{ ...s.btn, fontSize: 11 }} onClick={dispensarQuemEstaEmDia}
+              title="Quem já tem treinamento válido não foi convocado — sai como Não aplicável, não como ausente.">
+              Dispensar quem está em dia
+            </button>
             <span style={{ fontSize: 11, color: T.text3, alignSelf: "center" }}>
-              Participantes vêm de quem o documento exige, pelo cargo.
+              Participantes vêm de quem o documento exige, pelo cargo e setor.
             </span>
           </div>
         )}
@@ -256,23 +337,94 @@ export function SessoesTreinamentoTab({
               Ninguém exigido neste documento — vincule cargos à exigência de treinamento.
             </div>
           )}
-          {sel.participantes.map(p => (
-            <label key={p.userId}
-              style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.surf, border: `1px solid ${p.presente ? T.accent + "55" : T.border}`, borderRadius: 8, cursor: editavel ? "pointer" : "default" }}>
-              <input type="checkbox" checked={!!p.presente} disabled={!editavel}
-                onChange={() => togglePresenca(p.userId)}
-                style={{ width: 16, height: 16, accentColor: T.accent, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{p.userName}</div>
-                <div style={{ fontSize: 11, color: T.text2 }}>{p.cargoNome || "—"}{p.setor ? ` · ${p.setor}` : ""}</div>
+          {sel.participantes.map(p => {
+            const sit = situacaoParticipante(p);
+            const cor = SIT_COR[sit];
+            return (
+              <div key={p.userId}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.surf, border: `1px solid ${sit === SITUACAO.PRESENTE ? T.accent + "55" : T.border}`, borderRadius: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                    {p.userName}
+                    {p.temLogin === false && (
+                      <span style={{ fontSize: 10, fontWeight: 400, color: T.text3 }} title="Sem login no sistema — assina a folha impressa de próprio punho."> · sem login</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.text2 }}>{p.cargoNome || "—"}{p.setor ? ` · ${p.setor}` : ""}</div>
+                  {sit === SITUACAO.DISPENSADO && (
+                    editavel ? (
+                      <Sel value={MOTIVOS_DISPENSA.includes(p.motivoDispensa) ? p.motivoDispensa : (p.motivoDispensa ? "__livre" : "")}
+                        sx={{ marginTop: 6, fontSize: 11, padding: "4px 8px" }}
+                        onChange={e => mudarMotivo(p.userId, e.target.value === "__livre" ? (p.motivoDispensa || "") : e.target.value)}>
+                        <option value="">Motivo da dispensa…</option>
+                        {MOTIVOS_DISPENSA.map(m => <option key={m} value={m}>{m}</option>)}
+                        {p.motivoDispensa && !MOTIVOS_DISPENSA.includes(p.motivoDispensa) && (
+                          <option value="__livre">{p.motivoDispensa}</option>
+                        )}
+                      </Sel>
+                    ) : (
+                      <div style={{ fontSize: 11, color: T.text3, marginTop: 3 }}>{p.motivoDispensa || "sem motivo registrado"}</div>
+                    )
+                  )}
+                </div>
+                {p.jaTreinado && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#2ab84a" }} title="Já tem treinamento válido nesta revisão — pode assistir de novo (reforço/reciclagem).">
+                    ✓ já treinado
+                  </span>
+                )}
+                {editavel ? (
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    {[SITUACAO.PRESENTE, SITUACAO.AUSENTE, SITUACAO.DISPENSADO].map(op => (
+                      <button key={op} onClick={() => mudarSituacao(p.userId, op)}
+                        title={op === SITUACAO.DISPENSADO ? "Não convocado para esta sessão — não conta como falta" : ""}
+                        style={{
+                          fontSize: 10, fontWeight: 700, padding: "5px 9px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+                          background: sit === op ? SIT_COR[op] + "22" : "transparent",
+                          color: sit === op ? SIT_COR[op] : T.text3,
+                          border: `1px solid ${sit === op ? SIT_COR[op] + "66" : T.border}`,
+                        }}>
+                        {SITUACAO_LABEL[op]}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: cor + "22", color: cor }}>
+                    {SITUACAO_LABEL[sit]}
+                  </span>
+                )}
               </div>
-              {p.jaTreinado && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#2ab84a" }} title="Já tem treinamento válido nesta revisão — pode assistir de novo (reforço/reciclagem).">
-                  ✓ já treinado
-                </span>
-              )}
-            </label>
-          ))}
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: 20 }}>
+          <SecTitle icon="📎" ch="Lista assinada (digitalizada)" />
+          <div style={{ fontSize: 11, color: T.text3, marginBottom: 10 }}>
+            Anexe aqui a folha de presença assinada de próprio punho. É o registro primário de
+            quem não tem login no sistema. Pode ser anexada depois de a sessão ser encerrada —
+            {realizada
+              ? " em sessão encerrada o anexo é acréscimo, não alteração: entra e não sai."
+              : " a folha é digitalizada depois da sala."}
+          </div>
+          {realizada && pendenteDigitalizacao(sel) && (
+            <div style={{ background: "#e8a33d12", border: "1px solid #e8a33d33", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: T.text2 }}>
+              ⚠️ <strong style={{ color: T.text }}>Pendente:</strong> a folha assinada ainda não foi digitalizada e anexada.
+              Os treinamentos já estão registrados na matriz; o que falta é arquivar a evidência física.
+            </div>
+          )}
+          {podeRegistrar ? (
+            <AnexosUpload
+              anexos={anexos} setAnexos={setAnexosSessao}
+              inputId={`anexo-sessao-${sel.id}`}
+              podeRemover={!realizada}
+              accept="image/*,.pdf"
+              dica="Digitalização da folha assinada (PDF ou foto) — até 10MB por arquivo"
+            />
+          ) : anexos.length === 0 ? (
+            <div style={{ fontSize: 12, color: T.text3 }}>Nenhuma lista digitalizada anexada.</div>
+          ) : (
+            <AnexosUpload anexos={anexos} setAnexos={() => {}} inputId={`anexo-sessao-ro-${sel.id}`} podeRemover={false} bloqueado />
+          )}
         </div>
 
         {editavel && (
