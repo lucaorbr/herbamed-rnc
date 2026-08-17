@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.40.0`
+- Versao atual: `2.41.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -326,6 +326,14 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Nova revisão gera pendência de recolha das cópias obsoletas (banner + baixa por setor)
 - Lista Mestra: coluna "Cópias Físicas" + alerta de recolha; incluída em CSV/XLSX
 - Gerenciado por quem tem `iniciarRevisao` ou admin
+
+#### Distribuição — recebedor, data real e rastro da recolha (v2.41.0)
+Diagnóstico do usuário: o modal não tinha "recebido por" nem "data". Confirmado no código — o registro provava que **alguém entregou**, não que alguém **recebeu**, e `dataEntrega` era `tod()` cravado (entrega de sexta registrada na segunda ficava gravada como segunda). Numa distribuição de cópia controlada o registro que a inspeção quer é o do **recebedor**: é dele que se cobra a devolução quando a versão vira obsoleta.
+- **`recebidoPor` obrigatório**, escolhido na coleção **`colaboradores`** (Fase 6) — **com e sem login**, porque quem recebe cópia impressa no chão de fábrica é operador e operador não tem conta. Usar `users` aqui repetiria o erro que a Fase 6 corrigiu. A lista sai agrupada: primeiro os lotados no destino (`colaboradoresDoDestino`, respeitando setor × área inteira), depois o resto, mais "Outra pessoa (digitar)" para quem ainda não está cadastrado.
+- **`dataEntrega` editável**, default hoje, sem aceitar data futura.
+- ⚠️ **A recolha ARQUIVA em vez de apagar.** `removerDistribuicao`/`marcarRecolhida` só filtravam a linha fora: sumia a prova de que o setor teve (e devolveu) a cópia daquela revisão, e a evidência ficava só no `auditLog`, fora do documento. Agora as duas passam pelo mesmo modal (data, `recolhidoPor`, `devolvidoPor` — este pré-preenchido com quem recebeu) e gravam em **`doc.historicoDistribuicao[]`** (`comRecolha` / `comRecolhaObsoleta`, com `motivo: "recolha" | "obsoleta"`), exibido num `<details>` na própria seção.
+- Regras puras em **`src/features/documentos/distribuicao.js`** (`chaveDestino`, `destinoDaSelecao`, `validarDistribuicao`, `novaCopiaFisica`, `colaboradoresDoDestino`, `registroDeRecolha`, `validarRecolha`, `comRecolha`, `comRecolhaObsoleta`) + 28 testes. `chaveDestino` unifica o `destinoKey || legado:setor` que estava repetido em três lugares — **registro antigo, sem `destinoKey` e sem recebedor, continua sendo lido e recolhido normalmente**, sem migração.
+- Validado na tela: cópia registrada em PRO/Encapsulamento recebida por Cleber Antunes (operador **sem login**) com data 14/08 (não a de hoje); após recolher, o histórico mostrou o ciclo inteiro — *"Entregue em 14/08/2026 a Cleber Antunes · recolhida em 17/08/2026 por Administrador SGQ (devolvida por Cleber Antunes)"*. **288 testes verdes** (260 → 288).
 
 ### CQ — Fix recebimento Areco ✅ (PR #57)
 - `iniciarAnalise` reutiliza o material existente (`areco-<codigo>`) sem sobrescrever
