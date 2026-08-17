@@ -4,6 +4,7 @@ import { useTheme } from "../../core/theme";
 import { fmt, past, seloAssHTML, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
+import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
 // Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
 // usado server-side no render da Gestão de Docs (server/index.js), para que todos
@@ -47,6 +48,11 @@ export const PDF_CSS = `
   .sign-row{display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;}
   .sign-box{flex:1;text-align:center;}
   .sign-line{border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;}
+  /* Folha de coleta: linhas para assinatura de próprio punho (quem não tem login) */
+  .sig-cell{border-bottom:1px solid #999;height:26px;min-width:150px;}
+  .sig-box{display:inline-block;width:13px;height:13px;border:1.5px solid #444;border-radius:2px;}
+  .no-break{page-break-inside:avoid;break-inside:avoid;}
+  thead{display:table-header-group;}
   @media print{body{background:#fff!important;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}
 `;
 
@@ -528,21 +534,135 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
 // Lista de presença de treinamento presencial — o registro primário que uma inspeção
 // BPF pede: o que foi ministrado, por quem, quanto durou e quem esteve presente, com
 // a assinatura eletrônica do instrutor atestando a presença.
-export function exportListaPresencaPDF(sessao, doc = null) {
+//
+// Sai em dois modos, porque são dois papéis diferentes do mesmo registro:
+//
+//  • `coleta` — a folha que vai para a sala, emitida com a sessão ainda Planejada.
+//    Traz quadradinho de presença e LINHA DE ASSINATURA de próprio punho para cada
+//    participante. É o único caminho de assinatura de quem não tem login no sistema
+//    (a maioria da fábrica), e por isso é o registro primário do presencial: assina-se
+//    no papel, digitaliza-se e anexa-se de volta na sessão.
+//
+//  • `definitiva` — o comprovante depois de encerrada, com o selo eletrônico do
+//    instrutor. Não repete as linhas de assinatura: as manuais vivem no anexo
+//    digitalizado, que este PDF referencia para fechar o elo papel ↔ sistema.
+// O HTML sai numa função própria para poder ser testado sem abrir janela.
+export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva" } = {}) {
+  const coleta = modo === "coleta";
   const participantes = sessao.participantes || [];
-  const presentes = participantes.filter(p => p.presente);
-  const ausentes  = participantes.filter(p => !p.presente);
-  const linha = (p) => `<tr>
+  const conta = contagemSituacoes(sessao);
+  const anexos = sessao.anexos || [];
+
+  const corDaSituacao = { [SITUACAO.PRESENTE]: "#1a4a2e", [SITUACAO.AUSENTE]: "#b3261e", [SITUACAO.DISPENSADO]: "#777" };
+
+  // Na folha de coleta, quem foi dispensado não vai para a sala assinar — sai numa
+  // relação à parte, com o motivo, para a lista impressa não pedir assinatura de
+  // quem não foi convocado.
+  const paraAssinar = coleta
+    ? participantes.filter(p => situacaoParticipante(p) !== SITUACAO.DISPENSADO)
+    : participantes;
+  const dispensados = participantes.filter(p => situacaoParticipante(p) === SITUACAO.DISPENSADO);
+
+  const linhaColeta = (p) => `<tr class="no-break">
       <td>${p.userName || "—"}</td>
       <td>${p.cargoNome || "—"}</td>
       <td>${p.setor || "—"}</td>
-      <td style="text-align:center;font-weight:700;color:${p.presente ? "#1a4a2e" : "#999"}">${p.presente ? "Presente" : "Ausente"}</td>
+      <td style="text-align:center"><span class="sig-box"></span></td>
+      <td class="sig-cell"></td>
     </tr>`;
 
-  openPDFWindow(`Lista de Presença ${sessao.num} — Herbamed®`, buildPDFShell({
-    titulo: "Lista de Presença — Treinamento",
+  const linhaDefinitiva = (p) => {
+    const sit = situacaoParticipante(p);
+    const motivo = sit === SITUACAO.DISPENSADO && p.motivoDispensa ? p.motivoDispensa : "";
+    return `<tr class="no-break">
+      <td>${p.userName || "—"}</td>
+      <td>${p.cargoNome || "—"}</td>
+      <td>${p.setor || "—"}</td>
+      <td style="text-align:center;font-weight:700;color:${corDaSituacao[sit]}">
+        ${SITUACAO_LABEL[sit]}${motivo ? `<div style="font-weight:400;font-size:9.5px;color:#777;margin-top:2px;">${motivo}</div>` : ""}
+      </td>
+    </tr>`;
+  };
+
+  const tabela = coleta
+    ? `<table>
+      <thead><tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th style="text-align:center;width:60px">Presente</th><th style="width:34%">Assinatura</th></tr></thead>
+      <tbody>${paraAssinar.length ? paraAssinar.map(linhaColeta).join("") : `<tr><td colspan="5">Nenhum participante a convocar.</td></tr>`}</tbody>
+    </table>`
+    : `<table>
+      <thead><tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th style="text-align:center;width:26%">Situação</th></tr></thead>
+      <tbody>${participantes.length ? participantes.map(linhaDefinitiva).join("") : `<tr><td colspan="4">Nenhum participante registrado.</td></tr>`}</tbody>
+    </table>`;
+
+  const secaoTabela = coleta
+    ? `<div class="section">
+    <div class="stitle">Participantes convocados (${paraAssinar.length})</div>
+    <div style="font-size:10.5px;color:#555;margin-bottom:8px;">
+      Marque a presença e recolha a assinatura de próprio punho de cada participante.
+    </div>
+    ${tabela}
+    ${dispensados.length ? `
+    <div style="margin-top:12px;">
+      <div style="font-size:9.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+        Não convocados (${dispensados.length}) — não assinam esta lista
+      </div>
+      <div style="font-size:10.5px;color:#555;">
+        ${dispensados.map(p => `${p.userName || "—"}${p.motivoDispensa ? ` (${p.motivoDispensa})` : ""}`).join(" · ")}
+      </div>
+    </div>` : ""}
+  </div>`
+    : `<div class="section">
+    <div class="stitle">Participantes (${conta.presente} presente(s) · ${conta.ausente} ausente(s) · ${conta.dispensado} não aplicável)</div>
+    ${tabela}
+    <div style="font-size:9.5px;color:#777;margin-top:6px;">
+      <strong>Não aplicável</strong>: colaborador não convocado para esta sessão, pelo motivo indicado — não caracteriza ausência.
+    </div>
+  </div>`;
+
+  const secaoAtesto = coleta
+    ? `<div class="section">
+    <div class="stitle">Atesto do instrutor</div>
+    <div style="font-size:11px;color:#333;margin-bottom:6px;">
+      Declaro que ministrei o treinamento descrito nesta lista aos participantes que nela assinaram.
+    </div>
+    <div class="sign-row">
+      <div class="sign-box"><div class="sign-line">${sessao.instrutor?.nome || ""}<div style="font-size:9.5px;color:#777;">Instrutor — ${sessao.instrutor?.cargo || "cargo não informado"}</div></div></div>
+      <div class="sign-box"><div class="sign-line">Data</div></div>
+    </div>
+    <div class="box-orange" style="margin-top:14px;font-size:10.5px;">
+      <strong>Folha para coleta de assinaturas.</strong> Após assinada, digitalize e anexe esta folha à sessão
+      ${sessao.num || ""} no SGQ. O treinamento só é registrado na matriz quando a lista é encerrada e assinada
+      eletronicamente pelo instrutor no sistema.
+    </div>
+  </div>`
+    : `<div class="section">
+    <div class="stitle">Atesto do instrutor</div>
+    <div style="font-size:11px;color:#333;margin-bottom:10px;">
+      O instrutor identificado abaixo atesta que ministrou o treinamento descrito nesta lista e que
+      os colaboradores marcados como presentes dele participaram.
+    </div>
+    <div style="max-width:320px;">
+      ${seloAssHTML(sessao.assinaturaInstrutor, "Instrutor do Treinamento", "#1a4a2e", `TRN|${sessao.num || sessao.id || ""}`)}
+    </div>
+    <div style="margin-top:14px;">
+      ${anexos.length ? `<div class="box-green" style="font-size:10.5px;">
+        <strong>Lista assinada de próprio punho:</strong> arquivada no SGQ —
+        ${anexos.map(a => `${a.name || "arquivo"}${a.anexadoEm ? ` (anexado em ${fmt(String(a.anexadoEm).split("T")[0])}${a.anexadoPor ? ` por ${a.anexadoPor}` : ""})` : ""}`).join("; ")}.
+      </div>` : `<div class="box-orange" style="font-size:10.5px;">
+        <strong>Pendente:</strong> a folha assinada de próprio punho ainda não foi digitalizada e anexada a esta sessão.
+      </div>`}
+    </div>
+  </div>`;
+
+  const tituloPDF = coleta ? "Lista de Presença — Coleta de Assinaturas" : "Lista de Presença — Treinamento";
+  const metaPDF = coleta
+    ? `${fmt(sessao.data)} · ${paraAssinar.length} convocado(s)`
+    : `${fmt(sessao.data)} · ${conta.presente} presente(s) de ${conta.total}`;
+
+  return buildPDFShell({
+    titulo: tituloPDF,
     numero: sessao.num || "",
-    meta: `${fmt(sessao.data)} · ${presentes.length} presente(s) de ${participantes.length}`,
+    meta: metaPDF,
     rodapeEsq: "Herbamed® · SGQ · Registro de Treinamento",
     corpo: `
   <div class="section">
@@ -565,23 +685,12 @@ export function exportListaPresencaPDF(sessao, doc = null) {
     <div class="box-green">${sessao.conteudo || "—"}</div>
   </div>
 
-  <div class="section">
-    <div class="stitle">Participantes (${presentes.length} presente(s) · ${ausentes.length} ausente(s))</div>
-    <table>
-      <thead><tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th style="text-align:center">Presença</th></tr></thead>
-      <tbody>${participantes.length ? participantes.map(linha).join("") : `<tr><td colspan="4">Nenhum participante registrado.</td></tr>`}</tbody>
-    </table>
-  </div>
+  ${secaoTabela}
 
-  <div class="section">
-    <div class="stitle">Atesto do instrutor</div>
-    <div style="font-size:11px;color:#333;margin-bottom:10px;">
-      O instrutor identificado abaixo atesta que ministrou o treinamento descrito nesta lista e que
-      os colaboradores marcados como presentes dele participaram.
-    </div>
-    <div style="max-width:320px;">
-      ${seloAssHTML(sessao.assinaturaInstrutor, "Instrutor do Treinamento", "#1a4a2e", `TRN|${sessao.num || sessao.id || ""}`)}
-    </div>
-  </div>`,
-  }));
+  ${secaoAtesto}`,
+  });
+}
+
+export function exportListaPresencaPDF(sessao, doc = null, opcoes = {}) {
+  openPDFWindow(`Lista de Presença ${sessao.num} — Herbamed®`, buildListaPresencaHTML(sessao, doc, opcoes));
 }

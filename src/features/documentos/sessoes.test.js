@@ -1,6 +1,8 @@
 import {
   proxNumSessao, novaSessao, presentesDaSessao, podeEncerrar,
   evidenciasDaSessao, sessoesDoDocumento, STATUS_SESSAO,
+  SITUACAO, situacaoParticipante, definirSituacao, contagemSituacoes,
+  motivoEmDia, comAnexos, semAnexo, pendenteDigitalizacao,
 } from "./sessoes";
 import { indexarEvidencias, chaveEvidencia, statusCelula } from "./treinamento";
 
@@ -23,7 +25,7 @@ const sessaoValida = (over = {}) => {
   const s = novaSessao({ doc: doc(), instrutor, exigidos, num: "TRN-2026-01", hoje: "2026-08-06" });
   return {
     ...s, cargaHoraria: "2",
-    participantes: s.participantes.map(p => (p.userId === "u1" ? { ...p, presente: true } : p)),
+    participantes: s.participantes.map(p => (p.userId === "u1" ? definirSituacao(p, SITUACAO.PRESENTE) : p)),
     ...over,
   };
 };
@@ -69,6 +71,30 @@ describe("novaSessao", () => {
     expect(s.participantes).toHaveLength(3);
   });
 
+  it("quem já está em dia nasce DISPENSADO, não ausente — não foi convocado, não faltou", () => {
+    const s = novaSessao({ doc: doc(), instrutor, exigidos, hoje: "2026-08-06", jaTreinados: ["u2"] });
+    expect(s.participantes.map(situacaoParticipante))
+      .toEqual([SITUACAO.AUSENTE, SITUACAO.DISPENSADO, SITUACAO.AUSENTE]);
+  });
+
+  it("a dispensa automática já vem com motivo e validade — dispensa sem motivo não fecha", () => {
+    const s = novaSessao({
+      doc: doc(), instrutor, exigidos, hoje: "2026-08-06",
+      jaTreinados: ["u2"], validadeTreino: { u2: "2027-01-31" },
+    });
+    expect(s.participantes[1].motivoDispensa).toBe("Treinamento válido, em dia até 31/01/2027");
+  });
+
+  it("sem validade informada, o motivo da dispensa não inventa data", () => {
+    const s = novaSessao({ doc: doc(), instrutor, exigidos, hoje: "2026-08-06", jaTreinados: ["u2"] });
+    expect(s.participantes[1].motivoDispensa).toBe("Treinamento válido, em dia");
+  });
+
+  it("nasce sem anexo — a folha física é digitalizada depois da sala", () => {
+    const s = novaSessao({ doc: doc(), instrutor, exigidos, hoje: "2026-08-06" });
+    expect(s.anexos).toEqual([]);
+  });
+
   it("carimba documento e versão — sessão vale para UMA revisão", () => {
     const s = novaSessao({ doc: doc({ versao: "05" }), instrutor, exigidos, hoje: "2026-08-06" });
     expect(s).toMatchObject({ docId: "d1", docCodigo: "PRO-001", versao: "05" });
@@ -98,6 +124,111 @@ describe("novaSessao", () => {
   });
 });
 
+describe("situacaoParticipante / definirSituacao", () => {
+  it("lê a situação de três estados quando ela existe", () => {
+    expect(situacaoParticipante({ situacao: SITUACAO.DISPENSADO })).toBe(SITUACAO.DISPENSADO);
+    expect(situacaoParticipante({ situacao: SITUACAO.PRESENTE })).toBe(SITUACAO.PRESENTE);
+  });
+
+  it("cai no booleano antigo para sessão gravada antes dos três estados", () => {
+    // Registro já assinado não se reescreve — a leitura é que se adapta.
+    expect(situacaoParticipante({ presente: true })).toBe(SITUACAO.PRESENTE);
+    expect(situacaoParticipante({ presente: false })).toBe(SITUACAO.AUSENTE);
+    expect(situacaoParticipante({})).toBe(SITUACAO.AUSENTE);
+  });
+
+  it("ignora valor de situação desconhecido em vez de confiar nele", () => {
+    expect(situacaoParticipante({ situacao: "sei-la", presente: true })).toBe(SITUACAO.PRESENTE);
+  });
+
+  it("mantém `presente` como espelho de situacao — é o que gera evidência", () => {
+    const p = { userId: "u1" };
+    expect(definirSituacao(p, SITUACAO.PRESENTE).presente).toBe(true);
+    expect(definirSituacao(p, SITUACAO.AUSENTE).presente).toBe(false);
+    expect(definirSituacao(p, SITUACAO.DISPENSADO).presente).toBe(false);
+  });
+
+  it("guarda o motivo só enquanto dispensado — sair da dispensa limpa o motivo", () => {
+    const disp = definirSituacao({ userId: "u1" }, SITUACAO.DISPENSADO, "Férias / afastamento");
+    expect(disp.motivoDispensa).toBe("Férias / afastamento");
+    expect(definirSituacao(disp, SITUACAO.PRESENTE).motivoDispensa).toBe("");
+  });
+
+  it("não muta o participante recebido", () => {
+    const p = { userId: "u1", presente: false };
+    definirSituacao(p, SITUACAO.PRESENTE);
+    expect(p.presente).toBe(false);
+  });
+
+  it("conta os três estados, tolerando o registro antigo", () => {
+    const sessao = { participantes: [
+      { situacao: SITUACAO.PRESENTE }, { presente: true },
+      { situacao: SITUACAO.AUSENTE }, { situacao: SITUACAO.DISPENSADO },
+    ] };
+    expect(contagemSituacoes(sessao)).toEqual({ presente: 2, ausente: 1, dispensado: 1, total: 4 });
+  });
+
+  it("dispensado não é presente — não gera evidência de treinamento", () => {
+    const s = sessaoValida();
+    const comDispensa = {
+      ...s,
+      participantes: s.participantes.map(p => (p.userId === "u2"
+        ? definirSituacao(p, SITUACAO.DISPENSADO, "Treinamento válido, em dia") : p)),
+    };
+    expect(presentesDaSessao(comDispensa).map(p => p.userId)).toEqual(["u1"]);
+    expect(evidenciasDaSessao({ sessao: comDispensa, doc: doc() }).map(e => e.userId)).toEqual(["u1"]);
+  });
+
+  it("motivoEmDia carrega a validade quando ela existe", () => {
+    expect(motivoEmDia("2027-01-31")).toBe("Treinamento válido, em dia até 31/01/2027");
+    expect(motivoEmDia(null)).toBe("Treinamento válido, em dia");
+  });
+});
+
+describe("anexo da lista digitalizada", () => {
+  it("carimba quem anexou e quando, e registra no histórico", () => {
+    const s = comAnexos(sessaoValida(), [{ name: "lista.pdf", url: "/f/1" }], "Dra. Elis");
+    expect(s.anexos).toHaveLength(1);
+    expect(s.anexos[0]).toMatchObject({ name: "lista.pdf", anexadoPor: "Dra. Elis" });
+    expect(s.anexos[0].anexadoEm).toBeTruthy();
+    expect(s.historico.at(-1).acao).toContain("lista.pdf");
+  });
+
+  it("acrescenta sem apagar o que já estava anexado", () => {
+    const um = comAnexos(sessaoValida(), [{ name: "a.pdf", url: "/f/a" }], "Elis");
+    const dois = comAnexos(um, [{ name: "b.pdf", url: "/f/b" }], "Elis");
+    expect(dois.anexos.map(a => a.name)).toEqual(["a.pdf", "b.pdf"]);
+  });
+
+  it("anexar em sessão ENCERRADA é permitido — a folha é digitalizada depois", () => {
+    const encerrada = sessaoValida({ status: STATUS_SESSAO.REALIZADA });
+    expect(comAnexos(encerrada, [{ name: "lista.pdf", url: "/f/1" }], "Elis").anexos).toHaveLength(1);
+  });
+
+  it("remover anexo de sessão encerrada NÃO acontece — em BPF não se apaga registro", () => {
+    const encerrada = comAnexos(sessaoValida({ status: STATUS_SESSAO.REALIZADA }), [{ name: "x.pdf", url: "/f/x" }], "Elis");
+    expect(semAnexo(encerrada, 0).anexos).toHaveLength(1);
+  });
+
+  it("remove anexo enquanto a sessão não foi assinada", () => {
+    const rascunho = comAnexos(sessaoValida(), [{ name: "x.pdf", url: "/f/x" }], "Elis");
+    expect(semAnexo(rascunho, 0).anexos).toHaveLength(0);
+  });
+
+  it("pendência de digitalização só existe depois de encerrada", () => {
+    expect(pendenteDigitalizacao(sessaoValida())).toBe(false);
+    const encerrada = sessaoValida({ status: STATUS_SESSAO.REALIZADA });
+    expect(pendenteDigitalizacao(encerrada)).toBe(true);
+    expect(pendenteDigitalizacao(comAnexos(encerrada, [{ name: "x.pdf", url: "/f/x" }], "Elis"))).toBe(false);
+  });
+
+  it("não muta a sessão recebida", () => {
+    const s = sessaoValida();
+    comAnexos(s, [{ name: "x.pdf", url: "/f/x" }], "Elis");
+    expect(s.anexos).toEqual([]);
+  });
+});
+
 describe("podeEncerrar", () => {
   it("aceita a sessão completa com ao menos um presente", () => {
     expect(podeEncerrar(sessaoValida())).toEqual({ ok: true, erro: "" });
@@ -105,9 +236,35 @@ describe("podeEncerrar", () => {
 
   it("barra sem ninguém presente", () => {
     const s = sessaoValida();
-    const vazia = { ...s, participantes: s.participantes.map(p => ({ ...p, presente: false })) };
+    const vazia = { ...s, participantes: s.participantes.map(p => definirSituacao(p, SITUACAO.AUSENTE)) };
     expect(podeEncerrar(vazia).ok).toBe(false);
     expect(podeEncerrar(vazia).erro).toMatch(/presente/i);
+  });
+
+  it("barra dispensa sem motivo — não se sabe depois por que a pessoa não treinou", () => {
+    const s = sessaoValida();
+    const semMotivo = {
+      ...s,
+      participantes: s.participantes.map(p => (p.userId === "u2"
+        ? { ...definirSituacao(p, SITUACAO.DISPENSADO), motivoDispensa: "  " } : p)),
+    };
+    expect(podeEncerrar(semMotivo).ok).toBe(false);
+    expect(podeEncerrar(semMotivo).erro).toMatch(/motivo/i);
+    expect(podeEncerrar(semMotivo).erro).toContain("Beto");
+  });
+
+  it("aceita dispensa com motivo", () => {
+    const s = sessaoValida();
+    const comMotivo = {
+      ...s,
+      participantes: s.participantes.map(p => (p.userId === "u2"
+        ? definirSituacao(p, SITUACAO.DISPENSADO, "Férias / afastamento") : p)),
+    };
+    expect(podeEncerrar(comMotivo).ok).toBe(true);
+  });
+
+  it("NÃO exige a lista digitalizada para encerrar — a digitalizadora não está na sala", () => {
+    expect(podeEncerrar(sessaoValida({ anexos: [] })).ok).toBe(true);
   });
 
   it("barra sem carga horária", () => {
@@ -234,7 +391,7 @@ describe("evidenciasDaSessao", () => {
     const s = novaSessao({ doc: doc(), instrutor, exigidos: comInstrutor, num: "TRN-2026-01", hoje: "2026-08-06" });
     const marcada = {
       ...s, cargaHoraria: "2",
-      participantes: s.participantes.map(p => (p.userId === "i9" ? { ...p, presente: true } : p)),
+      participantes: s.participantes.map(p => (p.userId === "i9" ? definirSituacao(p, SITUACAO.PRESENTE) : p)),
     };
     expect(podeEncerrar(marcada).ok).toBe(true);
     expect(evidenciasDaSessao({ sessao: marcada, doc: doc() }).map(e => e.userId)).toEqual(["i9"]);
