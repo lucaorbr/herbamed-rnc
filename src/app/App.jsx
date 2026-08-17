@@ -31,6 +31,7 @@ import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { TopNav } from "../layout/TopNav";
+import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
@@ -753,7 +754,13 @@ export default function App() {
             )}
 
             <div style={{ padding: tab==="home" ? "0" : "1.5rem" }}>
-              {tab==="home"       && <HomeTab rncs={rncs} user={user} setTab={setTab} />}
+              {/* Na navegação nova, a tela inicial responde "o que precisa de mim
+                  agora"; na de sempre, segue a Home antiga. Andam juntas de
+                  propósito: quem volta para a lateral volta inteiro. */}
+              {tab==="home" && (navTopo
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} perm={perm} docNotifs={docNotifs}
+                    colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
+                : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
