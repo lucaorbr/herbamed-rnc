@@ -30,6 +30,7 @@ import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab,
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
+import { TopNav } from "../layout/TopNav";
 import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
@@ -81,6 +82,15 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Repaginação: navegação em abas no topo x barra lateral. Enquanto a nova casca
+  // amadurece, as duas convivem e a escolha fica por navegador — quem não gostar
+  // volta para a lateral sem depender de publicação.
+  const [navTopo, setNavTopo] = useState(() => localStorage.getItem("sgq_nav") === "topo");
+  const alternarNav = () => setNavTopo(v => {
+    const novo = !v;
+    localStorage.setItem("sgq_nav", novo ? "topo" : "lateral");
+    return novo;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
   const [desvios, setDesvios] = useState([]);
@@ -582,10 +592,12 @@ export default function App() {
             <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
               ☰
             </button>
-            {/* Desktop toggle */}
-            <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
-              {sidebarOpen ? "◀" : "▶"}
-            </button>
+            {/* Desktop toggle — sem sentido quando a navegação está no topo */}
+            {!navTopo && (
+              <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+                {sidebarOpen ? "◀" : "▶"}
+              </button>
+            )}
             <div onClick={() => setTab("home")} style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center", cursor:"pointer" }} title="Ir para Home">
               <HerbamedLogo height={24} white={false} />
             </div>
@@ -613,6 +625,13 @@ export default function App() {
           {/* Right: theme + notif + avatar */}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} formal={formalMode} onToggleFormal={toggleFormal} /></div>
+
+            {/* Alterna entre a navegação nova (abas) e a de sempre (lateral) */}
+            <button onClick={alternarNav}
+              title={navTopo ? "Voltar para o menu lateral" : "Experimentar a navegação em abas"}
+              style={{ background: navTopo ? T.accentDim : "none", border:`1px solid ${navTopo ? `${T.accent}44` : T.border2}`, borderRadius:8, color: navTopo ? T.accent : T.text2, cursor:"pointer", height:34, padding:"0 10px", display:"flex", alignItems:"center", gap:6, fontFamily:"inherit", fontSize:11, fontWeight:600, flexShrink:0, whiteSpace:"nowrap" }}>
+              {navTopo ? "⬅ Menu lateral" : "✨ Navegação nova"}
+            </button>
 
             {/* Presentation mode button — admin/keyuser/rt only */}
             {["admin","keyuser","rt"].includes(user.role) && (
@@ -694,6 +713,11 @@ export default function App() {
           </div>
         </div>
 
+        {/* ── BARRA DE ABAS (repaginação) ── */}
+        {navTopo && (
+          <TopNav tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+        )}
+
         {/* ── BODY: sidebar + content ── */}
         <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
@@ -702,10 +726,12 @@ export default function App() {
             <div onClick={()=>setMobileMenuOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:290, backdropFilter:"blur(2px)" }} />
           )}
 
-          {/* SIDEBAR */}
-          <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
-          </div>
+          {/* SIDEBAR — só na navegação lateral (a de abas dispensa) */}
+          {navTopo ? null : (
+            <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
+              <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+            </div>
+          )}
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
