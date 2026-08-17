@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.41.0`
+- Versao atual: `2.41.1`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -326,6 +326,10 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Nova revisão gera pendência de recolha das cópias obsoletas (banner + baixa por setor)
 - Lista Mestra: coluna "Cópias Físicas" + alerta de recolha; incluída em CSV/XLSX
 - Gerenciado por quem tem `iniciarRevisao` ou admin
+
+#### Fix visual — contraste dos botões de assinatura (v2.41.1)
+Os botões **Revisor** e **Aprovador** trocavam **só o `background`** do `btnA` por uma cor sólida e mantinham `color`/`border` no `T.accent`: no tema Professional saía **texto verde `#1a7a3c` sobre azul sólido `#0066cc`** — praticamente ilegível. Novo helper **`btnCor(cor)`** em `src/shared/styles.js` devolve a receita inteira do `btnA` na cor pedida (fundo `${cor}18`, texto e borda na cor) — que é o que o `btnD` já fazia em vermelho; os botões de assinatura é que eram a exceção. Elaborador = `accent`, Revisor = `blue`, Aprovador = `orange`. Mesmo bug corrigido em `LaudosTab.jsx` ("🔬 Assinar como RT"), a terceira e última ocorrência do padrão.
+⚠️ **Fundo sólido com texto branco foi descartado de propósito:** nos temas escuros `blue`/`orange` são claros (`#4fc3f7`, `#ff8c42`) e o branco por cima some. A pílula esmaecida funciona nos 8 temas — conferido em Professional e Dark Premium.
 
 #### Distribuição — recebedor, data real e rastro da recolha (v2.41.0)
 Diagnóstico do usuário: o modal não tinha "recebido por" nem "data". Confirmado no código — o registro provava que **alguém entregou**, não que alguém **recebeu**, e `dataEntrega` era `tod()` cravado (entrega de sexta registrada na segunda ficava gravada como segunda). Numa distribuição de cópia controlada o registro que a inspeção quer é o do **recebedor**: é dele que se cobra a devolução quando a versão vira obsoleta.

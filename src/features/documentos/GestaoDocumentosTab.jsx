@@ -4,7 +4,7 @@ import { saveCollection, deleteFromCollection, subscribeCollection, getDocumentS
 import { useTheme } from "../../core/theme";
 import { fmt, sigCodigo, tod } from "../../core/utils";
 import { uploadAttachment } from "../rnc/RncTabs";
-import { useS } from "../../shared/styles";
+import { btnCor, useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal } from "../pdf/pdfExports";
@@ -1377,10 +1377,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
-            {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.blue||"#4fc3f7",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
+            {/* Os três botões de assinatura são o mesmo desenho em matizes diferentes
+                (btnCor): fundo esmaecido + texto e borda na cor. Trocar só o fundo
+                por cor sólida deixava o texto no verde do accent — ilegível. */}
+            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.accent),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
+            {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.blue||"#4fc3f7"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssRev   && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"revisor",show:true}); }}>❌ Recusar</button>}
-            {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...s.btnA,fontSize:11,background:T.orange||"#ff9800",...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
+            {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.orange||"#ff9800"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
             {podeAssAprov && d.status==="Aguardando Aprovação" && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"aprovador",show:true}); }}>❌ Recusar</button>}
             {podeIniciarRevisao && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
             {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}

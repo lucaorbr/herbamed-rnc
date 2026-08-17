@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createElectronicSignature, incrementLaudoCounter, saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, seloAssHTML, sigCodigo, tod } from "../../core/utils";
-import { useS } from "../../shared/styles";
+import { btnCor, useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
@@ -607,7 +607,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
           <span style={{ padding:"3px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:statusBg[lSel.status], color:statusColor[lSel.status] }}>{statusIcon[lSel.status]} {lSel.status}</span>
           <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
             {podeAssinarAnalista && <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>assinarAnalista(lSel)}><span className="btn-emoji">✍️ </span>Assinar como Analista</button>}
-            {podeAssinarRT && <button style={{ ...s.btnA, fontSize:12, background:T.orange||"#ff9800" }} onClick={()=>assinarRT(lSel)}><span className="btn-emoji">🔬 </span>Assinar como RT</button>}
+            {podeAssinarRT && <button style={{ ...btnCor(T.orange||"#ff9800"), fontSize:12 }} onClick={()=>assinarRT(lSel)}><span className="btn-emoji">🔬 </span>Assinar como RT</button>}
             <button style={{ ...s.btn, fontSize:12 }} onClick={()=>exportPDF(lSel)}><span className="btn-emoji">🖨️ </span>Exportar PDF</button>
             {podeGerenciar && <button style={{ ...s.btn, fontSize:12, color:T.accent }} onClick={()=>novoAPartirDoLaudo(lSel)}>Criar novo com base neste</button>}
             {podeGerenciar && <button style={{ ...s.btn, fontSize:12 }} onClick={()=>salvarModelo(lSel, true)}>Salvar como novo modelo</button>}
