@@ -13,6 +13,10 @@ import { reabrirLeitura, exigidosDoDocumento, exigidosSemLogin, indexarEvidencia
 import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
 import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
 import { opcoesDeLocal } from "../colaboradores/colaboradores";
+import {
+  colaboradoresDoDestino, comRecolha, comRecolhaObsoleta,
+  destinoLabel, novaCopiaFisica, validarDistribuicao, validarRecolha,
+} from "./distribuicao";
 import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "./tiposDoc";
@@ -474,7 +478,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [novoMat, setNovoMat] = useState("");
   // Distribuição física — cópias controladas impressas entregues aos setores.
   const [modalDistribuir, setModalDistribuir] = useState(null); // { doc }
-  const [distribForm, setDistribForm] = useState({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:"" });
+  const [distribForm, setDistribForm] = useState({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:"", recebidoPorId:"", recebidoPor:"", dataEntrega:"" });
+  const [modalRecolher, setModalRecolher] = useState(null);
+  const [recolhaForm, setRecolhaForm] = useState({ data:"", recolhidoPor:"", devolvidoPor:"" });
   // Rota de assinatura — Elaborador designa Revisor e Aprovador ao assinar.
   const [modalRota, setModalRota]   = useState(null); // { doc } — escolha de revisor/aprovador antes de assinar como Elaborador
   const [rotaForm, setRotaForm]     = useState({ revisorId:"", aprovadorId:"" });
@@ -520,7 +526,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const areasDistribAtivas = catalogoAreasSetoresDistribuicao.filter(a => a.ativo !== false);
   const areaDistribPorId = id => catalogoAreasSetoresDistribuicao.find(a => a.id === id);
   const destinoDistribLabel = destino => {
-    if (destino?.areaNome) return destino.tipoDestino === "area" ? `${destino.areaId} — ${destino.areaNome} (área inteira)` : `${destino.areaId} — ${destino.areaNome} / ${destino.setorNome || destino.setorId}`;
+    if (destino?.areaNome) return destinoLabel(destino);
     const dep = deptosAtivos.find(x => x.id === destino?.setor);
     return dep ? `${dep.id} — ${dep.label}` : destino?.setor || "—";
   };
@@ -858,38 +864,47 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const registrarDistribuicao = async (doc) => {
     const area = areaDistribPorId(distribForm.areaId);
     const setor = area?.setores?.find(sx => sx.id === distribForm.setorId && sx.ativo !== false);
-    if (!area) { alert("Selecione a área que recebeu a cópia."); return; }
-    if (distribForm.tipoDestino === "setor" && !setor) { alert("Selecione o setor que recebeu a cópia."); return; }
-    const destinoKey = distribForm.tipoDestino === "area" ? `area:${area.id}` : `setor:${area.id}:${setor.id}`;
-    const lista = doc.distribuicaoFisica || [];
-    if (lista.some(x => x.destinoKey === destinoKey)) { alert("Este destino já tem cópia controlada registrada."); return; }
-    const nova = { destinoKey, tipoDestino:distribForm.tipoDestino, areaId:area.id, areaNome:area.label, setorId:setor?.id || null, setorNome:setor?.nome || null, setor:distribForm.tipoDestino === "area" ? area.id : `${area.id}/${setor.id}`, dataEntrega: tod(), entreguePor: distribForm.entreguePor?.trim() || user?.name || "" };
-    const updated = { ...doc, distribuicaoFisica: [...lista, nova] };
+    const check = validarDistribuicao({ form: distribForm, area, setor, existentes: doc.distribuicaoFisica || [], hoje: tod() });
+    if (!check.ok) { alert(check.erro); return; }
+    const nova = novaCopiaFisica({
+      area, setor, tipoDestino: distribForm.tipoDestino,
+      dataEntrega: distribForm.dataEntrega,
+      entreguePor: distribForm.entreguePor,
+      recebidoPor: distribForm.recebidoPor,
+      recebidoPorId: distribForm.recebidoPorId || null,
+      versao: doc.versao, registradoPor: user?.name || "",
+    });
+    const updated = { ...doc, distribuicaoFisica: [...(doc.distribuicaoFisica || []), nova] };
     await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog("Registrou cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { destino:destinoDistribLabel(nova), entreguePor: nova.entreguePor });
-    toast_(`Cópia controlada registrada em ${destinoDistribLabel(nova)}.`, "green");
+    await auditLog("Registrou cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null,
+      { destino:destinoDistribLabel(nova), entreguePor: nova.entreguePor, recebidoPor: nova.recebidoPor, dataEntrega: nova.dataEntrega });
+    toast_(`Cópia controlada registrada em ${destinoDistribLabel(nova)}, recebida por ${nova.recebidoPor}.`, "green");
     setSel(updated);
     setModalDistribuir(null);
   };
 
-  // Cópia recolhida/destruída — remove o setor da distribuição vigente.
-  const removerDistribuicao = async (doc, destino) => {
-    if (!window.confirm(`Confirmar recolha/destruição da cópia controlada de ${destinoDistribLabel(destino)}?`)) return;
-    const updated = { ...doc, distribuicaoFisica: (doc.distribuicaoFisica||[]).filter(x => (x.destinoKey || `legado:${x.setor}`) !== (destino.destinoKey || `legado:${destino.setor}`)) };
-    await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog("Recolheu cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { destino:destinoDistribLabel(destino) }, null);
-    toast_(`Cópia de ${destinoDistribLabel(destino)} recolhida.`, "green");
-    setSel(updated);
+  // Recolha — vale tanto para a cópia vigente quanto para a baixa da pendência
+  // aberta pela revisão nova. Nos dois casos o registro é ARQUIVADO em
+  // `historicoDistribuicao`, não apagado: sem isso some a prova de que o setor teve
+  // (e devolveu) a cópia daquela revisão, que é o que a inspeção pede.
+  const abrirRecolha = (doc, destino, tipo) => {
+    setRecolhaForm({ data: tod(), recolhidoPor: user?.name || "", devolvidoPor: destino?.recebidoPor || "" });
+    setModalRecolher({ doc, destino, tipo });
   };
 
-  // Pendência de recolha (após nova revisão) — marca o setor como recolhido.
-  const marcarRecolhida = async (doc, destino) => {
-    const pend = (doc.recolhaPendente||[]).filter(x => (x.destinoKey || `legado:${x.setor}`) !== (destino.destinoKey || `legado:${destino.setor}`));
-    const updated = { ...doc, recolhaPendente: pend.length ? pend : null };
+  const confirmarRecolha = async () => {
+    const { doc, destino, tipo } = modalRecolher;
+    const check = validarRecolha({ form: recolhaForm, hoje: tod() });
+    if (!check.ok) { alert(check.erro); return; }
+    const dados = { data: recolhaForm.data, recolhidoPor: recolhaForm.recolhidoPor, devolvidoPor: recolhaForm.devolvidoPor };
+    const updated = tipo === "obsoleta" ? comRecolhaObsoleta(doc, destino, dados) : comRecolha(doc, destino, dados);
     await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog("Confirmou recolha de cópia obsoleta", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { destino:destinoDistribLabel(destino) }, null);
-    toast_(`Recolha da cópia obsoleta confirmada: ${destinoDistribLabel(destino)}.`, "green");
+    await auditLog(tipo === "obsoleta" ? "Confirmou recolha de cópia obsoleta" : "Recolheu cópia física",
+      "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`,
+      { destino:destinoDistribLabel(destino) }, { recolhidoPor: dados.recolhidoPor, devolvidoPor: dados.devolvidoPor, data: dados.data });
+    toast_(`Recolha registrada: ${destinoDistribLabel(destino)}.`, "green");
     setSel(updated);
+    setModalRecolher(null);
   };
 
   const solicitarRevisao = async (doc) => {
@@ -1728,9 +1743,12 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                     <span style={{fontSize:18}}>📄</span>
                     <div style={{flex:1}}>
                       <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(p)}</div>
-                      <div style={{fontSize:11,color:T.text2}}>Cópia da Rev.{p.versaoAnterior} pendente de recolha</div>
+                      <div style={{fontSize:11,color:T.text2}}>
+                        Cópia da Rev.{p.versaoAnterior} pendente de recolha
+                        {p.recebidoPor ? ` · com ${p.recebidoPor}` : ""}
+                      </div>
                     </div>
-                    {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>marcarRecolhida(d,p)}>✓ Recolhida</button>}
+                    {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>abrirRecolha(d,p,"obsoleta")}>✓ Recolhida</button>}
                   </div>
                 );
               })}
@@ -1742,7 +1760,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           <div style={s.card}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
               <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
-              {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"" }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
+              {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"", recebidoPorId:"", recebidoPor:"", dataEntrega:tod() }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
             </div>
             <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Setores com cópia controlada impressa da Rev.{d.versao}.</div>
             {(d.distribuicaoFisica||[]).length===0 ? (
@@ -1755,13 +1773,41 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                       <span style={{fontSize:18}}>🗂️</span>
                       <div style={{flex:1}}>
                         <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(c)}</div>
-                        <div style={{fontSize:11,color:T.text2}}>Entregue em {fmt(c.dataEntrega)} por {c.entreguePor||"—"}</div>
+                        <div style={{fontSize:11,color:T.text2}}>
+                          Recebida por <strong style={{color:T.text}}>{c.recebidoPor||"—"}</strong> em {fmt(c.dataEntrega)}
+                        </div>
+                        <div style={{fontSize:11,color:T.text3}}>Entregue por {c.entreguePor||"—"}</div>
                       </div>
-                      {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>removerDistribuicao(d,c)}>🗑️ Recolher</button>}
+                      {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>abrirRecolha(d,c,"vigente")}>🗑️ Recolher</button>}
                     </div>
                   );
                 })}
               </div>
+            )}
+            {/* Histórico: a recolha arquiva o ciclo em vez de apagar a linha — é o
+                que prova que o setor teve (e devolveu) a cópia daquela revisão. */}
+            {(d.historicoDistribuicao||[]).length>0 && (
+              <details style={{marginTop:12}}>
+                <summary style={{fontSize:11,color:T.text3,cursor:"pointer"}}>
+                  📚 Histórico de cópias recolhidas ({d.historicoDistribuicao.length})
+                </summary>
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                  {[...d.historicoDistribuicao].reverse().map((h,i)=>(
+                    <div key={h.id||i} style={{padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                      <div style={{fontSize:12,fontWeight:600,color:T.text2}}>
+                        {h.destinoLabel} · Rev.{h.versao||"—"}
+                        {h.motivo==="obsoleta" && <span style={{fontSize:10,color:T.text3,fontWeight:400}}> · cópia obsoleta</span>}
+                      </div>
+                      <div style={{fontSize:11,color:T.text3}}>
+                        {h.entregaEm ? `Entregue em ${fmt(h.entregaEm)}` : "Entrega sem data registrada"}
+                        {h.recebidoPor ? ` a ${h.recebidoPor}` : ""}
+                        {" · "}recolhida em {fmt(h.recolhaEm)} por {h.recolhidoPor||"—"}
+                        {h.devolvidoPor ? ` (devolvida por ${h.devolvidoPor})` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
           </div>
         )}
@@ -1884,9 +1930,47 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                   {(areaDistribPorId(distribForm.areaId)?.setores||[]).filter(sx=>sx.ativo!==false).map(sx=><option key={sx.id} value={sx.id}>{sx.nome}</option>)}
                 </select>
               </div>}
-              <div style={{marginBottom:16}}>
-                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Entregue por</label>
+              {/* Recebedor: quem no destino fica responsável pela cópia impressa. É
+                  dele que se cobra a devolução quando a versão virar obsoleta. */}
+              {(()=>{
+                const { doDestino, outros } = colaboradoresDoDestino(colaboradores, distribForm, catalogoAreasSetoresDistribuicao);
+                const escolherRecebedor = (v) => {
+                  if (v === "__outro") { setDistribForm(p=>({...p,recebidoPorId:"__outro",recebidoPor:""})); return; }
+                  const c = [...doDestino,...outros].find(x=>String(x.id)===v);
+                  setDistribForm(p=>({...p,recebidoPorId:v,recebidoPor:c?.nome||""}));
+                };
+                return (
+                  <div style={{marginBottom:12}}>
+                    <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Recebido por *</label>
+                    <select value={distribForm.recebidoPorId} onChange={e=>escolherRecebedor(e.target.value)} style={{...s.inp,fontSize:13,width:"100%"}}>
+                      <option value="">Selecione quem recebeu…</option>
+                      {doDestino.length>0 && <optgroup label="No destino">
+                        {doDestino.map(c=><option key={c.id} value={c.id}>{c.nome}{c.matricula?` · ${c.matricula}`:""}</option>)}
+                      </optgroup>}
+                      {outros.length>0 && <optgroup label="Outros colaboradores">
+                        {outros.map(c=><option key={c.id} value={c.id}>{c.nome}{c.setor?` · ${c.setor}`:""}</option>)}
+                      </optgroup>}
+                      <option value="__outro">Outra pessoa (digitar)…</option>
+                    </select>
+                    {distribForm.recebidoPorId==="__outro" && (
+                      <input value={distribForm.recebidoPor} onChange={e=>setDistribForm(p=>({...p,recebidoPor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%",marginTop:6}} placeholder="Nome de quem recebeu" autoFocus />
+                    )}
+                    <div style={{fontSize:11,color:T.text3,marginTop:4}}>
+                      Colaboradores cadastrados, com ou sem login no sistema.
+                      {distribForm.areaId && doDestino.length===0 && " Nenhum colaborador lotado neste destino — escolha em “Outros” ou digite."}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Entregue por *</label>
                 <input value={distribForm.entreguePor} onChange={e=>setDistribForm(p=>({...p,entreguePor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} placeholder="Responsável pela entrega" />
+              </div>
+              {/* Data editável: entrega de sexta registrada na segunda não pode ficar
+                  gravada como segunda. Não aceita data futura. */}
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Data da entrega *</label>
+                <input type="date" max={tod()} value={distribForm.dataEntrega} onChange={e=>setDistribForm(p=>({...p,dataEntrega:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} />
               </div>
               <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                 <button style={s.btn} onClick={()=>setModalDistribuir(null)}>Cancelar</button>
@@ -1895,6 +1979,48 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           </div>
         )}
+        {/* ── RECOLHER CÓPIA FÍSICA — quem recolheu, quando e quem devolveu ── */}
+        {modalRecolher && (()=>{
+          const { doDestino, outros } = colaboradoresDoDestino(colaboradores, modalRecolher.destino || {}, catalogoAreasSetoresDistribuicao);
+          const obsoleta = modalRecolher.tipo === "obsoleta";
+          return (
+          <div onClick={()=>setModalRecolher(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:480,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>{obsoleta ? "⚠️ Confirmar recolha da cópia obsoleta" : "🗑️ Recolher cópia física"}</div>
+                <button style={{...s.btn,fontSize:11}} onClick={()=>setModalRecolher(null)}>✕ Fechar</button>
+              </div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{destinoDistribLabel(modalRecolher.destino)}</div>
+              <div style={{fontSize:11,color:T.text3,marginBottom:14}}>
+                {modalRecolher.destino?.dataEntrega
+                  ? <>Entregue em {fmt(modalRecolher.destino.dataEntrega)}{modalRecolher.destino.recebidoPor ? <> · recebida por <strong style={{color:T.text2}}>{modalRecolher.destino.recebidoPor}</strong></> : ""}.</>
+                  : "Registro antigo — sem data de entrega e sem recebedor."}
+                {" "}A recolha fica arquivada no histórico do documento.
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Data da recolha *</label>
+                <input type="date" max={tod()} value={recolhaForm.data} onChange={e=>setRecolhaForm(p=>({...p,data:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} />
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Recolhido por *</label>
+                <input value={recolhaForm.recolhidoPor} onChange={e=>setRecolhaForm(p=>({...p,recolhidoPor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} placeholder="Quem recolheu a cópia" />
+              </div>
+              <div style={{marginBottom:16}}>
+                <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Devolvido por</label>
+                <input list="devolvido-por-opts" value={recolhaForm.devolvidoPor} onChange={e=>setRecolhaForm(p=>({...p,devolvidoPor:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}} placeholder="Quem no setor devolveu a cópia" />
+                <datalist id="devolvido-por-opts">
+                  {[...doDestino,...outros].map(c=><option key={c.id} value={c.nome} />)}
+                </datalist>
+                <div style={{fontSize:11,color:T.text3,marginTop:4}}>Vem preenchido com quem recebeu; troque se outra pessoa devolveu.</div>
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button style={s.btn} onClick={()=>setModalRecolher(null)}>Cancelar</button>
+                <button style={s.btnA} onClick={confirmarRecolha}>Confirmar recolha</button>
+              </div>
+            </div>
+          </div>
+          );
+        })()}
         {modalRota && (
           <div onClick={()=>setModalRota(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:520,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
