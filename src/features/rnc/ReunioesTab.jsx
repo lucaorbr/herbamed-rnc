@@ -58,11 +58,20 @@ function motivosDaRnc(r) {
   return m;
 }
 
+// Quantas reuniões diferentes já trouxeram esta RNC pra pauta — o sinal de "RNC
+// emperrada" que o backlog da Fase 2 pedia (3+ reuniões sem sair). Não é um dado
+// novo: cada reunião já guarda sua pauta com o rncId de cada item, só nunca tinha
+// sido contado.
+function vezesNaPauta(rncId, reunioes) {
+  return (reunioes || []).filter(re => (re.pauta || []).some(it => it.rncId === rncId)).length;
+}
+
 // Pauta automática: toda RNC que pede atenção da gestão, ordenada por GUT (mesma fórmula
-// da Matriz GUT do Dashboard — ver calcGut em RncTabs).
-export function candidatasPauta(rncs) {
+// da Matriz GUT do Dashboard — ver calcGut em RncTabs). `reunioes` é opcional — quando
+// informado, cada candidata ganha `vezesNaPauta` (em quantas reuniões já apareceu).
+export function candidatasPauta(rncs, reunioes = []) {
   return rncs
-    .map(r => ({ ...calcGut(r), motivos: motivosDaRnc(r) }))
+    .map(r => ({ ...calcGut(r), motivos: motivosDaRnc(r), vezesNaPauta: vezesNaPauta(r.id, reunioes) }))
     .filter(r => r.motivos.length > 0)
     .sort((a, b) => b.gut - a.gut);
 }
@@ -92,6 +101,16 @@ function MotivoChip({ m }) {
   return <span style={{ display: "inline-flex", padding: "1px 7px", borderRadius: 20, fontSize: 9, fontWeight: 600, background: `${meta.cor}18`, color: meta.cor, border: `1px solid ${meta.cor}22` }}>{meta.label}</span>;
 }
 
+// RNC emperrada: já foi discutida em 3 ou mais reuniões e continua sem sair.
+function EmperradaChip({ n }) {
+  if (!n || n < 3) return null;
+  return (
+    <span title={`Já entrou na pauta de ${n} reunião(ões) sem sair`} style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "1px 7px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#9c27b018", color: "#9c27b0", border: "1px solid #9c27b033" }}>
+      ⚠️ {n}ª reunião
+    </span>
+  );
+}
+
 export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openEmail, perm, isAdmin }) {
   const T = useTheme(); const s = useS();
   const [reunioes, setReunioes] = useState([]);
@@ -102,7 +121,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
   useEffect(() => subscribeCollection("rnc_reunioes", setReunioes), []);
 
   const podeGerenciar = isAdmin || (perm ? perm("gerenciarReunioesRNC") : false);
-  const candidatas = useMemo(() => candidatasPauta(rncs), [rncs]);
+  const candidatas = useMemo(() => candidatasPauta(rncs, reunioes), [rncs, reunioes]);
   const lista = useMemo(() => [...reunioes].sort((a, b) => String(b.num || "").localeCompare(String(a.num || ""))), [reunioes]);
 
   const hEntry = (acao) => ({ data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao, resp: user.name });
@@ -301,6 +320,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                       <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>{r.num}</span>
                       <SevB s={r.sev} />
                       {r.motivos.map(m => <MotivoChip key={m} m={m} />)}
+                      <EmperradaChip n={r.vezesNaPauta} />
                     </div>
                     <div style={{ fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.desc || "—"}</div>
                     <div style={{ fontSize: 10, color: T.text2, marginTop: 2 }}>Resp: {r.resp || "—"} · Prazo AC: {fmt(r.prazoAC)}{past(r.prazoAC) ? " ⚠ vencido" : ""}</div>
@@ -377,6 +397,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>Item {i + 1} · {it.rncNum}</span>
                   <SevB s={it.sev} />
                   {(it.motivoEntrada || []).map(m => <MotivoChip key={m} m={m} />)}
+                  <EmperradaChip n={vezesNaPauta(it.rncId, reunioes)} />
                   <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 700, color: feito ? "#2ab84a" : "#8a6000" }}>{feito ? "✓ Deliberado" : "Pendente"}</span>
                 </div>
                 <div style={{ fontSize: 12, color: T.text, marginBottom: 4 }}>{it.desc || "—"}</div>
