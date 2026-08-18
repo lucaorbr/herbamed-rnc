@@ -8,6 +8,7 @@ export const THEMES = {
     accentGlow: "#2ab84a40", text: "#eef4ef", text2: "#7a9c7e", text3: "#3d5c42",
     border: "rgba(42,184,74,0.1)", border2: "rgba(42,184,74,0.2)",
     red: "#ff4f6a", yellow: "#ffd166", blue: "#4fc3f7", orange: "#ff8c42", purple: "#a78bfa",
+    dataviz: ["#4fc3f7","#22d3ee","#818cf8","#2ab84a","#ffd166","#ff8c42","#a78bfa","#5dd4b0"],
   },
   papelQuente: {
     name: "📜 Papel Quente", light: true,
@@ -16,6 +17,7 @@ export const THEMES = {
     accentGlow: "#2f6f5228", text: "#262019", text2: "#6b6152", text3: "#a89d89",
     border: "rgba(38,32,25,0.08)", border2: "rgba(38,32,25,0.14)",
     red: "#c1473f", yellow: "#b8862c", blue: "#3568a8", orange: "#b1652c", purple: "#7c5ea3",
+    dataviz: ["#3568a8","#2f8f8a","#6a63c4","#a4527a","#b8862c","#c07a3e","#7c5ea3","#4c8f6b"],
   },
   tintaQuente: {
     name: "🔥 Tinta Quente",
@@ -24,6 +26,7 @@ export const THEMES = {
     accentGlow: "#4fd18b40", text: "#f2ede2", text2: "#a89f8c", text3: "#5e564a",
     border: "rgba(242,237,226,0.08)", border2: "rgba(242,237,226,0.14)",
     red: "#ff6b5c", yellow: "#f0c04f", blue: "#6fb8ff", orange: "#ffa257", purple: "#c79bff",
+    dataviz: ["#6fb8ff","#5cc9c0","#9d8cff","#e08fb0","#f0c04f","#ffa257","#c79bff","#c9a15a"],
   },
   nevoaClara: {
     name: "🌫️ Névoa Clara", light: true,
@@ -32,6 +35,7 @@ export const THEMES = {
     accentGlow: "#0f9d7828", text: "#14181c", text2: "#5b6570", text3: "#99a1ab",
     border: "rgba(15,23,31,0.07)", border2: "rgba(15,23,31,0.13)",
     red: "#e0393f", yellow: "#d99a1b", blue: "#2f7ee0", orange: "#e0762f", purple: "#8b5fe0",
+    dataviz: ["#2f7ee0","#1fb0b8","#7c6fe0","#d1608f","#d99a1b","#e0762f","#8b5fe0","#5a8f6f"],
   },
   grafiteEsmeralda: {
     name: "💎 Grafite Esmeralda",
@@ -40,6 +44,7 @@ export const THEMES = {
     accentGlow: "#37e2a340", text: "#eef1f4", text2: "#838e99", text3: "#454c54",
     border: "rgba(255,255,255,0.06)", border2: "rgba(255,255,255,0.12)",
     red: "#ff6465", yellow: "#ffcf5c", blue: "#5aa6ff", orange: "#ff9d5c", purple: "#b18aff",
+    dataviz: ["#5aa6ff","#42c2c2","#a68cff","#ff8fb3","#ffcf5c","#ff9d5c","#b18aff","#8fae8a"],
   },
   macos: {
     name: "🍎 macOS", light: true,
@@ -48,6 +53,7 @@ export const THEMES = {
     accentGlow: "#007aff30", text: "#1c1c1e", text2: "#6e6e73", text3: "#86868b",
     border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
     red: "#ff3b30", yellow: "#ff9500", blue: "#007aff", orange: "#ff6b00", purple: "#af52de",
+    dataviz: ["#4fc3f7","#22d3ee","#818cf8","#2ab84a","#ffd166","#ff8c42","#a78bfa","#5dd4b0"],
   },
   professional: {
     name: "💼 Professional", light: true,
@@ -56,6 +62,7 @@ export const THEMES = {
     accentGlow: "#1a7a3c30", text: "#1c1c1e", text2: "#6e6e73", text3: "#86868b",
     border: "rgba(0,0,0,0.08)", border2: "rgba(0,0,0,0.14)",
     red: "#d70015", yellow: "#f5a623", blue: "#0066cc", orange: "#ff6600", purple: "#7b3ff2",
+    dataviz: ["#4fc3f7","#22d3ee","#818cf8","#2ab84a","#ffd166","#ff8c42","#a78bfa","#5dd4b0"],
   },
 };
 

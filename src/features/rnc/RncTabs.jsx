@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada } from "../../core/status";
+import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada, tipoCor } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -471,7 +471,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
     ) },
     { key: "desc", label: "Descrição", maxWidth: 240, nowrap: true, render: r => r.desc },
     { key: "tipo", label: "Tipo", render: r => (
-      <><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: TIPOC[r.tipo] || T.accent, marginRight: 4 }} />{r.tipo}</>
+      <><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: tipoCor(r.tipo, T), marginRight: 4 }} />{r.tipo}</>
     ) },
     { key: "sev", label: "Sev.", render: r => <SevB s={r.sev} /> },
     { key: "resp", label: "Responsável", render: r => r.resp || "—" },
@@ -1591,7 +1591,7 @@ export function DashTab({ rncs }) {
 
           {/* Barras por status e tipo */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,TIPOC]].map(([title,data,cm])=>(
+            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,Object.fromEntries(Object.keys(TIPOC).map(k=>[k,tipoCor(k,T)]))]].map(([title,data,cm])=>(
               <div key={title} style={{ ...s.card }}>
                 <SecTitle ch={title}/>
                 {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,n])=>{
@@ -2140,7 +2140,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,n],idx)=>{
             const max=Math.max(...Object.values(porTipo),1);
             const pct=Math.round(n/total*100);
-            const color=TIPOC[tipo]||T.accent;
+            const color=tipoCor(tipo,T);
             return <div key={tipo} style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12 }}>
               <div style={{ minWidth:24, width:24, height:24, borderRadius:"50%", background:`${color}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color, flexShrink:0 }}>{idx+1}</div>
               <div style={{ minWidth:180, fontSize:13, color:T.text, fontWeight:500 }}>{tipo}</div>
