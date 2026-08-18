@@ -168,6 +168,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [fTipo, setFTipo] = useState(fIni.tipo || "");
   const [sel, setSel] = useState(null);
   const [reclassDim, setReclassDim] = useState(null); // "tipo" | "setor" | null
+  const [selecionados, setSelecionados] = useState(new Set());
 
   const podeTriar = isAdmin || perm("triarDesvio");
 
@@ -210,6 +211,27 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     await doSaveDesvio(upd);
     setSel(null);
     toast_(`${d.num} encerrado.`, "green");
+  };
+
+  // Encerrar em lote — a extensão natural do Table.jsx da onda 9: rotina de
+  // triagem tem muito "sim, ação imediata resolveu" repetido um a um. Só os
+  // "Registrado" da seleção entram; o resto (já encerrado/convertido/etc.)
+  // é ignorado em silêncio — selecionar tudo numa página mista não deve travar.
+  const encerrarSelecionados = async () => {
+    const alvos = filtrados.filter(d => selecionados.has(d.id) && d.status === "Registrado");
+    if (alvos.length === 0) {
+      toast_("Nenhum dos selecionados está 'Registrado' — só esses podem ser encerrados em lote.", "red");
+      return;
+    }
+    const motivo = window.prompt(`Justificativa do encerramento em lote (${alvos.length} desvio(s) selecionado(s)):`);
+    if (motivo === null) return;
+    for (const d of alvos) {
+      const upd = { ...d, status: "Encerrado", encerradoPor: user.name, encerradoEm: tod(), encerramentoMotivo: motivo,
+        historico: [...(d.historico || []), { data: tod(), acao: "Encerrado — ação imediata (lote)", resp: user.name }] };
+      await doSaveDesvio(upd);
+    }
+    setSelecionados(new Set());
+    toast_(`${alvos.length} desvio(s) encerrado(s) em lote.`, "green");
   };
 
   const converter = (d) => {
@@ -292,6 +314,15 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
         </div>
       </div>
 
+      {/* Seleção em lote */}
+      {podeTriar && selecionados.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", marginBottom: 10, background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{selecionados.size} selecionado(s)</span>
+          <button style={s.btnA} onClick={encerrarSelecionados}>✅ Encerrar selecionados</button>
+          <button style={s.btn} onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
+        </div>
+      )}
+
       {/* Tabela */}
       <Table
         columns={colunasDesvio}
@@ -302,6 +333,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
         sortDirDefault="desc"
         perPage={15}
         emptyTitle="Nenhum desvio registrado ainda."
+        selectable={podeTriar}
+        selected={selecionados}
+        onSelectedChange={setSelecionados}
       />
 
       {/* Modal de detalhe / triagem */}

@@ -22,10 +22,17 @@ const DENSIDADES = {
 //
 // columns: [{ key, label, accessor?(row), render?(row), sortable=true,
 //   align, nowrap=true, width, minWidth }]
+//
+// Seleção em lote é opt-in (`selectable`) e controlada pelo pai — o Table só
+// desenha o checkbox e devolve o Set de chaves marcadas; a barra de ação (o
+// que fazer com a seleção) é decisão de cada tela, não do componente genérico.
+// "Selecionar tudo" marca só as linhas da página atual, pra não sumir com uma
+// seleção que o usuário não está vendo.
 export function Table({
   columns, rows, rowKey = (r) => r.id, onRowClick, rowAccent,
   perPage = 20, sortColDefault = null, sortDirDefault = "asc",
   emptyIcon = "📋", emptyTitle = "Nenhum registro encontrado", emptySubtitle,
+  selectable = false, selected, onSelectedChange,
 }) {
   const T = useTheme();
   const [sortCol, setSortCol] = useState(sortColDefault);
@@ -51,6 +58,22 @@ export function Table({
   const sorted = useMemo(() => sortRows(rows, columns, sortCol, sortDir), [rows, columns, sortCol, sortDir]);
   const { paginated, page, total, setPage } = usePagination(sorted, perPage);
   const d = DENSIDADES[densidade];
+
+  const marcadas = selected || new Set();
+  const chavesPagina = paginated.map(rowKey);
+  const todasMarcadasNaPagina = chavesPagina.length > 0 && chavesPagina.every(k => marcadas.has(k));
+  const alternarLinha = (k, e) => {
+    e.stopPropagation();
+    const novo = new Set(marcadas);
+    novo.has(k) ? novo.delete(k) : novo.add(k);
+    onSelectedChange?.(novo);
+  };
+  const alternarPagina = () => {
+    const novo = new Set(marcadas);
+    if (todasMarcadasNaPagina) chavesPagina.forEach(k => novo.delete(k));
+    else chavesPagina.forEach(k => novo.add(k));
+    onSelectedChange?.(novo);
+  };
 
   const thStyle = (col) => ({
     padding: `${d.padY}px ${d.padX}px`, textAlign: col.align || "left", fontSize: 11, fontWeight: 700,
@@ -100,6 +123,12 @@ export function Table({
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
+            {selectable && (
+              <th style={{ ...thStyle({}), cursor: "default", width: 36 }}>
+                <input type="checkbox" checked={todasMarcadasNaPagina} onChange={alternarPagina}
+                  title="Selecionar todos desta página" style={{ cursor: "pointer" }} />
+              </th>
+            )}
             {columns.map(col => (
               <th key={col.key} style={thStyle(col)} onClick={() => toggleSort(col)}>
                 {col.label}
@@ -130,6 +159,12 @@ export function Table({
                   cursor: onRowClick ? "pointer" : "default", transition: "background .15s",
                   outline: emFoco ? `2px solid ${T.accent}` : "none", outlineOffset: -1,
                 }}>
+                {selectable && (
+                  <td style={{ padding: `${d.padY}px ${d.padX}px`, width: 36 }} onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={marcadas.has(rowKey(r))} onChange={(e) => alternarLinha(rowKey(r), e)}
+                      style={{ cursor: "pointer" }} />
+                  </td>
+                )}
                 {columns.map(col => (
                   <td key={col.key} style={{
                     padding: `${d.padY}px ${d.padX}px`, fontSize: d.fontSize, color: T.text, textAlign: col.align || "left",
