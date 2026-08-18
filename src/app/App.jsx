@@ -60,7 +60,12 @@ async function migrarRevalidacoesLegado() {
 }
 
 export default function App() {
-  const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
+  // Fallback pra "herbamed": tema salvo pode ser de uma leva antiga (localStorage
+  // de sessão anterior) que não existe mais em THEMES depois de uma poda de temas.
+  const [themeKey, setThemeKey] = useState(() => {
+    const salvo = localStorage.getItem("hm_theme");
+    return salvo && THEMES[salvo] ? salvo : "herbamed";
+  });
   const [formalMode, setFormalMode] = useState(() => localStorage.getItem("hm_formal") === "true");
   const T = THEMES[themeKey];
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
