@@ -9,6 +9,22 @@ import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { cargosAtivos, cargoDoUsuario, cargosParaImportar, novoCargoId, pendentesDeMigracao, acharCargoPorNome, usuariosParaVincular } from "./cargos";
 import { ColaboradoresTab } from "../colaboradores/ColaboradoresTab";
 
+// Criar e editar usuário viraram modal (antes: formulário sempre aberto no fim
+// da lista, e edição expandindo dentro da própria linha) — em uma lista de
+// dezenas de usuários isso significava rolar a página inteira pra cadastrar
+// alguém, e editar por engano confundia com o formulário de baixo.
+function ModalShell({ onClose, children, maxWidth = 760 }) {
+  const T = useTheme();
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(6px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "2rem 2.5rem", maxWidth, width: "100%", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, config = {}, catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [] }) {
   const T = useTheme(); const s = useS();
   const isAdmin = ["admin","keyuser","rt"].includes(currentUser?.role);
@@ -122,6 +138,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     setSavingAreasDistrib(false);
   };
 
+  const [showNovo, setShowNovo] = useState(false);
   const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
@@ -143,6 +160,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       setUsers([...users, savedUser]);
       setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
+      setShowNovo(false);
       toast_("Usuário criado com sucesso!", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
   };
@@ -204,61 +222,12 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
 
       {abaAdmin==="usuarios" && (<>
       <div style={s.card}>
-        <SecTitle icon="👥" ch={`Usuários do sistema (${users.length})`} />
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <SecTitle icon="👥" ch={`Usuários do sistema (${users.length})`} />
+          <button style={s.btnA} onClick={()=>setShowNovo(true)}>+ Novo usuário</button>
+        </div>
         {_usrs.map(u=>(
           <div key={u.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, marginBottom:10, overflow:"hidden" }}>
-            {editing===u.id ? (
-              <div style={{ padding:"1rem" }}>
-                <G3 ch={<>
-                  <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
-                  <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
-                  <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />
-                  <F lbl="Cargo" tip="Vem do catálogo de cargos (Admin → Catálogos → Cargos). O cargo define quais treinamentos a pessoa herda." ch={
-                    <Sel value={editData.cargoId||""} onChange={e=>{
-                      const alvo = listaCargos.find(c=>c.id===e.target.value);
-                      // Grava o id (vínculo) e o rótulo (snapshot da assinatura depende dele).
-                      setEditData(p=>({...p, cargoId:e.target.value, cargo: alvo?alvo.nome:""}));
-                    }}>
-                      <option value="">— sem cargo —</option>
-                      {cargosAtivos(listaCargos).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
-                      {editData.cargoId && !listaCargos.some(c=>c.id===editData.cargoId) && (
-                        <option value={editData.cargoId}>{editData.cargo||editData.cargoId} (fora do catálogo)</option>
-                      )}
-                    </Sel>
-                  } />
-                  <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
-                    <option value="admin">Admin — acesso total</option>
-                    <option value="user">Usuário — cria e edita suas RNCs</option>
-                    <option value="viewer">Visualizador — apenas leitura</option>
-                    <option value="keyuser">Key User — edita qualquer RNC</option>
-                    <option value="rt">RT — Responsável Técnico</option>
-                    <option value="exec">Executivo — Dashboard gerencial</option>
-                  </Sel>} />
-                </>} />
-
-                {/* Permissões do usuário editado — editáveis por admin */}
-                <div style={{ marginTop:14, marginBottom:10 }}>
-                  <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Permissões</div>
-                  {PERMS_GRUPOS.map(grupo => (
-                    <div key={grupo.grupo} style={{ marginBottom:10 }}>
-                      <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>{grupo.grupo}</div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:3 }}>
-                        {grupo.items.map(item => (
-                          <label key={item.key} style={{ display:"flex", alignItems:"center", gap:7, padding:"5px 9px", background:editPerms[item.key]?T.accentDim:T.surf, border:`1px solid ${editPerms[item.key]?T.accent+"44":T.border}`, borderRadius:6, cursor:"pointer", transition:"all .15s" }}>
-                            <input type="checkbox" checked={!!editPerms[item.key]} onChange={()=>toggleEditPerm(item.key)} style={{ accentColor:T.accent, width:13, height:13, flexShrink:0 }}/>
-                            <span style={{ fontSize:11, color:editPerms[item.key]?T.accent:T.text2, userSelect:"none" }}>{item.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
-                  <button style={s.btn} onClick={()=>setEditing(null)}>Cancelar</button>
-                  <button style={s.btnA} onClick={()=>saveEdit(u.id)}>Salvar alterações</button>
-                </div>
-              </div>
-            ) : (
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px" }}>
                 <div style={{ display:"flex", gap:14, alignItems:"center" }}>
                   <div style={{ width:40, height:40, borderRadius:"50%", background:u.role==="admin"?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:u.role==="admin"?"#fff":T.text2, flexShrink:0 }}>{(u.name||u.email)?.[0]?.toUpperCase()||"?"}</div>
@@ -307,14 +276,17 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   {u.id!==currentUser.uid && <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>delUser(u.id)}>🗑️ Remover</button>}
                 </div>
               </div>
-            )}
           </div>
         ))}
         <Pagination page={_pgU} total={_totU} setPage={_setPgU}/>
       </div>
 
-      <div style={s.card}>
-        <SecTitle icon="➕" ch="Adicionar novo usuário" />
+      {showNovo && (
+      <ModalShell onClose={()=>setShowNovo(false)}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1.25rem" }}>
+          <div style={{ fontSize:20, fontWeight:700, color:T.text }}>➕ Novo usuário</div>
+          <button onClick={()=>setShowNovo(false)} style={{ background:"none", border:"none", color:T.text3, cursor:"pointer", fontSize:22, fontFamily:"inherit" }}>✕</button>
+        </div>
         <div style={{ background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8, padding:"10px 14px", marginBottom:"1rem", fontSize:12, color:T.accent }}>
           💡 O usuário receberá acesso ao sistema com e-mail e senha definidos abaixo. Recomende trocar a senha no primeiro acesso.
         </div>
@@ -370,7 +342,71 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         <div style={{ textAlign:"right", marginTop:6 }}>
           <button style={s.btnA} onClick={addUser}>Criar usuário ✓</button>
         </div>
-      </div>
+      </ModalShell>
+      )}
+
+      {editing && (()=>{
+        const alvo = users.find(u=>u.id===editing);
+        return (
+        <ModalShell onClose={()=>setEditing(null)}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1.25rem" }}>
+            <div>
+              <div style={{ fontSize:20, fontWeight:700, color:T.text }}>✏️ Editar usuário</div>
+              <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{alvo?.name || alvo?.email} · {alvo?.email}</div>
+            </div>
+            <button onClick={()=>setEditing(null)} style={{ background:"none", border:"none", color:T.text3, cursor:"pointer", fontSize:22, fontFamily:"inherit" }}>✕</button>
+          </div>
+          <G3 ch={<>
+            <F lbl="Nome" ch={<Inp value={editData.name} onChange={e=>setEditData(p=>({...p,name:e.target.value}))} />} />
+            <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e=>setEditData(p=>({...p,setor:e.target.value}))} />} />
+            <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={editData.crf||""} onChange={e=>setEditData(p=>({...p,crf:e.target.value}))} />} />
+            <F lbl="Cargo" tip="Vem do catálogo de cargos (Admin → Catálogos → Cargos). O cargo define quais treinamentos a pessoa herda." ch={
+              <Sel value={editData.cargoId||""} onChange={e=>{
+                const alvoCargo = listaCargos.find(c=>c.id===e.target.value);
+                // Grava o id (vínculo) e o rótulo (snapshot da assinatura depende dele).
+                setEditData(p=>({...p, cargoId:e.target.value, cargo: alvoCargo?alvoCargo.nome:""}));
+              }}>
+                <option value="">— sem cargo —</option>
+                {cargosAtivos(listaCargos).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
+                {editData.cargoId && !listaCargos.some(c=>c.id===editData.cargoId) && (
+                  <option value={editData.cargoId}>{editData.cargo||editData.cargoId} (fora do catálogo)</option>
+                )}
+              </Sel>
+            } />
+            <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
+              <option value="admin">Admin — acesso total</option>
+              <option value="user">Usuário — cria e edita suas RNCs</option>
+              <option value="viewer">Visualizador — apenas leitura</option>
+              <option value="keyuser">Key User — edita qualquer RNC</option>
+              <option value="rt">RT — Responsável Técnico</option>
+              <option value="exec">Executivo — Dashboard gerencial</option>
+            </Sel>} />
+          </>} />
+
+          {/* Permissões do usuário editado — editáveis por admin */}
+          <div style={{ marginTop:14, marginBottom:10 }}>
+            <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Permissões</div>
+            {PERMS_GRUPOS.map(grupo => (
+              <div key={grupo.grupo} style={{ marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>{grupo.grupo}</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:3 }}>
+                  {grupo.items.map(item => (
+                    <label key={item.key} style={{ display:"flex", alignItems:"center", gap:7, padding:"5px 9px", background:editPerms[item.key]?T.accentDim:T.surf, border:`1px solid ${editPerms[item.key]?T.accent+"44":T.border}`, borderRadius:6, cursor:"pointer", transition:"all .15s" }}>
+                      <input type="checkbox" checked={!!editPerms[item.key]} onChange={()=>toggleEditPerm(item.key)} style={{ accentColor:T.accent, width:13, height:13, flexShrink:0 }}/>
+                      <span style={{ fontSize:11, color:editPerms[item.key]?T.accent:T.text2, userSelect:"none" }}>{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <button style={s.btn} onClick={()=>setEditing(null)}>Cancelar</button>
+            <button style={s.btnA} onClick={()=>saveEdit(editing)}>Salvar alterações</button>
+          </div>
+        </ModalShell>
+        );
+      })()}
       </>)}
 
       {abaAdmin==="colaboradores" && (
