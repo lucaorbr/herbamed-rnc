@@ -3,7 +3,8 @@ import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
 import { useS } from "../../shared/styles";
-import { F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA, usePagination } from "../../shared/ui";
+import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { Table } from "../../shared/Table";
 import { AnexosUpload } from "../rnc/RncTabs";
 import { DesviosIndicadores } from "./DesviosIndicadores";
 import { setoresDaHierarquia, normSetor } from "./fusaoSetores";
@@ -185,7 +186,16 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       return [d.num, d.desc, d.setor, d.setorOutro, d.tipo, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
     });
 
-  const { paginated, page, total, setPage } = usePagination(filtrados, 15);
+  const colunasDesvio = [
+    { key: "num", label: "Nº", render: d => <span style={{ fontWeight: 700, color: T.accent }}>{d.num}</span> },
+    { key: "dataOcorrencia", label: "Data", render: d => fmt(d.dataOcorrencia) },
+    { key: "setor", label: "Setor", accessor: d => d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || "—") },
+    { key: "tipo", label: "Tipo", accessor: d => d.tipo === "Outros" ? (d.tipoOutro || "Outros") : d.tipo },
+    { key: "impacto", label: "Impacto", render: d => d.impacto ? <SevB s={d.impacto} /> : "—" },
+    { key: "desc", label: "Descrição", maxWidth: 280, render: d => d.desc },
+    { key: "status", label: "Status", render: d => <DesvioBadge status={d.status} /> },
+    { key: "triagem", label: "Triagem", sortable: false, render: d => <TriagemChip d={d} T={T} /> },
+  ];
 
   const abertos = desvios.filter(d => d.status === "Registrado").length;
   const encerrados = desvios.filter(d => d.status === "Encerrado").length;
@@ -283,39 +293,16 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       </div>
 
       {/* Tabela */}
-      <div style={{ ...s.card, padding: 0, overflowX: "auto" }}>
-        {filtrados.length === 0 ? (
-          <div style={{ padding: "3rem", textAlign: "center", color: T.text3, fontSize: 13 }}>Nenhum desvio registrado ainda.</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: T.surf, color: T.text3, fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em" }}>
-                {["Nº", "Data", "Setor", "Tipo", "Impacto", "Descrição", "Status", "Triagem", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${T.border}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map(d => (
-                <tr key={d.id} onClick={() => setSel(d)} style={{ cursor: "pointer", borderBottom: `1px solid ${T.border}` }}
-                  onMouseEnter={e => e.currentTarget.style.background = T.card2}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{d.num}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2, whiteSpace: "nowrap" }}>{fmt(d.dataOcorrencia)}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.setor === "Outros" ? d.setorOutro || "Outros" : d.setor || "—"}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.tipo === "Outros" ? d.tipoOutro || "Outros" : d.tipo}</td>
-                  <td style={{ padding: "10px 12px" }}>{d.impacto ? <SevB s={d.impacto} /> : "—"}</td>
-                  <td style={{ padding: "10px 12px", color: T.text, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</td>
-                  <td style={{ padding: "10px 12px" }}><DesvioBadge status={d.status} /></td>
-                  <td style={{ padding: "10px 12px" }}><TriagemChip d={d} T={T} /></td>
-                  <td style={{ padding: "10px 12px", color: T.text3, fontSize: 16 }}>›</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <Pagination page={page} total={total} setPage={setPage} />
-      </div>
+      <Table
+        columns={colunasDesvio}
+        rows={filtrados}
+        rowKey={d => d.id}
+        onRowClick={d => setSel(d)}
+        sortColDefault="dataOcorrencia"
+        sortDirDefault="desc"
+        perPage={15}
+        emptyTitle="Nenhum desvio registrado ainda."
+      />
 
       {/* Modal de detalhe / triagem */}
       {sel && (

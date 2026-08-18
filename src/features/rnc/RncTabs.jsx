@@ -11,8 +11,8 @@ import { useS } from "../../shared/styles";
 // AnexosUpload nasceu aqui e virou compartilhado (Desvios e lista de presença dos
 // treinamentos usam o mesmo). Reexportado para não quebrar quem importa de RncTabs.
 import { AnexosUpload, uploadAttachment } from "../../shared/AnexosUpload";
-import { usePagination } from "../../shared/ui";
-import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
+import { Badge, Divider, F, G2, G3, Inp, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
+import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 
@@ -446,20 +446,6 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
     await doDeleteRNC(id); setSel(null); toast_("RNC excluída.", "red");
   };
 
-  const [sortCol, setSortCol] = useState("data");
-  const [sortDir, setSortDir] = useState("desc");
-
-  const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("asc"); }
-  };
-
-  const sorted = [...list].sort((a, b) => {
-    const va = a[sortCol] || ""; const vb = b[sortCol] || "";
-    return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
-  });
-  const {paginated:_rncs,page:_pgRNC,total:_totRNC,setPage:_setPgRNC} = usePagination(sorted, 20);
-
   // Steps de progresso da RNC
   const getRNCStep = (r) => {
     if (r.status === "Eficaz" || r.status === "Ineficaz") return 4;
@@ -471,11 +457,30 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
   const STEPS = ["Abertura", "Análise", "CAPA", "Eficácia"];
 
-  const thStyle = (col) => ({
-    padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color: sortCol===col?T.accent:T.text3,
-    textTransform:"uppercase", letterSpacing:".06em", cursor:"pointer", userSelect:"none",
-    borderBottom:`1px solid ${T.border}`, background:T.surf, whiteSpace:"nowrap",
-  });
+  const colunasRNC = [
+    { key: "num", label: "Nº", render: r => <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>{r.num}</span> },
+    { key: "status", label: "Status / Progresso", sortable: false, render: r => (
+      <div style={{ minWidth: 180 }}>
+        <Badge s={r.status} />
+        <div style={{ display: "flex", gap: 2, marginTop: 5 }}>
+          {STEPS.map((st, i) => (
+            <div key={st} title={st} style={{ flex: 1, height: 3, borderRadius: 2, background: i < getRNCStep(r) ? T.accent : T.border, transition: "background .3s" }} />
+          ))}
+        </div>
+      </div>
+    ) },
+    { key: "desc", label: "Descrição", maxWidth: 240, nowrap: true, render: r => r.desc },
+    { key: "tipo", label: "Tipo", render: r => (
+      <><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: TIPOC[r.tipo] || T.accent, marginRight: 4 }} />{r.tipo}</>
+    ) },
+    { key: "sev", label: "Sev.", render: r => <SevB s={r.sev} /> },
+    { key: "resp", label: "Responsável", render: r => r.resp || "—" },
+    { key: "data", label: "Data", render: r => fmt(r.data) },
+    { key: "prazoAC", label: "Prazo AC", render: r => {
+      const vencido = past(r.prazoAC) && rncAtiva(r.status);
+      return <span style={{ color: vencido ? T.red : T.text2, fontWeight: vencido ? 600 : 400 }}>{vencido ? "⚠ " : ""}{r.prazoAC ? fmt(r.prazoAC) : "—"}</span>;
+    } },
+  ];
 
   return (
     <div>
@@ -491,68 +496,22 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
       </div>
 
       {/* Tabela enterprise */}
-      {sorted.length === 0 ? (
-        <div style={{ textAlign:"center", padding:"4rem 2rem", color:T.text3, background:T.card, borderRadius:14, border:`1px solid ${T.border}` }}>
-          <div style={{ fontSize:48, marginBottom:"1rem", opacity:.3 }}>📋</div>
-          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhuma RNC encontrada</div>
-          <div style={{ fontSize:12 }}>{isViewer?"Nenhuma não conformidade registrada.":"Clique em \"+ Nova RNC\" para começar."}</div>
-        </div>
-      ) : (
-        <>
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead>
-              <tr>
-                <th className="th-sort" style={thStyle("num")} onClick={()=>toggleSort("num")}>Nº {sortCol==="num"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
-                <th style={{...thStyle("status"),cursor:"default"}}>Status / Progresso</th>
-                <th className="th-sort" style={thStyle("desc")} onClick={()=>toggleSort("desc")}>Descrição</th>
-                <th className="th-sort" style={thStyle("tipo")} onClick={()=>toggleSort("tipo")}>Tipo</th>
-                <th className="th-sort" style={thStyle("sev")} onClick={()=>toggleSort("sev")}>Sev.</th>
-                <th className="th-sort" style={thStyle("resp")} onClick={()=>toggleSort("resp")}>Responsável</th>
-                <th className="th-sort" style={thStyle("data")} onClick={()=>toggleSort("data")}>Data {sortCol==="data"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
-                <th className="th-sort" style={thStyle("prazoAC")} onClick={()=>toggleSort("prazoAC")}>Prazo AC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {_rncs.map((r, idx) => {
-                const step = getRNCStep(r);
-                const vencido = past(r.prazoAC) && rncAtiva(r.status);
-                return (
-                  <tr key={r.id} className="rnc-row" onClick={()=>{setSel(r);setEditing(false);}} style={{ background: idx%2===0?T.card:T.surf, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, cursor:"pointer", transition:"background .15s" }}>
-                    <td style={{ padding:"10px 14px", fontSize:11, fontWeight:700, color:T.accent, whiteSpace:"nowrap" }}>{r.num}</td>
-                    <td style={{ padding:"10px 14px", minWidth:180 }}>
-                      <Badge s={r.status} />
-                      {/* Mini steps */}
-                      <div style={{ display:"flex", gap:2, marginTop:5 }}>
-                        {STEPS.map((st,i)=>(
-                          <div key={st} title={st} style={{ flex:1, height:3, borderRadius:2, background: i<step?T.accent:T.border, transition:"background .3s" }} />
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ padding:"10px 14px", fontSize:13, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.desc}</td>
-                    <td style={{ padding:"10px 14px", fontSize:11, color:T.text2, whiteSpace:"nowrap" }}>
-                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:TIPOC[r.tipo]||T.accent, marginRight:4 }} />
-                      {r.tipo}
-                    </td>
-                    <td style={{ padding:"10px 14px" }}><SevB s={r.sev} /></td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{r.resp||"—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{fmt(r.data)}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color: vencido?T.red:T.text2, fontWeight: vencido?600:400 }}>
-                      {vencido?"⚠ ":""}{r.prazoAC?fmt(r.prazoAC):"—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:11, color:T.text3, display:"flex", justifyContent:"space-between" }}>
-            <span>{sorted.length} registro(s) encontrado(s)</span>
-            <span>Clique em uma linha para ver detalhes</span>
-          </div>
-        </div>
-        <Pagination page={_pgRNC} total={_totRNC} setPage={_setPgRNC}/>
-      </>
+      {list.length > 0 && (
+        <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>{list.length} registro(s) encontrado(s) · clique em uma linha para ver detalhes</div>
       )}
+      <Table
+        columns={colunasRNC}
+        rows={list}
+        rowKey={r => r.id}
+        onRowClick={r => { setSel(r); setEditing(false); }}
+        rowAccent={r => SMETA[r.status]?.dot || T.accent}
+        sortColDefault="data"
+        sortDirDefault="desc"
+        perPage={20}
+        emptyIcon="📋"
+        emptyTitle="Nenhuma RNC encontrada"
+        emptySubtitle={isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}
+      />
 
       {/* MODAL */}
       {sel && (
