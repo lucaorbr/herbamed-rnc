@@ -6,7 +6,7 @@ import { rncAtiva } from "../../core/status";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
 import { AssinaturaModal, exportAtaReuniaoPDF } from "../pdf/pdfExports";
-import { calcGut } from "./RncTabs";
+import { calcGut, dispMeta, rncTemMaterial } from "./RncTabs";
 
 // Reunião de Análise Crítica (RAC) — o fórum onde a gestão analisa as RNCs em aberto e
 // delibera. O que a reunião produz não é um registro paralelo: cada deliberação age na
@@ -23,14 +23,28 @@ const MOTIVOS = {
 };
 const motivoLabel = (m) => MOTIVOS[m]?.label || m;
 
-// Fase 1 — só as deliberações que agem com peças que já existem no fluxo da RNC.
-// Escalar e aprovar encerramento entram na Fase 2.
+// Fase 1 — deliberações que agem com peças que já existem no fluxo da RNC.
+// Escalar fica pra Fase 2 (onda 13). "Aprovar encerramento" (onda 11) reaproveita
+// as mesmas travas do ciclo de eficácia e do encerramento por disposição — nunca
+// fecha por conta própria sem elas, porque fechar CAPA sem checagem de eficácia é
+// o achado nº1 de auditoria em CAPA (ISO 9001 / FDA / IATF).
 const DELIBERACOES = {
-  manter:         { label: "Manter o tratamento", desc: "Registra a análise crítica na RNC, sem alterar prazo ou responsável." },
-  reforcar_prazo: { label: "Reforçar prazo",      desc: "Grava um novo prazo de ação corretiva na RNC." },
-  cobrar:         { label: "Cobrar responsável",  desc: "Registra a cobrança na RNC e abre o e-mail de notificação." },
+  manter:               { label: "Manter o tratamento",   desc: "Registra a análise crítica na RNC, sem alterar prazo ou responsável." },
+  reforcar_prazo:       { label: "Reforçar prazo",        desc: "Grava um novo prazo de ação corretiva na RNC." },
+  cobrar:               { label: "Cobrar responsável",    desc: "Registra a cobrança na RNC e abre o e-mail de notificação." },
+  aprovar_encerramento: { label: "Aprovar encerramento",  desc: "Fecha a RNC agora se CAPA e disposição do material já estiverem completas; senão, registra a aprovação condicionada à conclusão da eficácia." },
 };
 const deliberacaoLabel = (d) => DELIBERACOES[d]?.label || d;
+
+// Mesma checagem que já trava o botão "Encerrar RNC (resolvida por disposição)"
+// no modal da RNC (RncTabs.jsx) e o resultado "Eficaz" na aba de eficácia —
+// reaproveitada aqui, não reimplementada, pra nunca divergir.
+function podeFecharAgora(rnc) {
+  const acoesPendentes = (rnc.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
+  if (acoesPendentes.length > 0) return false;
+  if (rncTemMaterial(rnc) && !rnc.disposicao?.decisao) return false;
+  return true;
+}
 
 function motivosDaRnc(r) {
   const m = [];
@@ -170,15 +184,28 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     const rnc = rncs.find(r => r.id === it.rncId);
     if (!rnc) { toast_(`RNC ${it.rncNum} não encontrada — pode ter sido excluída.`, "red"); return; }
 
+    // "Aprovar encerramento" só fecha de verdade quando as mesmas travas do
+    // encerramento por disposição já estão satisfeitas; senão, aprova a
+    // intenção e deixa marcado o que falta, sem tocar no status da RNC.
+    const fechaAgora = it.deliberacao === "aprovar_encerramento" && podeFecharAgora(rnc);
+    const aprovacaoPendente = it.deliberacao === "aprovar_encerramento" && !fechaAgora;
+    const pendenciasTexto = () => {
+      const pend = (rnc.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada").length;
+      const faltaDisp = rncTemMaterial(rnc) && !rnc.disposicao?.decisao;
+      return [pend > 0 && `${pend} ação(ões) de CAPA pendente(s)`, faltaDisp && "disposição do material não registrada"].filter(Boolean).join(" · ");
+    };
+
     const detalhes = [
       it.encaminhamento && `Encaminhamento: ${it.encaminhamento}`,
       it.novoResponsavel && `Responsável indicado: ${it.novoResponsavel}`,
       it.deliberacao === "reforcar_prazo" && `Novo prazo: ${fmt(it.novoPrazo)} (anterior: ${fmt(rnc.prazoAC)})`,
+      fechaAgora && `Encerrada por disposição do material (${dispMeta(rnc.disposicao?.decisao)?.label || rnc.disposicao?.decisao}), aprovado na reunião.`,
+      aprovacaoPendente && `Encerramento aprovado pela reunião, condicionado à conclusão: ${pendenciasTexto()}.`,
     ].filter(Boolean);
 
     const h = {
       data: tod(), hora: new Date().toLocaleTimeString("pt-BR"),
-      acao: `Deliberado na ${sel.num}: ${deliberacaoLabel(it.deliberacao)}`,
+      acao: fechaAgora ? `Deliberado na ${sel.num}: Aprovado encerramento — RNC encerrada` : `Deliberado na ${sel.num}: ${deliberacaoLabel(it.deliberacao)}`,
       resp: user.name, tipo: "reuniao", detalhes,
     };
     const patch = {
@@ -186,6 +213,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
       ultimaReuniao: { num: sel.num, data: sel.realizadaEm || sel.data },
     };
     if (it.deliberacao === "reforcar_prazo") patch.prazoAC = it.novoPrazo;
+    if (fechaAgora) patch.status = "Encerrada";
 
     try {
       await doUpdateRNC(rnc.id, patch);
@@ -195,11 +223,11 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     }
     if (it.deliberacao === "cobrar") openEmail({ ...rnc, ...patch }, "manual");
 
-    const pauta = sel.pauta.map((x, i) => i === idx ? { ...x, itemStatus: "deliberado", deliberadoEm: tod(), deliberadoPor: user.name } : x);
+    const pauta = sel.pauta.map((x, i) => i === idx ? { ...x, itemStatus: "deliberado", deliberadoEm: tod(), deliberadoPor: user.name, fechadaNaReuniao: fechaAgora, aprovacaoPendente } : x);
     await salvar({
       ...sel, pauta,
-      historico: [...(sel.historico || []), hEntry(`RNC ${it.rncNum} — ${deliberacaoLabel(it.deliberacao)}`)],
-    }, `Deliberação gravada no histórico da RNC ${it.rncNum}.`);
+      historico: [...(sel.historico || []), hEntry(fechaAgora ? `RNC ${it.rncNum} — encerramento aprovado e efetivado` : `RNC ${it.rncNum} — ${deliberacaoLabel(it.deliberacao)}`)],
+    }, fechaAgora ? `RNC ${it.rncNum} encerrada.` : `Deliberação gravada no histórico da RNC ${it.rncNum}.`);
   };
 
   const pendentes = sel?.pauta?.filter(i => i.itemStatus !== "deliberado").length || 0;
@@ -359,8 +387,10 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                 </div>
 
                 {feito ? (
-                  <div style={{ background: "#2ab84a12", border: "1px solid #2ab84a22", borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#2ab84a" }}>{deliberacaoLabel(it.deliberacao)}</div>
+                  <div style={{ background: it.aprovacaoPendente ? "#ffd16612" : "#2ab84a12", border: `1px solid ${it.aprovacaoPendente ? "#ffd16633" : "#2ab84a22"}`, borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: it.aprovacaoPendente ? "#8a6000" : "#2ab84a" }}>
+                      {it.fechadaNaReuniao ? "✅ Encerramento aprovado e efetivado — RNC encerrada" : it.aprovacaoPendente ? "⏳ Encerramento aprovado — pendente conclusão da eficácia" : deliberacaoLabel(it.deliberacao)}
+                    </div>
                     {it.encaminhamento && <div style={{ fontSize: 12, color: T.text, marginTop: 4 }}>{it.encaminhamento}</div>}
                     {it.novoResponsavel && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Responsável indicado: {it.novoResponsavel}</div>}
                     {it.novoPrazo && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Novo prazo: {fmt(it.novoPrazo)}</div>}
@@ -380,7 +410,20 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                         ? <F lbl="Novo prazo de ação corretiva *" ch={<Inp type="date" value={it.novoPrazo} onChange={e => setItem(i, { novoPrazo: e.target.value })} />} />
                         : <F lbl="Responsável indicado" ch={<Inp value={it.novoResponsavel} onChange={e => setItem(i, { novoResponsavel: e.target.value })} placeholder="Opcional" />} />}
                     </>} />
-                    {it.deliberacao && <div style={{ fontSize: 11, color: T.text2, marginTop: -6, marginBottom: 10 }}>{DELIBERACOES[it.deliberacao]?.desc}</div>}
+                    {it.deliberacao && (
+                      <div style={{ fontSize: 11, color: T.text2, marginTop: -6, marginBottom: 10 }}>
+                        {DELIBERACOES[it.deliberacao]?.desc}
+                        {it.deliberacao === "aprovar_encerramento" && rnc && (
+                          podeFecharAgora(rnc)
+                            ? <span style={{ color: "#2ab84a", fontWeight: 600 }}> · ✅ Pronta para fechar agora.</span>
+                            : <span style={{ color: "#e8a33d", fontWeight: 600 }}> · ⏳ Falta: {(() => {
+                                const pend = (rnc.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada").length;
+                                const faltaDisp = rncTemMaterial(rnc) && !rnc.disposicao?.decisao;
+                                return [pend > 0 && `${pend} ação(ões) de CAPA pendente(s)`, faltaDisp && "disposição do material"].filter(Boolean).join(" · ");
+                              })()}</span>
+                        )}
+                      </div>
+                    )}
                     <F lbl="Encaminhamento" ch={<TA value={it.encaminhamento} onChange={e => setItem(i, { encaminhamento: e.target.value })} placeholder="O que ficou decidido para esta RNC..." />} />
                     <button style={s.btnA} onClick={() => deliberar(i)}>✔️ Registrar deliberação na RNC</button>
                   </div>
