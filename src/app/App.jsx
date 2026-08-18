@@ -29,7 +29,7 @@ import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { TopNav } from "../layout/TopNav";
 import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
-import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
+import { HerbamedLogo, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
 import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
@@ -655,17 +655,8 @@ export default function App() {
             ))}
           </div>
 
-          {/* Right: theme + notif + avatar */}
+          {/* Right: notif + avatar (tema, modo formal e navegação moraram pro menu do avatar) */}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} formal={formalMode} onToggleFormal={toggleFormal} /></div>
-
-            {/* Alterna entre a navegação nova (abas) e a de sempre (lateral) */}
-            <button onClick={alternarNav}
-              title={navTopo ? "Voltar para o menu lateral" : "Experimentar a navegação em abas"}
-              style={{ background: navTopo ? T.accentDim : "none", border:`1px solid ${navTopo ? `${T.accent}44` : T.border2}`, borderRadius:8, color: navTopo ? T.accent : T.text2, cursor:"pointer", height:34, padding:"0 10px", display:"flex", alignItems:"center", gap:6, fontFamily:"inherit", fontSize:11, fontWeight:600, flexShrink:0, whiteSpace:"nowrap" }}>
-              {navTopo ? "⬅ Menu lateral" : "✨ Navegação nova"}
-            </button>
-
             {/* Presentation mode button — admin/keyuser/rt only */}
             {["admin","keyuser","rt"].includes(user.role) && (
               <button onClick={() => setPresentationMode(true)} title="Modo Apresentação" style={{ background: T.accentDim, border: `1px solid ${T.accent}44`, borderRadius: 8, color: T.accent, cursor: "pointer", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
@@ -723,12 +714,42 @@ export default function App() {
                 <span style={{ color:T.text3, fontSize:10 }}>▾</span>
               </button>
               {avatarOpen && (
-                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:220, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflow:"hidden", animation:"fadeIn .15s ease" }}>
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:240, maxHeight:"80vh", overflowY:"auto", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflow:"hidden", animation:"fadeIn .15s ease" }}>
                   <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}` }}>
                     <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{user.name}</div>
                     <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{user.email}</div>
                     <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{user.setor}</div>
                   </div>
+
+                  {/* Modo Formal */}
+                  <button onClick={toggleFormal} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${T.border}`, color:T.text2 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:8 }}>📁 Modo Formal</span>
+                    <span style={{ flexShrink:0, width:34, height:19, borderRadius:20, background:formalMode?T.accent:T.border, position:"relative", transition:"background .2s" }}>
+                      <span style={{ position:"absolute", top:2, left:formalMode?17:2, width:15, height:15, borderRadius:"50%", background:"#fff", transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+                    </span>
+                  </button>
+
+                  {/* Navegação em abas vs. menu lateral */}
+                  <button onClick={()=>{ alternarNav(); setAvatarOpen(false); }} title={navTopo ? "Clique para voltar ao menu lateral" : "Clique para experimentar a navegação em abas"} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${T.border}`, color:T.text2 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:8 }}>✨ Navegação em abas</span>
+                    <span style={{ flexShrink:0, width:34, height:19, borderRadius:20, background:navTopo?T.accent:T.border, position:"relative", transition:"background .2s" }}>
+                      <span style={{ position:"absolute", top:2, left:navTopo?17:2, width:15, height:15, borderRadius:"50%", background:"#fff", transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+                    </span>
+                  </button>
+
+                  {/* Tema */}
+                  <div style={{ padding:"10px 16px 6px", fontSize:10, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", fontWeight:700, borderBottom:`1px solid ${T.border}`, paddingBottom:8 }}>
+                    🎨 Tema
+                    <div style={{ display:"flex", flexDirection:"column", gap:2, marginTop:8 }}>
+                      {Object.entries(THEMES).map(([key, th]) => (
+                        <button key={key} onClick={()=>changeTheme(key)} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", border:"none", background:themeKey===key?T.accentDim:"transparent", color:themeKey===key?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11.5, borderRadius:8, fontWeight:themeKey===key?600:400, textTransform:"none", letterSpacing:"normal" }}>
+                          <span style={{ width:11, height:11, borderRadius:"50%", background:th.accent, display:"inline-block", boxShadow:`0 0 5px ${th.accent}`, flexShrink:0 }} />
+                          {th.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {isAdmin && (
                     <button onClick={()=>{setTab("admin");setAvatarOpen(false);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>
                       ⚙️ Administração
