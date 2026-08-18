@@ -8,6 +8,7 @@ import { uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle, Sel, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
+import { TableSkeleton, CardGridSkeleton } from "../../shared/Skeleton";
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
@@ -361,7 +362,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     } : null,
   });
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={6} cols={6} />;
 
   // ── NOVA FICHA ──
   if(view==="nova") {
@@ -1080,7 +1081,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     }
   };
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={7} cols={5} />;
 
   if(view==="lista") {
     return (
@@ -1556,7 +1557,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
     ) },
   ];
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={7} cols={7} />;
 
   // ── NOVA ANÁLISE ──
   const renderNovaForm = (modo="page") => (
@@ -1920,7 +1921,7 @@ export function CQDashboardTab() {
     return ()=>{ u1(); u2(); clearTimeout(t); };
   },[]);
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <CardGridSkeleton n={4} cols={4} />;
 
   // Filtrar por período
   const dataCorte = new Date();

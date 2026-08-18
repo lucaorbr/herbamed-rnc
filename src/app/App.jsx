@@ -544,6 +544,9 @@ export default function App() {
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
           @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
           @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+          @keyframes skeletonPulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
+          .skeleton-bar{animation:skeletonPulse 1.4s ease-in-out infinite;}
+          @media(prefers-reduced-motion:reduce){.skeleton-bar{animation:none;opacity:.75;}}
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           ${formalMode ? `
             button .emoji-hide, span.emoji-hide { display: none !important; }
