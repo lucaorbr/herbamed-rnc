@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
@@ -11,9 +11,7 @@ import { AuditoriasTab } from "../features/auditorias/AuditoriasTab";
 import { Login } from "../features/auth/Login";
 import { CEPTab } from "../features/cep/CEPTab";
 import { ClientesTab } from "../features/clientes/ClientesTab";
-import { CQAnalisesTab, CQDashboardTab, CQMateriaisTab, CQTab } from "../features/cq/CQTabs";
 import { ExecutivoDashboard } from "../features/dashboard/ExecutivoDashboard";
-import { GestaoDocumentosTab } from "../features/documentos/GestaoDocumentosTab";
 import { EmailModal } from "../features/email/EmailModal";
 import { FMEATab } from "../features/fmea/FMEATab";
 import { FornecedoresTab } from "../features/fornecedores/FornecedoresTab";
@@ -22,7 +20,6 @@ import { LaudosTab } from "../features/laudos/LaudosTab";
 import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
-import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { ConfiguracaoRevalidacaoTab } from "../features/revalidacao/ConfiguracaoRevalidacaoTab";
@@ -37,6 +34,33 @@ import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
 import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
+
+// Code-splitting por aba (onda 10) — Desvios, CQ e Gestão de Documentos só
+// pesam no bundle de quem realmente abre essas abas. RNC (RncTabs.jsx) fica
+// de fora de propósito: HomeTab mora no mesmo arquivo e é a tela padrão da
+// casca antiga (tab inicial "home") — colocar esse módulo em lazy atrasaria
+// a primeira tela de quem ainda não está na navegação nova.
+function lazyNamed(loader, nome) {
+  return lazy(() => loader().then(m => ({ default: m[nome] })));
+}
+const desviosLoader = () => import("../features/desvios/DesviosTabs");
+const DesviosTab = lazyNamed(desviosLoader, "DesviosTab");
+
+const cqLoader = () => import("../features/cq/CQTabs");
+const CQTab = lazyNamed(cqLoader, "CQTab");
+const CQMateriaisTab = lazyNamed(cqLoader, "CQMateriaisTab");
+const CQAnalisesTab = lazyNamed(cqLoader, "CQAnalisesTab");
+const CQDashboardTab = lazyNamed(cqLoader, "CQDashboardTab");
+
+const GestaoDocumentosTab = lazyNamed(() => import("../features/documentos/GestaoDocumentosTab"), "GestaoDocumentosTab");
+
+function AbaCarregando() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
+      <div style={{ width: 28, height: 28, border: "3px solid currentColor", opacity: .25, borderTopColor: "transparent", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
+    </div>
+  );
+}
 
 // Migração única (por sessão): copia registros da collection legada
 // "revalidacoes_grafico" para "revalidacoes", marcando o tipo como
@@ -765,6 +789,7 @@ export default function App() {
               {/* Na navegação nova, a tela inicial responde "o que precisa de mim
                   agora"; na de sempre, segue a Home antiga. Andam juntas de
                   propósito: quem volta para a lateral volta inteiro. */}
+              <Suspense fallback={<AbaCarregando />}>
               {tab==="home" && (navTopo
                 ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
@@ -802,6 +827,7 @@ export default function App() {
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}
+              </Suspense>
             </div>
           </div>
         </div>
