@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `2.41.1`
+- Versao atual: `3.0.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -113,9 +113,30 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
   - **260 testes verdes** ao final (216 → 235 → 260).
   - **Pendente (opcional):** a branch abandonada `feat/catalogos-indice` (`a2e650a`) tem um `src/features/admin/catalogos.js` com **contagem de uso real por item** e trava "item em uso não se exclui". Independe de layout e atende a queixa "não sei qual lista mexe em quê" — vale resgatar numa PR pequena. O índice de 3 famílias da mesma branch ficou obsoleto com este desenho.
 
+- **Repaginação da interface — 15 ondas (v3.0.0)** — reforma visual e de interação feita na branch `feat/nova-ui`, com ambiente paralelo próprio (`docker-compose.novaui.yml -p sgq-novaui` → **localhost:9030**, banco próprio) para o usuário usar no dia a dia antes de publicar. Direção escolhida na proposta visual: **navegação da Opção C** (abas no topo) com o **dashboard da Opção B** ("o que precisa de mim agora").
+  - ⚠️ **A navegação nova é OPT-IN no deploy da 3.0.0.** `localStorage.sgq_nav` nasce em `"lateral"`, então quem receber a atualização continua vendo o **menu lateral de sempre**; a troca é um toggle no menu do avatar. Foi decisão explícita do usuário: publicar sem big-bang, acompanhar a adoção e inverter o padrão depois numa PR de uma linha (`=== "topo"` → `!== "lateral"`). Só a casca de navegação e a tela inicial "Precisa de você" ficam atrás do toggle (`navTopo` no `App.jsx`); **todo o resto entra ligado para todos**.
+  - **Ondas 1-2 — navegação e tela inicial.** `src/layout/navegacao.js` é a fonte única das duas cascas (lateral e topo), então as duas nunca divergem de itens/permissões; `TopNav.jsx` (8 abas + segunda linha de subabas + busca Ctrl+K). `PrecisaDeVoce.jsx` + `pendencias.js` respondem "o que precisa de mim agora" cruzando RNC, desvios, documentos, laudos e treinamento.
+  - **Ondas 3-4, 7-9 — tabela compartilhada.** `Table.jsx` + `tableLogic.js` (lógica pura, testável): ordenação, paginação, estado vazio, hover, densidade, navegação por teclado e seleção em lote. Migradas as listas de RNC, Desvios e CQ, mais a paginação de documentos da Matriz de Treinamento (resolve o item 1 do backlog de escala da Fase 7). A seleção em lote habilitou "encerrar desvios em massa".
+  - **Ondas 5-6 — temas.** 4 temas novos, poda dos antigos, e paleta de dados única por tema (gráficos deixam de ter cores próprias descoladas do tema).
+  - **Onda 10 — code-splitting por aba** (Desvios, CQ, Documentos), fechando o item que estava em "melhorias técnicas".
+  - **Ondas 11-15 — campos append-only e edição de desvio.** Ver a seção própria abaixo.
+  - Fora da numeração: criar/editar usuário virou modal (antes era inline no meio da lista); tema, modo formal e a troca de navegação saíram do cabeçalho para o menu do avatar.
+  - Também na 3.0.0, fora da repaginação: **RAC ondas 11-12** — deliberação "Aprovar encerramento" e sinal de RNC emperrada na pauta (parte da Fase 2 da RAC, ver seção da RAC).
+
+- **RNC e Desvios — texto de registro vira append-only (ondas 11-15 da nova-ui, v3.0.0)** — descrição, ação de contenção (RNC) e ação imediata (desvio) eram texto livre **sobrescrito na edição**: o que estava escrito antes sumia e sobrava só um resumo `"campo: velho → novo"` perdido no `historico` genérico. Num SGQ o texto original **é a evidência** — corrigir não pode significar apagar. Regra pedida pelo usuário: o texto já salvo fica **no próprio campo**, em leitura, com **login, data e hora entre parênteses**, e o acréscimo entra **no fim**.
+  - ⚠️ **DECISÃO DE ARQUITETURA: o campo continua sendo UMA STRING, não virou array.** Tudo que lê `rnc.desc` / `desvio.acaoDesc` (PDF, Excel, e-mail, formulário do fornecedor, página pública do fornecedor, busca da lista, prefill desvio→RNC, indicadores) segue funcionando **sem alteração e sem migração de registro**. O que mudou é a **regra de escrita**: o texto gravado é prefixo imutável e a edição só acrescenta. Mesma razão do `userId` da Fase 6 e do nome do setor na etapa 3 dos catálogos.
+  - Peça compartilhada em `src/shared/campoHistoricoLogic.js` (pura, 17 testes) + `CampoHistorico.jsx` (tela). ⚠️ O nome do arquivo de lógica **tem de diferir do componente por mais que a caixa** — `campoHistorico.js` e `CampoHistorico.jsx` colidem no Windows (case-insensitive) e o import resolve para o módulo errado, quebrando o build. Daí a convenção `...Logic.js`, igual a `tableLogic.js`/`Table.jsx`.
+  - **O bloco original fica SEM carimbo de propósito** (sua autoria já está em "Registrado por X em Y"); só os acréscimos são carimbados. `blocosDoCampo` é **cosmético** — se o parse não reconhecer o formato, o bloco cai como texto puro, então registro antigo continua legível.
+  - `white-space: pre-wrap` no `.desc-box`/`.contencao-box` do PDF e na página pública do fornecedor: sem isso os acréscimos sairiam colados num parágrafo só **no papel**, que é justamente onde a evidência importa.
+  - **Desvio não tinha edição nenhuma** (onda 13). Agora edita **só desvio aberto** ("Registrado" — encerrado ou convertido em RNC é registro fechado), pela Qualidade (`triarDesvio`/admin) **ou por quem registrou** — o operador que digitou o setor errado precisa poder consertar sem depender de permissão de triagem. Junto entrou o **histórico do desvio na tela**: já era gravado desde sempre e nunca tinha sido exibido.
+  - ⚠️ **Nenhuma onda intermediária pode deixar o sistema num estado onde dá para sobrescrever registro.** Por isso a onda 13 (edição de desvio) saiu **sem** os campos de texto, que só entraram na onda 14 já travados — o contrário teria publicado justamente o buraco que o trabalho veio fechar.
+  - "Houve ação imediata?" **trava em "Sim"** quando já existe ação registrada: não se diz que não houve ação quando existe registro do que foi feito.
+  - **Encerramento de desvio (onda 15):** era um `window.prompt` de uma linha **pré-preenchido com a ação imediata de quem abriu**, pedindo para digitar por cima — duas coisas diferentes no mesmo campo. Agora um modal separa: a **ação imediata** fica à vista em leitura e a **justificativa do encerramento** é campo próprio, obrigatório, que nasce em branco. O encerramento **em lote** continua no prompt simples, por decisão do usuário (rotina de triagem em massa, justificativa igual para todos).
+  - **407 testes verdes** (390 → 407).
+
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
-- Code-splitting (bundle 605.4 kB)
+- **Inverter o padrão da navegação** (`sgq_nav`) depois de acompanhar a adoção da 3.0.0
 
 ### 🗓️ RNC — Reunião de Análise Crítica (RAC) — Fase 1 entregue em v2.22.0; Fases 2/3 pendentes
 Proposta visual original (14 seções, esboço de tela, data model): artifact `https://claude.ai/code/artifact/3cd73fc6-4888-4a7a-99ae-ee5d3fd36b22`.
@@ -362,7 +383,7 @@ O módulo já cobre o básico (planejamento + achados com tipo/ação/responsáv
 4. **Converter achado em RNC** — `AuditoriasTab` já recebe `rncs` e `doSaveRNC` por props mas não usa; achado de "Não conformidade" deveria virar RNC formal (5 Porquês + CAPA), como nos Desvios.
 
 ### Melhorias técnicas (paralelo)
-- **Code-splitting:** bundle 561.7 kB → lazy load por rota
+- ✅ **Code-splitting:** feito na onda 10 da nova-ui (Desvios, CQ, Documentos) — v3.0.0
+- ✅ **Keyboard navigation:** feita na onda 7 para o `Table.jsx` — v3.0.0 (falta o resto da aplicação)
 - **Testes unitários:** componentes shared
 - **Dark mode:** variante para Formal
-- **Keyboard navigation:** WCAG AA

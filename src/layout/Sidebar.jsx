@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useFormal } from "../core/theme";
 import { APP_VERSION_LABEL } from "../config/appVersion";
 import { MENU_SVG_ICONS } from "./menuIcons";
+import { montarGrupos } from "./navegacao";
 
 // Botão de item (folha do menu). padLeft controla o recuo — subitens de um
 // subgrupo recebem um recuo maior para deixar clara a hierarquia.
@@ -75,56 +76,9 @@ export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }
 }
 
 export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin, perm = () => true }) {
-  const GRUPOS = [
-    { id:"principal", icon:"📋", label:"RNCs", items:[
-      { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
-      ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
-      { id:"reunioes", icon:"🗓️", label:"Reuniões" },
-    ]},
-    { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
-      { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },
-      ...(!isViewer?[{ id:"novo-desvio", icon:"➕", label:"Novo Desvio" }]:[]),
-      { id:"indicadores-desvios", icon:"📊", label:"Indicadores" },
-    ]},
-    ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
-      { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
-      { id:"5w2h",     icon:"📋", label:"CAPA" },
-      { id:"eficacia", icon:"✅", label:"Eficácia" },
-      { id:"fmea",     icon:"⚠️", label:"FMEA" },
-    ]}]:[]),
-    { id:"cq", icon:"🧪", label:"Controle de Qualidade", items:[
-      { id:"recebimentos-areco", icon:"IN", label:"Recebimentos Areco" },
-{ id:"cq-materiais", icon:"🧪", label:"Entrada de Materiais" },
-      { id:"cq-analises",  icon:"📋", label:"Análises" },
-      { id:"cq-dashboard", icon:"📈", label:"Dashboard CQ" },
-      { id:"nqa",          icon:"📐", label:"NQA / AQL" },
-      { id:"revalidacao-sub", icon:"🔁", label:"Revalidações", subItems:[
-        { id:"revalidacao", icon:"📋", label:"Registros" },
-        ...(!isViewer?[{ id:"nova-revalidacao", icon:"➕", label:"Nova Revalidação" }]:[]),
-      ]},
-    ]},
-    { id:"producao", icon:"🏗️", label:"Produção", items:[
-      { id:"producao-processos", icon:"🏗️", label:"Controle de Processos" },
-      { id:"ipc",                icon:"🏭", label:"Controle de Processo IPC" },
-      { id:"ipc-produtos",       icon:"📦", label:"Produtos IPC" },
-    ]},
-    { id:"analise", icon:"📊", label:"Indicadores", items:[
-      { id:"dashboard",  icon:"📊", label:"Dashboard" },
-      { id:"cep",        icon:"📉", label:"CEP" },
-      { id:"relatorios", icon:"📑", label:"Relatórios" },
-    ]},
-    { id:"cadastros", icon:"🏢", label:"Cadastros", items:[
-      { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
-      { id:"clientes",     icon:"🏢", label:"Clientes Terceiros" },
-      { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
-    ]},
-    { id:"gestao", icon:"🗂️", label:"Documentos & Gestão", items:[
-      { id:"gestao-docs",  icon:"🗂️", label:"Gestão de Docs" },
-      { id:"auditorias",   icon:"🔍", label:"Auditorias" },
-      ...(isAdmin?[{ id:"audit-log", icon:"🛡️", label:"Trilha de Auditoria" }]:[]),
-      ...(isAdmin?[{ id:"admin",     icon:"⚙️", label:"Administração" }]:[]),
-    ]},
-  ];
+  // A estrutura do menu mora em `navegacao.js` — a barra lateral e a barra de abas
+  // leem a mesma fonte, para tela nova aparecer nas duas sem ninguém lembrar.
+  const GRUPOS = montarGrupos({ rncs, desvios, isViewer, isAdmin, perm });
 
   return (
     <div style={{ width:"100%", height:"100%", flexShrink:0, background:T.surf, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden" }}>
@@ -132,7 +86,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
         {GRUPOS.map(grupo=>(
           <SidebarGrupo
             key={grupo.id}
-            grupo={{ ...grupo, items:grupo.items.filter(item => item.id !== "laudos" || perm("verLaudos")) }}
+            grupo={grupo}
             tab={tab}
             setTab={setTab}
             sidebarOpen={sidebarOpen}

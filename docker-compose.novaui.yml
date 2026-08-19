@@ -1,0 +1,104 @@
+# Ambiente PARALELO para a repaginação da interface (branch feat/nova-ui).
+#
+# Sobe uma cópia completa do sistema — frontend, backend e banco próprios — para
+# a interface nova poder ser construída e comparada lado a lado com a atual, sem
+# encostar no ambiente de sempre.
+#
+#   atual  → http://localhost:9027   (docker-compose.yml)
+#   nova   → http://localhost:9030   (este arquivo)
+#
+# Subir:    docker compose -f docker-compose.novaui.yml -p sgq-novaui up --build -d
+# Derrubar: docker compose -f docker-compose.novaui.yml -p sgq-novaui down
+# Zerar:    docker compose -f docker-compose.novaui.yml -p sgq-novaui down -v
+#
+# Diferenças em relação ao docker-compose.yml, todas propositais:
+#  - nomes de container, portas publicadas e volume próprios (nada colide);
+#  - SEM a rede externa `herbamed_proxy` — este ambiente nunca deve ser alcançável
+#    pelo Nginx de produção;
+#  - sem o serviço de backup: é ambiente descartável;
+#  - ARECO_SYNC_ENABLED=false por padrão, para não sincronizar com o SQL Server real.
+#
+# Os aliases internos (`sgq-backend`) são os mesmos do ambiente atual de propósito:
+# cada projeto tem sua própria rede, então o nginx do frontend novo resolve o
+# backend novo sem precisar de um default.conf diferente.
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sgqnovaui-frontend
+    restart: unless-stopped
+    ports:
+      - "9030:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sgqnovaui-backend
+    restart: unless-stopped
+    ports:
+      - "9031:9028"
+    environment:
+      NODE_ENV: production
+      PORT: 9028
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-sgqherbamed}
+      POSTGRES_USER: ${POSTGRES_USER:-sgqherbamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgqherbamed_change_me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET obrigatorio no arquivo .env}
+      FILE_UPLOAD_MAX_BYTES: ${FILE_UPLOAD_MAX_BYTES:-52428800}
+      JSON_BODY_LIMIT_BYTES: ${JSON_BODY_LIMIT_BYTES:-80000000}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-Herba@123}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrador SGQ}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Ambiente de desenho: nunca sincroniza com o SQL Server da Areco.
+      ARECO_SYNC_ENABLED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - sgq-backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9028/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  db:
+    image: postgres:16-alpine
+    container_name: sgqnovaui-db
+    restart: unless-stopped
+    ports:
+      - "5488:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sgqherbamed}
+      POSTGRES_USER: ${POSTGRES_USER:-sgqherbamed}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgqherbamed_change_me}
+    volumes:
+      - sgqnovaui-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sgqnovaui-db-data:

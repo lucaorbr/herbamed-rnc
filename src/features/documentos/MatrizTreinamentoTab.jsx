@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
-import { SecTitle } from "../../shared/ui";
+import { SecTitle, usePagination, Pagination } from "../../shared/ui";
 import { tod, fmt } from "../../core/utils";
 import { saveCollection, getCollection } from "../../firebase";
 import {
@@ -62,6 +62,14 @@ export function MatrizTreinamentoTab({
     for (const l of matriz.linhas) if (l.cargoId) m.set(l.cargoId, l.cargoNome);
     return [...m.entries()];
   }, [matriz.linhas]);
+
+  // Com muitos documentos vigentes o cabeçalho vertical vira uma parede
+  // ilegível de colunas de 46px — pagina as colunas em vez de tentar caber
+  // tudo de uma vez. A % por pessoa e os KPIs continuam batendo com o total
+  // (matriz.colunas), só a grade visível é que é um recorte.
+  const DOCS_POR_PAGINA = 20;
+  const { paginated: colunasPaginadas, page: pagDocs, total: totalPagDocs, setPage: setPagDocs } =
+    usePagination(matriz.colunas, DOCS_POR_PAGINA);
 
   // ── Confirmar a própria leitura ────────────────────────────────────────────
   const confirmarLeitura = async (doc) => {
@@ -260,6 +268,15 @@ export function MatrizTreinamentoTab({
             Nenhuma pessoa encontrada com os filtros atuais.
           </div>
         ) : (
+          <>
+          {totalPagDocs > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: T.text3 }}>
+                Documentos {(pagDocs - 1) * DOCS_POR_PAGINA + 1}–{Math.min(pagDocs * DOCS_POR_PAGINA, matriz.colunas.length)} de {matriz.colunas.length}
+              </span>
+              <Pagination page={pagDocs} total={totalPagDocs} setPage={setPagDocs} />
+            </div>
+          )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: "100%" }}>
               <thead>
@@ -267,7 +284,7 @@ export function MatrizTreinamentoTab({
                   <th style={{ position: "sticky", left: 0, zIndex: 2, background: T.surf, padding: "8px 10px", textAlign: "left", color: T.text3, fontSize: 10, textTransform: "uppercase", borderBottom: `1px solid ${T.border}`, minWidth: 190 }}>
                     Colaborador
                   </th>
-                  {matriz.colunas.map(doc => (
+                  {colunasPaginadas.map(doc => (
                     <th key={doc.id} title={`${doc.codigo} — ${doc.titulo} (Rev.${doc.versao})`}
                       style={{ padding: "8px 6px", borderBottom: `1px solid ${T.border}`, background: T.surf, color: T.text3, fontSize: 10, fontWeight: 700, minWidth: 46, maxWidth: 46 }}>
                       <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap", maxHeight: 130, overflow: "hidden", margin: "0 auto", cursor: "pointer" }}
@@ -289,7 +306,7 @@ export function MatrizTreinamentoTab({
                         <div style={{ fontWeight: 600, color: T.text }}>{l.userName}</div>
                         <div style={{ fontSize: 10, color: T.text3 }}>{l.cargoNome || "—"}{l.setor ? ` · ${l.setor}` : ""}</div>
                       </td>
-                      {matriz.colunas.map(doc => {
+                      {colunasPaginadas.map(doc => {
                         const cel = l.celulas.get(String(doc.id));
                         if (!cel) return <td key={doc.id} style={{ borderBottom: `1px solid ${T.border}`, textAlign: "center", color: T.border }}>·</td>;
                         return (
@@ -310,6 +327,7 @@ export function MatrizTreinamentoTab({
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap", fontSize: 11, color: T.text3 }}>
           {Object.keys(COR).map(k => (

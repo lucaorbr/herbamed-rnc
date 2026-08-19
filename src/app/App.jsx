@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
@@ -11,9 +11,7 @@ import { AuditoriasTab } from "../features/auditorias/AuditoriasTab";
 import { Login } from "../features/auth/Login";
 import { CEPTab } from "../features/cep/CEPTab";
 import { ClientesTab } from "../features/clientes/ClientesTab";
-import { CQAnalisesTab, CQDashboardTab, CQMateriaisTab, CQTab } from "../features/cq/CQTabs";
 import { ExecutivoDashboard } from "../features/dashboard/ExecutivoDashboard";
-import { GestaoDocumentosTab } from "../features/documentos/GestaoDocumentosTab";
 import { EmailModal } from "../features/email/EmailModal";
 import { FMEATab } from "../features/fmea/FMEATab";
 import { FornecedoresTab } from "../features/fornecedores/FornecedoresTab";
@@ -22,7 +20,6 @@ import { LaudosTab } from "../features/laudos/LaudosTab";
 import { NQATab } from "../features/nqa/NQATab";
 import { PERMS_PADRAO } from "../features/permissions/permissions";
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
-import { DesviosTab } from "../features/desvios/DesviosTabs";
 import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { ConfiguracaoRevalidacaoTab } from "../features/revalidacao/ConfiguracaoRevalidacaoTab";
@@ -30,11 +27,40 @@ import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab,
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
-import { HerbamedLogo, ThemePicker, Toast } from "../shared/ui";
+import { TopNav } from "../layout/TopNav";
+import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
+import { HerbamedLogo, Toast } from "../shared/ui";
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
 import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
+
+// Code-splitting por aba (onda 10) — Desvios, CQ e Gestão de Documentos só
+// pesam no bundle de quem realmente abre essas abas. RNC (RncTabs.jsx) fica
+// de fora de propósito: HomeTab mora no mesmo arquivo e é a tela padrão da
+// casca antiga (tab inicial "home") — colocar esse módulo em lazy atrasaria
+// a primeira tela de quem ainda não está na navegação nova.
+function lazyNamed(loader, nome) {
+  return lazy(() => loader().then(m => ({ default: m[nome] })));
+}
+const desviosLoader = () => import("../features/desvios/DesviosTabs");
+const DesviosTab = lazyNamed(desviosLoader, "DesviosTab");
+
+const cqLoader = () => import("../features/cq/CQTabs");
+const CQTab = lazyNamed(cqLoader, "CQTab");
+const CQMateriaisTab = lazyNamed(cqLoader, "CQMateriaisTab");
+const CQAnalisesTab = lazyNamed(cqLoader, "CQAnalisesTab");
+const CQDashboardTab = lazyNamed(cqLoader, "CQDashboardTab");
+
+const GestaoDocumentosTab = lazyNamed(() => import("../features/documentos/GestaoDocumentosTab"), "GestaoDocumentosTab");
+
+function AbaCarregando() {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", padding: "4rem" }}>
+      <div style={{ width: 28, height: 28, border: "3px solid currentColor", opacity: .25, borderTopColor: "transparent", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
+    </div>
+  );
+}
 
 // Migração única (por sessão): copia registros da collection legada
 // "revalidacoes_grafico" para "revalidacoes", marcando o tipo como
@@ -58,7 +84,12 @@ async function migrarRevalidacoesLegado() {
 }
 
 export default function App() {
-  const [themeKey, setThemeKey] = useState(() => localStorage.getItem("hm_theme") || "herbamed");
+  // Fallback pra "herbamed": tema salvo pode ser de uma leva antiga (localStorage
+  // de sessão anterior) que não existe mais em THEMES depois de uma poda de temas.
+  const [themeKey, setThemeKey] = useState(() => {
+    const salvo = localStorage.getItem("hm_theme");
+    return salvo && THEMES[salvo] ? salvo : "herbamed";
+  });
   const [formalMode, setFormalMode] = useState(() => localStorage.getItem("hm_formal") === "true");
   const T = THEMES[themeKey];
   const changeTheme = key => { setThemeKey(key); localStorage.setItem("hm_theme", key); };
@@ -81,6 +112,15 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [tab, setTab] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Repaginação: navegação em abas no topo x barra lateral. Enquanto a nova casca
+  // amadurece, as duas convivem e a escolha fica por navegador — quem não gostar
+  // volta para a lateral sem depender de publicação.
+  const [navTopo, setNavTopo] = useState(() => localStorage.getItem("sgq_nav") === "topo");
+  const alternarNav = () => setNavTopo(v => {
+    const novo = !v;
+    localStorage.setItem("sgq_nav", novo ? "topo" : "lateral");
+    return novo;
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rncs, setRncs] = useState([]);
   const [desvios, setDesvios] = useState([]);
@@ -528,6 +568,9 @@ export default function App() {
           @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
           @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
           @keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+          @keyframes skeletonPulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
+          .skeleton-bar{animation:skeletonPulse 1.4s ease-in-out infinite;}
+          @media(prefers-reduced-motion:reduce){.skeleton-bar{animation:none;opacity:.75;}}
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           ${formalMode ? `
             button .emoji-hide, span.emoji-hide { display: none !important; }
@@ -578,14 +621,19 @@ export default function App() {
 
           {/* Left: toggle + logo */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            {/* Mobile hamburger */}
-            <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
-              ☰
-            </button>
-            {/* Desktop toggle */}
-            <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
-              {sidebarOpen ? "◀" : "▶"}
-            </button>
+            {/* Mobile hamburger — só na navegação lateral. Com as abas no topo não há
+                gaveta para abrir: o ☰ abria o overlay preto sobre nada. */}
+            {!navTopo && (
+              <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+                ☰
+              </button>
+            )}
+            {/* Desktop toggle — sem sentido quando a navegação está no topo */}
+            {!navTopo && (
+              <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+                {sidebarOpen ? "◀" : "▶"}
+              </button>
+            )}
             <div onClick={() => setTab("home")} style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center", cursor:"pointer" }} title="Ir para Home">
               <HerbamedLogo height={24} white={false} />
             </div>
@@ -610,10 +658,8 @@ export default function App() {
             ))}
           </div>
 
-          {/* Right: theme + notif + avatar */}
+          {/* Right: notif + avatar (tema, modo formal e navegação moraram pro menu do avatar) */}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div className="header-theme"><ThemePicker current={themeKey} onChange={changeTheme} formal={formalMode} onToggleFormal={toggleFormal} /></div>
-
             {/* Presentation mode button — admin/keyuser/rt only */}
             {["admin","keyuser","rt"].includes(user.role) && (
               <button onClick={() => setPresentationMode(true)} title="Modo Apresentação" style={{ background: T.accentDim, border: `1px solid ${T.accent}44`, borderRadius: 8, color: T.accent, cursor: "pointer", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
@@ -671,12 +717,42 @@ export default function App() {
                 <span style={{ color:T.text3, fontSize:10 }}>▾</span>
               </button>
               {avatarOpen && (
-                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:220, background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflow:"hidden", animation:"fadeIn .15s ease" }}>
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:240, maxHeight:"80vh", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflowX:"hidden", overflowY:"auto", animation:"fadeIn .15s ease" }}>
                   <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}` }}>
                     <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{user.name}</div>
                     <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{user.email}</div>
                     <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{user.setor}</div>
                   </div>
+
+                  {/* Modo Formal */}
+                  <button onClick={toggleFormal} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${T.border}`, color:T.text2 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:8 }}>📁 Modo Formal</span>
+                    <span style={{ flexShrink:0, width:34, height:19, borderRadius:20, background:formalMode?T.accent:T.border, position:"relative", transition:"background .2s" }}>
+                      <span style={{ position:"absolute", top:2, left:formalMode?17:2, width:15, height:15, borderRadius:"50%", background:"#fff", transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+                    </span>
+                  </button>
+
+                  {/* Navegação em abas vs. menu lateral */}
+                  <button onClick={()=>{ alternarNav(); setAvatarOpen(false); }} title={navTopo ? "Clique para voltar ao menu lateral" : "Clique para experimentar a navegação em abas"} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, borderBottom:`1px solid ${T.border}`, color:T.text2 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:8 }}>✨ Navegação em abas</span>
+                    <span style={{ flexShrink:0, width:34, height:19, borderRadius:20, background:navTopo?T.accent:T.border, position:"relative", transition:"background .2s" }}>
+                      <span style={{ position:"absolute", top:2, left:navTopo?17:2, width:15, height:15, borderRadius:"50%", background:"#fff", transition:"left .2s", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+                    </span>
+                  </button>
+
+                  {/* Tema */}
+                  <div style={{ padding:"10px 16px 6px", fontSize:10, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", fontWeight:700, borderBottom:`1px solid ${T.border}`, paddingBottom:8 }}>
+                    🎨 Tema
+                    <div style={{ display:"flex", flexDirection:"column", gap:2, marginTop:8 }}>
+                      {Object.entries(THEMES).map(([key, th]) => (
+                        <button key={key} onClick={()=>changeTheme(key)} style={{ display:"flex", alignItems:"center", gap:8, width:"100%", padding:"7px 10px", border:"none", background:themeKey===key?T.accentDim:"transparent", color:themeKey===key?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11.5, borderRadius:8, fontWeight:themeKey===key?600:400, textTransform:"none", letterSpacing:"normal" }}>
+                          <span style={{ width:11, height:11, borderRadius:"50%", background:th.accent, display:"inline-block", boxShadow:`0 0 5px ${th.accent}`, flexShrink:0 }} />
+                          {th.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {isAdmin && (
                     <button onClick={()=>{setTab("admin");setAvatarOpen(false);}} style={{ width:"100%", padding:"10px 16px", background:"none", border:"none", color:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>
                       ⚙️ Administração
@@ -694,18 +770,26 @@ export default function App() {
           </div>
         </div>
 
+        {/* ── BARRA DE ABAS (repaginação) ── */}
+        {navTopo && (
+          <TopNav tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+        )}
+
         {/* ── BODY: sidebar + content ── */}
         <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
-          {/* Mobile overlay */}
-          {mobileMenuOpen && (
+          {/* Mobile overlay — idem: sem gaveta, sem overlay (rede de segurança caso
+              o menu tenha ficado aberto quando a navegação foi trocada). */}
+          {mobileMenuOpen && !navTopo && (
             <div onClick={()=>setMobileMenuOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:290, backdropFilter:"blur(2px)" }} />
           )}
 
-          {/* SIDEBAR */}
-          <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-            <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
-          </div>
+          {/* SIDEBAR — só na navegação lateral (a de abas dispensa) */}
+          {navTopo ? null : (
+            <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
+              <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+            </div>
+          )}
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
@@ -727,7 +811,14 @@ export default function App() {
             )}
 
             <div style={{ padding: tab==="home" ? "0" : "1.5rem" }}>
-              {tab==="home"       && <HomeTab rncs={rncs} user={user} setTab={setTab} />}
+              {/* Na navegação nova, a tela inicial responde "o que precisa de mim
+                  agora"; na de sempre, segue a Home antiga. Andam juntas de
+                  propósito: quem volta para a lateral volta inteiro. */}
+              <Suspense fallback={<AbaCarregando />}>
+              {tab==="home" && (navTopo
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} perm={perm} docNotifs={docNotifs}
+                    colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
+                : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
@@ -761,6 +852,7 @@ export default function App() {
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}
+              </Suspense>
             </div>
           </div>
         </div>

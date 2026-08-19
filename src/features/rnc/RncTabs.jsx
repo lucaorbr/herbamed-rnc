@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada } from "../../core/status";
+import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada, tipoCor } from "../../core/status";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -11,8 +11,10 @@ import { useS } from "../../shared/styles";
 // AnexosUpload nasceu aqui e virou compartilhado (Desvios e lista de presença dos
 // treinamentos usam o mesmo). Reexportado para não quebrar quem importa de RncTabs.
 import { AnexosUpload, uploadAttachment } from "../../shared/AnexosUpload";
-import { usePagination } from "../../shared/ui";
-import { Badge, Divider, F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
+import { Badge, Divider, F, G2, G3, Inp, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
+import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoHistorico";
+import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
+import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 
@@ -300,6 +302,10 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
   const [sel, setSel] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  // Descrição e contenção não entram no editData: são append-only (onda 11). O que
+  // se digita aqui é só o ACRÉSCIMO — o texto já gravado nunca chega a um input.
+  const [addDesc, setAddDesc] = useState("");
+  const [addCont, setAddCont] = useState("");
   const [assinaturaModal, setAssinaturaModal] = useState(null);
   // Disposição do material
   const [dispForm, setDispForm] = useState(false);
@@ -397,31 +403,44 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
   const startEdit = (r) => {
     setEditData({
-      desc: r.desc || "", produto: r.produto || "", fornecedor: r.fornecedor || "",
+      produto: r.produto || "", fornecedor: r.fornecedor || "",
       lote: r.lote || "", nf: r.nf || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
       tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
       resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
-      prazoEfic: r.prazoEfic || "", contencao: r.contencao || "", respCont: r.respCont || "",
+      prazoEfic: r.prazoEfic || "", respCont: r.respCont || "",
     });
+    setAddDesc(""); setAddCont("");
     setEditing(true);
   };
 
   const saveEdit = async () => {
-    if (!editData.desc?.trim()) { alert("Descrição é obrigatória."); return; }
     const r = rncs.find(x => x.id === sel.id);
+    // Descrição segue obrigatória, mas agora só pode faltar em RNC que nunca teve
+    // uma — quem já tem descrição gravada não consegue esvaziá-la nem tentando.
+    if (campoVazio(r.desc) && campoVazio(addDesc)) { alert("Descrição é obrigatória."); return; }
 
-    // Detectar campos alterados para o histórico
+    // Detectar campos alterados para o histórico. Descrição e contenção saíram desta
+    // lista: são append-only e viram entrada própria, com o texto acrescentado inteiro.
+    // ⚠️ `campos` TEM DE COBRIR TUDO QUE O FORMULÁRIO EDITA. Com o early-return de
+    // "nada mudou" logo abaixo, um campo esquecido aqui não é só uma linha faltando
+    // no histórico: a edição inteira é descartada em silêncio. Setor, evidências,
+    // responsável da contenção e prazo de causa faltavam.
     const alterados = [];
-    const campos = { desc: "Descrição", produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", sev: "Severidade", tipo: "Tipo", resp: "Responsável", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", contencao: "Ação de Contenção" };
+    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
     Object.entries(campos).forEach(([k, label]) => {
       if ((r[k] || "") !== (editData[k] || "")) {
         alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
       }
     });
+    if (!campoVazio(addDesc)) alterados.push(`Descrição — acréscimo: "${resumoAcrescimo(addDesc)}"`);
+    if (!campoVazio(addCont)) alterados.push(`Ação de contenção — acréscimo: "${resumoAcrescimo(addCont)}"`);
 
+    if (!alterados.length) { setEditing(false); return; }
+
+    const agora = new Date();
     const h = {
       data: tod(),
-      hora: new Date().toLocaleTimeString("pt-BR"),
+      hora: agora.toLocaleTimeString("pt-BR"),
       acao: `RNC editada — ${alterados.length} campo(s) alterado(s)`,
       detalhes: alterados,
       resp: user.name,
@@ -430,14 +449,17 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
     let hist = [...(r?.historico || []), h];
     const patch = { ...editData };
+    if (!campoVazio(addDesc)) patch.desc = acrescentarAoCampo(r.desc, addDesc, user, agora);
+    if (!campoVazio(addCont)) patch.contencao = acrescentarAoCampo(r.contencao, addCont, user, agora);
     // Contenção registrada agora (estava vazia) = 1º ato de tratamento -> Em andamento.
-    const contNova = editData.contencao?.trim() && !(r.contencao || "").trim();
+    const contNova = !campoVazio(addCont) && campoVazio(r.contencao);
     const ap = contNova ? andamentoPatch(r, "contenção registrada", user.name) : null;
     if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; }
     patch.historico = hist;
     await doUpdateRNC(sel.id, patch);
     setSel(p => ({ ...p, ...patch }));
     setEditing(false);
+    setAddDesc(""); setAddCont("");
     toast_(ap ? "RNC atualizada — status movido para Em andamento." : "RNC atualizada com sucesso!", "green");
   };
 
@@ -445,20 +467,6 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
     if (!confirm("Excluir esta RNC permanentemente?")) return;
     await doDeleteRNC(id); setSel(null); toast_("RNC excluída.", "red");
   };
-
-  const [sortCol, setSortCol] = useState("data");
-  const [sortDir, setSortDir] = useState("desc");
-
-  const toggleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("asc"); }
-  };
-
-  const sorted = [...list].sort((a, b) => {
-    const va = a[sortCol] || ""; const vb = b[sortCol] || "";
-    return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
-  });
-  const {paginated:_rncs,page:_pgRNC,total:_totRNC,setPage:_setPgRNC} = usePagination(sorted, 20);
 
   // Steps de progresso da RNC
   const getRNCStep = (r) => {
@@ -471,11 +479,30 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
   const STEPS = ["Abertura", "Análise", "CAPA", "Eficácia"];
 
-  const thStyle = (col) => ({
-    padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color: sortCol===col?T.accent:T.text3,
-    textTransform:"uppercase", letterSpacing:".06em", cursor:"pointer", userSelect:"none",
-    borderBottom:`1px solid ${T.border}`, background:T.surf, whiteSpace:"nowrap",
-  });
+  const colunasRNC = [
+    { key: "num", label: "Nº", render: r => <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>{r.num}</span> },
+    { key: "status", label: "Status / Progresso", sortable: false, render: r => (
+      <div style={{ minWidth: 180 }}>
+        <Badge s={r.status} />
+        <div style={{ display: "flex", gap: 2, marginTop: 5 }}>
+          {STEPS.map((st, i) => (
+            <div key={st} title={st} style={{ flex: 1, height: 3, borderRadius: 2, background: i < getRNCStep(r) ? T.accent : T.border, transition: "background .3s" }} />
+          ))}
+        </div>
+      </div>
+    ) },
+    { key: "desc", label: "Descrição", maxWidth: 240, nowrap: true, render: r => r.desc },
+    { key: "tipo", label: "Tipo", render: r => (
+      <><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: tipoCor(r.tipo, T), marginRight: 4 }} />{r.tipo}</>
+    ) },
+    { key: "sev", label: "Sev.", render: r => <SevB s={r.sev} /> },
+    { key: "resp", label: "Responsável", render: r => r.resp || "—" },
+    { key: "data", label: "Data", render: r => fmt(r.data) },
+    { key: "prazoAC", label: "Prazo AC", render: r => {
+      const vencido = past(r.prazoAC) && rncAtiva(r.status);
+      return <span style={{ color: vencido ? T.red : T.text2, fontWeight: vencido ? 600 : 400 }}>{vencido ? "⚠ " : ""}{r.prazoAC ? fmt(r.prazoAC) : "—"}</span>;
+    } },
+  ];
 
   return (
     <div>
@@ -491,68 +518,22 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
       </div>
 
       {/* Tabela enterprise */}
-      {sorted.length === 0 ? (
-        <div style={{ textAlign:"center", padding:"4rem 2rem", color:T.text3, background:T.card, borderRadius:14, border:`1px solid ${T.border}` }}>
-          <div style={{ fontSize:48, marginBottom:"1rem", opacity:.3 }}>📋</div>
-          <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhuma RNC encontrada</div>
-          <div style={{ fontSize:12 }}>{isViewer?"Nenhuma não conformidade registrada.":"Clique em \"+ Nova RNC\" para começar."}</div>
-        </div>
-      ) : (
-        <>
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead>
-              <tr>
-                <th className="th-sort" style={thStyle("num")} onClick={()=>toggleSort("num")}>Nº {sortCol==="num"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
-                <th style={{...thStyle("status"),cursor:"default"}}>Status / Progresso</th>
-                <th className="th-sort" style={thStyle("desc")} onClick={()=>toggleSort("desc")}>Descrição</th>
-                <th className="th-sort" style={thStyle("tipo")} onClick={()=>toggleSort("tipo")}>Tipo</th>
-                <th className="th-sort" style={thStyle("sev")} onClick={()=>toggleSort("sev")}>Sev.</th>
-                <th className="th-sort" style={thStyle("resp")} onClick={()=>toggleSort("resp")}>Responsável</th>
-                <th className="th-sort" style={thStyle("data")} onClick={()=>toggleSort("data")}>Data {sortCol==="data"?(sortDir==="asc"?"↑":"↓"):"↕"}</th>
-                <th className="th-sort" style={thStyle("prazoAC")} onClick={()=>toggleSort("prazoAC")}>Prazo AC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {_rncs.map((r, idx) => {
-                const step = getRNCStep(r);
-                const vencido = past(r.prazoAC) && rncAtiva(r.status);
-                return (
-                  <tr key={r.id} className="rnc-row" onClick={()=>{setSel(r);setEditing(false);}} style={{ background: idx%2===0?T.card:T.surf, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, cursor:"pointer", transition:"background .15s" }}>
-                    <td style={{ padding:"10px 14px", fontSize:11, fontWeight:700, color:T.accent, whiteSpace:"nowrap" }}>{r.num}</td>
-                    <td style={{ padding:"10px 14px", minWidth:180 }}>
-                      <Badge s={r.status} />
-                      {/* Mini steps */}
-                      <div style={{ display:"flex", gap:2, marginTop:5 }}>
-                        {STEPS.map((st,i)=>(
-                          <div key={st} title={st} style={{ flex:1, height:3, borderRadius:2, background: i<step?T.accent:T.border, transition:"background .3s" }} />
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ padding:"10px 14px", fontSize:13, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.desc}</td>
-                    <td style={{ padding:"10px 14px", fontSize:11, color:T.text2, whiteSpace:"nowrap" }}>
-                      <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:TIPOC[r.tipo]||T.accent, marginRight:4 }} />
-                      {r.tipo}
-                    </td>
-                    <td style={{ padding:"10px 14px" }}><SevB s={r.sev} /></td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{r.resp||"—"}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, color:T.text2, whiteSpace:"nowrap" }}>{fmt(r.data)}</td>
-                    <td style={{ padding:"10px 14px", fontSize:12, whiteSpace:"nowrap", color: vencido?T.red:T.text2, fontWeight: vencido?600:400 }}>
-                      {vencido?"⚠ ":""}{r.prazoAC?fmt(r.prazoAC):"—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:11, color:T.text3, display:"flex", justifyContent:"space-between" }}>
-            <span>{sorted.length} registro(s) encontrado(s)</span>
-            <span>Clique em uma linha para ver detalhes</span>
-          </div>
-        </div>
-        <Pagination page={_pgRNC} total={_totRNC} setPage={_setPgRNC}/>
-      </>
+      {list.length > 0 && (
+        <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>{list.length} registro(s) encontrado(s) · clique em uma linha para ver detalhes</div>
       )}
+      <Table
+        columns={colunasRNC}
+        rows={list}
+        rowKey={r => r.id}
+        onRowClick={r => { setSel(r); setEditing(false); }}
+        rowAccent={r => SMETA[r.status]?.dot || T.accent}
+        sortColDefault="data"
+        sortDirDefault="desc"
+        perPage={20}
+        emptyIcon="📋"
+        emptyTitle="Nenhuma RNC encontrada"
+        emptySubtitle={isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}
+      />
 
       {/* MODAL */}
       {sel && (
@@ -626,11 +607,11 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="📋" ch="Descrição" />
-                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<TA rows={4} value={editData.desc} onChange={e => setEditData(p => ({ ...p, desc: e.target.value }))} />} />
+                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: reinspeção do lote confirmou 3% das unidades fora do padrão." />} />
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="⚡" ch="Ação de contenção" />
-                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
+                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<CampoHistoricoEdicao valorSalvo={sel.contencao} adicao={addCont} setAdicao={setAddCont} rows={3} placeholder="Ex.: lote transferido da quarentena para área de segregação definitiva." />} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <F lbl="Responsável" tip="Nome do responsável por verificar e atestar a eficácia da ação corretiva. Geralmente o RT ou coordenador de qualidade." tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
                   </div>
@@ -653,7 +634,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
               <div>
                 <div style={{ background: T.surf, borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Descrição</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.6 }}>{sel.desc}</div>
+                  <CampoHistoricoLeitura valor={sel.desc} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
                   {[["Produto", sel.produto], ["Fornecedor", sel.fornecedor], ["Lote", sel.lote], ["Nota Fiscal", sel.nf], ["Qtd.", sel.qtd], ["Responsável", sel.resp], ["Setor", sel.setor], ["Prazo AC", fmt(sel.prazoAC)], ["Prazo Eficácia", fmt(sel.prazoEfic)], ["Referência", sel.ref], ["Evidências", sel.evidencia]].filter(([, v]) => v).map(([k, v]) => (
@@ -663,7 +644,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     </div>
                   ))}
                 </div>
-                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><div style={{ fontSize: 13 }}>{sel.contencao}</div></div>}
+                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><CampoHistoricoLeitura valor={sel.contencao} compacto /></div>}
                 {sel.ishikawa?.root && <div style={{ background: T.accentDim, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: T.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>🎯 Causa raiz</div><div style={{ fontSize: 13, fontWeight: 500 }}>{sel.ishikawa.root}</div></div>}
 
                 {/* Anexos */}
@@ -1632,7 +1613,7 @@ export function DashTab({ rncs }) {
 
           {/* Barras por status e tipo */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,TIPOC]].map(([title,data,cm])=>(
+            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,Object.fromEntries(Object.keys(TIPOC).map(k=>[k,tipoCor(k,T)]))]].map(([title,data,cm])=>(
               <div key={title} style={{ ...s.card }}>
                 <SecTitle ch={title}/>
                 {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,n])=>{
@@ -2181,7 +2162,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,n],idx)=>{
             const max=Math.max(...Object.values(porTipo),1);
             const pct=Math.round(n/total*100);
-            const color=TIPOC[tipo]||T.accent;
+            const color=tipoCor(tipo,T);
             return <div key={tipo} style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12 }}>
               <div style={{ minWidth:24, width:24, height:24, borderRadius:"50%", background:`${color}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color, flexShrink:0 }}>{idx+1}</div>
               <div style={{ minWidth:180, fontSize:13, color:T.text, fontWeight:500 }}>{tipo}</div>

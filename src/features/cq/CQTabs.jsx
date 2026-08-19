@@ -6,8 +6,9 @@ import { openCOA } from "../rnc/RncTabs";
 import { askClaude } from "../../services/aiClient";
 import { uploadStoredFile } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
-import { usePagination } from "../../shared/ui";
-import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
+import { F, Inp, SecTitle, Sel, TA } from "../../shared/ui";
+import { Table } from "../../shared/Table";
+import { TableSkeleton, CardGridSkeleton } from "../../shared/Skeleton";
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
@@ -361,7 +362,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     } : null,
   });
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={6} cols={6} />;
 
   // ── NOVA FICHA ──
   if(view==="nova") {
@@ -832,14 +833,22 @@ export function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const [ftUploading, setFtUploading] = useState(null);
   const [filtroTipoLista, setFiltroTipoLista] = useState("Todos");
   const [buscaMatLista, setBuscaMatLista] = useState("");
-  const [pgMat, setPgMat] = useState(1);
-  const PER_PAGE_MAT = 15;
   const matFiltrados = materiais
     .filter(m => filtroTipoLista==="Todos" || materialBucket(m)===filtroTipoLista)
     .filter(m => matchesMaterialSearch(m, buscaMatLista));
-  const totMatPg = Math.ceil(matFiltrados.length / PER_PAGE_MAT) || 1;
-  const safePgMat = Math.min(pgMat, totMatPg);
-  const matPg = matFiltrados.slice((safePgMat-1)*PER_PAGE_MAT, safePgMat*PER_PAGE_MAT);
+  const colunasMateriais = [
+    { key: "nome", label: "Material", render: m => <span style={{ fontWeight: 600, color: T.text }}>{m.nome}</span> },
+    { key: "tipo", label: "Tipo" },
+    { key: "fornecedorPadrao", label: "Fornecedor padrão", accessor: m => m.fornecedorPadrao || "—" },
+    { key: "ensaios", label: "Ensaios", accessor: m => m.ensaios?.length || 0, render: m => <span style={{ color: T.accent, fontWeight: 700 }}>{m.ensaios?.length || 0}</span> },
+    { key: "ref", label: "Referência", accessor: m => m.ref || "—" },
+    { key: "acoes", label: "", sortable: false, render: m => (
+      <div style={{ display: "flex", gap: 6 }}>
+        <button style={{ ...s.btn, padding: "4px 10px", fontSize: 11, color: T.accent, borderColor: T.accent+"33", background: T.accentDim }} onClick={() => editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
+        <button style={{ ...s.btnD, padding: "4px 10px", fontSize: 11 }} onClick={() => delMaterial(m.id)}>🗑️</button>
+      </div>
+    ) },
+  ];
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   // Monta o nome de exibição a partir dos campos estruturados
@@ -1072,7 +1081,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     }
   };
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={7} cols={5} />;
 
   if(view==="lista") {
     return (
@@ -1093,49 +1102,29 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
           <div style={{ position:"relative", marginBottom:12 }}>
             <Inp
               value={buscaMatLista}
-              onChange={e=>{ setBuscaMatLista(e.target.value); setPgMat(1); }}
+              onChange={e=>setBuscaMatLista(e.target.value)}
               placeholder={`🔍 Buscar entre ${materiais.length} materiais por nome, referência, fornecedor ou código...`}
               sx={{ width:"100%", paddingRight:buscaMatLista?34:12 }}
             />
             {buscaMatLista && (
-              <button onClick={()=>{ setBuscaMatLista(""); setPgMat(1); }} title="Limpar busca" style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:T.text3, fontSize:16, cursor:"pointer", lineHeight:1 }}>×</button>
+              <button onClick={()=>setBuscaMatLista("")} title="Limpar busca" style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"transparent", border:"none", color:T.text3, fontSize:16, cursor:"pointer", lineHeight:1 }}>×</button>
             )}
           </div>
 
           {/* Filtro por tipo */}
           <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:12 }}>
             {CQ_TIPO_FILTROS.map(t=>(
-              <button key={t.id} onClick={()=>{ setFiltroTipoLista(t.id); setPgMat(1); }} style={{ padding:"4px 14px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipoLista===t.id?T.accent:T.border}`, background:filtroTipoLista===t.id?T.accentDim:"transparent", color:filtroTipoLista===t.id?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t.label}</button>
+              <button key={t.id} onClick={()=>setFiltroTipoLista(t.id)} style={{ padding:"4px 14px", fontSize:11, fontWeight:600, borderRadius:20, border:`1px solid ${filtroTipoLista===t.id?T.accent:T.border}`, background:filtroTipoLista===t.id?T.accentDim:"transparent", color:filtroTipoLista===t.id?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{t.label}</button>
             ))}
           </div>
 
-          <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse" }}>
-              <thead><tr style={{ background:T.surf }}>
-                {["Material","Tipo","Fornecedor padrão","Ensaios","Referência",""].map(h=>(
-                  <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {matPg.length===0 ? (
-                  <tr><td colSpan={6} style={{ padding:"2rem", textAlign:"center", color:T.text3, fontSize:13 }}>{buscaMatLista ? `Nenhum material encontrado para "${buscaMatLista}".` : "Nenhum material nesta categoria."}</td></tr>
-                ) : matPg.map((m,i)=>(
-                  <tr key={m.id} style={{ background:i%2===0?T.card:T.surf }}>
-                    <td style={{ padding:"10px 12px", fontSize:13, fontWeight:600, color:T.text }}>{m.nome}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.tipo}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.fornecedorPadrao||"—"}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.accent, fontWeight:700 }}>{m.ensaios?.length||0}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{m.ref||"—"}</td>
-                    <td style={{ padding:"10px 8px", display:"flex", gap:6 }}>
-                      <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
-                      <button style={{ ...s.btnD, padding:"4px 10px", fontSize:11 }} onClick={()=>delMaterial(m.id)}>🗑️</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={safePgMat} total={totMatPg} setPage={setPgMat} />
+          <Table
+            columns={colunasMateriais}
+            rows={matFiltrados}
+            rowKey={m => m.id}
+            perPage={15}
+            emptyTitle={buscaMatLista ? `Nenhum material encontrado para "${buscaMatLista}".` : "Nenhum material nesta categoria."}
+          />
         </>
       )}
     </div>
@@ -1549,9 +1538,26 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
     const concOk = filtroConc==="Todos" || a.conclusao===filtroConc;
     return textoOk && concOk;
   });
-  const { paginated: analisePg, page: pgAn, total: totAn, setPage: setPgAn } = usePagination(analiseFiltradas, 15);
+  const colunasAnalises = [
+    { key: "num", label: "Nº RA", render: a => <span style={{ fontWeight: 700, color: T.accent }}>{a.num}</span> },
+    { key: "materialNome", label: "Material" },
+    { key: "fornecedor", label: "Fornecedor", accessor: a => a.fornecedor || "—" },
+    { key: "lote", label: "Lote", accessor: a => a.lote || "—" },
+    { key: "dataAnalise", label: "Data", render: a => fmt(a.dataAnalise) },
+    { key: "resp", label: "Analista" },
+    { key: "conclusao", label: "Conclusão", render: a => {
+      const cc = a.conclusao;
+      const c = cc === "Aprovado" ? "#2ab84a" : cc === "Reprovado" ? "#ff4f6a" : "#ffd166";
+      return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: `${c}18`, padding: "3px 10px", borderRadius: 20 }}>
+        {cc === "Aprovado" ? "✅ Aprovado" : cc === "Reprovado" ? "❌ Reprovado" : "⏳ Pendente"}
+      </span>;
+    } },
+    { key: "acoes", label: "", sortable: false, render: a => (
+      <button style={{ ...s.btn, padding: "4px 8px", fontSize: 11, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212" }} onClick={e => { e.stopPropagation(); exportRA(a); }}><span className="btn-emoji">📄 </span>PDF</button>
+    ) },
+  ];
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <TableSkeleton rows={7} cols={7} />;
 
   // ── NOVA ANÁLISE ──
   const renderNovaForm = (modo="page") => (
@@ -1782,9 +1788,9 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
 
       {/* Filtros */}
       <div style={{ display:"flex", gap:10, marginBottom:"1rem", flexWrap:"wrap" }}>
-        <input value={filtroTexto} onChange={e=>{ setFiltroTexto(e.target.value); setPgAn(1); }} placeholder="Buscar por material, RA ou lote..." style={{ flex:1, minWidth:200, padding:"7px 12px", fontSize:13, borderRadius:8, border:`1px solid ${T.border}`, background:T.surf, color:T.text, outline:"none" }} />
+        <input value={filtroTexto} onChange={e=>setFiltroTexto(e.target.value)} placeholder="Buscar por material, RA ou lote..." style={{ flex:1, minWidth:200, padding:"7px 12px", fontSize:13, borderRadius:8, border:`1px solid ${T.border}`, background:T.surf, color:T.text, outline:"none" }} />
         {["Todos","Aprovado","Reprovado","Pendente"].map(c=>(
-          <button key={c} onClick={()=>{ setFiltroConc(c); setPgAn(1); }} style={{ padding:"6px 14px", fontSize:12, fontWeight:600, borderRadius:20, border:`1px solid ${filtroConc===c?T.accent:T.border}`, background:filtroConc===c?T.accentDim:"transparent", color:filtroConc===c?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{c}</button>
+          <button key={c} onClick={()=>setFiltroConc(c)} style={{ padding:"6px 14px", fontSize:12, fontWeight:600, borderRadius:20, border:`1px solid ${filtroConc===c?T.accent:T.border}`, background:filtroConc===c?T.accentDim:"transparent", color:filtroConc===c?T.accent:T.text2, cursor:"pointer", transition:"all .15s" }}>{c}</button>
         ))}
       </div>
 
@@ -1793,47 +1799,15 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
           <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>📋</div>
           <div style={{ fontSize:14, color:T.text2 }}>Nenhuma análise registrada</div>
         </div>
-      ) : analiseFiltradas.length===0 ? (
-        <div style={{ ...s.card, textAlign:"center", padding:"2rem" }}>
-          <div style={{ fontSize:13, color:T.text2 }}>Nenhuma análise encontrada com os filtros aplicados.</div>
-        </div>
       ) : (
-        <>
-        <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr style={{ background:T.surf }}>
-              {["Nº RA","Material","Fornecedor","Lote","Data","Analista","Conclusão",""].map(h=>(
-                <th key={h} style={{ padding:"10px 12px", fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", textAlign:"left", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {analisePg.map((a,i)=>{
-                const cc = a.conclusao;
-                const c = cc==="Aprovado"?"#2ab84a":cc==="Reprovado"?"#ff4f6a":"#ffd166";
-                return (
-                  <tr key={a.id} style={{ background:i%2===0?T.card:T.surf, cursor:"pointer" }} onClick={()=>setSelAnalise(a)}>
-                    <td style={{ padding:"10px 12px", fontSize:12, fontWeight:700, color:T.accent }}>{a.num}</td>
-                    <td style={{ padding:"10px 12px", fontSize:13, color:T.text }}>{a.materialNome}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.fornecedor||"—"}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.lote||"—"}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{fmt(a.dataAnalise)}</td>
-                    <td style={{ padding:"10px 12px", fontSize:12, color:T.text2 }}>{a.resp}</td>
-                    <td style={{ padding:"10px 12px" }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:c, background:`${c}18`, padding:"3px 10px", borderRadius:20 }}>
-                        {cc==="Aprovado"?"✅ Aprovado":cc==="Reprovado"?"❌ Reprovado":"⏳ Pendente"}
-                      </span>
-                    </td>
-                    <td style={{ padding:"10px 8px" }}>
-                      <button style={{ ...s.btn, padding:"4px 8px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={e=>{e.stopPropagation();exportRA(a);}}><span className="btn-emoji">📄 </span>PDF</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <Pagination page={pgAn} total={totAn} setPage={setPgAn} />
-        </>
+        <Table
+          columns={colunasAnalises}
+          rows={analiseFiltradas}
+          rowKey={a => a.id}
+          onRowClick={a => setSelAnalise(a)}
+          perPage={15}
+          emptyTitle="Nenhuma análise encontrada com os filtros aplicados."
+        />
       )}
 
       {/* Modal detalhe */}
@@ -1947,7 +1921,7 @@ export function CQDashboardTab() {
     return ()=>{ u1(); u2(); clearTimeout(t); };
   },[]);
 
-  if(loading) return <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando...</div>;
+  if(loading) return <CardGridSkeleton n={4} cols={4} />;
 
   // Filtrar por período
   const dataCorte = new Date();

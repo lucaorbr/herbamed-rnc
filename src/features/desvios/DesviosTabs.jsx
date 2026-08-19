@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
 import { useS } from "../../shared/styles";
-import { F, G2, G3, Inp, Pagination, SecTitle, Sel, SevB, TA, usePagination } from "../../shared/ui";
+import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoHistorico";
+import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
+import { Table } from "../../shared/Table";
 import { AnexosUpload } from "../rnc/RncTabs";
 import { DesviosIndicadores } from "./DesviosIndicadores";
 import { setoresDaHierarquia, normSetor } from "./fusaoSetores";
@@ -167,8 +170,65 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [fTipo, setFTipo] = useState(fIni.tipo || "");
   const [sel, setSel] = useState(null);
   const [reclassDim, setReclassDim] = useState(null); // "tipo" | "setor" | null
+  const [selecionados, setSelecionados] = useState(new Set());
+  const [editando, setEditando] = useState(false);
+  const [editData, setEditData] = useState({});
+  // Descrição e ação imediata são append-only: aqui vive só o ACRÉSCIMO.
+  const [addDesc, setAddDesc] = useState("");
+  const [addAcao, setAddAcao] = useState("");
+  const [encerrando, setEncerrando] = useState(null); // desvio em encerramento
+  useEffect(() => { setEditando(false); }, [sel?.id]);
+  // A seleção sobrevivia à troca de filtro, mas `encerrarSelecionados` só age sobre o
+  // que está filtrado: a barra dizia "5 selecionado(s)" e o encerramento fechava 2.
+  // Mudou o filtro, a seleção some — é a única leitura em que o contador não mente.
+  useEffect(() => { setSelecionados(new Set()); }, [fStatus, fSetor, fTipo, busca]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
+
+  // Só desvio ABERTO se edita: encerrado ou convertido em RNC é registro fechado, e
+  // registro fechado não se corrige — se estiver errado, o caminho é a trilha da RNC.
+  // Quem edita: a Qualidade (triagem) ou quem registrou — o operador que digitou o
+  // setor errado precisa poder consertar sem depender de alguém com permissão.
+  const podeEditar = (d) => !!d && d.status === "Registrado" && (podeTriar || d.registradoPor === user.name);
+
+  const abrirEdicao = (d) => {
+    setEditData({
+      dataOcorrencia: d.dataOcorrencia || "", setor: d.setor || "", setorOutro: d.setorOutro || "",
+      tipo: d.tipo || "", tipoOutro: d.tipoOutro || "", impacto: d.impacto || "Maior",
+      produto: d.produto || "", acaoImediata: d.acaoImediata || "Não",
+    });
+    setAddDesc(""); setAddAcao("");
+    setEditando(true);
+  };
+
+  const salvarEdicao = async () => {
+    const d = desvios.find(x => x.id === sel.id);
+    if (!editData.setor) { alert("Selecione o setor do desvio."); return; }
+    if (editData.setor === "Outros" && !editData.setorOutro.trim()) { alert("Especifique o setor do desvio (Outros)."); return; }
+    if (editData.tipo === "Outros" && !editData.tipoOutro.trim()) { alert("Especifique o tipo do desvio (Outros)."); return; }
+    if (editData.acaoImediata === "Sim" && campoVazio(d.acaoDesc) && campoVazio(addAcao)) { alert("Descreva a ação imediata adotada."); return; }
+
+    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", impacto: "Impacto", produto: "Produto / Lote", acaoImediata: "Houve ação imediata" };
+    const alterados = Object.entries(campos)
+      .filter(([k]) => (d[k] || "") !== (editData[k] || ""))
+      .map(([k, label]) => `${label}: "${d[k] || "—"}" → "${editData[k] || "—"}"`);
+    if (!campoVazio(addDesc)) alterados.push(`Descrição — acréscimo: "${resumoAcrescimo(addDesc)}"`);
+    if (!campoVazio(addAcao)) alterados.push(`Ação imediata — acréscimo: "${resumoAcrescimo(addAcao)}"`);
+    if (!alterados.length) { setEditando(false); return; }
+
+    const agora = new Date();
+    const patch = { ...editData };
+    if (!campoVazio(addDesc)) patch.desc = acrescentarAoCampo(d.desc, addDesc, user, agora);
+    if (!campoVazio(addAcao)) patch.acaoDesc = acrescentarAoCampo(d.acaoDesc, addAcao, user, agora);
+
+    const h = { data: tod(), hora: agora.toLocaleTimeString("pt-BR"), acao: `Desvio editado — ${alterados.length} campo(s) alterado(s)`, detalhes: alterados, resp: user.name };
+    const upd = { ...d, ...patch, historico: [...(d.historico || []), h] };
+    await doSaveDesvio(upd);
+    setSel(upd);
+    setEditando(false);
+    setAddDesc(""); setAddAcao("");
+    toast_(`${d.num} atualizado.`, "green");
+  };
 
   // Quantos desvios ainda estão como "Outros" com texto livre por dimensão (candidatos a reclassificar).
   const pendentesTipo  = desvios.filter(d => d.tipo === "Outros" && (d.tipoOutro || "").trim()).length;
@@ -185,21 +245,54 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       return [d.num, d.desc, d.setor, d.setorOutro, d.tipo, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
     });
 
-  const { paginated, page, total, setPage } = usePagination(filtrados, 15);
+  const colunasDesvio = [
+    { key: "num", label: "Nº", render: d => <span style={{ fontWeight: 700, color: T.accent }}>{d.num}</span> },
+    { key: "dataOcorrencia", label: "Data", render: d => fmt(d.dataOcorrencia) },
+    { key: "setor", label: "Setor", accessor: d => d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || "—") },
+    { key: "tipo", label: "Tipo", accessor: d => d.tipo === "Outros" ? (d.tipoOutro || "Outros") : d.tipo },
+    { key: "impacto", label: "Impacto", render: d => d.impacto ? <SevB s={d.impacto} /> : "—" },
+    { key: "desc", label: "Descrição", maxWidth: 280, render: d => d.desc },
+    { key: "status", label: "Status", render: d => <DesvioBadge status={d.status} /> },
+    { key: "triagem", label: "Triagem", sortable: false, render: d => <TriagemChip d={d} T={T} /> },
+  ];
 
   const abertos = desvios.filter(d => d.status === "Registrado").length;
   const encerrados = desvios.filter(d => d.status === "Encerrado").length;
   const convertidos = desvios.filter(d => d.status === "Convertido em RNC").length;
   const taxaRNC = desvios.length > 0 ? Math.round(convertidos / desvios.length * 100) : 0;
 
-  const encerrar = async (d) => {
-    const motivo = window.prompt("Justificativa do encerramento (ação imediata sanou o desvio):", d.acaoDesc || "");
-    if (motivo === null) return;
+  // O encerramento individual saiu do window.prompt: ele vinha pré-preenchido com a
+  // ação imediata de QUEM ABRIU e pedia para digitar por cima, misturando duas coisas
+  // diferentes no mesmo campo. Agora a ação imediata fica à vista, em leitura, e a
+  // justificativa de quem encerra é campo próprio.
+  const encerrar = async (d, motivo) => {
     const upd = { ...d, status: "Encerrado", encerradoPor: user.name, encerradoEm: tod(), encerramentoMotivo: motivo,
-      historico: [...(d.historico || []), { data: tod(), acao: "Encerrado — ação imediata", resp: user.name }] };
+      historico: [...(d.historico || []), { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Encerrado — ação imediata", detalhes: [motivo], resp: user.name }] };
     await doSaveDesvio(upd);
+    setEncerrando(null);
     setSel(null);
     toast_(`${d.num} encerrado.`, "green");
+  };
+
+  // Encerrar em lote — a extensão natural do Table.jsx da onda 9: rotina de
+  // triagem tem muito "sim, ação imediata resolveu" repetido um a um. Só os
+  // "Registrado" da seleção entram; o resto (já encerrado/convertido/etc.)
+  // é ignorado em silêncio — selecionar tudo numa página mista não deve travar.
+  const encerrarSelecionados = async () => {
+    const alvos = filtrados.filter(d => selecionados.has(d.id) && d.status === "Registrado");
+    if (alvos.length === 0) {
+      toast_("Nenhum dos selecionados está 'Registrado' — só esses podem ser encerrados em lote.", "red");
+      return;
+    }
+    const motivo = window.prompt(`Justificativa do encerramento em lote (${alvos.length} desvio(s) selecionado(s)):`);
+    if (motivo === null) return;
+    for (const d of alvos) {
+      const upd = { ...d, status: "Encerrado", encerradoPor: user.name, encerradoEm: tod(), encerramentoMotivo: motivo,
+        historico: [...(d.historico || []), { data: tod(), acao: "Encerrado — ação imediata (lote)", resp: user.name }] };
+      await doSaveDesvio(upd);
+    }
+    setSelecionados(new Set());
+    toast_(`${alvos.length} desvio(s) encerrado(s) em lote.`, "green");
   };
 
   const converter = (d) => {
@@ -282,40 +375,29 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
         </div>
       </div>
 
+      {/* Seleção em lote */}
+      {podeTriar && selecionados.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", marginBottom: 10, background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>{selecionados.size} selecionado(s)</span>
+          <button style={s.btnA} onClick={encerrarSelecionados}>✅ Encerrar selecionados</button>
+          <button style={s.btn} onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
+        </div>
+      )}
+
       {/* Tabela */}
-      <div style={{ ...s.card, padding: 0, overflowX: "auto" }}>
-        {filtrados.length === 0 ? (
-          <div style={{ padding: "3rem", textAlign: "center", color: T.text3, fontSize: 13 }}>Nenhum desvio registrado ainda.</div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: T.surf, color: T.text3, fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em" }}>
-                {["Nº", "Data", "Setor", "Tipo", "Impacto", "Descrição", "Status", "Triagem", ""].map(h => (
-                  <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, borderBottom: `1px solid ${T.border}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map(d => (
-                <tr key={d.id} onClick={() => setSel(d)} style={{ cursor: "pointer", borderBottom: `1px solid ${T.border}` }}
-                  onMouseEnter={e => e.currentTarget.style.background = T.card2}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <td style={{ padding: "10px 12px", fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{d.num}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2, whiteSpace: "nowrap" }}>{fmt(d.dataOcorrencia)}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.setor === "Outros" ? d.setorOutro || "Outros" : d.setor || "—"}</td>
-                  <td style={{ padding: "10px 12px", color: T.text2 }}>{d.tipo === "Outros" ? d.tipoOutro || "Outros" : d.tipo}</td>
-                  <td style={{ padding: "10px 12px" }}>{d.impacto ? <SevB s={d.impacto} /> : "—"}</td>
-                  <td style={{ padding: "10px 12px", color: T.text, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</td>
-                  <td style={{ padding: "10px 12px" }}><DesvioBadge status={d.status} /></td>
-                  <td style={{ padding: "10px 12px" }}><TriagemChip d={d} T={T} /></td>
-                  <td style={{ padding: "10px 12px", color: T.text3, fontSize: 16 }}>›</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <Pagination page={page} total={total} setPage={setPage} />
-      </div>
+      <Table
+        columns={colunasDesvio}
+        rows={filtrados}
+        rowKey={d => d.id}
+        onRowClick={d => setSel(d)}
+        sortColDefault="dataOcorrencia"
+        sortDirDefault="desc"
+        perPage={15}
+        emptyTitle="Nenhum desvio registrado ainda."
+        selectable={podeTriar}
+        selected={selecionados}
+        onSelectedChange={setSelecionados}
+      />
 
       {/* Modal de detalhe / triagem */}
       {sel && (
@@ -327,16 +409,68 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                 <DesvioBadge status={sel.status} />
                 {sel.impacto && <SevB s={sel.impacto} />}
               </div>
-              <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {podeEditar(sel) && !editando && (
+                  <button onClick={() => abrirEdicao(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
+                )}
+                <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
+              </div>
             </div>
             <div style={{ padding: "1.5rem" }}>
+              {editando ? (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: T.accent }}>
+                    ✏️ Modo edição — as alterações ficam registradas no histórico do desvio.
+                  </div>
+                  <G2 ch={<>
+                    <F lbl="Data da ocorrência" ch={<Inp type="date" value={editData.dataOcorrencia} onChange={e => setEditData(p => ({ ...p, dataOcorrencia: e.target.value }))} />} />
+                    <F lbl="Impacto" ch={<Sel value={editData.impacto} onChange={e => setEditData(p => ({ ...p, impacto: e.target.value }))}>{IMPACTOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+                  </>} />
+                  <F lbl="Setor *" ch={
+                    <div>
+                      <Sel value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))}><option value="">Selecione...</option>{setoresParaFiltro(setoresDesvio, desvios).map(x => <option key={x}>{x}</option>)}</Sel>
+                      {editData.setor === "Outros" && <Inp placeholder="Especifique o setor..." value={editData.setorOutro} onChange={e => setEditData(p => ({ ...p, setorOutro: e.target.value }))} sx={{ marginTop: 8 }} />}
+                    </div>
+                  } />
+                  <F lbl="Tipo do desvio" ch={
+                    <div>
+                      <Sel value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))}>{[...new Set([...tiposDesvio, editData.tipo].filter(Boolean))].map(x => <option key={x}>{x}</option>)}</Sel>
+                      {editData.tipo === "Outros" && <Inp placeholder="Especifique o tipo..." value={editData.tipoOutro} onChange={e => setEditData(p => ({ ...p, tipoOutro: e.target.value }))} sx={{ marginTop: 8 }} />}
+                    </div>
+                  } />
+                  <F lbl="Produto / Lote" ch={<Inp placeholder="Ex: Calcivitam D3 — Lote 2025-001" value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
+                  <F lbl="Descrição do desvio *" tip="O texto já registrado é evidência e não se altera. Para corrigir ou complementar, escreva o acréscimo — ele entra no fim, com seu login, data e hora." ch={
+                    <CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: na verdade a parada foi na encapsuladora 03, não na 02." />
+                  } />
+                  {/* Com ação imediata já registrada o campo trava em "Sim": não se pode
+                      dizer que não houve ação quando existe registro do que foi feito. */}
+                  <F lbl="Houve ação imediata?" ch={
+                    campoVazio(sel.acaoDesc)
+                      ? <Sel value={editData.acaoImediata} onChange={e => setEditData(p => ({ ...p, acaoImediata: e.target.value }))}><option>Não</option><option>Sim</option></Sel>
+                      : <div style={{ fontSize: 13, color: T.text2 }}>Sim — já há ação imediata registrada</div>
+                  } />
+                  {editData.acaoImediata === "Sim" && (
+                    <F lbl="Ação imediata adotada *" ch={
+                      <CampoHistoricoEdicao valorSalvo={sel.acaoDesc} adicao={addAcao} setAdicao={setAddAcao} rows={3} placeholder="Ex.: material segregado também no lote seguinte, após reinspeção." />
+                    } />
+                  )}
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button style={s.btn} onClick={() => setEditando(false)}>Cancelar edição</button>
+                    <button style={s.btnA} onClick={salvarEdicao}>💾 Salvar alterações</button>
+                  </div>
+                </div>
+              ) : (
+              <>
               <Campo T={T} l="Data da ocorrência" v={fmt(sel.dataOcorrencia)} />
               <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros — ${sel.setorOutro || ""}` : sel.setor} />
               <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros — ${sel.tipoOutro || ""}` : sel.tipo} />
-              <Campo T={T} l="Descrição do desvio" v={sel.desc} bloco />
+              <CampoBloco T={T} l="Descrição do desvio" v={sel.desc} />
               {sel.produto && <Campo T={T} l="Produto / Lote" v={sel.produto} />}
               <Campo T={T} l="Houve ação imediata?" v={sel.acaoImediata || "—"} />
-              {sel.acaoImediata === "Sim" && <Campo T={T} l="Ação imediata adotada" v={sel.acaoDesc} bloco />}
+              {sel.acaoImediata === "Sim" && <CampoBloco T={T} l="Ação imediata adotada" v={sel.acaoDesc} />}
+              {/* Justificativa do encerramento sobe para o corpo: é decisão da triagem,
+                  não um detalhe de rodapé como era quando cabia numa linha do prompt. */}
+              {sel.status === "Encerrado" && sel.encerramentoMotivo && <CampoBloco T={T} l="Justificativa do encerramento" v={sel.encerramentoMotivo} />}
               {sel.anexos?.length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
@@ -350,24 +484,57 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.text3 }}>
                 Registrado por <strong style={{ color: T.text2 }}>{sel.registradoPor}</strong> em {fmt(sel.dataRegistro)}
                 {(() => { const st = triagemStatus(sel); return st && <div style={{ marginTop: 4, color: st.atrasado ? T.yellow : T.text3, fontWeight: st.atrasado ? 700 : 400 }}>{st.atrasado ? "⚠️ " : ""}Aguardando triagem há {st.dias} dia(s) — meta: {META_TRIAGEM_DIAS} dias{st.atrasado ? " (atrasado)" : ""}</div>; })()}
-                {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}{sel.encerramentoMotivo ? ` — ${sel.encerramentoMotivo}` : ""}</div>}
+                {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}</div>}
                 {sel.status === "Convertido em RNC" && <div style={{ marginTop: 4 }}>Convertido por {sel.convertidoPor} em {fmt(sel.convertidoEm)}{sel.rncNum ? ` → ${sel.rncNum}` : ""}</div>}
               </div>
+              {/* Histórico — já era gravado desde sempre, mas nunca tinha sido exibido.
+                  Com a edição na tela, é ele que prova o que mudou, quem mudou e quando. */}
+              {sel.historico?.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>🕓 Histórico</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[...sel.historico].reverse().map((h, i) => (
+                      <div key={i} style={{ background: T.surf, borderLeft: `3px solid ${T.border2}`, borderRadius: "0 8px 8px 0", padding: "8px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, color: T.text }}>{h.acao}</span>
+                          <span style={{ fontSize: 10, color: T.text3, whiteSpace: "nowrap" }}>{fmt(h.data)}{h.hora ? ` · ${h.hora}` : ""}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: T.text3, marginTop: 2 }}>por {h.resp}</div>
+                        {h.detalhes?.length > 0 && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: T.text2, display: "flex", flexDirection: "column", gap: 2 }}>
+                            {h.detalhes.map((dt, j) => <div key={j}>• {dt}</div>)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </>
+              )}
             </div>
             {/* Ações de triagem */}
-            {sel.status === "Registrado" && podeTriar && (
+            {sel.status === "Registrado" && podeTriar && !editando && (
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, flexWrap: "wrap", position: "sticky", bottom: 0, background: T.bg }}>
-                <button onClick={() => encerrar(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>✓ Encerrar (ação imediata)</button>
+                <button onClick={() => setEncerrando(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>✓ Encerrar (ação imediata)</button>
                 <button onClick={() => converter(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>↗ Converter em RNC</button>
               </div>
             )}
-            {(isAdmin || perm("triarDesvio")) && (
+            {(isAdmin || perm("triarDesvio")) && !editando && (
               <div style={{ padding: "0 1.5rem 1.2rem", textAlign: "right" }}>
                 <button onClick={() => excluir(sel)} style={{ background: "none", border: "none", color: "#ff4f6a", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Excluir desvio</button>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {encerrando && (
+        <EncerrarDesvioModal
+          d={encerrando}
+          onCancel={() => setEncerrando(null)}
+          onConfirm={motivo => encerrar(encerrando, motivo)}
+        />
       )}
 
       {reclassDim && (
@@ -527,6 +694,67 @@ function Campo({ T, l, v, bloco }) {
     <div style={{ marginBottom: bloco ? 12 : 8, display: bloco ? "block" : "flex", gap: 8 }}>
       <div style={{ fontSize: 11, color: T.text3, fontWeight: 600, minWidth: bloco ? "auto" : 150, marginBottom: bloco ? 4 : 0 }}>{l}</div>
       <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", flex: 1 }}>{v}</div>
+    </div>
+  );
+}
+
+// ── Encerramento do desvio ──
+// Duas coisas diferentes que o window.prompt antigo colapsava num campo só: a AÇÃO
+// IMEDIATA é de quem abriu o desvio e fica em leitura (é registro, não rascunho de
+// justificativa); a JUSTIFICATIVA DO ENCERRAMENTO é de quem tria e nasce em branco.
+function EncerrarDesvioModal({ d, onCancel, onConfirm }) {
+  const T = useTheme(); const s = useS();
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const temAcao = d.acaoImediata === "Sim" && !campoVazio(d.acaoDesc);
+
+  const confirmar = async () => {
+    if (campoVazio(motivo)) { alert("Escreva a justificativa do encerramento."); return; }
+    setSalvando(true);
+    try { await onConfirm(motivo.trim()); } finally { setSalvando(false); }
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 14, maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px #000a", padding: "1.5rem" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Encerrar {d.num}</div>
+        <div style={{ fontSize: 12, color: T.text3, marginBottom: 16 }}>
+          Encerrar significa que o desvio foi sanado e não vira RNC. O registro fica fechado depois disso.
+        </div>
+
+        <div style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>
+            ⚡ Ação imediata registrada na abertura
+          </div>
+          {temAcao
+            ? <CampoHistoricoLeitura valor={d.acaoDesc} compacto />
+            : <div style={{ fontSize: 13, color: T.text3 }}>Nenhuma ação imediata foi registrada por quem abriu o desvio.</div>}
+        </div>
+
+        <F lbl="Justificativa do encerramento *" tip="Por que este desvio pode ser encerrado sem virar RNC. É o registro de quem tria, não o de quem abriu." ch={
+          <TA rows={4} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: ação imediata sanou o desvio, sem impacto no produto; lote conferido e conforme." />
+        } />
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+          <button style={s.btn} onClick={onCancel}>Cancelar</button>
+          <button onClick={confirmar} disabled={salvando} style={{ padding: "9px 20px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: salvando ? "default" : "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, opacity: salvando ? .6 : 1 }}>
+            {salvando ? "Encerrando..." : "✓ Encerrar desvio"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Campo append-only (descrição e ação imediata): mesma moldura do `Campo` em modo
+// bloco, mas o valor passa pelo `CampoHistoricoLeitura` para os acréscimos saírem
+// destacados com quem escreveu e quando.
+function CampoBloco({ T, l, v }) {
+  if (campoVazio(v)) return null;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: T.text3, fontWeight: 600, marginBottom: 4 }}>{l}</div>
+      <CampoHistoricoLeitura valor={v} compacto />
     </div>
   );
 }

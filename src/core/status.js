@@ -32,3 +32,17 @@ export const TIPOC = {
   "Ambiental":           "#5dd4b0",
   "Outros":              "#94a3b8",
 };
+
+// Ordem fixa que indexa TIPOC <-> T.dataviz — "Outros" fica de fora de propósito
+// (cai no cinza neutro do fallback, correto para uma categoria catch-all).
+const TIPO_ORDEM = Object.keys(TIPOC).filter(t => t !== "Outros");
+
+// Cor de um tipo de RNC no tema ativo. Cada tema pode declarar `dataviz` (paleta
+// categórica própria, tunada pro fundo dele) — mesma posição na lista = mesma
+// categoria em qualquer tela (tabela, dashboard "Por Tipo"). Sem tema ou tema sem
+// `dataviz`, cai no TIPOC fixo de sempre (zero mudança pros temas que não o declaram).
+export function tipoCor(tipo, T) {
+  const i = TIPO_ORDEM.indexOf(tipo);
+  if (T?.dataviz && i >= 0 && T.dataviz[i]) return T.dataviz[i];
+  return TIPOC[tipo] || T?.accent || "#94a3b8";
+}
