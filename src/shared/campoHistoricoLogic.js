@@ -1,4 +1,5 @@
 // Campo de texto append-only (onda 11) — lógica pura, testável sem montar componente.
+// Par de `CampoHistorico.jsx` (a tela), na mesma convenção de `tableLogic.js`/`Table.jsx`.
 //
 // PROBLEMA: descrição de RNC/desvio e ação de contenção/imediata eram texto livre
 // sobrescrito na edição. O que estava escrito antes sumia; sobrava só um resumo

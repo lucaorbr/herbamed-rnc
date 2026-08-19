@@ -1,7 +1,7 @@
 import React from "react";
 import { useTheme } from "../core/theme";
 import { useS } from "./styles";
-import { blocosDoCampo, campoVazio } from "./campoHistorico";
+import { blocosDoCampo, campoVazio } from "./campoHistoricoLogic";
 
 // Campo de texto append-only — a peça visual da onda 11. A regra e o formato moram
 // em `campoHistorico.js`; aqui é só a tela. Ver a decisão de arquitetura lá em cima

@@ -164,8 +164,10 @@ export function exportRNCPDF(rnc, assinatura = null) {
   .section-title::before{content:'';display:inline-block;width:3px;height:12px;background:#1a4a2e;border-radius:2px;}
   .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
   .field-value{font-size:12px;color:#1a1a1a;font-weight:500;}
-  .desc-box{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#1a1a1a;}
-  .contencao-box{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;}
+  /* pre-wrap: descrição e contenção são campos append-only (onda 11) — os acréscimos
+     carimbados são separados por linha em branco e precisam sair separados no papel. */
+  .desc-box{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;}
+  .contencao-box{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;}
   .causa-box{background:#e8f5e9;border:2px solid #1a4a2e;border-radius:8px;padding:12px;font-size:13px;font-weight:600;color:#1a4a1a;}
   .step{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
   .step-num{width:24px;height:24px;border-radius:50%;background:#1a4a2e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}

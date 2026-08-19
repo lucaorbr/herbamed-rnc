@@ -1,7 +1,7 @@
 import {
   SEP_BLOCO, identificacaoUsuario, carimbo, campoVazio,
   acrescentarAoCampo, blocosDoCampo, resumoAcrescimo,
-} from "./campoHistorico";
+} from "./campoHistoricoLogic";
 
 const user = { name: "Lucas Ribeiro", email: "lucas.ribeiro@herbamed.com.br" };
 const quando = new Date(2026, 7, 19, 14, 32); // 19/08/2026 14:32 (mês 7 = agosto)

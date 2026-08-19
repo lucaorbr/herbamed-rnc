@@ -142,7 +142,9 @@ export function SupplierRNCPage({ token }) {
         ].map(([k, v]) => (
           <div key={k} style={s.row}>
             <div style={s.kv_k}>{k}</div>
-            <div style={s.kv_v}>{v}</div>
+            {/* pre-wrap: descrição e contenção são append-only (onda 11) e chegam com
+                os acréscimos carimbados separados por linha em branco. */}
+            <div style={{ ...s.kv_v, whiteSpace: "pre-wrap" }}>{v}</div>
           </div>
         ))}
       </div>

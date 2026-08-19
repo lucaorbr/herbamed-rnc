@@ -12,6 +12,8 @@ import { useS } from "../../shared/styles";
 // treinamentos usam o mesmo). Reexportado para não quebrar quem importa de RncTabs.
 import { AnexosUpload, uploadAttachment } from "../../shared/AnexosUpload";
 import { Badge, Divider, F, G2, G3, Inp, SecTitle, Sel, SevB, StatusBadge, TA } from "../../shared/ui";
+import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoHistorico";
+import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
@@ -300,6 +302,10 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
   const [sel, setSel] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  // Descrição e contenção não entram no editData: são append-only (onda 11). O que
+  // se digita aqui é só o ACRÉSCIMO — o texto já gravado nunca chega a um input.
+  const [addDesc, setAddDesc] = useState("");
+  const [addCont, setAddCont] = useState("");
   const [assinaturaModal, setAssinaturaModal] = useState(null);
   // Disposição do material
   const [dispForm, setDispForm] = useState(false);
@@ -397,31 +403,40 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
   const startEdit = (r) => {
     setEditData({
-      desc: r.desc || "", produto: r.produto || "", fornecedor: r.fornecedor || "",
+      produto: r.produto || "", fornecedor: r.fornecedor || "",
       lote: r.lote || "", nf: r.nf || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
       tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
       resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
-      prazoEfic: r.prazoEfic || "", contencao: r.contencao || "", respCont: r.respCont || "",
+      prazoEfic: r.prazoEfic || "", respCont: r.respCont || "",
     });
+    setAddDesc(""); setAddCont("");
     setEditing(true);
   };
 
   const saveEdit = async () => {
-    if (!editData.desc?.trim()) { alert("Descrição é obrigatória."); return; }
     const r = rncs.find(x => x.id === sel.id);
+    // Descrição segue obrigatória, mas agora só pode faltar em RNC que nunca teve
+    // uma — quem já tem descrição gravada não consegue esvaziá-la nem tentando.
+    if (campoVazio(r.desc) && campoVazio(addDesc)) { alert("Descrição é obrigatória."); return; }
 
-    // Detectar campos alterados para o histórico
+    // Detectar campos alterados para o histórico. Descrição e contenção saíram desta
+    // lista: são append-only e viram entrada própria, com o texto acrescentado inteiro.
     const alterados = [];
-    const campos = { desc: "Descrição", produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", sev: "Severidade", tipo: "Tipo", resp: "Responsável", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", contencao: "Ação de Contenção" };
+    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", sev: "Severidade", tipo: "Tipo", resp: "Responsável", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
     Object.entries(campos).forEach(([k, label]) => {
       if ((r[k] || "") !== (editData[k] || "")) {
         alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
       }
     });
+    if (!campoVazio(addDesc)) alterados.push(`Descrição — acréscimo: "${resumoAcrescimo(addDesc)}"`);
+    if (!campoVazio(addCont)) alterados.push(`Ação de contenção — acréscimo: "${resumoAcrescimo(addCont)}"`);
 
+    if (!alterados.length) { setEditing(false); return; }
+
+    const agora = new Date();
     const h = {
       data: tod(),
-      hora: new Date().toLocaleTimeString("pt-BR"),
+      hora: agora.toLocaleTimeString("pt-BR"),
       acao: `RNC editada — ${alterados.length} campo(s) alterado(s)`,
       detalhes: alterados,
       resp: user.name,
@@ -430,14 +445,17 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
     let hist = [...(r?.historico || []), h];
     const patch = { ...editData };
+    if (!campoVazio(addDesc)) patch.desc = acrescentarAoCampo(r.desc, addDesc, user, agora);
+    if (!campoVazio(addCont)) patch.contencao = acrescentarAoCampo(r.contencao, addCont, user, agora);
     // Contenção registrada agora (estava vazia) = 1º ato de tratamento -> Em andamento.
-    const contNova = editData.contencao?.trim() && !(r.contencao || "").trim();
+    const contNova = !campoVazio(addCont) && campoVazio(r.contencao);
     const ap = contNova ? andamentoPatch(r, "contenção registrada", user.name) : null;
     if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; }
     patch.historico = hist;
     await doUpdateRNC(sel.id, patch);
     setSel(p => ({ ...p, ...patch }));
     setEditing(false);
+    setAddDesc(""); setAddCont("");
     toast_(ap ? "RNC atualizada — status movido para Em andamento." : "RNC atualizada com sucesso!", "green");
   };
 
@@ -585,11 +603,11 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="📋" ch="Descrição" />
-                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<TA rows={4} value={editData.desc} onChange={e => setEditData(p => ({ ...p, desc: e.target.value }))} />} />
+                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: reinspeção do lote confirmou 3% das unidades fora do padrão." />} />
                 </div>
                 <div style={{ ...s.card, marginBottom: "1rem" }}>
                   <SecTitle icon="⚡" ch="Ação de contenção" />
-                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<TA rows={3} value={editData.contencao} onChange={e => setEditData(p => ({ ...p, contencao: e.target.value }))} />} />
+                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<CampoHistoricoEdicao valorSalvo={sel.contencao} adicao={addCont} setAdicao={setAddCont} rows={3} placeholder="Ex.: lote transferido da quarentena para área de segregação definitiva." />} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <F lbl="Responsável" tip="Nome do responsável por verificar e atestar a eficácia da ação corretiva. Geralmente o RT ou coordenador de qualidade." tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
                   </div>
@@ -612,7 +630,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
               <div>
                 <div style={{ background: T.surf, borderRadius: 10, padding: 14, marginBottom: 14 }}>
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Descrição</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.6 }}>{sel.desc}</div>
+                  <CampoHistoricoLeitura valor={sel.desc} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
                   {[["Produto", sel.produto], ["Fornecedor", sel.fornecedor], ["Lote", sel.lote], ["Nota Fiscal", sel.nf], ["Qtd.", sel.qtd], ["Responsável", sel.resp], ["Setor", sel.setor], ["Prazo AC", fmt(sel.prazoAC)], ["Prazo Eficácia", fmt(sel.prazoEfic)], ["Referência", sel.ref], ["Evidências", sel.evidencia]].filter(([, v]) => v).map(([k, v]) => (
@@ -622,7 +640,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
                     </div>
                   ))}
                 </div>
-                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><div style={{ fontSize: 13 }}>{sel.contencao}</div></div>}
+                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><CampoHistoricoLeitura valor={sel.contencao} compacto /></div>}
                 {sel.ishikawa?.root && <div style={{ background: T.accentDim, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: T.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>🎯 Causa raiz</div><div style={{ fontSize: 13, fontWeight: 500 }}>{sel.ishikawa.root}</div></div>}
 
                 {/* Anexos */}
