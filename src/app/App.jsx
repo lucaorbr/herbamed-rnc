@@ -621,10 +621,13 @@ export default function App() {
 
           {/* Left: toggle + logo */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            {/* Mobile hamburger */}
-            <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
-              ☰
-            </button>
+            {/* Mobile hamburger — só na navegação lateral. Com as abas no topo não há
+                gaveta para abrir: o ☰ abria o overlay preto sobre nada. */}
+            {!navTopo && (
+              <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+                ☰
+              </button>
+            )}
             {/* Desktop toggle — sem sentido quando a navegação está no topo */}
             {!navTopo && (
               <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
@@ -714,7 +717,7 @@ export default function App() {
                 <span style={{ color:T.text3, fontSize:10 }}>▾</span>
               </button>
               {avatarOpen && (
-                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:240, maxHeight:"80vh", overflowY:"auto", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflow:"hidden", animation:"fadeIn .15s ease" }}>
+                <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:240, maxHeight:"80vh", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflowX:"hidden", overflowY:"auto", animation:"fadeIn .15s ease" }}>
                   <div style={{ padding:"12px 16px", borderBottom:`1px solid ${T.border}` }}>
                     <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{user.name}</div>
                     <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{user.email}</div>
@@ -775,8 +778,9 @@ export default function App() {
         {/* ── BODY: sidebar + content ── */}
         <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }} onClick={()=>{setNotifOpen(false);setAvatarOpen(false);}}>
 
-          {/* Mobile overlay */}
-          {mobileMenuOpen && (
+          {/* Mobile overlay — idem: sem gaveta, sem overlay (rede de segurança caso
+              o menu tenha ficado aberto quando a navegação foi trocada). */}
+          {mobileMenuOpen && !navTopo && (
             <div onClick={()=>setMobileMenuOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:290, backdropFilter:"blur(2px)" }} />
           )}
 

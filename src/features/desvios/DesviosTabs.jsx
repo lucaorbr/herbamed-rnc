@@ -178,6 +178,10 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [addAcao, setAddAcao] = useState("");
   const [encerrando, setEncerrando] = useState(null); // desvio em encerramento
   useEffect(() => { setEditando(false); }, [sel?.id]);
+  // A seleção sobrevivia à troca de filtro, mas `encerrarSelecionados` só age sobre o
+  // que está filtrado: a barra dizia "5 selecionado(s)" e o encerramento fechava 2.
+  // Mudou o filtro, a seleção some — é a única leitura em que o contador não mente.
+  useEffect(() => { setSelecionados(new Set()); }, [fStatus, fSetor, fTipo, busca]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
 

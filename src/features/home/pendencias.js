@@ -51,11 +51,16 @@ export function pendenciasDeRNC({ rncs = [], userName = "", hoje }) {
 }
 
 /** Desvio parado na triagem. Estourou a meta, vira crítico. */
-export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PADRAO }) {
+export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PADRAO, podeVerDesvios = true }) {
+  if (!podeVerDesvios) return [];
   return (desvios || [])
     .filter(d => d?.status === "Registrado")
     .map(d => {
-      const dias = diasEntre(d.data, hoje);
+      // ⚠️ O desvio NÃO tem campo `data` — tem `dataRegistro` (quando foi registrado,
+      // que é o que a triagem cobra) e `dataOcorrencia`. Mesma leitura de
+      // `triagemStatus` em DesviosTabs, para as duas telas nunca discordarem de
+      // quantos dias o desvio está parado.
+      const dias = diasEntre(d.dataRegistro || d.dataOcorrencia, hoje);
       return item({
         id: `desvio-${d.id}`, fonte: "desvio", tab: "desvios",
         titulo: `${d.num || "Desvio"} — aguardando triagem`,
@@ -68,7 +73,10 @@ export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PAD
 /** Laudo emitido esperando a assinatura do RT — só aparece para quem assina. */
 export function pendenciasDeLaudo({ laudos = [], podeAssinar = false }) {
   if (!podeAssinar) return [];
-  const esperando = (laudos || []).filter(l => l && !l.assinaturaRT && l.status !== "Rascunho");
+  // A assinatura do RT só é possível DEPOIS da do analista (LaudosTab: podeAssinarRT
+  // exige assinaturaAnalista). Sem esse filtro a home cobrava do RT um laudo que ele
+  // ainda não tinha como assinar.
+  const esperando = (laudos || []).filter(l => l && l.assinaturaAnalista && !l.assinaturaRT && l.status !== "Rascunho");
   if (!esperando.length) return [];
   return [item({
     id: "laudos-rt", fonte: "laudo", tab: "laudos", minha: true,
@@ -78,6 +86,9 @@ export function pendenciasDeLaudo({ laudos = [], podeAssinar = false }) {
 }
 
 /** Liberação de IPC pendente. */
+// Sem gate de permissão de propósito: a aba de IPC também não tem um no App.jsx
+// (`tab==="ipc" && <IPCTab/>`), então esta pendência nunca leva a uma tela vazia.
+// Se um dia o IPC ganhar permissão própria, ela tem de chegar aqui junto.
 export function pendenciasDeIPC({ ipc = [] }) {
   const pendentes = (ipc || []).filter(r => r?.status === "Pendente");
   if (!pendentes.length) return [];

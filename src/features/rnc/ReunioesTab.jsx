@@ -39,6 +39,12 @@ const deliberacaoLabel = (d) => DELIBERACOES[d]?.label || d;
 // Mesma checagem que já trava o botão "Encerrar RNC (resolvida por disposição)"
 // no modal da RNC (RncTabs.jsx) e o resultado "Eficaz" na aba de eficácia —
 // reaproveitada aqui, não reimplementada, pra nunca divergir.
+// ⚠️ LACUNA CONHECIDA, mantida por decisão do usuário (2026-08-19, revisão da
+// v3.0.0): `w2h` VAZIO também passa neste teste — RNC sem nenhuma ação corretiva e
+// sem material pode ser encerrada direto pela RAC, sem passar pela verificação de
+// eficácia, que é onde a trava de "5 Porquês/CAPA" da v2.23.0 mora. Endurecer isto
+// (exigir ao menos uma ação concluída ou disposição registrada) muda o
+// comportamento da deliberação e ficou para depois de a RAC rodar algumas semanas.
 function podeFecharAgora(rnc) {
   const acoesPendentes = (rnc.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
   if (acoesPendentes.length > 0) return false;

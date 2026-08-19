@@ -109,8 +109,18 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, perm = ()
 
   const pendencias = useMemo(() => montarPendencias({
     rncs, desvios, laudos, ipc, docNotifs, pendentesTreino,
-    userName: user?.name || "", podeAssinar: perm("assinarLaudo") || perm("verLaudos"), hoje,
-  }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, user?.name, perm, hoje]);
+    // ⚠️ Quem assina laudo como RT é `isRT && criarLaudos` (regra do LaudosTab).
+    // Aqui havia `perm("assinarLaudo") || perm("verLaudos")`: "assinarLaudo" não
+    // existe em permissions.js, então o `||` caía em `verLaudos` — que é true até
+    // para viewer — e a home dizia a um leitor que havia laudos esperando a
+    // assinatura DELE, com selo "VOCÊ", numa tela onde ele não pode assinar nada.
+    userName: user?.name || "",
+    podeAssinar: (user?.role === "rt" || user?.role === "admin") && perm("criarLaudos"),
+    // Sem `verDesvios` a aba não renderiza (App.jsx), então a pendência levaria a
+    // uma tela em branco sem explicação.
+    podeVerDesvios: perm("verDesvios"),
+    hoje,
+  }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, user?.name, user?.role, perm, hoje]);
 
   const resumo = resumoPendencias(pendencias);
   const [verTudo, setVerTudo] = useState(false);

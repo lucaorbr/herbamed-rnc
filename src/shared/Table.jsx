@@ -57,6 +57,10 @@ export function Table({
 
   const sorted = useMemo(() => sortRows(rows, columns, sortCol, sortDir), [rows, columns, sortCol, sortDir]);
   const { paginated, page, total, setPage } = usePagination(sorted, perPage);
+  // `tabIndex` só é 0 na linha de `focusIdx`. Sem este clamp, ir de uma página cheia
+  // (foco na linha 15) para uma página com 3 linhas deixa TODAS com tabIndex -1 e a
+  // tabela some da navegação por teclado.
+  const focoValido = paginated.length ? Math.min(focusIdx, paginated.length - 1) : 0;
   const d = DENSIDADES[densidade];
 
   const marcadas = selected || new Set();
@@ -142,11 +146,11 @@ export function Table({
         <tbody>
           {paginated.map((r, idx) => {
             const cor = rowAccent?.(r);
-            const emFoco = temFoco && focusIdx === idx;
+            const emFoco = temFoco && focoValido === idx;
             const realcada = hoverIdx === idx || emFoco;
             return (
               <tr key={rowKey(r)} ref={(el) => { rowRefs.current[idx] = el; }}
-                tabIndex={idx === focusIdx ? 0 : -1}
+                tabIndex={idx === focoValido ? 0 : -1}
                 onFocus={() => { setFocusIdx(idx); setTemFoco(true); }}
                 onBlur={() => setTemFoco(false)}
                 onKeyDown={(e) => onKeyDownRow(e, idx)}

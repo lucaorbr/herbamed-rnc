@@ -44,9 +44,9 @@ describe("pendenciasDeRNC", () => {
 
 describe("pendenciasDeDesvio", () => {
   const desvios = [
-    { id: 1, num: "DEV-01", status: "Registrado", data: "2026-08-01", desc: "Parado há tempo" },
-    { id: 2, num: "DEV-02", status: "Registrado", data: "2026-08-15", desc: "Recente" },
-    { id: 3, num: "DEV-03", status: "Encerrado",  data: "2026-01-01" },
+    { id: 1, num: "DEV-01", status: "Registrado", dataRegistro: "2026-08-01", desc: "Parado há tempo" },
+    { id: 2, num: "DEV-02", status: "Registrado", dataRegistro: "2026-08-15", desc: "Recente" },
+    { id: 3, num: "DEV-03", status: "Encerrado",  dataRegistro: "2026-01-01" },
   ];
 
   it("desvio parado além da meta de triagem vira crítico", () => {
@@ -67,13 +67,33 @@ describe("pendenciasDeDesvio", () => {
     const p = pendenciasDeDesvio({ desvios, hoje: HOJE, meta: 30 });
     expect(p.every(x => x.urgencia === URGENCIA.ATENCAO)).toBe(true);
   });
+
+  // Regressão: a primeira versão lia `d.data`, campo que o desvio NÃO tem — todo
+  // desvio saía com dias 0 e nunca virava crítico, e os testes não pegavam porque
+  // as fixtures inventavam o campo. Este teste usa o desvio como ele é gravado de
+  // verdade (só `dataRegistro`/`dataOcorrencia`) e falha se alguém voltar ao `data`.
+  it("lê a data do desvio real, sem campo `data`", () => {
+    const real = [{ id: 9, num: "DEV-09", status: "Registrado", dataOcorrencia: "2026-07-20", dataRegistro: "2026-08-01" }];
+    expect(pendenciasDeDesvio({ desvios: real, hoje: HOJE })[0]).toMatchObject({ dias: 16, urgencia: URGENCIA.CRITICO });
+  });
+
+  it("quem não pode ver desvios não recebe a pendência", () => {
+    expect(pendenciasDeDesvio({ desvios, hoje: HOJE, podeVerDesvios: false })).toEqual([]);
+  });
+
+  it("cai para dataOcorrencia quando não há dataRegistro", () => {
+    const semRegistro = [{ id: 10, num: "DEV-10", status: "Registrado", dataOcorrencia: "2026-08-01" }];
+    expect(pendenciasDeDesvio({ desvios: semRegistro, hoje: HOJE })[0].dias).toBe(16);
+  });
 });
 
 describe("pendenciasDeLaudo", () => {
+  // O RT só assina DEPOIS do analista, então `assinaturaAnalista` faz parte da
+  // condição — sem ela o laudo não está esperando por ele.
   const laudos = [
-    { id: 1, num: "L-01", status: "Emitido", assinaturaRT: null },
-    { id: 2, num: "L-02", status: "Emitido", assinaturaRT: { nome: "RT" } },
-    { id: 3, num: "L-03", status: "Rascunho", assinaturaRT: null },
+    { id: 1, num: "L-01", status: "Emitido", assinaturaAnalista: { nome: "Analista" }, assinaturaRT: null },
+    { id: 2, num: "L-02", status: "Emitido", assinaturaAnalista: { nome: "Analista" }, assinaturaRT: { nome: "RT" } },
+    { id: 3, num: "L-03", status: "Rascunho", assinaturaAnalista: null, assinaturaRT: null },
   ];
 
   it("agrupa numa linha só e conta os que esperam assinatura", () => {
@@ -85,6 +105,11 @@ describe("pendenciasDeLaudo", () => {
 
   it("rascunho não conta — ainda não foi emitido", () => {
     expect(pendenciasDeLaudo({ laudos, podeAssinar: true })[0].detalhe).toBe("L-01");
+  });
+
+  it("laudo sem assinatura do analista não conta — o RT ainda não pode assinar", () => {
+    const soAnalistaPendente = [{ id: 4, num: "L-04", status: "Emitido", assinaturaAnalista: null, assinaturaRT: null }];
+    expect(pendenciasDeLaudo({ laudos: soAnalistaPendente, podeAssinar: true })).toEqual([]);
   });
 
   it("quem não assina laudo não vê a pendência", () => {
@@ -188,8 +213,8 @@ describe("montarPendencias", () => {
   const ctx = {
     hoje: HOJE, userName: "Lucas", podeAssinar: true,
     rncs: [{ id: 1, num: "NC-01", status: "Aberta", prazoAC: "2026-06-01", resp: "Outra" }],
-    desvios: [{ id: 1, num: "DEV-01", status: "Registrado", data: "2026-08-16" }],
-    laudos: [{ id: 1, num: "L-01", status: "Emitido", assinaturaRT: null }],
+    desvios: [{ id: 1, num: "DEV-01", status: "Registrado", dataRegistro: "2026-08-16" }],
+    laudos: [{ id: 1, num: "L-01", status: "Emitido", assinaturaAnalista: { nome: "Analista" }, assinaturaRT: null }],
     ipc: [{ status: "Pendente" }],
     pendentesTreino: [{ doc: { id: "d1", codigo: "POP-001" }, status: "atrasado", dias: 40 }],
     docNotifs: [{ id: 9, titulo: "Assinar POP-002", lida: false, criada_em: "2026-08-15" }],

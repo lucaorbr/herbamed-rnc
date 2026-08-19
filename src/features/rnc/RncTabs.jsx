@@ -421,8 +421,12 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
 
     // Detectar campos alterados para o histórico. Descrição e contenção saíram desta
     // lista: são append-only e viram entrada própria, com o texto acrescentado inteiro.
+    // ⚠️ `campos` TEM DE COBRIR TUDO QUE O FORMULÁRIO EDITA. Com o early-return de
+    // "nada mudou" logo abaixo, um campo esquecido aqui não é só uma linha faltando
+    // no histórico: a edição inteira é descartada em silêncio. Setor, evidências,
+    // responsável da contenção e prazo de causa faltavam.
     const alterados = [];
-    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", sev: "Severidade", tipo: "Tipo", resp: "Responsável", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
+    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
     Object.entries(campos).forEach(([k, label]) => {
       if ((r[k] || "") !== (editData[k] || "")) {
         alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
