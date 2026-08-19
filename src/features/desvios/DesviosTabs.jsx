@@ -4,6 +4,8 @@ import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoHistorico";
+import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
 import { Table } from "../../shared/Table";
 import { AnexosUpload } from "../rnc/RncTabs";
 import { DesviosIndicadores } from "./DesviosIndicadores";
@@ -171,6 +173,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [selecionados, setSelecionados] = useState(new Set());
   const [editando, setEditando] = useState(false);
   const [editData, setEditData] = useState({});
+  // Descrição e ação imediata são append-only: aqui vive só o ACRÉSCIMO.
+  const [addDesc, setAddDesc] = useState("");
+  const [addAcao, setAddAcao] = useState("");
   useEffect(() => { setEditando(false); }, [sel?.id]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
@@ -182,14 +187,12 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const podeEditar = (d) => !!d && d.status === "Registrado" && (podeTriar || d.registradoPor === user.name);
 
   const abrirEdicao = (d) => {
-    // Descrição e ação imediata NÃO entram aqui: são append-only e chegam na próxima
-    // onda com o campo travado. Deixá-las como textarea comum agora seria abrir
-    // justamente o buraco que este trabalho veio fechar.
     setEditData({
       dataOcorrencia: d.dataOcorrencia || "", setor: d.setor || "", setorOutro: d.setorOutro || "",
       tipo: d.tipo || "", tipoOutro: d.tipoOutro || "", impacto: d.impacto || "Maior",
-      produto: d.produto || "",
+      produto: d.produto || "", acaoImediata: d.acaoImediata || "Não",
     });
+    setAddDesc(""); setAddAcao("");
     setEditando(true);
   };
 
@@ -198,18 +201,27 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     if (!editData.setor) { alert("Selecione o setor do desvio."); return; }
     if (editData.setor === "Outros" && !editData.setorOutro.trim()) { alert("Especifique o setor do desvio (Outros)."); return; }
     if (editData.tipo === "Outros" && !editData.tipoOutro.trim()) { alert("Especifique o tipo do desvio (Outros)."); return; }
+    if (editData.acaoImediata === "Sim" && campoVazio(d.acaoDesc) && campoVazio(addAcao)) { alert("Descreva a ação imediata adotada."); return; }
 
-    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", impacto: "Impacto", produto: "Produto / Lote" };
+    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", impacto: "Impacto", produto: "Produto / Lote", acaoImediata: "Houve ação imediata" };
     const alterados = Object.entries(campos)
       .filter(([k]) => (d[k] || "") !== (editData[k] || ""))
       .map(([k, label]) => `${label}: "${d[k] || "—"}" → "${editData[k] || "—"}"`);
+    if (!campoVazio(addDesc)) alterados.push(`Descrição — acréscimo: "${resumoAcrescimo(addDesc)}"`);
+    if (!campoVazio(addAcao)) alterados.push(`Ação imediata — acréscimo: "${resumoAcrescimo(addAcao)}"`);
     if (!alterados.length) { setEditando(false); return; }
 
-    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Desvio editado — ${alterados.length} campo(s) alterado(s)`, detalhes: alterados, resp: user.name };
-    const upd = { ...d, ...editData, historico: [...(d.historico || []), h] };
+    const agora = new Date();
+    const patch = { ...editData };
+    if (!campoVazio(addDesc)) patch.desc = acrescentarAoCampo(d.desc, addDesc, user, agora);
+    if (!campoVazio(addAcao)) patch.acaoDesc = acrescentarAoCampo(d.acaoDesc, addAcao, user, agora);
+
+    const h = { data: tod(), hora: agora.toLocaleTimeString("pt-BR"), acao: `Desvio editado — ${alterados.length} campo(s) alterado(s)`, detalhes: alterados, resp: user.name };
+    const upd = { ...d, ...patch, historico: [...(d.historico || []), h] };
     await doSaveDesvio(upd);
     setSel(upd);
     setEditando(false);
+    setAddDesc(""); setAddAcao("");
     toast_(`${d.num} atualizado.`, "green");
   };
 
@@ -419,9 +431,21 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                     </div>
                   } />
                   <F lbl="Produto / Lote" ch={<Inp placeholder="Ex: Calcivitam D3 — Lote 2025-001" value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
-                  <div style={{ fontSize: 11, color: T.text3, background: T.surf, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
-                    A descrição e a ação imediata não são editadas aqui — elas são registro e não podem ser reescritas.
-                  </div>
+                  <F lbl="Descrição do desvio *" tip="O texto já registrado é evidência e não se altera. Para corrigir ou complementar, escreva o acréscimo — ele entra no fim, com seu login, data e hora." ch={
+                    <CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: na verdade a parada foi na encapsuladora 03, não na 02." />
+                  } />
+                  {/* Com ação imediata já registrada o campo trava em "Sim": não se pode
+                      dizer que não houve ação quando existe registro do que foi feito. */}
+                  <F lbl="Houve ação imediata?" ch={
+                    campoVazio(sel.acaoDesc)
+                      ? <Sel value={editData.acaoImediata} onChange={e => setEditData(p => ({ ...p, acaoImediata: e.target.value }))}><option>Não</option><option>Sim</option></Sel>
+                      : <div style={{ fontSize: 13, color: T.text2 }}>Sim — já há ação imediata registrada</div>
+                  } />
+                  {editData.acaoImediata === "Sim" && (
+                    <F lbl="Ação imediata adotada *" ch={
+                      <CampoHistoricoEdicao valorSalvo={sel.acaoDesc} adicao={addAcao} setAdicao={setAddAcao} rows={3} placeholder="Ex.: material segregado também no lote seguinte, após reinspeção." />
+                    } />
+                  )}
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button style={s.btn} onClick={() => setEditando(false)}>Cancelar edição</button>
                     <button style={s.btnA} onClick={salvarEdicao}>💾 Salvar alterações</button>
@@ -432,10 +456,10 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               <Campo T={T} l="Data da ocorrência" v={fmt(sel.dataOcorrencia)} />
               <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros — ${sel.setorOutro || ""}` : sel.setor} />
               <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros — ${sel.tipoOutro || ""}` : sel.tipo} />
-              <Campo T={T} l="Descrição do desvio" v={sel.desc} bloco />
+              <CampoBloco T={T} l="Descrição do desvio" v={sel.desc} />
               {sel.produto && <Campo T={T} l="Produto / Lote" v={sel.produto} />}
               <Campo T={T} l="Houve ação imediata?" v={sel.acaoImediata || "—"} />
-              {sel.acaoImediata === "Sim" && <Campo T={T} l="Ação imediata adotada" v={sel.acaoDesc} bloco />}
+              {sel.acaoImediata === "Sim" && <CampoBloco T={T} l="Ação imediata adotada" v={sel.acaoDesc} />}
               {sel.anexos?.length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
@@ -651,6 +675,19 @@ function Campo({ T, l, v, bloco }) {
     <div style={{ marginBottom: bloco ? 12 : 8, display: bloco ? "block" : "flex", gap: 8 }}>
       <div style={{ fontSize: 11, color: T.text3, fontWeight: 600, minWidth: bloco ? "auto" : 150, marginBottom: bloco ? 4 : 0 }}>{l}</div>
       <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", flex: 1 }}>{v}</div>
+    </div>
+  );
+}
+
+// Campo append-only (descrição e ação imediata): mesma moldura do `Campo` em modo
+// bloco, mas o valor passa pelo `CampoHistoricoLeitura` para os acréscimos saírem
+// destacados com quem escreveu e quando.
+function CampoBloco({ T, l, v }) {
+  if (campoVazio(v)) return null;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11, color: T.text3, fontWeight: 600, marginBottom: 4 }}>{l}</div>
+      <CampoHistoricoLeitura valor={v} compacto />
     </div>
   );
 }
