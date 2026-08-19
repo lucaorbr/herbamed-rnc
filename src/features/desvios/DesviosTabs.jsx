@@ -176,6 +176,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   // Descrição e ação imediata são append-only: aqui vive só o ACRÉSCIMO.
   const [addDesc, setAddDesc] = useState("");
   const [addAcao, setAddAcao] = useState("");
+  const [encerrando, setEncerrando] = useState(null); // desvio em encerramento
   useEffect(() => { setEditando(false); }, [sel?.id]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
@@ -256,12 +257,15 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const convertidos = desvios.filter(d => d.status === "Convertido em RNC").length;
   const taxaRNC = desvios.length > 0 ? Math.round(convertidos / desvios.length * 100) : 0;
 
-  const encerrar = async (d) => {
-    const motivo = window.prompt("Justificativa do encerramento (ação imediata sanou o desvio):", d.acaoDesc || "");
-    if (motivo === null) return;
+  // O encerramento individual saiu do window.prompt: ele vinha pré-preenchido com a
+  // ação imediata de QUEM ABRIU e pedia para digitar por cima, misturando duas coisas
+  // diferentes no mesmo campo. Agora a ação imediata fica à vista, em leitura, e a
+  // justificativa de quem encerra é campo próprio.
+  const encerrar = async (d, motivo) => {
     const upd = { ...d, status: "Encerrado", encerradoPor: user.name, encerradoEm: tod(), encerramentoMotivo: motivo,
-      historico: [...(d.historico || []), { data: tod(), acao: "Encerrado — ação imediata", resp: user.name }] };
+      historico: [...(d.historico || []), { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Encerrado — ação imediata", detalhes: [motivo], resp: user.name }] };
     await doSaveDesvio(upd);
+    setEncerrando(null);
     setSel(null);
     toast_(`${d.num} encerrado.`, "green");
   };
@@ -460,6 +464,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               {sel.produto && <Campo T={T} l="Produto / Lote" v={sel.produto} />}
               <Campo T={T} l="Houve ação imediata?" v={sel.acaoImediata || "—"} />
               {sel.acaoImediata === "Sim" && <CampoBloco T={T} l="Ação imediata adotada" v={sel.acaoDesc} />}
+              {/* Justificativa do encerramento sobe para o corpo: é decisão da triagem,
+                  não um detalhe de rodapé como era quando cabia numa linha do prompt. */}
+              {sel.status === "Encerrado" && sel.encerramentoMotivo && <CampoBloco T={T} l="Justificativa do encerramento" v={sel.encerramentoMotivo} />}
               {sel.anexos?.length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
@@ -473,7 +480,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.text3 }}>
                 Registrado por <strong style={{ color: T.text2 }}>{sel.registradoPor}</strong> em {fmt(sel.dataRegistro)}
                 {(() => { const st = triagemStatus(sel); return st && <div style={{ marginTop: 4, color: st.atrasado ? T.yellow : T.text3, fontWeight: st.atrasado ? 700 : 400 }}>{st.atrasado ? "⚠️ " : ""}Aguardando triagem há {st.dias} dia(s) — meta: {META_TRIAGEM_DIAS} dias{st.atrasado ? " (atrasado)" : ""}</div>; })()}
-                {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}{sel.encerramentoMotivo ? ` — ${sel.encerramentoMotivo}` : ""}</div>}
+                {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}</div>}
                 {sel.status === "Convertido em RNC" && <div style={{ marginTop: 4 }}>Convertido por {sel.convertidoPor} em {fmt(sel.convertidoEm)}{sel.rncNum ? ` → ${sel.rncNum}` : ""}</div>}
               </div>
               {/* Histórico — já era gravado desde sempre, mas nunca tinha sido exibido.
@@ -505,7 +512,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             {/* Ações de triagem */}
             {sel.status === "Registrado" && podeTriar && !editando && (
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, flexWrap: "wrap", position: "sticky", bottom: 0, background: T.bg }}>
-                <button onClick={() => encerrar(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>✓ Encerrar (ação imediata)</button>
+                <button onClick={() => setEncerrando(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>✓ Encerrar (ação imediata)</button>
                 <button onClick={() => converter(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>↗ Converter em RNC</button>
               </div>
             )}
@@ -516,6 +523,14 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
             )}
           </div>
         </div>
+      )}
+
+      {encerrando && (
+        <EncerrarDesvioModal
+          d={encerrando}
+          onCancel={() => setEncerrando(null)}
+          onConfirm={motivo => encerrar(encerrando, motivo)}
+        />
       )}
 
       {reclassDim && (
@@ -675,6 +690,54 @@ function Campo({ T, l, v, bloco }) {
     <div style={{ marginBottom: bloco ? 12 : 8, display: bloco ? "block" : "flex", gap: 8 }}>
       <div style={{ fontSize: 11, color: T.text3, fontWeight: 600, minWidth: bloco ? "auto" : 150, marginBottom: bloco ? 4 : 0 }}>{l}</div>
       <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", flex: 1 }}>{v}</div>
+    </div>
+  );
+}
+
+// ── Encerramento do desvio ──
+// Duas coisas diferentes que o window.prompt antigo colapsava num campo só: a AÇÃO
+// IMEDIATA é de quem abriu o desvio e fica em leitura (é registro, não rascunho de
+// justificativa); a JUSTIFICATIVA DO ENCERRAMENTO é de quem tria e nasce em branco.
+function EncerrarDesvioModal({ d, onCancel, onConfirm }) {
+  const T = useTheme(); const s = useS();
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const temAcao = d.acaoImediata === "Sim" && !campoVazio(d.acaoDesc);
+
+  const confirmar = async () => {
+    if (campoVazio(motivo)) { alert("Escreva a justificativa do encerramento."); return; }
+    setSalvando(true);
+    try { await onConfirm(motivo.trim()); } finally { setSalvando(false); }
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 14, maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px #000a", padding: "1.5rem" }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: T.text, marginBottom: 4 }}>Encerrar {d.num}</div>
+        <div style={{ fontSize: 12, color: T.text3, marginBottom: 16 }}>
+          Encerrar significa que o desvio foi sanado e não vira RNC. O registro fica fechado depois disso.
+        </div>
+
+        <div style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>
+            ⚡ Ação imediata registrada na abertura
+          </div>
+          {temAcao
+            ? <CampoHistoricoLeitura valor={d.acaoDesc} compacto />
+            : <div style={{ fontSize: 13, color: T.text3 }}>Nenhuma ação imediata foi registrada por quem abriu o desvio.</div>}
+        </div>
+
+        <F lbl="Justificativa do encerramento *" tip="Por que este desvio pode ser encerrado sem virar RNC. É o registro de quem tria, não o de quem abriu." ch={
+          <TA rows={4} value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex.: ação imediata sanou o desvio, sem impacto no produto; lote conferido e conforme." />
+        } />
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+          <button style={s.btn} onClick={onCancel}>Cancelar</button>
+          <button onClick={confirmar} disabled={salvando} style={{ padding: "9px 20px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: salvando ? "default" : "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, opacity: salvando ? .6 : 1 }}>
+            {salvando ? "Encerrando..." : "✓ Encerrar desvio"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
