@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
@@ -169,8 +169,49 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [sel, setSel] = useState(null);
   const [reclassDim, setReclassDim] = useState(null); // "tipo" | "setor" | null
   const [selecionados, setSelecionados] = useState(new Set());
+  const [editando, setEditando] = useState(false);
+  const [editData, setEditData] = useState({});
+  useEffect(() => { setEditando(false); }, [sel?.id]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
+
+  // Só desvio ABERTO se edita: encerrado ou convertido em RNC é registro fechado, e
+  // registro fechado não se corrige — se estiver errado, o caminho é a trilha da RNC.
+  // Quem edita: a Qualidade (triagem) ou quem registrou — o operador que digitou o
+  // setor errado precisa poder consertar sem depender de alguém com permissão.
+  const podeEditar = (d) => !!d && d.status === "Registrado" && (podeTriar || d.registradoPor === user.name);
+
+  const abrirEdicao = (d) => {
+    // Descrição e ação imediata NÃO entram aqui: são append-only e chegam na próxima
+    // onda com o campo travado. Deixá-las como textarea comum agora seria abrir
+    // justamente o buraco que este trabalho veio fechar.
+    setEditData({
+      dataOcorrencia: d.dataOcorrencia || "", setor: d.setor || "", setorOutro: d.setorOutro || "",
+      tipo: d.tipo || "", tipoOutro: d.tipoOutro || "", impacto: d.impacto || "Maior",
+      produto: d.produto || "",
+    });
+    setEditando(true);
+  };
+
+  const salvarEdicao = async () => {
+    const d = desvios.find(x => x.id === sel.id);
+    if (!editData.setor) { alert("Selecione o setor do desvio."); return; }
+    if (editData.setor === "Outros" && !editData.setorOutro.trim()) { alert("Especifique o setor do desvio (Outros)."); return; }
+    if (editData.tipo === "Outros" && !editData.tipoOutro.trim()) { alert("Especifique o tipo do desvio (Outros)."); return; }
+
+    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", impacto: "Impacto", produto: "Produto / Lote" };
+    const alterados = Object.entries(campos)
+      .filter(([k]) => (d[k] || "") !== (editData[k] || ""))
+      .map(([k, label]) => `${label}: "${d[k] || "—"}" → "${editData[k] || "—"}"`);
+    if (!alterados.length) { setEditando(false); return; }
+
+    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Desvio editado — ${alterados.length} campo(s) alterado(s)`, detalhes: alterados, resp: user.name };
+    const upd = { ...d, ...editData, historico: [...(d.historico || []), h] };
+    await doSaveDesvio(upd);
+    setSel(upd);
+    setEditando(false);
+    toast_(`${d.num} atualizado.`, "green");
+  };
 
   // Quantos desvios ainda estão como "Outros" com texto livre por dimensão (candidatos a reclassificar).
   const pendentesTipo  = desvios.filter(d => d.tipo === "Outros" && (d.tipoOutro || "").trim()).length;
@@ -348,9 +389,46 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                 <DesvioBadge status={sel.status} />
                 {sel.impacto && <SevB s={sel.impacto} />}
               </div>
-              <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {podeEditar(sel) && !editando && (
+                  <button onClick={() => abrirEdicao(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
+                )}
+                <button onClick={() => setSel(null)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 22, fontFamily: "inherit" }}>✕</button>
+              </div>
             </div>
             <div style={{ padding: "1.5rem" }}>
+              {editando ? (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: T.accent }}>
+                    ✏️ Modo edição — as alterações ficam registradas no histórico do desvio.
+                  </div>
+                  <G2 ch={<>
+                    <F lbl="Data da ocorrência" ch={<Inp type="date" value={editData.dataOcorrencia} onChange={e => setEditData(p => ({ ...p, dataOcorrencia: e.target.value }))} />} />
+                    <F lbl="Impacto" ch={<Sel value={editData.impacto} onChange={e => setEditData(p => ({ ...p, impacto: e.target.value }))}>{IMPACTOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
+                  </>} />
+                  <F lbl="Setor *" ch={
+                    <div>
+                      <Sel value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))}><option value="">Selecione...</option>{setoresParaFiltro(setoresDesvio, desvios).map(x => <option key={x}>{x}</option>)}</Sel>
+                      {editData.setor === "Outros" && <Inp placeholder="Especifique o setor..." value={editData.setorOutro} onChange={e => setEditData(p => ({ ...p, setorOutro: e.target.value }))} sx={{ marginTop: 8 }} />}
+                    </div>
+                  } />
+                  <F lbl="Tipo do desvio" ch={
+                    <div>
+                      <Sel value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))}>{[...new Set([...tiposDesvio, editData.tipo].filter(Boolean))].map(x => <option key={x}>{x}</option>)}</Sel>
+                      {editData.tipo === "Outros" && <Inp placeholder="Especifique o tipo..." value={editData.tipoOutro} onChange={e => setEditData(p => ({ ...p, tipoOutro: e.target.value }))} sx={{ marginTop: 8 }} />}
+                    </div>
+                  } />
+                  <F lbl="Produto / Lote" ch={<Inp placeholder="Ex: Calcivitam D3 — Lote 2025-001" value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
+                  <div style={{ fontSize: 11, color: T.text3, background: T.surf, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
+                    A descrição e a ação imediata não são editadas aqui — elas são registro e não podem ser reescritas.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button style={s.btn} onClick={() => setEditando(false)}>Cancelar edição</button>
+                    <button style={s.btnA} onClick={salvarEdicao}>💾 Salvar alterações</button>
+                  </div>
+                </div>
+              ) : (
+              <>
               <Campo T={T} l="Data da ocorrência" v={fmt(sel.dataOcorrencia)} />
               <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros — ${sel.setorOutro || ""}` : sel.setor} />
               <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros — ${sel.tipoOutro || ""}` : sel.tipo} />
@@ -374,15 +452,40 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                 {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}{sel.encerramentoMotivo ? ` — ${sel.encerramentoMotivo}` : ""}</div>}
                 {sel.status === "Convertido em RNC" && <div style={{ marginTop: 4 }}>Convertido por {sel.convertidoPor} em {fmt(sel.convertidoEm)}{sel.rncNum ? ` → ${sel.rncNum}` : ""}</div>}
               </div>
+              {/* Histórico — já era gravado desde sempre, mas nunca tinha sido exibido.
+                  Com a edição na tela, é ele que prova o que mudou, quem mudou e quando. */}
+              {sel.historico?.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>🕓 Histórico</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[...sel.historico].reverse().map((h, i) => (
+                      <div key={i} style={{ background: T.surf, borderLeft: `3px solid ${T.border2}`, borderRadius: "0 8px 8px 0", padding: "8px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12, color: T.text }}>{h.acao}</span>
+                          <span style={{ fontSize: 10, color: T.text3, whiteSpace: "nowrap" }}>{fmt(h.data)}{h.hora ? ` · ${h.hora}` : ""}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: T.text3, marginTop: 2 }}>por {h.resp}</div>
+                        {h.detalhes?.length > 0 && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: T.text2, display: "flex", flexDirection: "column", gap: 2 }}>
+                            {h.detalhes.map((dt, j) => <div key={j}>• {dt}</div>)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </>
+              )}
             </div>
             {/* Ações de triagem */}
-            {sel.status === "Registrado" && podeTriar && (
+            {sel.status === "Registrado" && podeTriar && !editando && (
               <div style={{ padding: "1rem 1.5rem", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10, flexWrap: "wrap", position: "sticky", bottom: 0, background: T.bg }}>
                 <button onClick={() => encerrar(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#2ab84a", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>✓ Encerrar (ação imediata)</button>
                 <button onClick={() => converter(sel)} style={{ flex: "1 1 200px", padding: "11px", background: "#ff8c42", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>↗ Converter em RNC</button>
               </div>
             )}
-            {(isAdmin || perm("triarDesvio")) && (
+            {(isAdmin || perm("triarDesvio")) && !editando && (
               <div style={{ padding: "0 1.5rem 1.2rem", textAlign: "right" }}>
                 <button onClick={() => excluir(sel)} style={{ background: "none", border: "none", color: "#ff4f6a", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>Excluir desvio</button>
               </div>
