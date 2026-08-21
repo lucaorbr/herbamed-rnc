@@ -96,7 +96,10 @@ Ganho imediato: chave fora do bundle, falha visível, evidência de notificaçã
 
 **Estado da conta EmailJS, conferido no painel em 2026-08-21** (importa porque tudo aqui morre na Fase 1):
 titular é uma **conta pessoal** (`lukinhasb013@gmail.com`), do tempo em que o sistema não tinha domínio
-corporativo. O serviço `service_gxhicii` é **Outlook**, não Gmail como este documento dizia. A cota é de
+corporativo. O serviço `service_gxhicii` é **Outlook**, não Gmail como este documento dizia, e está
+*"Connected as `lucas.rbr92@outlook.com`" — Personal Service, 300 e-mails/dia*. Ou seja: **hoje o `From`
+que chega na caixa das pessoas é a conta pessoal de uma pessoa física**, com o nome de exibição dizendo
+Herbamed. É a causa concreta da falha de DMARC descrita no item 1, e não é ajustável por código. A cota é de
 **200 requisições/mês** (ciclo reinicia dia 30) — e o modal gasta uma por destinatário, então uma
 notificação para 8 pessoas consome 4% do mês. Não vale migrar a titularidade para a empresa: a conta
 deve ser **encerrada** ao fim da Fase 1, e a caixa corporativa nasce direto no M365.
