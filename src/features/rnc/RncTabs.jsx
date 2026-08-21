@@ -5,6 +5,7 @@ import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
+import { enviarEmail } from "../email/enviarEmail";
 import { askClaude } from "../../services/aiClient";
 import { isExternalStorageUrl } from "../../services/localFileStorage";
 import { useS } from "../../shared/styles";
@@ -1951,15 +1952,13 @@ ${"═".repeat(50)}
 Herbamed® · Sistema de Gestão da Qualidade`;
 
     try {
-      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send",{
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ service_id:"service_gxhicii", template_id:"template_4jl73wq", user_id:"z2VxJ1dYjwrRp8Nh4",
-          template_params:{ to_email:emailDest, to_name:emailDest, from_name:`${user.name} · Herbamed® SGQ`,
-            subject:`📊 Relatório SGQ — ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
-            message:corpo, reply_to:user.email }})
+      await enviarEmail({
+        para:[emailDest],
+        assunto:`📊 Relatório SGQ — ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
+        corpo, evento:"relatorio_rnc",
       });
-      if(res.ok) toast_("Relatório enviado!","green"); else toast_("Erro ao enviar.","red");
-    } catch { toast_("Erro ao enviar.","red"); }
+      toast_("Relatório enviado!","green");
+    } catch(e) { toast_("Erro ao enviar: "+e.message,"red"); }
     setEnviando(false);
   };
 

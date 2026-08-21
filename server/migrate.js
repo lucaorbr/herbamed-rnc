@@ -272,6 +272,38 @@ async function migrate() {
     ON notifications (user_id, criada_em DESC)
   `);
 
+  // Registro imutavel de notificacao: so INSERT. Sustenta "notificamos o
+  // responsavel em tal data" numa inspecao — por isso guarda tambem a falha,
+  // que antes sumia no `.catch(() => {})` do navegador.
+  await query(`
+    CREATE TABLE IF NOT EXISTS email_log (
+      id bigserial PRIMARY KEY,
+      destinatario text NOT NULL,
+      assunto text,
+      evento text,
+      entidade_tipo text,
+      entidade_id text,
+      entidade_num text,
+      disparado_por_id text,
+      disparado_por_nome text,
+      transporte text NOT NULL,
+      status text NOT NULL,
+      erro text,
+      message_id text,
+      criado_em timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_email_log_criado_em
+    ON email_log (criado_em DESC)
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_email_log_entidade
+    ON email_log (entidade_tipo, entidade_id, criado_em DESC)
+  `);
+
   await seedAdmin();
   await seedTrustedThirdPartyClients();
 }

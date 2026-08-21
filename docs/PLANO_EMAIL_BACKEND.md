@@ -15,8 +15,16 @@ consequências tornam o desenho insustentável:
    é rejeitada pelo próprio Exchange da empresa. A API responde `200 OK` e a mensagem nunca chega.
    Nenhum ajuste de código corrige isso; só a troca de transporte.
 2. **Credencial exposta.** `service_id`, `template_id` e a public key estão no bundle JavaScript, em
-   quatro lugares. Verificado em 2026-08-20: a API aceita chamadas **fora do navegador**, sem trava de
-   domínio — qualquer pessoa que abra o JS envia e-mail em nome da Herbamed.
+   quatro lugares — qualquer pessoa que abra o JS envia e-mail em nome da Herbamed a partir de um
+   navegador.
+
+   > **Correção (2026-08-21, durante a Fase 0):** o que este item afirmava — que a API aceita chamadas
+   > fora do navegador — está **errado**. Testado contra a API real: responde `403 "API access from
+   > non-browser environments is currently disabled"`. O bloqueio é do EmailJS, não uma trava de domínio,
+   > e **não protege o bundle** (do navegador o envio segue livre para qualquer um). Consequência
+   > prática: a Fase 0 exige, no painel do EmailJS, ligar *Account → Security → Allow EmailJS API for
+   > non-browser applications* e informar a **private key** em `EMAILJS_PRIVATE_KEY`. É a última vez que
+   > isso importa — o Graph da Fase 1 não tem essa restrição.
 3. **Envio depende de aba aberta.** Os dois alertas diários rodam em `useEffect` no login
    (`src/app/App.jsx:287` e `:333`). Quem está de férias ou não entrou no sistema **nunca é avisado**
    do prazo vencido — exatamente o cenário em que o alerta serviria.
@@ -58,7 +66,7 @@ sustentar "notificamos o responsável em tal data" numa inspeção.
 
 ## Fases
 
-### Fase 0 — Fundação no backend (não depende da TI)
+### Fase 0 — Fundação no backend ✅ entregue (v3.1.0)
 
 Tira o envio do navegador **mantendo o EmailJS como transporte**, atrás de um adaptador. Entrega
 valor sozinha e deixa a Fase 1 como troca de variável de ambiente.
@@ -73,7 +81,18 @@ valor sozinha e deixa a Fase 1 como troca de variável de ambiente.
 - Os `.catch(() => {})` dos alertas passam a registrar falha no `email_log`.
 - Testes em `server/email.test.js` (`npm run test:server`) na montagem da mensagem e na validação.
 
-Ganho imediato: chave fora do bundle, falha visível, evidência de notificação. Sugestão de versão: **3.1.0**.
+Ganho imediato: chave fora do bundle, falha visível, evidência de notificação. Versão: **3.1.0**.
+
+**O que ficou diferente do previsto:**
+- O `Reply-To` e o nome do remetente **deixaram de ser parâmetro** — vêm da sessão no servidor. Como
+  efeito, `EmailModal` não recebe mais `currentUser`: o cliente não escolhe mais quem assina o e-mail.
+- **Falha parcial devolve `200`**, com a lista do que falhou, e não erro. Se cinco pessoas precisam ser
+  notificadas e um endereço está errado, as outras quatro são avisadas de verdade — o que não pode
+  acontecer é a falha sumir da tela, e por isso o cliente (`enviarEmail.js`) transforma a lista de
+  falhas em erro visível.
+- **Antes de fazer o deploy**, ligar *Allow EmailJS API for non-browser applications* e preencher
+  `EMAILJS_PRIVATE_KEY` — ver a correção no item 2 de "Por que mudar". Sem isso o envio para de
+  funcionar (com a falha registrada em `email_log`, não em silêncio).
 
 ### Fase 1 — Transporte Graph (depende da TI)
 

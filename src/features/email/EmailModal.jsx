@@ -3,6 +3,7 @@ import { useTheme } from "../../core/theme";
 import { fmt, past } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle } from "../../shared/ui";
+import { enviarEmail } from "./enviarEmail";
 
 export function buildEmail(rnc, evento) {
   const sev = { Crítica: "🔴 CRÍTICA", Maior: "🟠 MAIOR", Menor: "🟡 MENOR" }[rnc.sev] || rnc.sev;
@@ -70,7 +71,9 @@ async function gerarLinkFornecedor(rncId, rncNum, diasValidade = 30) {
   return data;
 }
 
-export function EmailModal({ rnc, users, currentUser, evento, onClose, onSent }) {
+// `currentUser` saiu da assinatura: remetente e Reply-To agora vêm da sessão no
+// backend — o cliente não escolhe mais quem assina o e-mail.
+export function EmailModal({ rnc, users, evento, onClose, onSent }) {
   const T = useTheme(); const s = useS();
   const tpl = buildEmail(rnc, evento);
   const [to, setTo] = useState([]);
@@ -91,34 +94,15 @@ export function EmailModal({ rnc, users, currentUser, evento, onClose, onSent })
     if (!validTo.length) { setErr("Nenhum destinatário com e-mail válido selecionado."); return; }
     setSending(true); setErr("");
     try {
-      // Envia um e-mail para cada destinatário via EmailJS
-      const EMAILJS_SERVICE  = "service_gxhicii";
-      const EMAILJS_TEMPLATE = "template_4jl73wq";
-      const EMAILJS_KEY      = "z2VxJ1dYjwrRp8Nh4";
-
-      for (const email of validTo) {
-        const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            service_id:  EMAILJS_SERVICE,
-            template_id: EMAILJS_TEMPLATE,
-            user_id:     EMAILJS_KEY,
-            template_params: {
-              to_email:    email,
-              to_name:     users.find(u => u.email === email)?.name || email,
-              from_name:   `${currentUser.name} · Herbamed® Gestão da Qualidade`,
-              subject:     subject,
-              message:     body,
-              reply_to:    currentUser.email,
-            }
-          })
-        });
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(`Erro ao enviar para ${email}: ${txt}`);
-        }
-      }
+      // O laço por destinatário mudou de lugar, não sumiu: agora ele roda no
+      // backend, que registra cada envio (e cada falha) em `email_log`.
+      const nomes = Object.fromEntries(validTo.map(e => [e, users.find(u => u.email === e)?.name || e]));
+      await enviarEmail({
+        para: validTo, assunto: subject, corpo: body,
+        evento: evento || "manual",
+        entidade: { tipo: "rnc", id: rnc.id, num: rnc.num },
+        nomes,
+      });
       onSent(`E-mail enviado para ${validTo.length} destinatário(s)!`);
     } catch (e) { setErr("Erro: " + e.message); }
     setSending(false);

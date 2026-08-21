@@ -32,7 +32,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versao do sistema
-- Versao atual: `3.0.0`
+- Versao atual: `3.1.0`
 - A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
 - Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
 - `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
@@ -133,6 +133,16 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
   - "Houve ação imediata?" **trava em "Sim"** quando já existe ação registrada: não se diz que não houve ação quando existe registro do que foi feito.
   - **Encerramento de desvio (onda 15):** era um `window.prompt` de uma linha **pré-preenchido com a ação imediata de quem abriu**, pedindo para digitar por cima — duas coisas diferentes no mesmo campo. Agora um modal separa: a **ação imediata** fica à vista em leitura e a **justificativa do encerramento** é campo próprio, obrigatório, que nasce em branco. O encerramento **em lote** continua no prompt simples, por decisão do usuário (rotina de triagem em massa, justificativa igual para todos).
   - **407 testes verdes** (390 → 407).
+
+- **E-mail — Fase 0: o envio sai do navegador (v3.1.0)** — plano completo em `docs/PLANO_EMAIL_BACKEND.md`. Os quatro pontos de envio (modal de notificação, alerta de prazo de RNC, alerta de treinamento, relatório de RNCs) faziam `fetch` direto do navegador para a API do EmailJS, cada um com `service_id`/`template_id`/public key repetidos no bundle. Agora todos passam por `POST /api/email/send`, autenticado por sessão.
+  - `server/email.js` seleciona o transporte por `EMAIL_TRANSPORTE` (`emailjs` | `graph` | `log`). **A Fase 1 é troca de variável de ambiente, não de código** — e o rollback também. `log` não envia nada (é o padrão do ambiente paralelo da nova-ui, que roda sobre banco de teste).
+  - Nova tabela **`email_log`**, imutável (só INSERT): destinatário, evento, entidade vinculada, quem disparou, transporte, status, erro. Notificar é evidência — o `.catch(() => {})` dos dois alertas engolia exatamente isso.
+  - ⚠️ **A premissa do plano estava errada e foi corrigida no próprio documento.** O plano afirmava que a API do EmailJS aceita chamadas fora do navegador. Testado contra a API real em 2026-08-21: responde **403 `"API access from non-browser environments is currently disabled"`**. **Antes do deploy da 3.1.0**: ligar *Account → Security → Allow EmailJS API for non-browser applications* no painel do EmailJS e preencher `EMAILJS_PRIVATE_KEY` (vai como `accessToken`). Sem isso o envio para — mas para **com a falha registrada em `email_log`**, não em silêncio, que é o ponto. Restrição só do EmailJS; o Graph da Fase 1 não a tem.
+  - ⚠️ **Remetente e `Reply-To` deixaram de ser parâmetro** — vêm da sessão no servidor. Por isso `EmailModal` **não recebe mais `currentUser`**: o cliente não escolhe mais quem assina o e-mail. Falsificar o `From` da pessoa é o que quebra DMARC, e é o que a Fase 1 vem resolver.
+  - ⚠️ **Falha parcial devolve `200`**, com a lista do que falhou — se cinco precisam ser notificados e um endereço está errado, os outros quatro são avisados de verdade em vez de o lote inteiro abortar. O que não pode é a falha sumir da tela: `src/features/email/enviarEmail.js` transforma a lista de falhas em erro visível. Endereço inválido **também** vira linha de log ("tentamos notificar e o endereço estava errado" é auditoria, não ruído de validação).
+  - Limite de taxa por usuário conta **destinatários, não requisições** — o modal manda um e-mail por destinatário num laço, então limitar por requisição não seguraria nada.
+  - Validado no Docker ponta a ponta: 401 sem sessão, 400 em destinatário/assunto inválidos, o 403 do EmailJS virando instrução acionável em vez de stack, e o modal da NC-2026-T08 gravando a linha vinculada à RNC. **38 testes de servidor verdes** (30 → 38).
+  - **Próximo:** Fase 1 (transporte Graph) depende da TI — `docs/SOLICITACAO_TI_EMAIL_M365.md` está pronto para encaminhar.
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
