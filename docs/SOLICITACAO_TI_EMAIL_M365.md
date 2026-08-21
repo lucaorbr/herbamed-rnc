@@ -2,7 +2,7 @@
 
 **Sistema:** SGQ Herbamed (`sgq.herbamed.com.br`)
 **Solicitante:** Lucas Ribeiro de Oliveira — Garantia da Qualidade
-**Data:** 20/08/2026
+**Data:** 20/08/2026 · *atualizado em 21/08/2026*
 
 ## Contexto
 
@@ -13,6 +13,12 @@ Hoje essas mensagens saem por um serviço externo, com remetente que **não pert
 `herbamed.com.br`**. Como o domínio publica SPF/DKIM/DMARC, essas mensagens falham na validação e são
 tratadas como suspeitas — caem em lixo eletrônico ou são barradas pelo próprio Exchange. É a causa
 provável de notificações que não chegam.
+
+**Verificado em 21/08/2026:** o remetente configurado nesse serviço é uma **conta pessoal do Outlook, de
+pessoa física** (do tempo em que o sistema ainda não rodava sob o domínio da empresa), com o nome de
+exibição escrito como se fosse da Herbamed. Além do problema de entrega, isso significa que hoje as
+notificações oficiais do sistema da qualidade saem em nome de um indivíduo e não da empresa — o que não
+se sustenta em auditoria e é o motivo de estarmos tratando isso agora.
 
 O pedido é passar o envio para o Microsoft 365 da empresa, para que as mensagens saiam de dentro do
 tenant, com autenticação válida, entrega interna garantida e rastreabilidade no message trace.
@@ -89,10 +95,19 @@ Observação: o caminho com **senha da caixa postal via SMTP AUTH** (basic auth)
 a Microsoft anunciou a desativação desse método (setembro/2025). Se ainda estiver habilitado no tenant,
 a TI pode nos dizer — mas seria uma solução com prazo de validade.
 
+## Preparação já feita do nosso lado
+
+A parte de software já está pronta e testada (versão 3.1.0 do SGQ). O envio saiu do navegador e passou
+para o servidor, atrás de um seletor de transporte: quando os dados dos itens 1 a 4 chegarem, a mudança é
+**só de variável de ambiente**, sem alterar código e sem nova entrega — e o rollback também. Passou a
+existir também um registro interno de cada envio (destinatário, data, e o erro quando falha), que hoje
+não existia.
+
 ## Prazo
 
-Não é urgente e não bloqueia o sistema: enquanto a configuração não sai, as notificações continuam
-saindo pelo caminho atual. Mas enquanto isso não for feito, **parte das notificações do SGQ não chega
-ao destinatário** — inclusive alertas de prazo de ação corretiva, que têm impacto em auditoria.
+Não bloqueia o sistema: enquanto a configuração não sai, as notificações continuam saindo pelo caminho
+atual. Mas enquanto isso não for feito, **parte das notificações do SGQ não chega ao destinatário** —
+inclusive alertas de prazo de ação corretiva, que têm impacto em auditoria — e o remetente segue sendo
+uma conta pessoal.
 
 Qualquer dúvida sobre o funcionamento do sistema, estou à disposição.
