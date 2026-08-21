@@ -140,12 +140,16 @@ async function enviarViaEmailJS(mensagem, deps = {}) {
   });
   if (!res.ok) {
     const texto = await res.text().catch(() => "");
-    if (res.status === 403 && /non-browser/i.test(texto)) {
+    // A API devolve 403 com duas redacoes diferentes para a mesma causa raiz —
+    // "strict mode, but no Private Key was provided" e, quando o template tambem
+    // nao confere, "non-browser environments is currently disabled". As duas se
+    // resolvem preenchendo EMAILJS_PRIVATE_KEY, entao a instrucao e a mesma.
+    if (res.status === 403 && /non-browser|private key|strict mode/i.test(texto)) {
       throw new Error(
-        "EmailJS recusou a chamada do servidor. Causa mais provavel: EMAILJS_PRIVATE_KEY vazia — a conta " +
-        "esta com 'Use Private Key' ligado, e nesse modo a API exige o accessToken (a mensagem do EmailJS " +
-        "fala em non-browser, mas o bloqueio e a falta da chave). Conferir tambem 'Allow EmailJS API for " +
-        "non-browser applications' em dashboard.emailjs.com → Account → Security."
+        "EmailJS recusou a chamada do servidor: EMAILJS_PRIVATE_KEY vazia. A conta esta em strict mode " +
+        "('Use Private Key' ligado), e nesse modo a API exige o accessToken. A chave fica em " +
+        "dashboard.emailjs.com → Account → General → Private Key. " +
+        `Resposta do EmailJS: ${texto.slice(0, 150)}`
       );
     }
     throw new Error(`EmailJS respondeu ${res.status}${texto ? `: ${texto.slice(0, 300)}` : ""}`);
@@ -210,12 +214,25 @@ async function registrarEnvio(query, linha) {
 async function enviarEmails(pedido, deps = {}) {
   const { destinatarios, invalidos, assunto, corpo } = validarEnvio(pedido);
   const remetente = pedido.remetente || {};
-  const registrar = deps.registrar || (async () => {});
   const nomeTransporte = deps.transporte || transporteAtual();
   const adaptador = deps.adaptador || resolverTransporte(nomeTransporte);
 
   const enviados = [];
   const falhas = [];
+
+  // O log e importante, mas nao mais importante que a notificacao: se o INSERT
+  // falhar (banco fora, coluna nova ainda nao migrada), derrubar o envio faria o
+  // handler devolver erro para e-mails QUE JA SAIRAM — e abortaria os proximos
+  // destinatarios do lote. Entao a gravacao nunca lanca; a falha dela vai para o
+  // stdout do container, que e onde se procura problema de infraestrutura.
+  const registrarBruto = deps.registrar || (async () => {});
+  const registrar = async linha => {
+    try {
+      await registrarBruto(linha);
+    } catch (e) {
+      console.error(`[email] falha ao gravar email_log (${linha.destinatario}): ${e.message}`);
+    }
+  };
 
   const linhaBase = destinatario => ({
     destinatario,

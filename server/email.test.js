@@ -80,19 +80,26 @@ test("private key entra como accessToken; sem ela o campo nem aparece", () => {
   }
 });
 
-test("403 de ambiente nao-navegador vira instrucao, nao stack", async () => {
+test("as duas redacoes do 403 do EmailJS viram a mesma instrucao acionavel", async () => {
   const anterior = { s: process.env.EMAILJS_SERVICE_ID, t: process.env.EMAILJS_TEMPLATE_ID, k: process.env.EMAILJS_PUBLIC_KEY };
   process.env.EMAILJS_SERVICE_ID = "srv";
   process.env.EMAILJS_TEMPLATE_ID = "tpl";
   process.env.EMAILJS_PUBLIC_KEY = "key";
   try {
     const emailjs = resolverTransporte("emailjs");
-    await assert.rejects(
-      () => emailjs({ para: "a@b.com", assunto: "x", corpo: "y" }, {
-        fetchImpl: async () => ({ ok: false, status: 403, text: async () => "API access from non-browser environments is currently disabled." }),
-      }),
-      e => /EMAILJS_PRIVATE_KEY/.test(e.message) && /Use Private Key/.test(e.message)
-    );
+    const redacoes = [
+      "API access from non-browser environments is currently disabled.",
+      "API access in strict mode, but no Private Key was provided",
+    ];
+    for (const texto of redacoes) {
+      await assert.rejects(
+        () => emailjs({ para: "a@b.com", assunto: "x", corpo: "y" }, {
+          fetchImpl: async () => ({ ok: false, status: 403, text: async () => texto }),
+        }),
+        e => /EMAILJS_PRIVATE_KEY/.test(e.message) && /Account → General/.test(e.message),
+        `redacao nao reconhecida: ${texto}`
+      );
+    }
   } finally {
     for (const [nome, valor] of [["EMAILJS_SERVICE_ID", anterior.s], ["EMAILJS_TEMPLATE_ID", anterior.t], ["EMAILJS_PUBLIC_KEY", anterior.k]]) {
       if (valor === undefined) delete process.env[nome];
@@ -152,6 +159,22 @@ test("endereco invalido tambem deixa rastro no log", async () => {
   const invalido = logs.find(l => l.destinatario === "sem-arroba");
   assert.equal(invalido.status, "falhou");
   assert.equal(invalido.erro, "Endereco invalido");
+});
+
+test("banco fora nao derruba o envio: log falha, e-mail sai", async () => {
+  const enviadas = [];
+  const resultado = await enviarEmails(
+    { para: ["a@b.com", "c@b.com"], assunto: "Assunto", corpo: "Corpo", remetente: { id: "u1", nome: "Lucas" } },
+    {
+      transporte: "teste",
+      adaptador: async msg => { enviadas.push(msg.para); return {}; },
+      registrar: async () => { throw new Error("banco fora do ar"); },
+    }
+  );
+  // Os dois destinatarios foram notificados apesar de nenhuma linha ter sido gravada.
+  assert.deepEqual(enviadas, ["a@b.com", "c@b.com"]);
+  assert.deepEqual(resultado.enviados, ["a@b.com", "c@b.com"]);
+  assert.deepEqual(resultado.falhas, []);
 });
 
 test("falha isolada nao aborta o lote", async () => {
