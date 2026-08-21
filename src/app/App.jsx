@@ -13,6 +13,7 @@ import { CEPTab } from "../features/cep/CEPTab";
 import { ClientesTab } from "../features/clientes/ClientesTab";
 import { ExecutivoDashboard } from "../features/dashboard/ExecutivoDashboard";
 import { EmailModal } from "../features/email/EmailModal";
+import { enviarEmail } from "../features/email/enviarEmail";
 import { FMEATab } from "../features/fmea/FMEATab";
 import { FornecedoresTab } from "../features/fornecedores/FornecedoresTab";
 import { IPCProdutosTab, IPCTab } from "../features/ipc/IPCTabs";
@@ -284,19 +285,15 @@ export default function App() {
       if (lastAlert !== hoje) {
         localStorage.setItem("hm_last_alert", hoje);
         if (vencendoHoje.length > 0) {
-          fetch("https://api.emailjs.com/api/v1.0/email/send", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              service_id: "service_gxhicii", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
-              template_params: {
-                to_email: user.email, to_name: user.name,
-                from_name: "SGQ Herbamed® · Alertas Automáticos",
-                subject: `⚠️ SGQ Herbamed — ${vencendoHoje.length} prazo(s) vencendo HOJE`,
-                message: `Olá ${user.name},\n\nAs seguintes RNCs têm prazo de ação corretiva vencendo HOJE:\n\n${vencendoHoje.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...\n  Prazo: ${fmt(r.prazoAC)}`).join("\n\n")}\n\n${vencendoAmanha.length > 0 ? `\nVencendo AMANHÃ:\n${vencendoAmanha.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...`).join("\n")}\n\n` : ""}Acesse o sistema para tomar as ações necessárias.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
-                reply_to: user.email,
-              }
-            })
-          }).catch(() => {});
+          // A falha não é mais engolida em silêncio: o backend registra o
+          // insucesso em `email_log` antes de a promessa rejeitar aqui.
+          enviarEmail({
+            para: [user.email],
+            assunto: `⚠️ SGQ Herbamed — ${vencendoHoje.length} prazo(s) vencendo HOJE`,
+            corpo: `Olá ${user.name},\n\nAs seguintes RNCs têm prazo de ação corretiva vencendo HOJE:\n\n${vencendoHoje.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...\n  Prazo: ${fmt(r.prazoAC)}`).join("\n\n")}\n\n${vencendoAmanha.length > 0 ? `\nVencendo AMANHÃ:\n${vencendoAmanha.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...`).join("\n")}\n\n` : ""}Acesse o sistema para tomar as ações necessárias.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
+            evento: "alerta_prazo_rnc",
+            nomes: { [user.email]: user.name },
+          }).catch(e => console.warn("Alerta de prazo de RNC nao enviado:", e.message));
         }
       }
     }
@@ -330,19 +327,13 @@ export default function App() {
         if (!criticos.length) return;
         localStorage.setItem("hm_last_alert_treino", hoje);
         const linha = (m) => `• ${m.doc.codigo} — ${m.doc.titulo} (Rev.${m.doc.versao})\n  ${m.status === "vencido" ? `Reciclagem vencida há ${m.dias} dia(s)` : `Sem treinamento há ${m.dias} dia(s)`}`;
-        fetch("https://api.emailjs.com/api/v1.0/email/send", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            service_id: "service_gxhicii", template_id: "template_4jl73wq", user_id: "z2VxJ1dYjwrRp8Nh4",
-            template_params: {
-              to_email: user.email, to_name: user.name,
-              from_name: "SGQ Herbamed® · Alertas Automáticos",
-              subject: `📚 SGQ Herbamed — ${criticos.length} treinamento(s) em atraso`,
-              message: `Olá ${user.name},\n\nVocê tem treinamento obrigatório pendente nos documentos abaixo:\n\n${criticos.map(linha).join("\n\n")}\n\nAcesse Gestão de Documentos → Matriz de Treinamento para regularizar.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
-              reply_to: user.email,
-            }
-          })
-        }).catch(() => {});
+        enviarEmail({
+          para: [user.email],
+          assunto: `📚 SGQ Herbamed — ${criticos.length} treinamento(s) em atraso`,
+          corpo: `Olá ${user.name},\n\nVocê tem treinamento obrigatório pendente nos documentos abaixo:\n\n${criticos.map(linha).join("\n\n")}\n\nAcesse Gestão de Documentos → Matriz de Treinamento para regularizar.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
+          evento: "alerta_treinamento",
+          nomes: { [user.email]: user.name },
+        }).catch(e => console.warn("Alerta de treinamento nao enviado:", e.message));
       } catch { /* alerta é best-effort: falha não pode atrapalhar o login */ }
     })();
     return () => { vivo = false; };
@@ -857,7 +848,7 @@ export default function App() {
           </div>
         </div>
 
-        {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} currentUser={user} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
+        {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
         {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
         <AtualizacaoDisponivel />
         <AutocorrectNotice />

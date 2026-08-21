@@ -19,6 +19,7 @@ const {
 const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
 const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegration");
 const { carimbarFormularioXlsx, nomeArquivoFormulario } = require("./formularioXlsx");
+const { checarLimite, enviarEmails, registrarEnvio, validarEnvio } = require("./email");
 const {
   buildDocumentSourceHash,
   createLocalSummary,
@@ -316,6 +317,30 @@ async function handleSignatures(req, res, pathname, url) {
   }
 
   return false;
+}
+
+// Fase 0 do plano de e-mail: o envio saiu do navegador. O front manda quem,
+// assunto e corpo; remetente e Reply-To vem da SESSAO, nunca do cliente.
+async function handleEmail(req, res, pathname) {
+  if (pathname !== "/api/email/send" || req.method !== "POST") return false;
+
+  const user = await requireUser(req);
+  const body = await readBody(req);
+  const { destinatarios } = validarEnvio(body);
+  checarLimite(user.id, destinatarios.length);
+
+  const resultado = await enviarEmails(
+    {
+      ...body,
+      remetente: { id: String(user.id), nome: user.name, email: user.email },
+    },
+    { registrar: linha => registrarEnvio(query, linha) }
+  );
+
+  // Falha total vira erro HTTP para o modal mostrar; falha parcial volta 200 com
+  // a lista, porque os outros destinatarios foram notificados de verdade.
+  const status = resultado.enviados.length ? 200 : 502;
+  return sendJson(res, status, resultado);
 }
 
 async function handleNotifications(req, res, pathname) {
@@ -1912,7 +1937,7 @@ async function route(req, res) {
   const integrationHandled = await handleRncIntegration(req, res, pathname, url);
   if (integrationHandled !== false) return integrationHandled;
 
-  const handlers = [handleAuth, handleSignatures, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentFormularioXlsx, handleDocumentSummary, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleSignatures, handleEmail, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentFormularioXlsx, handleDocumentSummary, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;
