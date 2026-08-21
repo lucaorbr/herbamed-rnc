@@ -142,8 +142,10 @@ async function enviarViaEmailJS(mensagem, deps = {}) {
     const texto = await res.text().catch(() => "");
     if (res.status === 403 && /non-browser/i.test(texto)) {
       throw new Error(
-        "EmailJS esta bloqueando chamadas do servidor. Ligue 'Allow EmailJS API for non-browser applications' " +
-        "em dashboard.emailjs.com → Account → Security e defina EMAILJS_PRIVATE_KEY."
+        "EmailJS recusou a chamada do servidor. Causa mais provavel: EMAILJS_PRIVATE_KEY vazia — a conta " +
+        "esta com 'Use Private Key' ligado, e nesse modo a API exige o accessToken (a mensagem do EmailJS " +
+        "fala em non-browser, mas o bloqueio e a falta da chave). Conferir tambem 'Allow EmailJS API for " +
+        "non-browser applications' em dashboard.emailjs.com → Account → Security."
       );
     }
     throw new Error(`EmailJS respondeu ${res.status}${texto ? `: ${texto.slice(0, 300)}` : ""}`);

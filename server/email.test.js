@@ -91,7 +91,7 @@ test("403 de ambiente nao-navegador vira instrucao, nao stack", async () => {
       () => emailjs({ para: "a@b.com", assunto: "x", corpo: "y" }, {
         fetchImpl: async () => ({ ok: false, status: 403, text: async () => "API access from non-browser environments is currently disabled." }),
       }),
-      e => /non-browser applications/.test(e.message) && /EMAILJS_PRIVATE_KEY/.test(e.message)
+      e => /EMAILJS_PRIVATE_KEY/.test(e.message) && /Use Private Key/.test(e.message)
     );
   } finally {
     for (const [nome, valor] of [["EMAILJS_SERVICE_ID", anterior.s], ["EMAILJS_TEMPLATE_ID", anterior.t], ["EMAILJS_PUBLIC_KEY", anterior.k]]) {

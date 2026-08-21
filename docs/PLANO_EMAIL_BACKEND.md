@@ -19,12 +19,13 @@ consequências tornam o desenho insustentável:
    navegador.
 
    > **Correção (2026-08-21, durante a Fase 0):** o que este item afirmava — que a API aceita chamadas
-   > fora do navegador — está **errado**. Testado contra a API real: responde `403 "API access from
-   > non-browser environments is currently disabled"`. O bloqueio é do EmailJS, não uma trava de domínio,
-   > e **não protege o bundle** (do navegador o envio segue livre para qualquer um). Consequência
-   > prática: a Fase 0 exige, no painel do EmailJS, ligar *Account → Security → Allow EmailJS API for
-   > non-browser applications* e informar a **private key** em `EMAILJS_PRIVATE_KEY`. É a última vez que
-   > isso importa — o Graph da Fase 1 não tem essa restrição.
+   > fora do navegador sem mais nada — está **errado**. Testado contra a API real: responde `403 "API
+   > access from non-browser environments is currently disabled"`. Conferido depois no painel: *Allow
+   > EmailJS API for non-browser applications* **já está ligado**, e *Use Private Key (recommended)*
+   > também — ou seja, **a mensagem do EmailJS engana**: o que faltava no teste era o `accessToken`, não
+   > a permissão. Consequência prática: a Fase 0 precisa só da **private key** em `EMAILJS_PRIVATE_KEY`,
+   > sem mexer em configuração. Nada disso protege o bundle (do navegador o envio segue livre para
+   > qualquer um) e é a última vez que importa — o Graph da Fase 1 não tem essa restrição.
 3. **Envio depende de aba aberta.** Os dois alertas diários rodam em `useEffect` no login
    (`src/app/App.jsx:287` e `:333`). Quem está de férias ou não entrou no sistema **nunca é avisado**
    do prazo vencido — exatamente o cenário em que o alerta serviria.
@@ -90,9 +91,15 @@ Ganho imediato: chave fora do bundle, falha visível, evidência de notificaçã
   notificadas e um endereço está errado, as outras quatro são avisadas de verdade — o que não pode
   acontecer é a falha sumir da tela, e por isso o cliente (`enviarEmail.js`) transforma a lista de
   falhas em erro visível.
-- **Antes de fazer o deploy**, ligar *Allow EmailJS API for non-browser applications* e preencher
-  `EMAILJS_PRIVATE_KEY` — ver a correção no item 2 de "Por que mudar". Sem isso o envio para de
-  funcionar (com a falha registrada em `email_log`, não em silêncio).
+- **Antes de fazer o deploy**, preencher `EMAILJS_PRIVATE_KEY` — ver a correção no item 2 de "Por que
+  mudar". Sem ela o envio para de funcionar (com a falha registrada em `email_log`, não em silêncio).
+
+**Estado da conta EmailJS, conferido no painel em 2026-08-21** (importa porque tudo aqui morre na Fase 1):
+titular é uma **conta pessoal** (`lukinhasb013@gmail.com`), do tempo em que o sistema não tinha domínio
+corporativo. O serviço `service_gxhicii` é **Outlook**, não Gmail como este documento dizia. A cota é de
+**200 requisições/mês** (ciclo reinicia dia 30) — e o modal gasta uma por destinatário, então uma
+notificação para 8 pessoas consome 4% do mês. Não vale migrar a titularidade para a empresa: a conta
+deve ser **encerrada** ao fim da Fase 1, e a caixa corporativa nasce direto no M365.
 
 ### Fase 1 — Transporte Graph (depende da TI)
 
