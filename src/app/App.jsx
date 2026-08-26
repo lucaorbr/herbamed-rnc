@@ -54,6 +54,7 @@ const CQAnalisesTab = lazyNamed(cqLoader, "CQAnalisesTab");
 const CQDashboardTab = lazyNamed(cqLoader, "CQDashboardTab");
 
 const GestaoDocumentosTab = lazyNamed(() => import("../features/documentos/GestaoDocumentosTab"), "GestaoDocumentosTab");
+const HomologacoesTab = lazyNamed(() => import("../features/homologacoes/HomologacoesTab"), "HomologacoesTab");
 
 function AbaCarregando() {
   return (
@@ -126,6 +127,7 @@ export default function App() {
   const [rncs, setRncs] = useState([]);
   const [desvios, setDesvios] = useState([]);
   const [revalidacoes, setRevalidacoes] = useState([]);
+  const [homologacoes, setHomologacoes] = useState([]);
   const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -243,6 +245,12 @@ export default function App() {
     const unsubDesvios = subscribeCollection("desvios", setDesvios);
     migrarRevalidacoesLegado();
     const unsubReval = subscribeCollection("revalidacoes", setRevalidacoes);
+    const podeLerHomologacoes = user.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, "verHomologacoes")
+      ? user.permissoes.verHomologacoes === true
+      : PERMS_PADRAO[user.role]?.verHomologacoes === true;
+    const unsubHomologacoes = podeLerHomologacoes
+      ? subscribeCollection("homologacoes", setHomologacoes)
+      : () => {};
     const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
@@ -269,7 +277,7 @@ export default function App() {
       setCatalogoCargos(cc?.items || []);
     });
     const unsubColab = subscribeCollection("colaboradores", list => setColaboradores(list || []));
-    return () => { unsub(); unsubDesvios(); unsubReval(); unsubNotifs(); unsubForn(); unsubCfg(); unsubColab && unsubColab(); };
+    return () => { unsub(); unsubDesvios(); unsubReval(); unsubHomologacoes(); unsubNotifs(); unsubForn(); unsubCfg(); unsubColab && unsubColab(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -510,6 +518,7 @@ export default function App() {
     { id: "relatorios",  icon: "📑", label: "Relatórios" },
     { id: "cep",         icon: "📉", label: "CEP" },
     { id: "fornecedores",icon: "🏭", label: "Fornecedores" },
+    { id: "homologacoes",icon: "✅", label: "Homologações" },
     { id: "nqa",         icon: "📐", label: "NQA / AQL" },
     { id: "cq-materiais",icon: "🧪", label: "CQ — Materiais" },
     { id: "cq-analises", icon: "📋", label: "CQ — Análises" },
@@ -528,6 +537,7 @@ export default function App() {
     dashboard: "Dashboard", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
+    homologacoes: "Homologação de Fornecedores e Itens",
     nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
     "recebimentos-areco": "Recebimentos Areco",
     "cq-materiais": "CQ — Cadastro de Materiais",
@@ -827,7 +837,8 @@ export default function App() {
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
-              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
+              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} homologacoes={homologacoes} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
+              {tab==="homologacoes" && perm("verHomologacoes") && <HomologacoesTab user={user} users={users} fornecedores={fornecedores} homologacoes={homologacoes} toast_={toast_} auditLog={auditLog} perm={perm} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
               {tab==="cq"           && <CQTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="recebimentos-areco" && <ArecoRecebimentosTab user={user} toast_={toast_} setTab={setTab} />}

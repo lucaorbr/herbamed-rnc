@@ -95,7 +95,7 @@ export function AuditLogTab({ user }) {
     const header = ["Data/Hora","Usuário","E-mail","Ação","Coleção","Documento","ID"];
     const rows = filtrados.map(l => [
       fmtDataHora(l.data), l.usuario, l.email, l.acao,
-      l.colecao === "rncs" ? "RNCs" : l.colecao === "gestao_docs" ? "Gestão de Docs" : l.colecao === "cq_analises" ? "CQ Análises" : l.colecao === "cq_materiais" ? "CQ Materiais" : l.colecao === "fornecedores" ? "Fornecedores" : l.colecao === "auditorias" ? "Auditorias" : l.colecao === "fmea" ? "FMEA" : l.colecao === "laudos" ? "Laudos" : l.colecao === "usuarios" ? "Usuários" : l.colecao || "—",
+      l.colecao === "rncs" ? "RNCs" : l.colecao === "gestao_docs" ? "Gestão de Docs" : l.colecao === "cq_analises" ? "CQ Análises" : l.colecao === "cq_materiais" ? "CQ Materiais" : l.colecao === "fornecedores" ? "Fornecedores" : l.colecao === "homologacoes" ? "Homologações" : l.colecao === "auditorias" ? "Auditorias" : l.colecao === "fmea" ? "FMEA" : l.colecao === "laudos" ? "Laudos" : l.colecao === "usuarios" ? "Usuários" : l.colecao || "—",
       l.docNome, l.docId
     ]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
@@ -119,7 +119,7 @@ export function AuditLogTab({ user }) {
             ["Usuário",    sel.usuario],
             ["E-mail",     sel.email],
             ["Ação",       sel.acao],
-            ["Coleção",    sel.colecao === "rncs" ? "RNCs" : sel.colecao === "gestao_docs" ? "Gestão de Docs" : sel.colecao === "cq_analises" ? "CQ Análises" : sel.colecao === "cq_materiais" ? "CQ Materiais" : sel.colecao === "fornecedores" ? "Fornecedores" : sel.colecao === "auditorias" ? "Auditorias" : sel.colecao === "fmea" ? "FMEA" : sel.colecao === "laudos" ? "Laudos" : sel.colecao === "usuarios" ? "Usuários / Sessões" : sel.colecao || "—"],
+            ["Coleção",    sel.colecao === "rncs" ? "RNCs" : sel.colecao === "gestao_docs" ? "Gestão de Docs" : sel.colecao === "cq_analises" ? "CQ Análises" : sel.colecao === "cq_materiais" ? "CQ Materiais" : sel.colecao === "fornecedores" ? "Fornecedores" : sel.colecao === "homologacoes" ? "Homologações" : sel.colecao === "auditorias" ? "Auditorias" : sel.colecao === "fmea" ? "FMEA" : sel.colecao === "laudos" ? "Laudos" : sel.colecao === "usuarios" ? "Usuários / Sessões" : sel.colecao || "—"],
             ["Documento",  sel.docNome],
             ["ID",         sel.docId],
           ].map(([k,v]) => (
@@ -184,6 +184,7 @@ export function AuditLogTab({ user }) {
           <option value="cq_analises">CQ Análises</option>
           <option value="cq_materiais">CQ Materiais</option>
           <option value="fornecedores">Fornecedores</option>
+          <option value="homologacoes">Homologações</option>
           <option value="auditorias">Auditorias</option>
           <option value="fmea">FMEA</option>
           <option value="laudos">Laudos</option>

@@ -157,6 +157,11 @@ export const incrementLaudoCounter = async () => {
   return value;
 };
 
+export const incrementHomologacaoCounter = async () => {
+  const { value } = await api("/api/counters/increment-homologacao", { method: "POST", body: {} });
+  return value;
+};
+
 export const peekDailyCounter = async () => {
   const { value } = await api("/api/counters/peek-daily");
   return value;

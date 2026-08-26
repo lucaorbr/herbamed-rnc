@@ -52,6 +52,7 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
     ]},
     { id:"cadastros", icon:"🏢", label:"Cadastros", items:[
       { id:"fornecedores", icon:"🏭", label:"Fornecedores" },
+      ...(perm("verHomologacoes") ? [{ id:"homologacoes", icon:"✅", label:"Homologações" }] : []),
       { id:"clientes",     icon:"🏢", label:"Clientes Terceiros" },
       { id:"laudos",       icon:"📋", label:"Laudos Analíticos" },
     ]},

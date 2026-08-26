@@ -6,7 +6,7 @@ import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { Badge, F, Inp, MaskedInp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
 
-export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toast_, isAdmin, auditLog }) {
+export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setFornecedores, user, toast_, isAdmin, auditLog }) {
   const T = useTheme(); const s = useS();
   const [sel, setSel] = useState(null);
   const [editMode, setEditMode] = useState(false);
@@ -68,6 +68,7 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
 
   // RNCs por fornecedor
   const rncsForn = (nome) => rncs.filter(r => r.fornecedor === nome);
+  const homsForn = fornecedor => homologacoes.filter(h => String(h.fornecedorId || "") === String(fornecedor.id) || (!h.fornecedorId && h.fornecedorNome === fornecedor.nome));
   const taxaForn = (nome) => {
     const rf = rncsForn(nome);
     const ef = rf.filter(x => x.status === "Eficaz").length;
@@ -249,6 +250,19 @@ export function FornecedoresTab({ rncs, fornecedores, setFornecedores, user, toa
                     <div key={l} style={{ background:T.card, border:`1px solid ${c}22`, borderRadius:10, padding:"10px", textAlign:"center" }}>
                       <div style={{ fontSize:18, fontWeight:700, color:c }}>{v}</div>
                       <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Escopos homologados para este fornecedor */}
+                <div style={{ marginBottom:"1rem" }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:8 }}>✅ Escopos de Homologação</div>
+                  {homsForn(sel).length === 0 ? (
+                    <div style={{ color:T.text3, fontSize:12, padding:"1rem", textAlign:"center", background:T.surf, borderRadius:8 }}>Nenhuma homologação registrada para este fornecedor</div>
+                  ) : homsForn(sel).map(h => (
+                    <div key={h.id} style={{ display:"flex", justifyContent:"space-between", gap:10, background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 11px", marginBottom:6 }}>
+                      <div><div style={{fontSize:11,fontWeight:700,color:T.accent}}>{h.num}</div><div style={{fontSize:12,color:T.text2}}>{h.itemNome} · {h.categoria}</div></div>
+                      <span style={{fontSize:10,fontWeight:700,color:h.status==="Homologada"?T.accent:h.status==="Reprovada"?"#ff4f6a":"#ffb300"}}>{h.status}</span>
                     </div>
                   ))}
                 </div>

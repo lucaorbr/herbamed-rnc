@@ -46,22 +46,28 @@ export function Pagination({ page, total, setPage }) {
 
 export function Tooltip({ text }) {
   const T = useTheme();
-  const [show, setShow] = React.useState(false);
+  // Passar o mouse mostra; clicar FIXA. Antes era um `show` só: o mouseEnter
+  // ligava e o clique logo em seguida alternava para desligado, então clicar
+  // no "?" fechava a dica em vez de abri-la — e no toque, onde o tap dispara
+  // mouseEnter e click juntos, ela nem chegava a aparecer.
+  const [hover, setHover] = React.useState(false);
+  const [fixo, setFixo] = React.useState(false);
+  const show = hover || fixo;
   const ref = React.useRef(null);
 
   React.useEffect(() => {
-    if (!show) return;
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (!fixo) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setFixo(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [show]);
+  }, [fixo]);
 
   return (
     <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center", marginLeft:5, verticalAlign:"middle", flexShrink:0 }}>
       <span
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onClick={() => setShow(v => !v)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() => setFixo(v => !v)}
         style={{ width:15, height:15, borderRadius:"50%", background:T.accent+"22", border:`1px solid ${T.accent}44`, color:T.accent, fontSize:9, fontWeight:700, display:"inline-flex", alignItems:"center", justifyContent:"center", cursor:"pointer", userSelect:"none", lineHeight:1, flexShrink:0 }}>
         ?
       </span>
@@ -76,7 +82,18 @@ export function Tooltip({ text }) {
   );
 }
 
-export function F({ lbl, ch, tip }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>{lbl}{tip && <Tooltip text={tip}/>}</label>{ch}</div>; }
+// `err` destaca o campo e mostra a mensagem embaixo dele — evita despejar a
+// lista inteira de pendências num alert(), onde o usuário não vê onde falta.
+export function F({ lbl, ch, tip, err }) {
+  const s = useS();
+  return <div style={{ marginBottom: 14 }}>
+    <label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2, color: err ? "#ff4f6a" : s.lbl.color }}>{lbl}{tip && <Tooltip text={tip}/>}</label>
+    <div style={err ? { borderRadius: 8, boxShadow: "0 0 0 2px #ff4f6a55" } : undefined}>{ch}</div>
+    {err && <div style={{ fontSize: 11, color: "#ff4f6a", marginTop: 4, display:"flex", alignItems:"center", gap:4 }}>
+      <span aria-hidden="true">⚠</span>{err}
+    </div>}
+  </div>;
+}
 
 export function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
 
