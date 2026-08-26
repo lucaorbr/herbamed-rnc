@@ -11,6 +11,7 @@ import {
   STATUS_HOMOLOGACAO,
   checklistTecnicoInicial,
   documentosIniciais,
+  erroPorChave,
   escapeHtml,
   pendenciasParecer,
   pendenciasSubmissao,
@@ -43,6 +44,35 @@ function Campo({ label, value, amplo = false }) {
   return <div style={{ gridColumn:amplo?"1/-1":undefined, background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 11px" }}>
     <div style={{ fontSize:9, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>{label}</div>
     <div style={{ fontSize:12, color:T.text, whiteSpace:"pre-wrap" }}>{value}</div>
+  </div>;
+}
+
+// O solicitante não configura o instrumento de avaliação — ele só pede. O que
+// será exigido é consequência da categoria, e quem ajusta (marcando "Não
+// aplicável" com justificativa) é o parecerista, na análise.
+function ChecklistPreview({ itens, vazio, obrigatoriedade = false }) {
+  const T = useTheme();
+  if (!itens?.length) return <div style={{ fontSize:12, color:T.text3 }}>{vazio}</div>;
+  return <div>
+    {itens.map((item, i) => (
+      <div key={item.id || i} style={{ display:"flex", alignItems:"baseline", gap:8, padding:"7px 0", borderBottom:`1px solid ${T.border}` }}>
+        <span style={{ color:T.text3, fontSize:11, minWidth:18 }}>{i + 1}.</span>
+        <span style={{ fontSize:12, color:T.text2, flex:1 }}>{item.item}</span>
+        {obrigatoriedade && (
+          <span style={{ fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:".05em", padding:"2px 8px", borderRadius:20,
+            color: item.obrigatorio ? T.red : T.text3, background: item.obrigatorio ? `${T.red}18` : T.surf, whiteSpace:"nowrap" }}>
+            {item.obrigatorio ? "Obrigatório" : "Se aplicável"}
+          </span>
+        )}
+      </div>
+    ))}
+  </div>;
+}
+
+function NotaQuemPreenche({ ch }) {
+  const T = useTheme();
+  return <div style={{ fontSize:11, color:T.text3, background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 11px", marginBottom:12, lineHeight:1.5 }}>
+    {ch}
   </div>;
 }
 
@@ -109,6 +139,12 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
   const [parecerModal, setParecerModal] = useState(null);
   const [decisaoModal, setDecisaoModal] = useState(null);
   const [assinaturaCtx, setAssinaturaCtx] = useState(null);
+  // As pendências só aparecem depois da primeira tentativa de envio — nascer
+  // tudo vermelho antes de o usuário digitar é hostil. A partir daí elas se
+  // atualizam ao vivo, então ele vê cada uma sumir conforme corrige.
+  const [mostrarErros, setMostrarErros] = useState(false);
+  const [mostrarErrosParecer, setMostrarErrosParecer] = useState(false);
+  const [mostrarErrosDecisao, setMostrarErrosDecisao] = useState(false);
 
   useEffect(() => {
     const u1 = subscribeCollection("cq_materiais", setMateriais);
@@ -137,13 +173,17 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
       && (!filtroStatus || status === filtroStatus);
   }).sort((a,b) => (b.criadoTs || 0) - (a.criadoTs || 0)), [homologacoes, busca, filtroStatus]);
 
-  const abrirNovo = () => { setSel(null); setForm(formVazio()); setView("form"); };
-  const editar = registro => { setSel(registro); setForm({ ...formVazio(), ...registro }); setView("form"); };
+  const errosForm = useMemo(() => pendenciasSubmissao(form), [form]);
+  const errForm = campo => (mostrarErros ? erroPorChave(errosForm, campo) : "");
+
+  const abrirNovo = () => { setSel(null); setForm(formVazio()); setMostrarErros(false); setView("form"); };
+  const editar = registro => { setSel(registro); setForm({ ...formVazio(), ...registro }); setMostrarErros(false); setView("form"); };
 
   const persistir = async (enviar = false) => {
-    if (enviar) {
-      const erros = pendenciasSubmissao(form);
-      if (erros.length) { alert(erros.join("\n")); return; }
+    if (enviar && errosForm.length) {
+      setMostrarErros(true);
+      document.getElementById("homologacao-topo-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
     }
     setSalvando(true);
     try {
@@ -179,17 +219,26 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
     } finally { setSalvando(false); }
   };
 
-  const prepararParecer = registro => setParecerModal({
-    documentos:(registro.documentos || []).map(x=>({...x})),
-    checklistTecnico:(registro.checklistTecnico || []).map(x=>({...x})),
-    anexos:[...(registro.anexos || [])], decisao:"", conclusao:"",
-  });
+  const prepararParecer = registro => {
+    setMostrarErrosParecer(false);
+    setParecerModal({
+      documentos:(registro.documentos || []).map(x=>({...x})),
+      checklistTecnico:(registro.checklistTecnico || []).map(x=>({...x})),
+      anexos:[...(registro.anexos || [])], decisao:"", conclusao:"",
+    });
+  };
+
+  // Parecer desfavorável não exige o checklist completo: quem reprova não
+  // precisa terminar de avaliar o que já foi reprovado.
+  const errosParecer = useMemo(
+    () => (parecerModal && parecerModal.decisao !== "Desfavorável" ? pendenciasParecer(parecerModal) : []),
+    [parecerModal]
+  );
+  const errParecerLinha = id => (mostrarErrosParecer ? erroPorChave(errosParecer, id) : "");
+  const faltaNoParecer = !parecerModal?.decisao || !String(parecerModal?.conclusao || "").trim() || errosParecer.length > 0;
 
   const solicitarAssinaturaParecer = () => {
-    if (!parecerModal.decisao) { alert("Selecione a recomendação técnica."); return; }
-    const erros = pendenciasParecer(parecerModal);
-    if (erros.length && parecerModal.decisao !== "Desfavorável") { alert(erros.join("\n")); return; }
-    if (!parecerModal.conclusao.trim()) { alert("Registre a conclusão do parecer."); return; }
+    if (faltaNoParecer) { setMostrarErrosParecer(true); return; }
     setAssinaturaCtx({ tipo:"parecer" });
   };
 
@@ -213,13 +262,22 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
 
   const prepararDecisao = registro => {
     const validade = new Date(); validade.setFullYear(validade.getFullYear()+1);
+    setMostrarErrosDecisao(false);
     setDecisaoModal({ decisao:registro.parecerTecnico?.decisao==="Desfavorável"?"Reprovada":"Homologada", validade:validade.toISOString().slice(0,10), condicoes:"", conclusao:"" });
   };
 
+  const errosDecisao = useMemo(() => {
+    if (!decisaoModal) return [];
+    const erros = [];
+    if (["Homologada","Condicional"].includes(decisaoModal.decisao) && !decisaoModal.validade) erros.push({ campo:"validade", msg:"Informe até quando esta homologação vale." });
+    if (decisaoModal.decisao === "Condicional" && !String(decisaoModal.condicoes||"").trim()) erros.push({ campo:"condicoes", msg:"Descreva as condições que o fornecedor precisa cumprir." });
+    if (!String(decisaoModal.conclusao||"").trim()) erros.push({ campo:"conclusao", msg:"Registre a conclusão final." });
+    return erros;
+  }, [decisaoModal]);
+  const errDecisao = campo => (mostrarErrosDecisao ? erroPorChave(errosDecisao, campo) : "");
+
   const solicitarAssinaturaFinal = () => {
-    if (["Homologada","Condicional"].includes(decisaoModal.decisao) && !decisaoModal.validade) { alert("Informe a validade da homologação."); return; }
-    if (decisaoModal.decisao === "Condicional" && !decisaoModal.condicoes.trim()) { alert("Descreva as condições da aprovação."); return; }
-    if (!decisaoModal.conclusao.trim()) { alert("Registre a conclusão final."); return; }
+    if (errosDecisao.length) { setMostrarErrosDecisao(true); return; }
     setAssinaturaCtx({ tipo:"final" });
   };
 
@@ -247,38 +305,73 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
     } catch (e) { toast_(e.message || "Erro ao excluir.", "red"); }
   };
 
-  if (view === "form") return <div>
+  if (view === "form") return <div id="homologacao-topo-form">
     <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}><button style={s.btn} onClick={()=>setView(sel?"detalhe":"lista")}>← Voltar</button><strong>{sel?`Editar ${sel.num}`:"Nova homologação"}</strong></div>
+    {mostrarErros && errosForm.length>0 && (
+      <div style={{ background:"#ff4f6a14", border:"1px solid #ff4f6a55", borderRadius:10, padding:"11px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
+        <b style={{ color:"#ff4f6a" }}>Faltam {errosForm.length} {errosForm.length===1?"item":"itens"} para enviar.</b> Os campos pendentes estão destacados abaixo.
+      </div>
+    )}
     <div style={s.card}><SecTitle icon="📋" ch="Identificação e escopo" />
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
-        <F lbl="Fornecedor *" ch={<Sel value={form.fornecedorId} onChange={e=>{const f=fornecedores.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,fornecedorId:e.target.value,fornecedorNome:f?.nome||""}));}}><option value="">Selecione...</option>{fornecedores.filter(f=>f.status!=="Bloqueado").map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</Sel>} />
-        <F lbl="Categoria *" ch={<Sel value={form.categoria} onChange={e=>trocarCategoria(e.target.value)}>{CATEGORIAS_HOMOLOGACAO.map(c=><option key={c}>{c}</option>)}</Sel>} />
-        <F lbl="Criticidade *" ch={<Sel value={form.criticidade} onChange={e=>setF("criticidade",e.target.value)}><option value="">Selecione...</option><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></Sel>} />
-        <F lbl="Item cadastrado no CQ (opcional)" ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Produto/item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
-        <F lbl="Item / produto / serviço *" ch={<Inp value={form.itemNome} onChange={e=>setF("itemNome",e.target.value)} placeholder="Ex.: Vitamina C / Cartucho / Laboratório" />} />
-        <F lbl="Código / referência" ch={<Inp value={form.codigoItem} onChange={e=>setF("codigoItem",e.target.value)} />} />
-        <F lbl="Fabricante (se diferente)" ch={<Inp value={form.fabricante} onChange={e=>setF("fabricante",e.target.value)} />} />
-        <F lbl="Unidade fabricante" ch={<Inp value={form.unidadeFabricante} onChange={e=>setF("unidadeFabricante",e.target.value)} />} />
-        <F lbl="Motivo" ch={<Sel value={form.motivo} onChange={e=>setF("motivo",e.target.value)}><option>Produto novo</option><option>Novo fornecedor</option><option>Fornecedor alternativo</option><option>Alteração de origem/fabricante</option><option>Outro</option></Sel>} />
-        <F lbl="Responsável pelo acompanhamento" ch={<Sel value={form.responsavel} onChange={e=>setF("responsavel",e.target.value)}><option value="">Selecione...</option>{users.filter(u=>u.name).map(u=><option key={u.id||u.uid}>{u.name}</option>)}</Sel>} />
-        <F lbl="Prazo desejado" ch={<Inp type="date" value={form.prazo} onChange={e=>setF("prazo",e.target.value)} />} />
+        <F lbl="Fornecedor *" err={errForm("fornecedorId")}
+          tip="Empresa que vai fornecer o item. Só aparecem fornecedores já cadastrados e não bloqueados — se não estiver na lista, cadastre-o antes em Fornecedores."
+          ch={<Sel value={form.fornecedorId} onChange={e=>{const f=fornecedores.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,fornecedorId:e.target.value,fornecedorNome:f?.nome||""}));}}><option value="">Selecione...</option>{fornecedores.filter(f=>f.status!=="Bloqueado").map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</Sel>} />
+        <F lbl="Categoria *" err={errForm("categoria")}
+          tip="Define quais documentos e ensaios serão exigidos do fornecedor. Trocar a categoria refaz os dois checklists mais abaixo, então escolha antes de continuar."
+          ch={<Sel value={form.categoria} onChange={e=>trocarCategoria(e.target.value)}>{CATEGORIAS_HOMOLOGACAO.map(c=><option key={c}>{c}</option>)}</Sel>} />
+        <F lbl="Criticidade *" err={errForm("criticidade")}
+          tip="O quanto este item afeta a qualidade do produto final. Crítica: princípio ativo ou contato direto com o produto. Alta: excipiente ou embalagem primária. Média: embalagem secundária. Baixa: material de apoio, sem contato com o produto."
+          ch={<Sel value={form.criticidade} onChange={e=>setF("criticidade",e.target.value)}><option value="">Selecione...</option><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></Sel>} />
+        <F lbl="Item / produto / serviço *" err={errForm("itemNome")}
+          tip="Nome do que está sendo homologado, do jeito que a fábrica chama. Ex.: Vitamina C (Ácido Ascórbico), Cartucho Calcivitam 60un, Serviço de calibração."
+          ch={<Inp value={form.itemNome} onChange={e=>setF("itemNome",e.target.value)} placeholder="Ex.: Vitamina C / Cartucho / Laboratório" />} />
+        <F lbl="Já cadastrado no CQ?"
+          tip="Se este material já existe no cadastro do Controle de Qualidade, selecione-o: o nome e o código são preenchidos sozinhos e as análises de CQ daquele material passam a aparecer nesta homologação. Item novo? Deixe como está."
+          ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Não — item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
+        <F lbl="Código / referência"
+          tip="Código interno do item, se já houver. Serve para amarrar esta homologação ao que o almoxarifado e o CQ usam no dia a dia."
+          ch={<Inp value={form.codigoItem} onChange={e=>setF("codigoItem",e.target.value)} />} />
+        <F lbl="Fabricante (se diferente)"
+          tip="Preencha só quando quem fabrica não é quem vende. Distribuidores revendem material de terceiros, e o que se homologa tecnicamente é a fábrica de origem."
+          ch={<Inp value={form.fabricante} onChange={e=>setF("fabricante",e.target.value)} />} />
+        <F lbl="Unidade fabricante"
+          tip="Planta/endereço onde o item é produzido. A mesma empresa pode ter unidades com licenças e desempenho diferentes."
+          ch={<Inp value={form.unidadeFabricante} onChange={e=>setF("unidadeFabricante",e.target.value)} />} />
+        <F lbl="Motivo"
+          tip="Por que esta homologação está sendo aberta agora. Ajuda a Qualidade a priorizar: fornecedor alternativo para item que já falta é mais urgente que estudo de produto novo."
+          ch={<Sel value={form.motivo} onChange={e=>setF("motivo",e.target.value)}><option>Produto novo</option><option>Novo fornecedor</option><option>Fornecedor alternativo</option><option>Alteração de origem/fabricante</option><option>Outro</option></Sel>} />
+        <F lbl="Responsável pelo acompanhamento"
+          tip="Quem cobra o fornecedor pelos documentos e acompanha até a decisão. Não é quem aprova — a aprovação é feita por outra pessoa, por segregação de funções."
+          ch={<Sel value={form.responsavel} onChange={e=>setF("responsavel",e.target.value)}><option value="">Selecione...</option>{users.filter(u=>u.name).map(u=><option key={u.id||u.uid}>{u.name}</option>)}</Sel>} />
+        <F lbl="Prazo desejado"
+          tip="Quando você precisa da decisão. É uma expectativa para a Qualidade se organizar, não um compromisso automático."
+          ch={<Inp type="date" value={form.prazo} onChange={e=>setF("prazo",e.target.value)} />} />
       </div>
-      <F lbl="Finalidade / uso pretendido *" ch={<TA rows={3} value={form.finalidade} onChange={e=>setF("finalidade",e.target.value)} placeholder="Onde e para qual produto/processo será utilizado?" />} />
-      <F lbl="Observações iniciais" ch={<TA rows={2} value={form.observacoes} onChange={e=>setF("observacoes",e.target.value)} />} />
+      <F lbl="Finalidade / uso pretendido *" err={errForm("finalidade")}
+        tip="Onde este item vai ser usado e em qual produto/processo. É o que permite avaliar o risco: o mesmo insumo pode ser aceitável num produto e não em outro."
+        ch={<TA rows={3} value={form.finalidade} onChange={e=>setF("finalidade",e.target.value)} placeholder="Ex.: Matéria-prima para o Calcivitam D3 cápsulas, substituindo o fornecedor atual por falta de entrega." />} />
+      <F lbl="Observações iniciais"
+        tip="Qualquer contexto que ajude quem vai analisar: histórico com o fornecedor, urgência, amostras já recebidas."
+        ch={<TA rows={2} value={form.observacoes} onChange={e=>setF("observacoes",e.target.value)} />} />
     </div>
-    <div style={s.card}><SecTitle icon="📄" ch="Checklist documental" />
-      {(form.documentos||[]).map((d,i)=><div key={d.id||i} style={{ display:"grid", gridTemplateColumns:"2fr 110px 150px 1.5fr", gap:8, alignItems:"center", marginBottom:8 }}>
-        <div style={{ fontSize:12, color:T.text2 }}>{d.item}{d.obrigatorio&&<b style={{color:T.red}}> *</b>}</div>
-        <Sel value={d.obrigatorio?"Sim":"Não"} onChange={e=>setF("documentos",form.documentos.map((x,j)=>j===i?{...x,obrigatorio:e.target.value==="Sim"}:x))}><option>Sim</option><option>Não</option></Sel>
-        <span style={{fontSize:11,color:T.text3}}>Situação preenchida na análise</span>
-        <Inp value={d.obs||""} onChange={e=>setF("documentos",form.documentos.map((x,j)=>j===i?{...x,obs:e.target.value}:x))} placeholder="Orientação / observação" />
-      </div>)}
+    <div style={s.card}><SecTitle icon="📄" ch={`O que será exigido do fornecedor (${(form.documentos||[]).length})`} />
+      <NotaQuemPreenche ch={<>Esta lista é definida pela categoria <b>{form.categoria}</b> — você não precisa preencher nada aqui. A Qualidade marca cada item como recebido, reprovado ou não aplicável durante a análise.</>} />
+      <ChecklistPreview itens={form.documentos} obrigatoriedade vazio="Selecione uma categoria para ver os documentos exigidos." />
     </div>
-    <div style={s.card}><SecTitle icon="🔬" ch="Checklist técnico planejado" />
-      {(form.checklistTecnico||[]).map((item,i)=><div key={item.id||i} style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8, alignItems:"center", marginBottom:8 }}><div style={{fontSize:12,color:T.text2}}>{item.item}</div><Inp value={item.obs||""} onChange={e=>setF("checklistTecnico",form.checklistTecnico.map((x,j)=>j===i?{...x,obs:e.target.value}:x))} placeholder="Critério / orientação" /></div>)}
+    <div style={s.card}><SecTitle icon="🔬" ch={`O que será avaliado tecnicamente (${(form.checklistTecnico||[]).length})`} />
+      <NotaQuemPreenche ch="Os critérios técnicos também vêm da categoria e são avaliados pela Qualidade no parecer. Se algum ponto específico precisar de atenção, escreva em Observações iniciais." />
+      <ChecklistPreview itens={form.checklistTecnico} vazio="Selecione uma categoria para ver os critérios técnicos." />
     </div>
-    <div style={s.card}><SecTitle icon="📎" ch="Evidências iniciais" /><AnexosUpload anexos={form.anexos||[]} setAnexos={v=>setForm(p=>({...p,anexos:typeof v==="function"?v(p.anexos||[]):v}))} inputId="homologacao-anexos-form" /></div>
-    <div style={{ display:"flex", gap:8, justifyContent:"flex-end", paddingBottom:20 }}><button style={s.btn} disabled={salvando} onClick={()=>persistir(false)}>Salvar rascunho</button><button style={s.btnA} disabled={salvando} onClick={()=>persistir(true)}>{salvando?"Salvando...":"Enviar para análise →"}</button></div>
+    <div style={s.card}><SecTitle icon="📎" ch="Evidências iniciais (opcional)" />
+      <NotaQuemPreenche ch="Se você já tem algo do fornecedor em mãos — ficha técnica, certificado, proposta — anexe aqui para adiantar a análise." />
+      <AnexosUpload anexos={form.anexos||[]} setAnexos={v=>setForm(p=>({...p,anexos:typeof v==="function"?v(p.anexos||[]):v}))} inputId="homologacao-anexos-form" />
+    </div>
+    <div style={{ display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center", paddingBottom:20 }}>
+      {mostrarErros && errosForm.length>0 && <span style={{ fontSize:11, color:"#ff4f6a" }}>Faltam {errosForm.length} {errosForm.length===1?"item":"itens"}</span>}
+      <button style={s.btn} disabled={salvando} onClick={()=>persistir(false)}>Salvar rascunho</button>
+      <button style={s.btnA} disabled={salvando} onClick={()=>persistir(true)}>{salvando?"Salvando...":"Enviar para análise →"}</button>
+    </div>
   </div>;
 
   if (view === "detalhe" && sel) {
@@ -307,18 +400,48 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
       {user.role==="admin"&&sel.status==="Rascunho"&&<button style={s.btnD} onClick={()=>excluirRascunho(sel)}>Excluir rascunho</button>}
 
       {parecerModal&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{background:T.card2,border:`1px solid ${T.border2}`,borderRadius:16,padding:22,width:"min(1000px,96vw)",maxHeight:"92vh",overflowY:"auto"}}>
-        <h3 style={{marginTop:0}}>Parecer técnico — {sel.num}</h3><SecTitle icon="📄" ch="Documentos" />
-        {parecerModal.documentos.map((d,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"2fr 150px 140px 2fr",gap:8,marginBottom:7,alignItems:"center"}}><span style={{fontSize:12}}>{d.item}{d.obrigatorio?" *":""}</span><Sel value={d.situacao} onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,situacao:e.target.value}:x)}))}><option>Pendente</option><option>Recebido</option><option>Não aplicável</option><option>Reprovado</option></Sel><Inp type="date" value={d.validade||""} onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,validade:e.target.value}:x)}))}/><Inp value={d.obs||""} placeholder="Observação" onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,obs:e.target.value}:x)}))}/></div>)}
-        <SecTitle icon="🔬" ch="Checklist técnico" />{parecerModal.checklistTecnico.map((d,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"2fr 160px 2fr",gap:8,marginBottom:7,alignItems:"center"}}><span style={{fontSize:12}}>{d.item}</span><Sel value={d.resultado} onChange={e=>setParecerModal(p=>({...p,checklistTecnico:p.checklistTecnico.map((x,j)=>j===i?{...x,resultado:e.target.value}:x)}))}><option value="">Pendente</option><option>Conforme</option><option>Não conforme</option><option>Não aplicável</option></Sel><Inp value={d.obs||""} placeholder="Observação / evidência" onChange={e=>setParecerModal(p=>({...p,checklistTecnico:p.checklistTecnico.map((x,j)=>j===i?{...x,obs:e.target.value}:x)}))}/></div>)}
+        <h3 style={{marginTop:0}}>Parecer técnico — {sel.num}</h3>
+        {mostrarErrosParecer && errosParecer.length>0 && (
+          <div style={{ background:"#ff4f6a14", border:"1px solid #ff4f6a55", borderRadius:10, padding:"11px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
+            <b style={{ color:"#ff4f6a" }}>Faltam {errosParecer.length} {errosParecer.length===1?"item":"itens"} na avaliação.</b> As linhas pendentes estão destacadas. Para reprovar sem concluir tudo, escolha a recomendação <b>Desfavorável</b>.
+          </div>
+        )}
+        <SecTitle icon="📄" ch="Documentos" />
+        <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Marque o que o fornecedor entregou. "Reprovado" e "Não aplicável" precisam de justificativa na observação.</div>
+        {parecerModal.documentos.map((d,i)=>{const err=errParecerLinha(d.id);return <div key={d.id||i} style={{marginBottom:7,padding:err?"6px 8px":undefined,borderRadius:8,background:err?"#ff4f6a10":undefined,border:err?"1px solid #ff4f6a55":"1px solid transparent"}}>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 150px 140px 2fr",gap:8,alignItems:"center"}}><span style={{fontSize:12}}>{d.item}{d.obrigatorio?<b style={{color:T.red}}> *</b>:""}</span><Sel value={d.situacao} onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,situacao:e.target.value}:x)}))}><option>Pendente</option><option>Recebido</option><option>Não aplicável</option><option>Reprovado</option></Sel><Inp type="date" title="Validade do documento, quando houver" value={d.validade||""} onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,validade:e.target.value}:x)}))}/><Inp value={d.obs||""} placeholder={["Reprovado","Não aplicável"].includes(d.situacao)?"Justificativa obrigatória":"Observação"} onChange={e=>setParecerModal(p=>({...p,documentos:p.documentos.map((x,j)=>j===i?{...x,obs:e.target.value}:x)}))}/></div>
+          {err&&<div style={{fontSize:11,color:"#ff4f6a",marginTop:4}}>⚠ {err}</div>}
+        </div>;})}
+        <SecTitle icon="🔬" ch="Checklist técnico" />
+        <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Todo item precisa de um resultado. "Não conforme" e "Não aplicável" precisam de justificativa.</div>
+        {parecerModal.checklistTecnico.map((d,i)=>{const err=errParecerLinha(d.id);return <div key={d.id||i} style={{marginBottom:7,padding:err?"6px 8px":undefined,borderRadius:8,background:err?"#ff4f6a10":undefined,border:err?"1px solid #ff4f6a55":"1px solid transparent"}}>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 160px 2fr",gap:8,alignItems:"center"}}><span style={{fontSize:12}}>{d.item}</span><Sel value={d.resultado} onChange={e=>setParecerModal(p=>({...p,checklistTecnico:p.checklistTecnico.map((x,j)=>j===i?{...x,resultado:e.target.value}:x)}))}><option value="">Pendente</option><option>Conforme</option><option>Não conforme</option><option>Não aplicável</option></Sel><Inp value={d.obs||""} placeholder={["Não conforme","Não aplicável"].includes(d.resultado)?"Justificativa obrigatória":"Observação / evidência"} onChange={e=>setParecerModal(p=>({...p,checklistTecnico:p.checklistTecnico.map((x,j)=>j===i?{...x,obs:e.target.value}:x)}))}/></div>
+          {err&&<div style={{fontSize:11,color:"#ff4f6a",marginTop:4}}>⚠ {err}</div>}
+        </div>;})}
         <SecTitle icon="📎" ch="Evidências adicionais" /><AnexosUpload anexos={parecerModal.anexos} setAnexos={v=>setParecerModal(p=>({...p,anexos:typeof v==="function"?v(p.anexos):v}))} inputId="homologacao-anexos-parecer" />
-        <F lbl="Recomendação técnica *" ch={<Sel value={parecerModal.decisao} onChange={e=>setParecerModal(p=>({...p,decisao:e.target.value}))}><option value="">Selecione...</option><option>Favorável</option><option>Favorável com ressalvas</option><option>Desfavorável</option></Sel>}/><F lbl="Conclusão técnica *" ch={<TA rows={4} value={parecerModal.conclusao} onChange={e=>setParecerModal(p=>({...p,conclusao:e.target.value}))}/>} />
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button style={s.btn} onClick={()=>setParecerModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaParecer}>Assinar parecer →</button></div>
+        <F lbl="Recomendação técnica *" err={mostrarErrosParecer&&!parecerModal.decisao?"Selecione a recomendação técnica.":""}
+          tip="Favorável: pode ser homologado. Favorável com ressalvas: pode ser usado, mas com condições que o aprovador vai registrar. Desfavorável: não deve ser homologado — esta opção dispensa concluir o checklist."
+          ch={<Sel value={parecerModal.decisao} onChange={e=>setParecerModal(p=>({...p,decisao:e.target.value}))}><option value="">Selecione...</option><option>Favorável</option><option>Favorável com ressalvas</option><option>Desfavorável</option></Sel>}/>
+        <F lbl="Conclusão técnica *" err={mostrarErrosParecer&&!String(parecerModal.conclusao||"").trim()?"Registre a conclusão do parecer.":""}
+          tip="Resuma o que sustenta a recomendação. É este texto que sai no relatório em PDF e que a inspeção lê."
+          ch={<TA rows={4} value={parecerModal.conclusao} onChange={e=>setParecerModal(p=>({...p,conclusao:e.target.value}))}/>} />
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>{mostrarErrosParecer&&faltaNoParecer&&<span style={{fontSize:11,color:"#ff4f6a"}}>Revise os itens destacados</span>}<button style={s.btn} onClick={()=>setParecerModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaParecer}>Assinar parecer →</button></div>
       </div></div>}
 
       {decisaoModal&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{background:T.card2,border:`1px solid ${T.border2}`,borderRadius:16,padding:22,width:"min(620px,96vw)"}}><h3 style={{marginTop:0}}>Decisão final — {sel.num}</h3>
-        <F lbl="Decisão *" ch={<Sel value={decisaoModal.decisao} onChange={e=>setDecisaoModal(p=>({...p,decisao:e.target.value}))}><option>Homologada</option><option>Condicional</option><option>Reprovada</option></Sel>}/>
-        {decisaoModal.decisao!=="Reprovada"&&<F lbl="Validade *" ch={<Inp type="date" value={decisaoModal.validade} onChange={e=>setDecisaoModal(p=>({...p,validade:e.target.value}))}/>}/>}<F lbl="Condições / restrições" ch={<TA rows={3} value={decisaoModal.condicoes} onChange={e=>setDecisaoModal(p=>({...p,condicoes:e.target.value}))}/>}/><F lbl="Conclusão final *" ch={<TA rows={4} value={decisaoModal.conclusao} onChange={e=>setDecisaoModal(p=>({...p,conclusao:e.target.value}))}/>}/>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button style={s.btn} onClick={()=>setDecisaoModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaFinal}>Assinar decisão →</button></div>
+        <F lbl="Decisão *"
+          tip="Homologada: aprovado sem restrição. Condicional: aprovado só enquanto o fornecedor cumprir as condições que você escrever abaixo. Reprovada: não pode ser usado."
+          ch={<Sel value={decisaoModal.decisao} onChange={e=>setDecisaoModal(p=>({...p,decisao:e.target.value}))}><option>Homologada</option><option>Condicional</option><option>Reprovada</option></Sel>}/>
+        {decisaoModal.decisao!=="Reprovada"&&<F lbl="Validade *" err={errDecisao("validade")}
+          tip="Data em que a homologação deixa de valer. Passada essa data o registro aparece como Vencida na lista e precisa de nova avaliação."
+          ch={<Inp type="date" value={decisaoModal.validade} onChange={e=>setDecisaoModal(p=>({...p,validade:e.target.value}))}/>}/>}
+        <F lbl={decisaoModal.decisao==="Condicional"?"Condições / restrições *":"Condições / restrições"} err={errDecisao("condicoes")}
+          tip="O que o fornecedor precisa cumprir para continuar homologado. Ex.: enviar certificado de análise a cada lote; reavaliar após 3 entregas conformes."
+          ch={<TA rows={3} value={decisaoModal.condicoes} onChange={e=>setDecisaoModal(p=>({...p,condicoes:e.target.value}))}/>}/>
+        <F lbl="Conclusão final *" err={errDecisao("conclusao")}
+          tip="A justificativa da decisão. Sai assinada no relatório em PDF — é o registro que comprova que a aprovação foi analisada, não automática."
+          ch={<TA rows={4} value={decisaoModal.conclusao} onChange={e=>setDecisaoModal(p=>({...p,conclusao:e.target.value}))}/>}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>{mostrarErrosDecisao&&errosDecisao.length>0&&<span style={{fontSize:11,color:"#ff4f6a"}}>Faltam {errosDecisao.length} {errosDecisao.length===1?"item":"itens"}</span>}<button style={s.btn} onClick={()=>setDecisaoModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaFinal}>Assinar decisão →</button></div>
       </div></div>}
       {assinaturaCtx&&<AssinaturaModal user={user} titulo={assinaturaCtx.tipo==="parecer"?`Parecer técnico — ${sel.num}`:`Decisão final — ${sel.num}`} contexto={`HOMOLOGACAO|${sel.num}|${assinaturaCtx.tipo}`} papel={assinaturaCtx.tipo==="parecer"?"Parecerista técnico":"Aprovador da homologação"} docId={sel.id} onClose={()=>setAssinaturaCtx(null)} onConfirm={assinaturaCtx.tipo==="parecer"?confirmarParecer:confirmarDecisao}/>}
     </div>;

@@ -76,29 +76,46 @@ export function checklistTecnicoInicial(categoria) {
     .map((item, index) => ({ id: `tec-${index + 1}`, item, resultado: "", obs: "" }));
 }
 
+// Os erros carregam o campo/linha a que pertencem para a tela poder destacar
+// onde falta preencher, em vez de despejar a lista inteira num alerta.
 export function pendenciasSubmissao(registro) {
   const erros = [];
-  if (!registro?.fornecedorId) erros.push("Selecione o fornecedor.");
-  if (!String(registro?.itemNome || "").trim()) erros.push("Informe o item, material, produto ou serviço.");
-  if (!String(registro?.finalidade || "").trim()) erros.push("Informe a finalidade da homologação.");
-  if (!registro?.categoria) erros.push("Selecione a categoria.");
-  if (!registro?.criticidade) erros.push("Classifique a criticidade.");
-  if (!(registro?.documentos || []).length) erros.push("O checklist documental não pode ficar vazio.");
-  if (!(registro?.checklistTecnico || []).length) erros.push("O checklist técnico não pode ficar vazio.");
+  if (!registro?.fornecedorId) erros.push({ campo: "fornecedorId", msg: "Selecione o fornecedor." });
+  if (!registro?.categoria) erros.push({ campo: "categoria", msg: "Selecione a categoria." });
+  if (!String(registro?.itemNome || "").trim()) erros.push({ campo: "itemNome", msg: "Informe o item, material, produto ou serviço." });
+  if (!registro?.criticidade) erros.push({ campo: "criticidade", msg: "Classifique a criticidade." });
+  if (!String(registro?.finalidade || "").trim()) erros.push({ campo: "finalidade", msg: "Informe a finalidade da homologação." });
+  if (!(registro?.documentos || []).length) erros.push({ campo: "categoria", msg: "O checklist documental não pode ficar vazio." });
+  if (!(registro?.checklistTecnico || []).length) erros.push({ campo: "categoria", msg: "O checklist técnico não pode ficar vazio." });
   return erros;
 }
 
+// "Não aplicável" dispensa o documento/item da avaliação, então precisa de
+// justificativa pelo mesmo motivo que "Reprovado" e "Não conforme" precisam:
+// é uma decisão técnica que a inspeção vai querer ler.
 export function pendenciasParecer(registro) {
   const erros = [];
   for (const doc of registro?.documentos || []) {
-    if (doc.obrigatorio && !["Recebido", "Não aplicável"].includes(doc.situacao)) erros.push(`Documento pendente: ${doc.item}`);
-    if (doc.situacao === "Reprovado" && !String(doc.obs || "").trim()) erros.push(`Justifique o documento reprovado: ${doc.item}`);
+    if (doc.obrigatorio && !["Recebido", "Não aplicável"].includes(doc.situacao)) {
+      erros.push({ tipo: "documento", id: doc.id, msg: "Documento obrigatório ainda pendente." });
+    }
+    if (["Reprovado", "Não aplicável"].includes(doc.situacao) && !String(doc.obs || "").trim()) {
+      erros.push({ tipo: "documento", id: doc.id, msg: `Justifique por que este documento está "${doc.situacao}".` });
+    }
   }
   for (const item of registro?.checklistTecnico || []) {
-    if (!item.resultado) erros.push(`Avalie o item técnico: ${item.item}`);
-    if (item.resultado === "Não conforme" && !String(item.obs || "").trim()) erros.push(`Justifique o item não conforme: ${item.item}`);
+    if (!item.resultado) erros.push({ tipo: "tecnico", id: item.id, msg: "Avalie este item." });
+    if (["Não conforme", "Não aplicável"].includes(item.resultado) && !String(item.obs || "").trim()) {
+      erros.push({ tipo: "tecnico", id: item.id, msg: `Justifique por que este item está "${item.resultado}".` });
+    }
   }
   return erros;
+}
+
+// Indexa os erros por campo (submissão) ou por linha (parecer) para a tela
+// consultar sem varrer a lista a cada render.
+export function erroPorChave(erros, chave) {
+  return (erros || []).find(e => (e.campo || e.id) === chave)?.msg || "";
 }
 
 export function statusEfetivo(registro, hoje = new Date()) {

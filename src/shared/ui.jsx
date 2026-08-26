@@ -76,7 +76,18 @@ export function Tooltip({ text }) {
   );
 }
 
-export function F({ lbl, ch, tip }) { const s = useS(); return <div style={{ marginBottom: 14 }}><label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2 }}>{lbl}{tip && <Tooltip text={tip}/>}</label>{ch}</div>; }
+// `err` destaca o campo e mostra a mensagem embaixo dele — evita despejar a
+// lista inteira de pendências num alert(), onde o usuário não vê onde falta.
+export function F({ lbl, ch, tip, err }) {
+  const s = useS();
+  return <div style={{ marginBottom: 14 }}>
+    <label style={{ ...s.lbl, display:"flex", alignItems:"center", flexWrap:"wrap", gap:2, color: err ? "#ff4f6a" : s.lbl.color }}>{lbl}{tip && <Tooltip text={tip}/>}</label>
+    <div style={err ? { borderRadius: 8, boxShadow: "0 0 0 2px #ff4f6a55" } : undefined}>{ch}</div>
+    {err && <div style={{ fontSize: 11, color: "#ff4f6a", marginTop: 4, display:"flex", alignItems:"center", gap:4 }}>
+      <span aria-hidden="true">⚠</span>{err}
+    </div>}
+  </div>;
+}
 
 export function Inp({ sx, ...p }) { const s = useS(); return <input style={{ ...s.inp, ...sx }} {...p} />; }
 
