@@ -21,6 +21,10 @@ const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegrati
 const { carimbarFormularioXlsx, nomeArquivoFormulario } = require("./formularioXlsx");
 const { checarLimite, enviarEmails, registrarEnvio, validarEnvio } = require("./email");
 const {
+  requireHomologacaoPermission,
+  validateHomologacaoUpdate,
+} = require("./homologacao");
+const {
   buildDocumentSourceHash,
   createLocalSummary,
   extractTextFromStoredFile,
@@ -688,6 +692,30 @@ async function handleCounters(req, res, pathname) {
     return sendJson(res, 200, { value: `LA-${ano}-${String(value).padStart(3, "0")}` });
   }
 
+  if (pathname === "/api/counters/increment-homologacao" && req.method === "POST") {
+    const user = await requireUser(req);
+    requireHomologacaoPermission(user, "criarHomologacao");
+    const ano = new Date().getFullYear();
+    const value = await transaction(async client => {
+      const result = await client.query(`
+        INSERT INTO counters (key, value, updated_at)
+        VALUES (
+          $1,
+          COALESCE((
+            SELECT MAX((substring(data->>'num' from '([0-9]+)$'))::int)
+            FROM generic_documents
+            WHERE collection = 'homologacoes' AND data->>'num' LIKE $2
+          ), 0) + 1,
+          now()
+        )
+        ON CONFLICT (key) DO UPDATE SET value = GREATEST(counters.value + 1, EXCLUDED.value), updated_at = now()
+        RETURNING value
+      `, [`homologacao:${ano}`, `HOM-${ano}-%`]);
+      return result.rows[0].value;
+    });
+    return sendJson(res, 200, { value: `HOM-${ano}-${String(value).padStart(4, "0")}` });
+  }
+
   return false;
 }
 
@@ -975,6 +1003,9 @@ async function handleCollections(req, res, pathname) {
   if (isLaudoCollection) {
     requireLaudoPermission(user, req.method === "GET" ? "verLaudos" : "criarLaudos");
   }
+  if (collection === "homologacoes" && req.method === "GET") {
+    requireHomologacaoPermission(user, "verHomologacoes");
+  }
 
   if (!id && req.method === "GET") {
     const result = await query(`
@@ -989,7 +1020,7 @@ async function handleCollections(req, res, pathname) {
     const data = sanitize(await readBody(req));
 
     let oldData = null;
-    if (collection === "gestao_docs" || collection === "laudos") {
+    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes") {
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
         [collection, id]
@@ -998,6 +1029,7 @@ async function handleCollections(req, res, pathname) {
     }
 
     if (collection === "laudos") validateLaudoUpdate(oldData, data);
+    if (collection === "homologacoes") validateHomologacaoUpdate(user, oldData, data);
 
     await query(`
       INSERT INTO generic_documents (collection, id, data, updated_at)
@@ -1017,6 +1049,22 @@ async function handleCollections(req, res, pathname) {
   }
 
   if (id && req.method === "DELETE") {
+    if (collection === "homologacoes") {
+      if (user.role !== "admin") {
+        const error = new Error("Apenas administrador pode excluir rascunho de homologacao");
+        error.status = 403;
+        throw error;
+      }
+      const prev = await query(
+        "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
+        [collection, id]
+      );
+      if (prev.rows[0]?.data?.status !== "Rascunho") {
+        const error = new Error("Apenas homologacao em rascunho pode ser excluida");
+        error.status = 409;
+        throw error;
+      }
+    }
     if (collection === "laudos") {
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",

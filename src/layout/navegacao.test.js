@@ -42,6 +42,13 @@ describe("montarGrupos", () => {
     const comPerm = montarGrupos({ ...admin, perm: () => true }).find(g => g.id === "cadastros");
     expect(comPerm.items.map(i => i.id)).toContain("laudos");
   });
+
+  it("homologações respeita a permissão própria", () => {
+    const semPerm = montarGrupos({ ...admin, perm: key => key !== "verHomologacoes" }).find(g => g.id === "cadastros");
+    expect(semPerm.items.map(i => i.id)).not.toContain("homologacoes");
+    const comPerm = montarGrupos({ ...admin, perm: () => true }).find(g => g.id === "cadastros");
+    expect(comPerm.items.map(i => i.id)).toContain("homologacoes");
+  });
 });
 
 describe("telasDoGrupo", () => {
@@ -144,7 +151,7 @@ describe("busca de telas", () => {
 
   it("acha também pelo nome da aba", () => {
     expect(buscarTelas(telas, "cadastros").map(t => t.id)).toEqual(
-      expect.arrayContaining(["fornecedores", "clientes", "laudos"])
+      expect.arrayContaining(["fornecedores", "homologacoes", "clientes", "laudos"])
     );
   });
 
