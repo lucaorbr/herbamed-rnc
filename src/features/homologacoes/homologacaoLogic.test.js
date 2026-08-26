@@ -1,9 +1,12 @@
 import {
+  ETAPAS_FLUXO,
   checklistTecnicoInicial,
   documentosIniciais,
   erroPorChave,
+  etapaAtual,
   pendenciasParecer,
   pendenciasSubmissao,
+  proximoPasso,
   statusEfetivo,
 } from "./homologacaoLogic";
 
@@ -14,20 +17,47 @@ describe("homologacaoLogic", () => {
   });
 
   it("valida os campos mínimos da solicitação", () => {
-    expect(pendenciasSubmissao({})).toHaveLength(7);
+    expect(pendenciasSubmissao({})).toHaveLength(8);
     expect(pendenciasSubmissao({
       fornecedorId: "f1", itemNome: "Vitamina C", finalidade: "Produto novo",
-      categoria: "Matéria-prima", criticidade: "Alta", documentos: [{}], checklistTecnico: [{}],
+      categoria: "Matéria-prima", criticidade: "Alta", motivo: "Novo fornecedor",
+      documentos: [{}], checklistTecnico: [{}],
     })).toEqual([]);
+  });
+
+  // O motivo vinha pré-selecionado como "Produto novo" e era gravado sem
+  // ninguém ter escolhido; agora nasce vazio, então precisa ser exigido.
+  it("exige o motivo, que deixou de vir respondido por padrão", () => {
+    const completo = {
+      fornecedorId: "f1", itemNome: "Vitamina C", finalidade: "Uso X",
+      categoria: "Matéria-prima", criticidade: "Alta",
+      documentos: [{}], checklistTecnico: [{}],
+    };
+    expect(pendenciasSubmissao(completo).map(e => e.campo)).toEqual(["motivo"]);
+    expect(pendenciasSubmissao({ ...completo, motivo: "Outro" })).toEqual([]);
   });
 
   it("aponta o campo de cada pendência para a tela poder destacá-lo", () => {
     const erros = pendenciasSubmissao({});
     expect(erros.map(e => e.campo)).toEqual(
-      expect.arrayContaining(["fornecedorId", "categoria", "itemNome", "criticidade", "finalidade"])
+      expect.arrayContaining(["fornecedorId", "categoria", "itemNome", "criticidade", "motivo", "finalidade"])
     );
     expect(erroPorChave(erros, "criticidade")).toMatch(/criticidade/i);
     expect(erroPorChave(erros, "fabricante")).toBe("");
+  });
+
+  it("situa o registro no fluxo e diz de quem se está esperando", () => {
+    expect(etapaAtual("Rascunho")).toBe(0);
+    expect(etapaAtual("Em análise")).toBe(1);
+    expect(etapaAtual("Aguardando aprovação")).toBe(2);
+    // Os três desfechos e o vencimento ocupam a mesma última etapa.
+    for (const s of ["Homologada", "Condicional", "Reprovada", "Vencida"]) {
+      expect(etapaAtual(s)).toBe(ETAPAS_FLUXO.length - 1);
+    }
+    expect(etapaAtual("status inventado")).toBe(0);
+    expect(proximoPasso("Em análise")).toMatch(/parecer técnico/i);
+    expect(proximoPasso("Aguardando aprovação")).toMatch(/outra pessoa/i);
+    expect(proximoPasso("status inventado")).toBe("");
   });
 
   it("bloqueia parecer com documentos e itens técnicos pendentes", () => {

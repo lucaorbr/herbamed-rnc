@@ -8,26 +8,72 @@ import { F, Inp, SecTitle, Sel, TA } from "../../shared/ui";
 import { AssinaturaModal, buildPDFShell, openPDFWindow } from "../pdf/pdfExports";
 import {
   CATEGORIAS_HOMOLOGACAO,
+  ETAPAS_FLUXO,
   STATUS_HOMOLOGACAO,
   checklistTecnicoInicial,
   documentosIniciais,
   erroPorChave,
   escapeHtml,
+  etapaAtual,
   pendenciasParecer,
   pendenciasSubmissao,
+  proximoPasso,
   statusEfetivo,
 } from "./homologacaoLogic";
 
 const FINALIZADOS = new Set(["Homologada", "Condicional", "Reprovada"]);
+
+const ABAS_FORM = [
+  { id: "identificacao", icon: "📋", label: "Identificação" },
+  { id: "avaliacao", icon: "🔎", label: "O que será avaliado" },
+  { id: "evidencias", icon: "📎", label: "Evidências" },
+];
+
+// Toda pendência de envio hoje mora na primeira aba, mas o mapa evita que um
+// campo novo passe a ser exigido numa aba fechada, sem sinal nenhum na tela.
+const ABA_DO_CAMPO = {
+  fornecedorId: "identificacao", categoria: "identificacao", itemNome: "identificacao",
+  criticidade: "identificacao", motivo: "identificacao", finalidade: "identificacao",
+};
 
 function formVazio() {
   const categoria = CATEGORIAS_HOMOLOGACAO[0];
   return {
     fornecedorId: "", fornecedorNome: "", fabricante: "", unidadeFabricante: "",
     categoria, materialId: "", itemNome: "", codigoItem: "", finalidade: "",
-    motivo: "Produto novo", criticidade: "", responsavel: "", prazo: "", observacoes: "",
+    motivo: "", criticidade: "", responsavel: "", prazo: "", observacoes: "",
     documentos: documentosIniciais(categoria), checklistTecnico: checklistTecnicoInicial(categoria), anexos: [],
   };
+}
+
+function FluxoStepper({ status }) {
+  const T = useTheme();
+  const atual = etapaAtual(status);
+  const reprovada = status === "Reprovada" || status === "Vencida";
+  return <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:"13px 16px", marginBottom:14 }}>
+    <div style={{ display:"flex", alignItems:"stretch", gap:6, flexWrap:"wrap" }}>
+      {ETAPAS_FLUXO.map((etapa, i) => {
+        const feita = i < atual, aqui = i === atual;
+        const cor = aqui ? (reprovada ? "#ff4f6a" : T.accent) : feita ? T.accent : T.text3;
+        return <React.Fragment key={etapa.id}>
+          {i > 0 && <div style={{ alignSelf:"center", color:T.text3, fontSize:11 }}>→</div>}
+          <div style={{ flex:"1 1 130px", minWidth:0, padding:"7px 10px", borderRadius:8,
+            background: aqui ? `${cor}14` : "transparent", border:`1px solid ${aqui ? `${cor}55` : "transparent"}` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, fontWeight:700, color:cor }}>
+              <span aria-hidden="true">{feita ? "✓" : aqui ? "●" : "○"}</span>
+              <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{etapa.label}</span>
+            </div>
+            <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{etapa.quem}</div>
+          </div>
+        </React.Fragment>;
+      })}
+    </div>
+    {proximoPasso(status) && (
+      <div style={{ fontSize:11, color:T.text2, marginTop:10, paddingTop:9, borderTop:`1px solid ${T.border}`, lineHeight:1.5 }}>
+        {proximoPasso(status)}
+      </div>
+    )}
+  </div>;
 }
 
 function BadgeStatus({ status }) {
@@ -145,6 +191,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
   const [mostrarErros, setMostrarErros] = useState(false);
   const [mostrarErrosParecer, setMostrarErrosParecer] = useState(false);
   const [mostrarErrosDecisao, setMostrarErrosDecisao] = useState(false);
+  const [abaForm, setAbaForm] = useState("identificacao");
 
   useEffect(() => {
     const u1 = subscribeCollection("cq_materiais", setMateriais);
@@ -175,13 +222,18 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
 
   const errosForm = useMemo(() => pendenciasSubmissao(form), [form]);
   const errForm = campo => (mostrarErros ? erroPorChave(errosForm, campo) : "");
+  const errosNaAba = aba => errosForm.filter(e => (ABA_DO_CAMPO[e.campo] || "identificacao") === aba).length;
 
-  const abrirNovo = () => { setSel(null); setForm(formVazio()); setMostrarErros(false); setView("form"); };
-  const editar = registro => { setSel(registro); setForm({ ...formVazio(), ...registro }); setMostrarErros(false); setView("form"); };
+  const abrirNovo = () => { setSel(null); setForm(formVazio()); setMostrarErros(false); setAbaForm("identificacao"); setView("form"); };
+  const editar = registro => { setSel(registro); setForm({ ...formVazio(), ...registro }); setMostrarErros(false); setAbaForm("identificacao"); setView("form"); };
 
   const persistir = async (enviar = false) => {
     if (enviar && errosForm.length) {
       setMostrarErros(true);
+      // Sem isto a pendência ficaria escondida numa aba fechada e o botão
+      // recusaria o envio sem o usuário ver por quê.
+      const primeira = ABAS_FORM.find(a => errosNaAba(a.id) > 0);
+      if (primeira) setAbaForm(primeira.id);
       document.getElementById("homologacao-topo-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
@@ -307,66 +359,90 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
 
   if (view === "form") return <div id="homologacao-topo-form">
     <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}><button style={s.btn} onClick={()=>setView(sel?"detalhe":"lista")}>← Voltar</button><strong>{sel?`Editar ${sel.num}`:"Nova homologação"}</strong></div>
+    <FluxoStepper status="Rascunho" />
     {mostrarErros && errosForm.length>0 && (
       <div style={{ background:"#ff4f6a14", border:"1px solid #ff4f6a55", borderRadius:10, padding:"11px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
         <b style={{ color:"#ff4f6a" }}>Faltam {errosForm.length} {errosForm.length===1?"item":"itens"} para enviar.</b> Os campos pendentes estão destacados abaixo.
       </div>
     )}
-    <div style={s.card}><SecTitle icon="📋" ch="Identificação e escopo" />
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
-        <F lbl="Fornecedor *" err={errForm("fornecedorId")}
-          tip="Empresa que vai fornecer o item. Só aparecem fornecedores já cadastrados e não bloqueados — se não estiver na lista, cadastre-o antes em Fornecedores."
-          ch={<Sel value={form.fornecedorId} onChange={e=>{const f=fornecedores.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,fornecedorId:e.target.value,fornecedorNome:f?.nome||""}));}}><option value="">Selecione...</option>{fornecedores.filter(f=>f.status!=="Bloqueado").map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</Sel>} />
-        <F lbl="Categoria *" err={errForm("categoria")}
-          tip="Define quais documentos e ensaios serão exigidos do fornecedor. Trocar a categoria refaz os dois checklists mais abaixo, então escolha antes de continuar."
-          ch={<Sel value={form.categoria} onChange={e=>trocarCategoria(e.target.value)}>{CATEGORIAS_HOMOLOGACAO.map(c=><option key={c}>{c}</option>)}</Sel>} />
-        <F lbl="Criticidade *" err={errForm("criticidade")}
-          tip="O quanto este item afeta a qualidade do produto final. Crítica: princípio ativo ou contato direto com o produto. Alta: excipiente ou embalagem primária. Média: embalagem secundária. Baixa: material de apoio, sem contato com o produto."
-          ch={<Sel value={form.criticidade} onChange={e=>setF("criticidade",e.target.value)}><option value="">Selecione...</option><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></Sel>} />
-        <F lbl="Item / produto / serviço *" err={errForm("itemNome")}
-          tip="Nome do que está sendo homologado, do jeito que a fábrica chama. Ex.: Vitamina C (Ácido Ascórbico), Cartucho Calcivitam 60un, Serviço de calibração."
-          ch={<Inp value={form.itemNome} onChange={e=>setF("itemNome",e.target.value)} placeholder="Ex.: Vitamina C / Cartucho / Laboratório" />} />
-        <F lbl="Já cadastrado no CQ?"
-          tip="Se este material já existe no cadastro do Controle de Qualidade, selecione-o: o nome e o código são preenchidos sozinhos e as análises de CQ daquele material passam a aparecer nesta homologação. Item novo? Deixe como está."
-          ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Não — item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
-        <F lbl="Código / referência"
-          tip="Código interno do item, se já houver. Serve para amarrar esta homologação ao que o almoxarifado e o CQ usam no dia a dia."
-          ch={<Inp value={form.codigoItem} onChange={e=>setF("codigoItem",e.target.value)} />} />
-        <F lbl="Fabricante (se diferente)"
-          tip="Preencha só quando quem fabrica não é quem vende. Distribuidores revendem material de terceiros, e o que se homologa tecnicamente é a fábrica de origem."
-          ch={<Inp value={form.fabricante} onChange={e=>setF("fabricante",e.target.value)} />} />
-        <F lbl="Unidade fabricante"
-          tip="Planta/endereço onde o item é produzido. A mesma empresa pode ter unidades com licenças e desempenho diferentes."
-          ch={<Inp value={form.unidadeFabricante} onChange={e=>setF("unidadeFabricante",e.target.value)} />} />
-        <F lbl="Motivo"
-          tip="Por que esta homologação está sendo aberta agora. Ajuda a Qualidade a priorizar: fornecedor alternativo para item que já falta é mais urgente que estudo de produto novo."
-          ch={<Sel value={form.motivo} onChange={e=>setF("motivo",e.target.value)}><option>Produto novo</option><option>Novo fornecedor</option><option>Fornecedor alternativo</option><option>Alteração de origem/fabricante</option><option>Outro</option></Sel>} />
-        <F lbl="Responsável pelo acompanhamento"
-          tip="Quem cobra o fornecedor pelos documentos e acompanha até a decisão. Não é quem aprova — a aprovação é feita por outra pessoa, por segregação de funções."
-          ch={<Sel value={form.responsavel} onChange={e=>setF("responsavel",e.target.value)}><option value="">Selecione...</option>{users.filter(u=>u.name).map(u=><option key={u.id||u.uid}>{u.name}</option>)}</Sel>} />
-        <F lbl="Prazo desejado"
-          tip="Quando você precisa da decisão. É uma expectativa para a Qualidade se organizar, não um compromisso automático."
-          ch={<Inp type="date" value={form.prazo} onChange={e=>setF("prazo",e.target.value)} />} />
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+      {ABAS_FORM.map(aba => {
+        const ativa = abaForm === aba.id;
+        const pendentes = mostrarErros ? errosNaAba(aba.id) : 0;
+        return <button key={aba.id} onClick={()=>setAbaForm(aba.id)}
+          style={{ padding:"8px 16px", borderRadius:8, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:ativa?600:400,
+            border:`1px solid ${pendentes?"#ff4f6a":ativa?T.accent:T.border2}`,
+            background: ativa ? T.accentDim : T.surf, color: pendentes ? "#ff4f6a" : ativa ? T.accent : T.text2 }}>
+          {aba.icon} {aba.label}{pendentes>0 && <b> · {pendentes}</b>}
+        </button>;
+      })}
+    </div>
+
+    {abaForm==="identificacao" && <>
+      <div style={s.card}><SecTitle icon="📋" ch="Essencial" />
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
+          <F lbl="Fornecedor *" err={errForm("fornecedorId")}
+            tip="Empresa que vai fornecer o item. Só aparecem fornecedores já cadastrados e não bloqueados — se não estiver na lista, cadastre-o antes em Fornecedores."
+            ch={<Sel value={form.fornecedorId} onChange={e=>{const f=fornecedores.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,fornecedorId:e.target.value,fornecedorNome:f?.nome||""}));}}><option value="">Selecione...</option>{fornecedores.filter(f=>f.status!=="Bloqueado").map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</Sel>} />
+          <F lbl="Item / produto / serviço *" err={errForm("itemNome")}
+            tip="Nome do que está sendo homologado, do jeito que a fábrica chama. Ex.: Vitamina C (Ácido Ascórbico), Cartucho Calcivitam 60un, Serviço de calibração."
+            ch={<Inp value={form.itemNome} onChange={e=>setF("itemNome",e.target.value)} placeholder="Ex.: Vitamina C / Cartucho / Laboratório" />} />
+          <F lbl="Categoria *" err={errForm("categoria")}
+            tip="Define quais documentos e ensaios serão exigidos do fornecedor. Trocar a categoria refaz as duas listas da aba 'O que será avaliado', então escolha antes de continuar."
+            ch={<Sel value={form.categoria} onChange={e=>trocarCategoria(e.target.value)}>{CATEGORIAS_HOMOLOGACAO.map(c=><option key={c}>{c}</option>)}</Sel>} />
+          <F lbl="Criticidade *" err={errForm("criticidade")}
+            tip="O quanto este item afeta a qualidade do produto final. Crítica: princípio ativo ou contato direto com o produto. Alta: excipiente ou embalagem primária. Média: embalagem secundária. Baixa: material de apoio, sem contato com o produto."
+            ch={<Sel value={form.criticidade} onChange={e=>setF("criticidade",e.target.value)}><option value="">Selecione...</option><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></Sel>} />
+          <F lbl="Motivo *" err={errForm("motivo")}
+            tip="Por que esta homologação está sendo aberta agora. Ajuda a Qualidade a priorizar: fornecedor alternativo para item que já falta é mais urgente que estudo de produto novo."
+            ch={<Sel value={form.motivo} onChange={e=>setF("motivo",e.target.value)}><option value="">Selecione...</option><option>Produto novo</option><option>Novo fornecedor</option><option>Fornecedor alternativo</option><option>Alteração de origem/fabricante</option><option>Outro</option></Sel>} />
+        </div>
+        <F lbl="Finalidade / uso pretendido *" err={errForm("finalidade")}
+          tip="Onde este item vai ser usado e em qual produto/processo. É o que permite avaliar o risco: o mesmo insumo pode ser aceitável num produto e não em outro."
+          ch={<TA rows={3} value={form.finalidade} onChange={e=>setF("finalidade",e.target.value)} placeholder="Ex.: Matéria-prima para o Calcivitam D3 cápsulas, substituindo o fornecedor atual por falta de entrega." />} />
       </div>
-      <F lbl="Finalidade / uso pretendido *" err={errForm("finalidade")}
-        tip="Onde este item vai ser usado e em qual produto/processo. É o que permite avaliar o risco: o mesmo insumo pode ser aceitável num produto e não em outro."
-        ch={<TA rows={3} value={form.finalidade} onChange={e=>setF("finalidade",e.target.value)} placeholder="Ex.: Matéria-prima para o Calcivitam D3 cápsulas, substituindo o fornecedor atual por falta de entrega." />} />
-      <F lbl="Observações iniciais"
-        tip="Qualquer contexto que ajude quem vai analisar: histórico com o fornecedor, urgência, amostras já recebidas."
-        ch={<TA rows={2} value={form.observacoes} onChange={e=>setF("observacoes",e.target.value)} />} />
-    </div>
-    <div style={s.card}><SecTitle icon="📄" ch={`O que será exigido do fornecedor (${(form.documentos||[]).length})`} />
-      <NotaQuemPreenche ch={<>Esta lista é definida pela categoria <b>{form.categoria}</b> — você não precisa preencher nada aqui. A Qualidade marca cada item como recebido, reprovado ou não aplicável durante a análise.</>} />
-      <ChecklistPreview itens={form.documentos} obrigatoriedade vazio="Selecione uma categoria para ver os documentos exigidos." />
-    </div>
-    <div style={s.card}><SecTitle icon="🔬" ch={`O que será avaliado tecnicamente (${(form.checklistTecnico||[]).length})`} />
-      <NotaQuemPreenche ch="Os critérios técnicos também vêm da categoria e são avaliados pela Qualidade no parecer. Se algum ponto específico precisar de atenção, escreva em Observações iniciais." />
-      <ChecklistPreview itens={form.checklistTecnico} vazio="Selecione uma categoria para ver os critérios técnicos." />
-    </div>
-    <div style={s.card}><SecTitle icon="📎" ch="Evidências iniciais (opcional)" />
-      <NotaQuemPreenche ch="Se você já tem algo do fornecedor em mãos — ficha técnica, certificado, proposta — anexe aqui para adiantar a análise." />
+      <div style={s.card}><SecTitle icon="➕" ch="Complementar — preencha o que souber" />
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
+          <F lbl="Já cadastrado no CQ?"
+            tip="Se este material já existe no cadastro do Controle de Qualidade, selecione-o: o nome e o código são preenchidos sozinhos e as análises de CQ daquele material passam a aparecer nesta homologação. Item novo? Deixe como está."
+            ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Não — item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
+          <F lbl="Código / referência"
+            tip="Código interno do item, se já houver. Serve para amarrar esta homologação ao que o almoxarifado e o CQ usam no dia a dia."
+            ch={<Inp value={form.codigoItem} onChange={e=>setF("codigoItem",e.target.value)} />} />
+          <F lbl="Fabricante (se diferente)"
+            tip="Preencha só quando quem fabrica não é quem vende. Distribuidores revendem material de terceiros, e o que se homologa tecnicamente é a fábrica de origem."
+            ch={<Inp value={form.fabricante} onChange={e=>setF("fabricante",e.target.value)} />} />
+          <F lbl="Unidade fabricante"
+            tip="Planta/endereço onde o item é produzido. A mesma empresa pode ter unidades com licenças e desempenho diferentes."
+            ch={<Inp value={form.unidadeFabricante} onChange={e=>setF("unidadeFabricante",e.target.value)} />} />
+          <F lbl="Responsável pelo acompanhamento"
+            tip="Quem cobra o fornecedor pelos documentos e acompanha até a decisão. Não é quem aprova — a aprovação é feita por outra pessoa, por segregação de funções."
+            ch={<Sel value={form.responsavel} onChange={e=>setF("responsavel",e.target.value)}><option value="">Selecione...</option>{users.filter(u=>u.name).map(u=><option key={u.id||u.uid}>{u.name}</option>)}</Sel>} />
+          <F lbl="Prazo desejado"
+            tip="Quando você precisa da decisão. É uma expectativa para a Qualidade se organizar, não um compromisso automático."
+            ch={<Inp type="date" value={form.prazo} onChange={e=>setF("prazo",e.target.value)} />} />
+        </div>
+        <F lbl="Observações iniciais"
+          tip="Qualquer contexto que ajude quem vai analisar: histórico com o fornecedor, urgência, amostras já recebidas."
+          ch={<TA rows={2} value={form.observacoes} onChange={e=>setF("observacoes",e.target.value)} />} />
+      </div>
+    </>}
+
+    {abaForm==="avaliacao" && <>
+      <div style={s.card}><SecTitle icon="📄" ch={`Documentos exigidos do fornecedor (${(form.documentos||[]).length})`} />
+        <NotaQuemPreenche ch={<>Esta lista é definida pela categoria <b>{form.categoria}</b> — você não precisa preencher nada aqui. A Qualidade marca cada item como recebido, reprovado ou não aplicável durante a análise.</>} />
+        <ChecklistPreview itens={form.documentos} obrigatoriedade vazio="Selecione uma categoria para ver os documentos exigidos." />
+      </div>
+      <div style={s.card}><SecTitle icon="🔬" ch={`Critérios técnicos (${(form.checklistTecnico||[]).length})`} />
+        <NotaQuemPreenche ch="Os critérios técnicos também vêm da categoria e são avaliados pela Qualidade no parecer. Se algum ponto específico precisar de atenção, escreva em Observações iniciais." />
+        <ChecklistPreview itens={form.checklistTecnico} vazio="Selecione uma categoria para ver os critérios técnicos." />
+      </div>
+    </>}
+
+    {abaForm==="evidencias" && <div style={s.card}><SecTitle icon="📎" ch="Evidências iniciais (opcional)" />
+      <NotaQuemPreenche ch="Se você já tem algo do fornecedor em mãos — ficha técnica, certificado, proposta — anexe aqui para adiantar a análise. Nada aqui é obrigatório para enviar." />
       <AnexosUpload anexos={form.anexos||[]} setAnexos={v=>setForm(p=>({...p,anexos:typeof v==="function"?v(p.anexos||[]):v}))} inputId="homologacao-anexos-form" />
-    </div>
+    </div>}
     <div style={{ display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center", paddingBottom:20 }}>
       {mostrarErros && errosForm.length>0 && <span style={{ fontSize:11, color:"#ff4f6a" }}>Faltam {errosForm.length} {errosForm.length===1?"item":"itens"}</span>}
       <button style={s.btn} disabled={salvando} onClick={()=>persistir(false)}>Salvar rascunho</button>
@@ -385,6 +461,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
         {sel.status==="Aguardando aprovação"&&perm("aprovarHomologacao")&&<button style={s.btnA} onClick={()=>prepararDecisao(sel)}>Registrar decisão final</button>}
         {FINALIZADOS.has(sel.status)&&<button style={s.btnA} onClick={()=>exportarPDF(sel)}>Gerar relatório PDF</button>}
       </div></div>
+      <FluxoStepper status={efetivo} />
       <div style={s.card}><SecTitle icon="📋" ch="Identificação" /><div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10}}>
         <Campo label="Fornecedor" value={sel.fornecedorNome}/><Campo label="Item" value={sel.itemNome}/><Campo label="Código / categoria" value={[sel.codigoItem,sel.categoria].filter(Boolean).join(" · ")}/>
         <Campo label="Fabricante / unidade" value={[sel.fabricante,sel.unidadeFabricante].filter(Boolean).join(" · ")}/><Campo label="Criticidade" value={sel.criticidade}/><Campo label="Solicitante" value={`${sel.criadoPor} · ${fmt(sel.criadoEm)}`}/>
