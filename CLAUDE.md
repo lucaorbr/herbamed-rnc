@@ -18,7 +18,6 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 7. Avisar TI se precisar configurar algo em produção antes do deploy
 
 ## Rede Docker e Nginx (deploy)
-- Guia completo: `GUIA_REDE_DOCKER_NGINX.md`
 - Padrão: o Nginx (`nginx-proxy`) deve acessar o SGQ pela rede compartilhada `herbamed_proxy`, via alias interno `sgq-frontend:80` — nunca por `IP-do-host:porta-publicada`.
 - `sgq.herbamed.com.br` → upstream `sgq-frontend:80` (rede interna)
 - Container: `container_name: herbamed_sgq_frontend`, alias proxy: `sgq-frontend`
@@ -31,18 +30,29 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - ARECO_SYNC_ENABLED=false para testes locais
 - Seção 17 do roadmap depende de infraestrutura da TI
 
-## Versao do sistema
-- Versao atual: `3.2.0`
-- A versao exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versao do `package.json`.
-- Usar versionamento semantico no formato `MAJOR.MINOR.PATCH`.
-- `PATCH` (ex.: `2.0.0` -> `2.0.1`): correcoes pequenas, ajustes visuais, textos, bugs pontuais.
-- `MINOR` (ex.: `2.0.1` -> `2.1.0`): melhorias ou novas funcionalidades compativeis com o fluxo atual.
-- `MAJOR` (ex.: `2.1.0` -> `3.0.0`): mudancas grandes de fluxo, arquitetura, permissoes ou comportamento que exigem atencao da TI/usuarios.
-- Toda PR que altere comportamento do sistema deve avaliar se precisa incrementar a versao. A versao visivel ajuda a confirmar se o ambiente oficial da TI recebeu o mesmo codigo do GitHub.
+## Versão do sistema
+- Versão atual: `3.2.0`
+- A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
+- Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
-## Status do roadmap (auditoria 2026-06-08)
+---
 
-### ✅ Completadas
+## Status do Roadmap
+Veja `/memory` — as memórias contêm:
+- **roadmap-status.md** — o que foi completado, o que falta, 8 itens backlog
+- **se-suite-principios.md** — modelo de referência (SE Suite)
+- **decisoes-arquitetura.md** — fonte única, append-only, IDs preservados, segregação funcional
+- **versionamento-semantico.md** — regras de versioning
+- **infra-docker-nginx.md** — configuração Docker, rede, cache
+- **protocolo-trabalho.md** — protocolo de trabalho completo
+
+## Próximos Passos
+1. **RNC — RAC Fases 2/3** — delta de resumo, RNC emperrada, assinatura de presença, notificações
+2. **Desvios — Backlog priorizado** — disposição de material (maior lacuna), rigor no encerramento, investigação leve, dono, notificação de atraso, recorrência, PDF, polimento
+3. **E-mail — Fase 1** — transporte Graph M365 (espera Solicitação TI)
+4. **Inverter padrão de navegação** — depois de acompanhar adoção da 3.0.0
+
+### DESCARTADO — Seção anterior com roadmap completo
 - **Gestão de Documentos** — 9 fases + bônus (senhas)
 - **Seção 10** — Rejeição de documento com auto-RNC (PR #43)
 - **Shared Components** — StatusBadge, DataTable (PR #41)
