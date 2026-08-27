@@ -545,7 +545,7 @@ async function handleRncs(req, res, pathname) {
   await requireUser(req);
   const id = decodeURIComponent(match[1]);
 
-  if (req.method === "PUT" || req.method === "POST") {
+  if (req.method === "PUT" || req.method === "POST" || req.method === "PATCH") {
     const body = sanitize(await readBody(req));
     const data = { ...body, id };
     await transaction(async client => {
