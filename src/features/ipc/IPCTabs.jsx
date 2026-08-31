@@ -48,7 +48,10 @@ export function IPCTab({ user, toast_ }) {
     },
   ];
 
-  const [form, setForm] = useState({ area: "", sala: "", op: "", lote: "", produto: "", linha: "", resp: "", data: "", obs: "" });
+  // Fonte única do formulário vazio: os três pontos de reset (novo, cancelar, pós-salvar)
+  // divergiam e deixavam `lote`/`linha` de fora, então campo antigo vazava para o registro seguinte.
+  const FORM_VAZIO = { area: "", sala: "", op: "", lote: "", produto: "", produtoId: "", linha: "", resp: "", data: "", obs: "" };
+  const [form, setForm] = useState(FORM_VAZIO);
   const [resultados, setResultados] = useState([]);
   const [filtroArea, setFiltroArea] = useState("todas");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -139,7 +142,7 @@ export function IPCTab({ user, toast_ }) {
     await saveCollection("ipc_registros", String(reg.id), reg);
     toast_(sel ? "Registro atualizado!" : "Registro salvo!", "green");
     setSel(null);
-    setForm({ area: "", sala: "", op: "", lote: "", produto: "", resp: "", data: tod(), obs: "" });
+    setForm({ ...FORM_VAZIO, data: tod() });
     setResultados([]);
     setView("lista");
     } catch(e) {
@@ -162,7 +165,10 @@ export function IPCTab({ user, toast_ }) {
 
   const editar = (r) => {
     setSel(r);
-    setForm({ area: r.area, sala: r.sala || "", op: r.op, produto: r.produto, resp: r.resp || "", data: r.data || tod(), obs: r.obs || "" });
+    // `lote`, `linha` e `produtoId` precisam voltar ao form: `salvar` grava o form
+    // inteiro, então campo que não é recarregado aqui some do registro ao editar.
+    setForm({ area: r.area, sala: r.sala || "", op: r.op, lote: r.lote || "", produto: r.produto,
+              produtoId: r.produtoId || "", linha: r.linha || "", resp: r.resp || "", data: r.data || tod(), obs: r.obs || "" });
     setResultados(r.resultados || []);
     setView("novo");
   };
@@ -171,11 +177,19 @@ export function IPCTab({ user, toast_ }) {
   const statusBg    = { "Liberado": T.accent+"18", "Reprovado": T.red+"18", "Pendente": T.yellow+"18" };
   const statusIcon  = { "Liberado": "✅", "Reprovado": "❌", "Pendente": "⏳" };
 
+  // Busca por lote, OP ou produto. O lote é o que mais se usa no chão de fábrica,
+  // por isso entra na busca livre em vez de virar mais um campo de filtro.
+  const bateBusca = (r) => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return true;
+    return [r.lote, r.op, r.produto].some(v => (v || "").toLowerCase().includes(q));
+  };
+
   const filtrados = registros
     .filter(r => filtroArea === "todas" || r.area === filtroArea)
     .filter(r => filtroStatus === "todos" || r.status === filtroStatus)
     .filter(r => filtroLinha === "todas" || r.linha === filtroLinha)
-    .filter(r => !busca || r.op?.toLowerCase().includes(busca.toLowerCase()) || r.produto?.toLowerCase().includes(busca.toLowerCase()));
+    .filter(bateBusca);
 
   const { paginated: filtradosPg, page: pgIPC, total: totIPC, setPage: setPgIPC } = usePagination(filtrados, 20);
 
@@ -184,7 +198,7 @@ export function IPCTab({ user, toast_ }) {
     <div>
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
         <button style={s.btn} onClick={() => { setView("lista"); setSel(null); setResultados([]); }}>← Voltar</button>
-        <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>{sel ? "Editar Registro" : "Novo Registro IPC"}</h2>
+        <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>{sel ? "Editar Análise de Mistura" : "Nova Análise de Mistura"}</h2>
       </div>
 
       <div style={s.card}>
@@ -305,7 +319,7 @@ export function IPCTab({ user, toast_ }) {
       <div>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
           <button style={s.btn} onClick={() => { setView("lista"); setSel(null); }}>← Voltar</button>
-          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>OP: {sel.op}{sel.lote && <span style={{ fontSize:13, color:T.text2, fontWeight:400, marginLeft:10 }}>Lote: {sel.lote}</span>}</h2>
+          <h2 style={{ fontSize:18, fontWeight:700, color:T.text, margin:0 }}>{sel.lote ? `Lote ${sel.lote}` : "Sem lote"}<span style={{ fontSize:13, color:T.text2, fontWeight:400, marginLeft:10 }}>OP: {sel.op}</span></h2>
           <span style={{ padding:"3px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:statusBg[sel.status], color:statusColor[sel.status] }}>{statusIcon[sel.status]} {sel.status}</span>
         </div>
         <div style={s.card}>
@@ -313,6 +327,8 @@ export function IPCTab({ user, toast_ }) {
           <G3 ch={<>
             <F lbl="Área" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{area?.icon} {area?.label}</div>} />
             {sel.sala && <F lbl="Sala" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{sel.sala}</div>} />}
+            <F lbl="Lote" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{sel.lote || "—"}</div>} />
+            <F lbl="OP" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{sel.op || "—"}</div>} />
             <F lbl="Produto" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{sel.produto}</div>} />
             <F lbl="Data" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{fmt(sel.data)}</div>} />
             <F lbl="Responsável" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{sel.resp || "—"}</div>} />
@@ -367,8 +383,12 @@ export function IPCTab({ user, toast_ }) {
           {/* Barra de busca */}
           <div style={{ position:"relative" }}>
             <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", color:T.text3, fontSize:13 }}>🔍</span>
-            <input placeholder="Buscar OP ou produto..." value={busca} onChange={e => setBusca(e.target.value)}
-              style={{ ...s.inp, paddingLeft:30, width:200, fontSize:12 }} />
+            <input placeholder="Buscar lote, OP ou produto..." value={busca} onChange={e => setBusca(e.target.value)}
+              style={{ ...s.inp, paddingLeft:30, width:240, fontSize:12 }} />
+            {busca && (
+              <button onClick={() => setBusca("")} title="Limpar busca"
+                style={{ position:"absolute", right:6, top:"50%", transform:"translateY(-50%)", border:"none", background:"transparent", color:T.text3, cursor:"pointer", fontSize:13, lineHeight:1, padding:2 }}>✕</button>
+            )}
           </div>
           <Sel value={filtroLinha} onChange={e => setFiltroLinha(e.target.value)}>
             <option value="todas">Todas as linhas</option>
@@ -386,8 +406,8 @@ export function IPCTab({ user, toast_ }) {
           </Sel>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <button style={s.btnA} onClick={() => { setSel(null); setForm({ area:"", sala:"", op:"", produto:"", linha:"", resp:"", data:tod(), obs:"" }); setResultados([]); setView("novo"); }}>
-            + Novo Registro IPC
+          <button style={s.btnA} onClick={() => { setSel(null); setForm({ ...FORM_VAZIO, data:tod() }); setResultados([]); setView("novo"); }}>
+            + Nova Análise de Mistura
           </button>
         </div>
       </div>
@@ -423,8 +443,8 @@ export function IPCTab({ user, toast_ }) {
       ) : filtrados.length === 0 ? (
         <div style={{ textAlign:"center", padding:"3rem", color:T.text3 }}>
           <div style={{ fontSize:40, marginBottom:12 }}>🏭</div>
-          <div style={{ fontSize:14 }}>Nenhum registro encontrado.</div>
-          <div style={{ fontSize:12, marginTop:6 }}>Crie o primeiro registro de controle de processo!</div>
+          <div style={{ fontSize:14 }}>Nenhuma análise encontrada.</div>
+          <div style={{ fontSize:12, marginTop:6 }}>{busca ? `Nada corresponde a "${busca}" em lote, OP ou produto.` : "Registre a primeira análise de mistura!"}</div>
         </div>
       ) : (
         filtradosPg.map(r => {
@@ -434,8 +454,13 @@ export function IPCTab({ user, toast_ }) {
               style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:8, cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderLeft:`3px solid ${statusColor[r.status]||T.border}` }}>
               <div style={{ fontSize:22 }}>{area?.icon||"🏭"}</div>
               <div style={{ flex:1, minWidth:150 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:T.text }}>OP: {r.op} — {r.produto}</div>
-                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{area?.label}{r.sala ? ` · ${r.sala}` : ""}{r.linha ? ` · ${r.linha}` : ""} · {fmt(r.data)}{r.resp ? ` · ${r.resp}` : ""}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  {r.lote
+                    ? <span style={{ padding:"2px 8px", borderRadius:6, background:T.accentDim, color:T.accent, fontSize:12 }}>Lote {r.lote}</span>
+                    : <span style={{ padding:"2px 8px", borderRadius:6, background:T.border, color:T.text3, fontSize:11, fontWeight:600 }}>sem lote</span>}
+                  <span>{r.produto}</span>
+                </div>
+                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>OP: {r.op} · {area?.label}{r.sala ? ` · ${r.sala}` : ""}{r.linha ? ` · ${r.linha}` : ""} · {fmt(r.data)}{r.resp ? ` · ${r.resp}` : ""}</div>
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
                 {(r.resultados||[]).map((res, i) => (

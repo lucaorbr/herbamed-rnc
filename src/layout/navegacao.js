@@ -42,8 +42,8 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
     ]},
     { id:"producao", icon:"🏗️", label:"Produção", items:[
       { id:"producao-processos", icon:"🏗️", label:"Controle de Processos" },
-      { id:"ipc",                icon:"🏭", label:"Controle de Processo IPC" },
-      { id:"ipc-produtos",       icon:"📦", label:"Produtos IPC" },
+      { id:"ipc",                icon:"🏭", label:"IPC — Análise de Mistura" },
+      { id:"ipc-produtos",       icon:"📦", label:"IPC — Produtos" },
     ]},
     { id:"analise", icon:"📊", label:"Indicadores", items:[
       { id:"dashboard",  icon:"📊", label:"Dashboard" },
