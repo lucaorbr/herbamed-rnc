@@ -523,7 +523,7 @@ export default function App() {
     { id: "cq-materiais",icon: "🧪", label: "CQ — Materiais" },
     { id: "cq-analises", icon: "📋", label: "CQ — Análises" },
     { id: "auditorias",  icon: "🔍", label: "Auditorias" },
-    { id: "ipc",          icon: "🏭", label: "Controle de Processo" },
+    { id: "ipc",          icon: "🏭", label: "IPC — Análise de Mistura" },
     { id: "ipc-produtos",   icon: "📦", label: "IPC — Produtos" },
     ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
@@ -551,7 +551,7 @@ export default function App() {
     "gestao-docs": "Gestão de Documentos — Lista Mestra",
     "audit-log": "Trilha de Auditoria — RNCs e Documentos",
     clientes: "Clientes Terceiros",
-    ipc: "IPC — Controle de Processo",
+    ipc: "IPC — Análise de Mistura",
     "ipc-produtos": "IPC — Produtos Cadastrados",
     "producao-processos": "Controle de Processos de Produção",
     admin: "Administração",

@@ -228,7 +228,7 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
           const ipc = (ipcRegistros||[]).find(r => r.op === form.op || r.lote === form.op);
           if (!ipc) return (
             <div style={{padding:"12px 14px",borderRadius:10,marginBottom:12,background:"#ffd16610",border:"1px solid #ffd16633",fontSize:12,color:"#ffd166"}}>
-              ⚠ Nenhuma análise IPC localizada para a OP <strong>{form.op}</strong>. Lance a análise no módulo IPC — Controle de Processo antes de prosseguir.
+              ⚠ Nenhuma análise IPC localizada para a OP <strong>{form.op}</strong>. Lance a análise no módulo IPC — Análise de Mistura antes de prosseguir.
             </div>
           );
           const statusColor = ipc.status==="Liberado"?"#2ab84a":ipc.status==="Reprovado"?"#ff4f6a":"#ffd166";
