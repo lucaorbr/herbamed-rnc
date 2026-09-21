@@ -1516,31 +1516,18 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           </div>
         )}
 
-        {/* ── FORMULÁRIO EM EXCEL PARA O FORNECEDOR ──
-            Documento que é formulário precisa ir ao fornecedor em formato
-            preenchível. O PDF não serve (não é editável) e o arquivo fonte cru
-            sai anônimo — sem código nem revisão, impossível de amarrar ao
-            documento controlado. O servidor carimba o fonte e registra quem
-            emitiu, no mesmo log das cópias não controladas. */}
-        {podeBaixarCopiaNaoControlada && d.status==="Vigente" && /\.xlsx?$/i.test(d.arquivoFonte?.nome || "") && (
-          <div style={s.card}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-              <SecTitle icon="📗" ch="Formulário para fornecedor" />
-              <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:"#8a5a0022", color:"#8a5a00" }}>CÓPIA NÃO CONTROLADA</span>
-            </div>
-            <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:10 }}>
-              Gera o Excel preenchível a partir do arquivo fonte, com a faixa verde de identificação
-              no topo (logo, título e código/revisão) e a faixa de rodapé ao final — a mesma
-              identidade do formulário em PDF. O formulário em si sai intacto. Anexe ao seu e-mail
-              para o fornecedor preencher e devolver. A emissão fica registrada no log de distribuição.
-            </div>
-            <button
-              onClick={()=>abrirArquivoAutenticado(`/api/documents/${encodeURIComponent(d.id)}/formulario.xlsx`, true, `${d.codigo||"Formulario"}_Rev${d.versao||"01"}.xlsx`)}
-              style={{ ...s.btnA, fontSize:12 }}>
-              📗 Gerar formulário em Excel
-            </button>
-          </div>
-        )}
+        {/* ── FORMULÁRIO EM EXCEL PARA O FORNECEDOR — RETIRADO ──
+            A emissão carimbava o .xlsx fonte com ExcelJS, que não edita o
+            arquivo: parseia para um modelo próprio e o reescreve do zero. Tudo
+            que esse modelo não representa não voltava — checkbox e demais
+            controles de formulário sumiam — e as células desciam sem que as
+            fórmulas fossem reescritas, então o total passava a somar linhas
+            vazias e o fornecedor recebia um formulário que dava zero, sem erro
+            nenhum na tela. Fórmula arrastada (shared formula) nem chegava a
+            gerar: estourava.
+            Retirado do ar até existir uma emissão que preserve o fonte. O
+            caminho medido é editar o .xlsx como pacote ZIP, sem round-trip.
+            Ver o histórico deste commit para o código anterior. */}
 
         {/* ── FASE 7: LOG DE DISTRIBUIÇÃO ── */}
         {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
@@ -1565,6 +1552,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
                       <tr key={row.id||i} style={{ borderBottom:`1px solid ${T.border}`, background:i%2===0?T.bg:T.surf }}>
                         <td style={{ padding:"7px 10px", color:T.text2 }}>{row.data_download ? new Date(row.data_download).toLocaleString("pt-BR") : "—"}</td>
                         <td style={{ padding:"7px 10px", color:T.text }}>{row.usuario_nome || "—"}</td>
+                        {/* O modo `formulario_fornecedor` não é mais emitido (seção retirada
+                            acima), mas o rótulo FICA: o log é registro de distribuição e as
+                            emissões já feitas continuam tendo de aparecer por extenso. */}
                         <td style={{ padding:"7px 10px" }}>
                           <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12,
                             background:row.modo==="formulario_fornecedor" ? "#8a5a0022" : T.border,
