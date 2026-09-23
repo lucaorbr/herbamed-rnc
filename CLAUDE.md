@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.2.0`
+- Versão atual: `3.5.0`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -176,6 +176,15 @@ Veja `/memory` — as memórias contêm:
   - ⚠️ **O rótulo `formulario_fornecedor` CONTINUA no log de distribuição**, embora ninguém mais o emita: o log é registro de distribuição e as emissões já feitas têm de seguir aparecendo por extenso. Mesma regra do `Encerrada` no denominador da taxa de eficácia — não se apaga registro para limpar tela.
   - **Caminho já medido para refazer** (protótipos validados abrindo no Excel instalado): editar o `.xlsx` **como pacote ZIP**, sem round-trip. Duas formas, ambas preservando checkbox, fórmulas e validação: (**A**) só `<headerFooter>` nativo de impressão — uma linha de XML, resto do pacote byte a byte idêntico, mas **invisível na grade** (só em Layout de Página / impressão), e como o fornecedor preenche na tela ele nunca veria o código; (**B**) a faixa verde de hoje na grade, inserindo as linhas no XML e deslocando **tudo** que aponta para linha (células, fórmulas — respeitando strings literais e referências a outras abas —, `sqref`, `ref`, merges, dimensão, âncoras de drawing e do VML, nomes definidos, `calcChain`). B funciona (total 44, checkbox vivo) mas tem **muito mais superfície de erro**: no protótipo o atributo `ref="` casou dentro de `sqref="` e deslocou validação e formatação condicional **+8 em vez de +4**, com o total ainda dando certo — exatamente o defeito silencioso que o trabalho veio eliminar. Se for retomar B, a trava é cair automaticamente para A quando o arquivo tiver construção que o deslocador não saiba tratar (tabelas estruturadas, `INDIRETO`/`DESLOC`, várias abas se referenciando), e ter teste de deslocamento área por área — foi o que pegou o bug.
 
+- **Indicadores — filtro de período "de x até y" (v3.5.0)** — cada tela de indicador recortava o tempo de um jeito (botões fixos de meses, 12 meses cravados, nenhum filtro) e nenhuma deixava escolher datas. Fonte única em `src/shared/periodoLogic.js` (pura, 30 testes) + `src/shared/FiltroPeriodo.jsx`: atalhos (mês atual, 3/6/12 meses, ano, tudo; 7/15 dias no Relatórios) e **De/até sempre visíveis** — mexer numa data vira "personalizado". Aplicado em **Indicadores de Desvios, Dashboard de RNC (KPIs e Pareto), CEP, Dashboard CQ e Relatórios**. O **Executivo ficou de fora** por decisão do usuário (é painel de situação atual).
+  - **Cada tela lembra o próprio período**, no `localStorage` de cada pessoa (`sgq_periodo:<tela>`). Guarda-se a **escolha** (`{ preset, de, ate }`), não as datas calculadas — "Mês atual" escolhido em setembro vira outubro sozinho.
+  - ⚠️ **Número de situação atual não obedece ao filtro, e a tela diz isso** (`SituacaoAtual`): RNCs abertas agora, vencidas, Matriz GUT, PDCA, aging dos desvios. "Vencidas em março" não significa nada.
+  - ⚠️ **Taxa de eficácia virou fonte única — `taxaEficaciaRNC()` em `core/status.js`**: eficazes ÷ **encerradas** (Eficaz + Ineficaz + Encerrada). Havia três contas (Dashboard e Relatórios dividiam pelo total, punindo o período recente, cujas RNCs nem chegaram à verificação). `Encerrada` segue no denominador sem contar como eficaz (decisão da v2.23.0). Sem encerrada → `null` ("—"), não 0%.
+  - A lista de Desvios ganhou **"Ocorrência de/até"** e o clique nos gráficos dos Indicadores leva o período junto (antes o gráfico dizia "Envase: 4" e a lista abria com todo o histórico de Envase). O clique no aging não leva período. Junto: a busca da lista passou a olhar `tipoOutro` — os Indicadores mandam tipo fora do catálogo como busca, e ela não achava nada.
+  - Fix de bug junto: **"voltar N meses" com `setMonth()` num dia 29–31 transbordava** (31/out − 1 mês = 1º/out) e os gráficos mensais do CEP, CQ e Executivo repetiam um mês e pulavam outro. `inicioMesesAtras`/`ultimosMeses` sempre partem do dia 1. Datas em fuso **local** (o `toISOString()` do Relatórios dava "amanhã" depois das 21h).
+  - O comparativo ▲▼ dos Desvios passou a ser a janela **de mesma duração em dias** colada antes do período. O "trimestral" do Relatórios virou "Últimos 3 meses" (mês atual + 2 anteriores).
+  - Validado na tela (Docker, 8 desvios semeados e removidos): histórico todo = 8 começando no mais antigo; personalizado 01/01–30/06/2026 = 3, comparativo +200% (1 na janela anterior); clique na matriz Envase × tipo abriu a lista só com o DV-T04; Dashboard de RNC com taxa 50% = 2 ÷ 4 encerradas. **450 testes verdes** (420 → 450).
+
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
 - **Inverter o padrão da navegação** (`sgq_nav`) depois de acompanhar a adoção da 3.0.0
@@ -210,7 +219,7 @@ Diagnóstico: o fluxo operacional é enxuto/binário (registra → Qualidade tri
 5. **Notificação/escalonamento de atraso.** A coluna "Triagem" (v2.13.0) já mostra o atraso; falta o alerta ativo (e-mail/aviso) quando estoura a meta, nos moldes do alerta de prazo das RNCs no `App.jsx`. Crítico deveria ter prazo de triagem menor que Menor (prazo por impacto).
 6. **Recorrência no registro.** Os indicadores mostram recorrência (matriz Setor×Tipo, produtos que repetem), mas no registro não dá para marcar "isto já aconteceu / é recorrente" nem vincular a um desvio anterior — recorrência deveria elevar a criticidade.
 7. **Relatório PDF.** RNC e Auditorias exportam PDF; Desvios só CSV. Falta o relatório individual do desvio e/ou o sumário para reunião de gestão/inspeção.
-8. **Polimento da lista.** Falta filtro por **impacto** e por **período** na lista (os Indicadores já têm ambos) — inconsistência pequena.
+8. **Polimento da lista.** Falta filtro por **impacto** na lista (o de **período** entrou na v3.5.0).
 
 Regra ao pegar estes itens: seguir o que o SE Suite faria e manter a **fonte única** já estabelecida (catálogos configuráveis, `META_TRIAGEM_DIAS`, histórico imutável via `doSaveDesvio`).
 

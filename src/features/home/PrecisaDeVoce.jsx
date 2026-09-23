@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
-import { rncAtiva } from "../../core/status";
+import { rncAtiva, taxaEficaciaRNC } from "../../core/status";
 import { tod } from "../../core/utils";
 import { getCollection, subscribeCollection } from "../../firebase";
 import { pendentesDoUsuario } from "../documentos/treinamento";
@@ -126,8 +126,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, perm = ()
   const [verTudo, setVerTudo] = useState(false);
   const mostradas = verTudo ? pendencias : pendencias.slice(0, 8);
 
-  const eficazes = rncs.filter(x => x.status === "Eficaz").length;
-  const taxaEf = rncs.length ? Math.round((eficazes / rncs.length) * 100) : 0;
+  const taxaEf = taxaEficaciaRNC(rncs).taxa;
   const hora = new Date().getHours();
   const saud = hora < 12 ? "Bom dia" : hora < 18 ? "Boa tarde" : "Boa noite";
 
@@ -179,7 +178,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, perm = ()
           <Indicador T={T} n={rncs.length} l="Total RNCs" />
           <Indicador T={T} n={rncs.filter(x => x.status === "Aberta").length} l="Abertas" />
           <Indicador T={T} n={rncs.filter(x => x.sev === "Crítica" && rncAtiva(x.status)).length} l="Críticas" cor={T.red} />
-          <Indicador T={T} n={`${taxaEf}%`} l="Taxa de eficácia" cor={taxaEf < 50 ? T.red : T.accent} />
+          <Indicador T={T} n={taxaEf === null ? "—" : `${taxaEf}%`} l="Taxa de eficácia" cor={taxaEf === null ? T.text3 : taxaEf < 50 ? T.red : T.accent} />
           <Indicador T={T} n={desvios.filter(d => d.status === "Registrado").length} l="Desvios a triar" />
         </div>
       </div>

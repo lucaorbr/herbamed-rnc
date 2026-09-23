@@ -15,6 +15,17 @@ export const RNC_TERMINAIS = ["Eficaz", "Ineficaz", "Encerrada"];
 export const rncEncerrada = (st) => RNC_TERMINAIS.includes(st);
 export const rncAtiva = (st) => !RNC_TERMINAIS.includes(st);
 
+// Taxa de eficácia das RNCs — fonte única (antes eram três contas diferentes).
+// Denominador = RNCs ENCERRADAS (os três terminais). Dividir pelo total punia o
+// período recente, cujas RNCs ainda nem chegaram à verificação. "Encerrada" (por
+// disposição) fica no denominador sem contar como eficaz, para não inflar a taxa
+// (decisão da v2.23.0). Nenhuma encerrada → taxa null ("—" na tela, não 0%).
+export function taxaEficaciaRNC(rncs = []) {
+  const eficazes = rncs.filter(r => r.status === "Eficaz").length;
+  const encerradas = rncs.filter(r => rncEncerrada(r.status)).length;
+  return { eficazes, encerradas, taxa: encerradas > 0 ? Math.round(eficazes / encerradas * 100) : null };
+}
+
 export const SEVMETA = {
   "Crítica": { c: "#ff4f6a", bg: "#ff4f6a18" },
   "Maior":   { c: "#ff8c42", bg: "#ff8c4218" },
