@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Line,
   ResponsiveContainer, Tooltip as RcTooltip, XAxis, YAxis,
@@ -7,14 +7,10 @@ import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { DESVIO_SMETA, META_TRIAGEM_DIAS, SETORES_DESVIO, TIPOS_DESVIO, pedirFiltroDesvios } from "./DesviosTabs";
 
-const VERDE_OK = "#2ab84a";
+import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
+import { filtrarPorPeriodo, mesesDoPeriodo, periodoAnterior, resolverPeriodo } from "../../shared/periodoLogic";
 
-const PERIODOS = [
-  { id: "6m",  label: "Últimos 6 meses",  meses: 6 },
-  { id: "12m", label: "Últimos 12 meses", meses: 12 },
-  { id: "ano", label: "Ano atual",        meses: null },
-  { id: "tudo", label: "Todo o histórico", meses: null },
-];
+const VERDE_OK = "#2ab84a";
 
 const setorDe = d => (d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || "—"));
 const tipoDe  = d => (d.tipo === "Outros" ? (d.tipoOutro || "Outros") : (d.tipo || "—"));
@@ -43,55 +39,27 @@ const mediana = arr => {
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2 * 10) / 10;
 };
 
-// Subtrai n meses de uma data YYYY-MM-DD, voltando ao dia 1 do mês resultante
-const mesesAntes = (iso, n) => {
-  const [y, m] = iso.split("-").map(Number);
-  const d = new Date(y, m - 1 - n, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-};
-
 export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const T = useTheme();
-  const [periodo, setPeriodo] = useState("12m");
+  const [selPeriodo, setSelPeriodo] = usePeriodo("desvios-indicadores", "12m");
 
   // Cores de impacto vindas do tema (acompanham claro/escuro)
   const IMPACTO_CORES = { "Crítica": T.red, "Maior": T.yellow, "Menor": T.blue };
 
   // ── Filtro de período (+ janela anterior de mesmo tamanho, p/ comparativo) ──
-  const { filtrados, anteriores, meses, temAnterior } = useMemo(() => {
-    const p = PERIODOS.find(x => x.id === periodo);
-    let inicio = null;
-    let nMeses;
-    if (periodo === "ano") {
-      inicio = `${new Date().getFullYear()}-01-01`;
-      nMeses = new Date().getMonth() + 1;
-    } else if (periodo === "tudo") {
-      const datas = desvios.map(dataDe).filter(Boolean).sort();
-      inicio = datas[0] || tod();
-      const [ay, am] = inicio.split("-").map(Number);
-      const agora = new Date();
-      nMeses = Math.max(1, (agora.getFullYear() - ay) * 12 + (agora.getMonth() + 1 - am) + 1);
-    } else {
-      const d = new Date();
-      d.setMonth(d.getMonth() - (p.meses - 1));
-      inicio = `${d.toISOString().slice(0, 7)}-01`;
-      nMeses = p.meses;
-    }
-    const lista = desvios.filter(d => dataDe(d) >= inicio);
-    // Janela imediatamente anterior, de mesmo tamanho — para os deltas dos KPIs
-    const prevInicio = mesesAntes(inicio, Math.min(nMeses, 24));
-    const listaPrev = periodo === "tudo" ? [] : desvios.filter(d => {
-      const dt = dataDe(d);
-      return dt >= prevInicio && dt < inicio;
-    });
-    // Chaves YYYY-MM do período (limitado a 24 barras para não poluir o gráfico)
-    nMeses = Math.min(nMeses, 24);
-    const chaves = Array.from({ length: nMeses }, (_, i) => {
-      const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (nMeses - 1 - i));
-      return d.toISOString().slice(0, 7);
-    });
-    return { filtrados: lista, anteriores: listaPrev, meses: chaves, temAnterior: periodo !== "tudo" };
-  }, [desvios, periodo]);
+  // A data de referência é a da ocorrência (a do registro só quando falta a outra).
+  const { periodo, filtrados, anteriores, meses, temAnterior } = useMemo(() => {
+    const per = resolverPeriodo(selPeriodo, { datas: desvios.map(dataDe) });
+    const ant = periodoAnterior(per);
+    return {
+      periodo: per,
+      filtrados: filtrarPorPeriodo(desvios, per, dataDe),
+      anteriores: ant ? filtrarPorPeriodo(desvios, ant, dataDe) : [],
+      // Limitado a 24 barras para não poluir o gráfico
+      meses: mesesDoPeriodo(per, 24),
+      temAnterior: !!ant,
+    };
+  }, [desvios, selPeriodo]);
 
   // ── KPIs (período atual + anterior) ──
   const kpis = useMemo(() => {
@@ -208,9 +176,12 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
   }, [filtrados]);
 
   // ── Navegação: clique em gráfico → lista já filtrada ──
-  const irParaLista = (filtro) => {
+  // O período vai junto: sem ele o gráfico dizia "Envase: 4" e a lista abria com
+  // todos os de Envase do histórico. O aging é a exceção — ele mostra a situação
+  // de hoje, então o clique nele não carrega período.
+  const irParaLista = (filtro, { comPeriodo = true } = {}) => {
     if (!setTab) return;
-    pedirFiltroDesvios(filtro);
+    pedirFiltroDesvios(comPeriodo && !periodo.todo ? { ...filtro, de: periodo.de, ate: periodo.ate } : filtro);
     setTab("desvios");
   };
   const filtroSetor = s => (setoresDesvio.includes(s) ? { setor: s } : { busca: s });
@@ -230,7 +201,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
     const blob = new Blob(["﻿" + linhas.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `desvios_indicadores_${tod()}.csv`;
+    a.download = `desvios_indicadores_${periodo.de}_a_${periodo.ate}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -299,17 +270,12 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
   return (
     <div>
       {/* ── Filtro de período + export ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        {PERIODOS.map(pp => (
-          <button key={pp.id} onClick={() => setPeriodo(pp.id)}
-            style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${periodo === pp.id ? T.accent : T.border}`, background: periodo === pp.id ? T.accentDim : "transparent", color: periodo === pp.id ? T.accent : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: periodo === pp.id ? 700 : 400 }}>
-            {pp.label}
-          </button>
-        ))}
-        <button onClick={exportCSV} style={{ marginLeft: "auto", padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.surf, color: T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
+      <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
+        <span style={{ fontSize: 12, color: T.text3 }}>{filtrados.length} desvio(s) no período</span>
+        <button onClick={exportCSV} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${T.border2}`, background: T.surf, color: T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
           ⬇ Exportar CSV
         </button>
-      </div>
+      </FiltroPeriodo>
 
       {/* ── KPIs com comparativo do período anterior ── */}
       <div className="kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
@@ -512,7 +478,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
               {aging.map(d => {
                 const corDias = d.dias > 15 ? T.red : d.dias > 7 ? T.yellow : T.text2;
                 return (
-                  <div key={d.id} onClick={() => irParaLista({ busca: d.num })}
+                  <div key={d.id} onClick={() => irParaLista({ busca: d.num }, { comPeriodo: false })}
                     style={{ background: T.surf, border: `1px solid ${T.border}`, borderLeft: `3px solid ${corDias}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 12, cursor: setTab ? "pointer" : "default" }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, whiteSpace: "nowrap" }}>{d.num}</span>
                     <span style={{ fontSize: 11, color: T.text2, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.desc}</span>

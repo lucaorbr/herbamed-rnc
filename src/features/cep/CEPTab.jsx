@@ -2,29 +2,32 @@ import React, { useState } from "react";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { Inp, SecTitle } from "../../shared/ui";
+import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
+import { filtrarPorPeriodo, mesesDoPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 
 export function CEPTab({ rncs }) {
   const T = useTheme(); const s = useS();
   const [metric, setMetric] = useState("rncs_mes");
   const [customData, setCustomData] = useState([{ label:"", value:"" },{ label:"", value:"" },{ label:"", value:"" }]);
+  const [selPeriodo, setSelPeriodo] = usePeriodo("cep", "12m");
 
-  // Calcular dados de RNCs por mês (últimos 12 meses)
-  const meses = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(); d.setMonth(d.getMonth() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const label = d.toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
-    meses.push({ key, label });
-  }
+  // Um ponto por mês do período (até 36). Antes eram 12 meses cravados, e o
+  // setMonth() num dia 31 repetia um mês e pulava outro.
+  const periodo = resolverPeriodo(selPeriodo, { datas: rncs.map(r => r.data) });
+  const doPer = filtrarPorPeriodo(rncs, periodo, r => r.data);
+  const meses = mesesDoPeriodo(periodo, 36).map(key => {
+    const [y, m] = key.split("-").map(Number);
+    return { key, label: new Date(y, m - 1, 1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"}) };
+  });
 
   const dadosMes = meses.map(m => ({
     label: m.label,
-    value: rncs.filter(r => r.data?.startsWith(m.key)).length,
+    value: doPer.filter(r => r.data?.startsWith(m.key)).length,
   }));
 
   const dadosEficacia = meses.map(m => ({
     label: m.label,
-    value: rncs.filter(r => r.data?.startsWith(m.key) && r.status === "Eficaz").length,
+    value: doPer.filter(r => r.data?.startsWith(m.key) && r.status === "Eficaz").length,
   }));
 
   const activeData = metric === "custom" ? customData.map(x=>({...x,value:Number(x.value)||0})) : metric === "eficacia" ? dadosEficacia : dadosMes;
@@ -55,6 +58,15 @@ export function CEPTab({ rncs }) {
           <button key={id} onClick={()=>setMetric(id)} style={{ padding:"7px 16px", borderRadius:20, border:`1px solid ${metric===id?T.accent+"55":T.border}`, background:metric===id?T.accentDim:T.surf, color:metric===id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:metric===id?600:400 }}>{label}</button>
         ))}
       </div>
+
+      {/* Período — só para as métricas calculadas das RNCs; os dados customizados são digitados */}
+      {metric !== "custom" && (
+        <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
+          <span style={{ fontSize:12, color: meses.length < 6 ? "#ff8c42" : T.text3 }}>
+            {meses.length} ponto(s){meses.length < 6 ? " — poucos pontos deixam os limites UCL/LCL pouco confiáveis" : ""}
+          </span>
+        </FiltroPeriodo>
+      )}
 
       {/* Entrada de dados customizados */}
       {metric === "custom" && (

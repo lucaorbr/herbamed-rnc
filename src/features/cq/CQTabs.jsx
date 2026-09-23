@@ -9,6 +9,8 @@ import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle, Sel, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
 import { TableSkeleton, CardGridSkeleton } from "../../shared/Skeleton";
+import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
+import { dataIso, filtrarPorPeriodo, mesesDoPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
@@ -1912,7 +1914,7 @@ export function CQDashboardTab() {
   const [analises, setAnalises] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [periodoMeses, setPeriodoMeses] = useState(6);
+  const [selPeriodo, setSelPeriodo] = usePeriodo("cq-dashboard", "6m");
 
   useEffect(()=>{
     const u1 = subscribeCollection("cq_analises", list=>{ setAnalises(list); setLoading(false); });
@@ -1923,11 +1925,10 @@ export function CQDashboardTab() {
 
   if(loading) return <CardGridSkeleton n={4} cols={4} />;
 
-  // Filtrar por período
-  const dataCorte = new Date();
-  dataCorte.setMonth(dataCorte.getMonth() - periodoMeses);
-  const cortStr = dataCorte.toISOString().split("T")[0];
-  const filtered = analises.filter(a => (a.dataAnalise||a.criadoEm||"") >= cortStr);
+  // Filtrar por período — data da análise; `criadoEm` só quando falta a outra.
+  const dataDaAnalise = a => a.dataAnalise || a.criadoEm;
+  const periodo = resolverPeriodo(selPeriodo, { datas: analises.map(dataDaAnalise) });
+  const filtered = filtrarPorPeriodo(analises, periodo, dataDaAnalise);
 
   // Stats gerais
   const total = filtered.length;
@@ -1957,27 +1958,22 @@ export function CQDashboardTab() {
   });
 
   // Evolução mensal
-  const meses = [];
-  for(let i=periodoMeses-1; i>=0; i--){
-    const d = new Date(); d.setMonth(d.getMonth()-i);
-    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const label = d.toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
-    const ms = filtered.filter(a=>(a.dataAnalise||"").startsWith(key));
-    meses.push({ key, label, total:ms.length, aprov:ms.filter(x=>x.conclusao==="Aprovado").length, reprov:ms.filter(x=>x.conclusao==="Reprovado").length });
-  }
+  // Mesma data do filtro (antes o gráfico só olhava `dataAnalise` e perdia quem só
+  // tinha `criadoEm`, enquanto os cards contavam essas análises).
+  const meses = mesesDoPeriodo(periodo, 24).map(key => {
+    const [y, m] = key.split("-").map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString("pt-BR",{month:"short",year:"2-digit"});
+    const ms = filtered.filter(a=>dataIso(dataDaAnalise(a)).startsWith(key));
+    return { key, label, total:ms.length, aprov:ms.filter(x=>x.conclusao==="Aprovado").length, reprov:ms.filter(x=>x.conclusao==="Reprovado").length };
+  });
   const maxMes = Math.max(...meses.map(m=>m.total), 1);
 
   return (
     <div>
       {/* Filtro de período */}
-      <div style={{ display:"flex", gap:8, marginBottom:"1rem" }}>
-        {[3,6,12].map(m=>(
-          <button key={m} onClick={()=>setPeriodoMeses(m)} style={{ padding:"6px 16px", borderRadius:20, border:`1px solid ${periodoMeses===m?T.accent+"55":T.border}`, background:periodoMeses===m?T.accentDim:T.surf, color:periodoMeses===m?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:periodoMeses===m?600:400 }}>
-            Últimos {m} meses
-          </button>
-        ))}
-        <div style={{ marginLeft:"auto", fontSize:12, color:T.text3, alignSelf:"center" }}>{total} análise(s) no período</div>
-      </div>
+      <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
+        <span style={{ fontSize:12, color:T.text3 }}>{total} análise(s) no período</span>
+      </FiltroPeriodo>
 
       {/* KPI cards */}
       <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1.5rem" }}>

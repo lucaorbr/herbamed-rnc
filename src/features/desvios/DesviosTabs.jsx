@@ -168,6 +168,10 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const [fStatus, setFStatus] = useState(fIni.status || "");
   const [fSetor, setFSetor] = useState(fIni.setor || "");
   const [fTipo, setFTipo] = useState(fIni.tipo || "");
+  // Período da ocorrência — chega preenchido quando se clica num gráfico dos
+  // Indicadores, para a lista mostrar os mesmos desvios que o gráfico contou.
+  const [fDe, setFDe] = useState(fIni.de || "");
+  const [fAte, setFAte] = useState(fIni.ate || "");
   const [sel, setSel] = useState(null);
   const [reclassDim, setReclassDim] = useState(null); // "tipo" | "setor" | null
   const [selecionados, setSelecionados] = useState(new Set());
@@ -181,7 +185,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   // A seleção sobrevivia à troca de filtro, mas `encerrarSelecionados` só age sobre o
   // que está filtrado: a barra dizia "5 selecionado(s)" e o encerramento fechava 2.
   // Mudou o filtro, a seleção some — é a única leitura em que o contador não mente.
-  useEffect(() => { setSelecionados(new Set()); }, [fStatus, fSetor, fTipo, busca]);
+  useEffect(() => { setSelecionados(new Set()); }, [fStatus, fSetor, fTipo, busca, fDe, fAte]);
 
   const podeTriar = isAdmin || perm("triarDesvio");
 
@@ -240,9 +244,16 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     .filter(d => !fSetor || d.setor === fSetor)
     .filter(d => !fTipo || d.tipo === fTipo)
     .filter(d => {
+      // Mesma data de referência dos Indicadores: ocorrência, ou registro se faltar.
+      if (!fDe && !fAte) return true;
+      const dt = (d.dataOcorrencia || d.dataRegistro || "").slice(0, 10);
+      return !!dt && (!fDe || dt >= fDe) && (!fAte || dt <= fAte);
+    })
+    .filter(d => {
       if (!busca.trim()) return true;
       const q = busca.toLowerCase();
-      return [d.num, d.desc, d.setor, d.setorOutro, d.tipo, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
+      // tipoOutro entra porque os Indicadores mandam tipo fora do catálogo como busca.
+      return [d.num, d.desc, d.setor, d.setorOutro, d.tipo, d.tipoOutro, d.produto, d.registradoPor].some(x => (x || "").toLowerCase().includes(q));
     });
 
   const colunasDesvio = [
@@ -354,6 +365,15 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
           <div style={{ flex: "1 1 130px" }}>
             <F lbl="Tipo" ch={<Sel value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Todos</option>{tiposDesvio.map(x => <option key={x}>{x}</option>)}</Sel>} />
           </div>
+          <div style={{ flex: "0 1 150px" }}>
+            <F lbl="Ocorrência de" ch={<Inp type="date" value={fDe} max={fAte || undefined} onChange={e => setFDe(e.target.value)} />} />
+          </div>
+          <div style={{ flex: "0 1 150px" }}>
+            <F lbl="até" ch={<Inp type="date" value={fAte} min={fDe || undefined} onChange={e => setFAte(e.target.value)} />} />
+          </div>
+          {(fDe || fAte) && (
+            <button type="button" onClick={() => { setFDe(""); setFAte(""); }} title="Limpar o período" style={{ ...s.btn, padding: "9px 12px", marginBottom: 14 }}>✕ Período</button>
+          )}
           {isAdmin && pendentesTipo > 0 && (
             <button onClick={() => setReclassDim("tipo")} title="Reclassificar desvios antigos que ficaram como 'Outros' para os tipos do catálogo" style={{ ...s.btn, padding: "9px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
               🏷️ Reclassificar tipos

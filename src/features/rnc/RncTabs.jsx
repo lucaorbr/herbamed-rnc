@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada, tipoCor } from "../../core/status";
+import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
+import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
+import { filtrarPorPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -95,9 +97,8 @@ export function HomeTab({ rncs, user, setTab }) {
   // Stats
   const abertas   = rncs.filter(x => x.status === "Aberta").length;
   const vencidas  = rncs.filter(x => x.prazoAC && x.prazoAC < tod() && rncAtiva(x.status)).length;
-  const eficazes  = rncs.filter(x => x.status === "Eficaz").length;
   const criticas  = rncs.filter(x => x.sev === "Crítica" && rncAtiva(x.status)).length;
-  const taxaEf    = rncs.length > 0 ? Math.round(eficazes / rncs.length * 100) : 0;
+  const taxaEf    = taxaEficaciaRNC(rncs).taxa;
   const minhas    = rncs.filter(x => x.resp === user.name && rncAtiva(x.status));
   const recentes  = [...rncs].sort((a, b) => (b.createdAt||0) - (a.createdAt||0)).slice(0, 5);
 
@@ -140,7 +141,7 @@ export function HomeTab({ rncs, user, setTab }) {
             { l:"Total RNCs",    n:rncs.length,  c:T.accent,  icon:"📋", action:()=>setTab("lista") },
             { l:"Abertas",       n:abertas,       c:"#ff4f6a", icon:"🔴", action:()=>setTab("lista") },
             { l:"Críticas",      n:criticas,      c:"#ff8c42", icon:"⚡", action:()=>setTab("lista") },
-            { l:"Taxa Eficácia", n:`${taxaEf}%`,  c:taxaEf>=70?T.accent:"#ff8c42", icon:"✅", action:()=>setTab("dashboard") },
+            { l:"Taxa Eficácia", n:taxaEf===null?"—":`${taxaEf}%`,  c:taxaEf===null?T.text3:taxaEf>=70?T.accent:"#ff8c42", icon:"✅", action:()=>setTab("dashboard") },
             { l:"Prazos Vencidos",n:vencidas,     c:vencidas>0?"#ffd166":T.text3, icon:"⏰", action:()=>setTab("lista") },
           ].map(({ l, n, c, icon, action }) => (
             <div key={l} onClick={action} className="action-card" style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", cursor:"pointer", transition:"all .2s", boxShadow:`0 2px 12px rgba(0,0,0,.2)` }}>
@@ -237,7 +238,7 @@ export function HomeTab({ rncs, user, setTab }) {
             {[
               { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
               { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
-              { l:"Taxa de eficácia",ok:taxaEf>=70,    val:`${taxaEf}%${taxaEf>=70?" ✓":""}`},
+              { l:"Taxa de eficácia",ok:taxaEf===null||taxaEf>=70, val:taxaEf===null?"— sem RNC encerrada":`${taxaEf}%${taxaEf>=70?" ✓":""}`},
               { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0, val:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length} sem responsável` },
               { l:"IPC — Liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
               { l:"Laudos aguardando RT", ok:laudosPendentes===0, val:laudosPendentes===0?"✓ Todos assinados":`${laudosPendentes} aguardando assinatura`, link:"laudos" },
@@ -1509,16 +1510,25 @@ Responda APENAS em JSON sem markdown:
 export function DashTab({ rncs }) {
   const T = useTheme(); const s = useS();
   const [dashTab, setDashTab] = useState("kpis");
+  const [selPeriodo, setSelPeriodo] = usePeriodo("rnc-dashboard", "12m");
 
-  const tot = rncs.length;
-  const ef = rncs.filter(x=>x.status==="Eficaz").length;
-  const ab = rncs.filter(x=>x.status==="Aberta").length;
-  const venc = rncs.filter(r=>r.prazoAC&&r.prazoAC<tod()&&rncAtiva(r.status));
-  const critica = rncs.filter(x=>x.sev==="Crítica").length;
-  const taxaEf = tot>0?Math.round(ef/tot*100):0;
+  // Duas famílias de número nesta tela:
+  // - do PERÍODO: RNCs abertas (campo `data`) dentro do filtro — total, eficácia,
+  //   tempo médio, reincidência, Pareto;
+  // - da SITUAÇÃO ATUAL: abertas agora, vencidas, GUT e PDCA — "vencidas em março"
+  //   não quer dizer nada, então essas olham todas as RNCs e dizem isso na tela.
+  const todas = rncs;
+  const periodo = resolverPeriodo(selPeriodo, { datas: todas.map(r => r.data) });
+  const doPer = filtrarPorPeriodo(todas, periodo, r => r.data);
+
+  const tot = doPer.length;
+  const { eficazes: ef, encerradas, taxa: taxaEf } = taxaEficaciaRNC(doPer);
+  const ab = todas.filter(x=>x.status==="Aberta").length;
+  const venc = todas.filter(r=>r.prazoAC&&r.prazoAC<tod()&&rncAtiva(r.status));
+  const critica = doPer.filter(x=>x.sev==="Crítica").length;
 
   // Tempo médio resolução
-  const resolvidas = rncs.filter(x=>x.status==="Eficaz"&&x.data&&x.eficacia?.data);
+  const resolvidas = doPer.filter(x=>x.status==="Eficaz"&&x.data&&x.eficacia?.data);
   const tempoMedio = resolvidas.length>0?Math.round(resolvidas.reduce((a,r)=>{
     const d1=new Date(r.data);const d2=new Date(r.eficacia.data);
     return a+(d2-d1)/(1000*60*60*24);
@@ -1526,12 +1536,12 @@ export function DashTab({ rncs }) {
 
   // Reincidência (mesma causa raiz)
   const causas = {};
-  rncs.filter(x=>x.ishikawa?.root).forEach(r=>{ causas[r.ishikawa.root]=(causas[r.ishikawa.root]||0)+1; });
+  doPer.filter(x=>x.ishikawa?.root).forEach(r=>{ causas[r.ishikawa.root]=(causas[r.ishikawa.root]||0)+1; });
   const reincidentes = Object.values(causas).filter(v=>v>1).length;
 
   // Por tipo (Pareto)
   const bT={},bS={},bF={};
-  rncs.forEach(r=>{
+  doPer.forEach(r=>{
     bT[r.tipo]=(bT[r.tipo]||0)+1;
     bS[r.status]=(bS[r.status]||0)+1;
     if(r.fornecedor)bF[r.fornecedor]=(bF[r.fornecedor]||0)+1;
@@ -1539,10 +1549,10 @@ export function DashTab({ rncs }) {
 
   // PDCA — agrupar RNCs por fase
   const pdcaFases = {
-    P: rncs.filter(x=>x.status==="Aberta"||x.status==="Em andamento").filter(x=>!x.ishikawa?.root),
-    D: rncs.filter(x=>x.ishikawa?.root&&(!x.w2h||x.w2h.length===0)),
-    C: rncs.filter(x=>x.w2h?.length>0&&x.status==="Pendente verificação"),
-    A: rncs.filter(x=>x.status==="Eficaz"),
+    P: todas.filter(x=>x.status==="Aberta"||x.status==="Em andamento").filter(x=>!x.ishikawa?.root),
+    D: todas.filter(x=>x.ishikawa?.root&&(!x.w2h||x.w2h.length===0)),
+    C: todas.filter(x=>x.w2h?.length>0&&x.status==="Pendente verificação"),
+    A: todas.filter(x=>x.status==="Eficaz"),
   };
 
   // Pareto acumulado
@@ -1552,7 +1562,8 @@ export function DashTab({ rncs }) {
   const paretoAcum = paretoData.map(([k,n])=>{ acum+=n; return [k,n,Math.round(acum/paretoTotal*100)]; });
 
   // Matriz GUT das RNCs abertas
-  const gutRncs = gutRank(rncs);
+  const gutRncs = gutRank(todas);
+  const comPeriodo = dashTab==="kpis" || dashTab==="pareto";
 
   const DASH_TABS=[
     {id:"kpis",icon:"📈",label:"KPIs"},
@@ -1572,14 +1583,20 @@ export function DashTab({ rncs }) {
         ))}
       </div>
 
+      {comPeriodo
+        ? <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
+            <span style={{ fontSize:12, color:T.text3 }}>{tot} RNC(s) abertas no período</span>
+          </FiltroPeriodo>
+        : <div style={{ marginBottom:12 }}><SituacaoAtual>Situação atual de todas as RNCs — esta visão independe do período</SituacaoAtual></div>}
+
       {/* ── KPIs ── */}
       {dashTab==="kpis"&&(
         <>
           {/* Cards principais */}
           <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
             {[
-              {l:"Taxa de Eficácia",n:`${taxaEf}%`,c:taxaEf>=70?T.accent:"#ff8c42",sub:`${ef}/${tot} RNCs resolvidas`,icon:"✅",trend:taxaEf>=70?"↑ Bom":"↓ Atenção"},
-              {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Requerem ação",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
+              {l:"Taxa de Eficácia",n:taxaEf===null?"—":`${taxaEf}%`,c:taxaEf===null?T.text3:taxaEf>=70?T.accent:"#ff8c42",sub:`${ef} eficaz(es) de ${encerradas} encerrada(s)`,icon:"✅",trend:taxaEf===null?"Sem encerradas":taxaEf>=70?"↑ Bom":"↓ Atenção"},
+              {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Hoje — independe do período",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
               {l:"Tempo Médio Resolução",n:tempoMedio?`${tempoMedio}d`:"N/D",c:T.blue,sub:"Da abertura à eficácia",icon:"⏱️",trend:tempoMedio&&tempoMedio<=30?"↑ Eficiente":tempoMedio?"↓ Avaliar":"—"},
               {l:"Causa Raiz Reincidente",n:reincidentes,c:reincidentes>0?"#ff8c42":T.accent,sub:"Mesma causa em +1 RNC",icon:"🔄",trend:reincidentes===0?"✓ Sem reincidência":"⚠ Atenção"},
             ].map(({l,n,c,sub,icon,trend})=>(
@@ -1599,11 +1616,11 @@ export function DashTab({ rncs }) {
           {/* KPIs secundários */}
           <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
             {[
-              ["Total RNCs",tot,T.accent],
+              ["Total no período",tot,T.accent],
               ["Críticas",critica,"#ff4f6a"],
-              ["Vencidas",venc.length,"#ffd166"],
+              ["Vencidas hoje",venc.length,"#ffd166"],
               ["Eficazes",ef,T.accent],
-              ["Ineficazes",rncs.filter(x=>x.status==="Ineficaz").length,"#ff8c42"],
+              ["Ineficazes",doPer.filter(x=>x.status==="Ineficaz").length,"#ff8c42"],
             ].map(([l,n,c])=>(
               <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", textAlign:"center" }}>
                 <div style={{ fontSize:22, fontWeight:700, color:c }}>{n}</div>
@@ -1617,6 +1634,7 @@ export function DashTab({ rncs }) {
             {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,Object.fromEntries(Object.keys(TIPOC).map(k=>[k,tipoCor(k,T)]))]].map(([title,data,cm])=>(
               <div key={title} style={{ ...s.card }}>
                 <SecTitle ch={title}/>
+                {Object.keys(data).length===0&&<div style={{ color:T.text3, fontSize:12, textAlign:"center", padding:"1rem" }}>Nenhuma RNC no período.</div>}
                 {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,n])=>{
                   const max=Math.max(...Object.values(data),1);
                   return <div key={k} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
@@ -1634,6 +1652,7 @@ export function DashTab({ rncs }) {
           {/* Vencidas */}
           {venc.length>0&&<div style={{ ...s.card, marginTop:14 }}>
             <SecTitle icon="⚠️" ch="Prazos de ação corretiva vencidos"/>
+            <div style={{ marginTop:-6, marginBottom:10 }}><SituacaoAtual /></div>
             {venc.map(r=>(
               <div key={r.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:"#ff4f6a12", border:"1px solid #ff4f6a30", borderRadius:10, marginBottom:8 }}>
                 <div><div style={{ fontSize:13, fontWeight:600, color:"#ff4f6a" }}>{r.num}</div><div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,55)}...</div></div>
@@ -1829,28 +1848,20 @@ export function DashTab({ rncs }) {
 
 export function RelatoriosTab({ rncs, users, user, toast_ }) {
   const T = useTheme(); const s = useS();
-  const [periodo, setPeriodo] = useState("mensal");
+  const [selPeriodo, setSelPeriodo] = usePeriodo("rnc-relatorios", "mes");
   const [respFiltro, setRespFiltro] = useState("");
-  const [dataInicio, setDataInicio] = useState(() => { const d=new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
-  const [dataFim, setDataFim] = useState(() => new Date().toISOString().split("T")[0]);
   const [enviando, setEnviando] = useState(false);
   const [emailDest, setEmailDest] = useState(user.email);
   const [aiResumo, setAiResumo] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
   const [activeSection, setActiveSection] = useState("resumo");
 
-  const aplicarPeriodo = (p) => {
-    setPeriodo(p);
-    const hoje = new Date(); let inicio = new Date();
-    if (p==="semanal") inicio.setDate(hoje.getDate()-7);
-    else if (p==="quinzenal") inicio.setDate(hoje.getDate()-15);
-    else if (p==="mensal") inicio.setDate(1);
-    else if (p==="trimestral") { inicio.setMonth(hoje.getMonth()-3); inicio.setDate(1); }
-    setDataInicio(inicio.toISOString().split("T")[0]);
-    setDataFim(hoje.toISOString().split("T")[0]);
-  };
+  // Mesmo filtro de período dos painéis (periodoLogic). As datas eram calculadas com
+  // toISOString(), que é UTC: depois das 21h o "hoje" do relatório já era amanhã.
+  const periodo = resolverPeriodo(selPeriodo, { datas: rncs.map(r => r.data) });
+  const dataInicio = periodo.de, dataFim = periodo.ate;
 
-  const filtered = rncs.filter(r => r.data >= dataInicio && r.data <= dataFim && (!respFiltro || r.resp === respFiltro));
+  const filtered = filtrarPorPeriodo(rncs, periodo, r => r.data).filter(r => !respFiltro || r.resp === respFiltro);
   const resps = [...new Set(rncs.map(r=>r.resp).filter(Boolean))].sort();
 
   const total = filtered.length;
@@ -1863,7 +1874,8 @@ export function RelatoriosTab({ rncs, users, user, toast_ }) {
   const maior = filtered.filter(x=>x.sev==="Maior").length;
   const menor = filtered.filter(x=>x.sev==="Menor").length;
   const vencidas = filtered.filter(x=>x.prazoAC&&x.prazoAC<tod()&&rncAtiva(x.status)).length;
-  const taxaEficacia = total>0?Math.round(eficaz/total*100):0;
+  const { encerradas, taxa: taxaEficacia } = taxaEficaciaRNC(filtered);
+  const txtEficacia = taxaEficacia===null ? "—" : `${taxaEficacia}%`;
   const taxaAberto = total>0?Math.round((abertas+emAndamento)/total*100):0;
 
   // Por responsável
@@ -1893,7 +1905,7 @@ export function RelatoriosTab({ rncs, users, user, toast_ }) {
 PERÍODO: ${fmt(dataInicio)} a ${fmt(dataFim)}
 FILTRO: ${respFiltro||"Todos os responsáveis"}
 TOTAL: ${total} | ABERTAS: ${abertas} | EFICAZES: ${eficaz} | CRÍTICAS: ${critica} | VENCIDAS: ${vencidas}
-TAXA DE EFICÁCIA: ${taxaEficacia}%
+TAXA DE EFICÁCIA (eficazes ÷ encerradas): ${txtEficacia}
 TEMPO MÉDIO RESOLUÇÃO: ${tempoMedio?`${tempoMedio} dias`:"N/D"}
 TIPOS MAIS FREQUENTES: ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(", ")}
 FORNECEDORES COM MAIS NCs: ${Object.entries(porForn).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(", ")||"N/D"}
@@ -1919,7 +1931,7 @@ ${"─".repeat(50)}
 Total de RNCs:        ${total}
 Abertas:              ${abertas}
 Em andamento:         ${emAndamento}
-Eficazes:             ${eficaz} (${taxaEficacia}%)
+Eficazes:             ${eficaz} (${txtEficacia} das ${encerradas} encerradas)
 Ineficazes:           ${ineficaz}
 Críticas:             ${critica}
 Prazos vencidos:      ${vencidas}
@@ -1989,14 +2001,9 @@ Herbamed® · Sistema de Gestão da Qualidade`;
 
         {/* Filtros inline */}
         <div style={{ display:"flex", gap:8, marginTop:"1rem", flexWrap:"wrap", alignItems:"center" }}>
-          <div style={{ display:"flex", gap:4 }}>
-            {["semanal","quinzenal","mensal","trimestral"].map(p=>(
-              <button key={p} onClick={()=>aplicarPeriodo(p)} style={{ padding:"5px 12px", borderRadius:20, border:`1px solid ${periodo===p?T.accent+"55":T.border}`, background:periodo===p?T.accentDim:T.surf, color:periodo===p?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:periodo===p?600:400, textTransform:"capitalize" }}>{p}</button>
-            ))}
+          <div style={{ flexBasis:"100%", marginBottom:-8 }}>
+            <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo} presets={["7d","15d","mes","3m","12m"]} />
           </div>
-          <Inp type="date" value={dataInicio} onChange={e=>{setDataInicio(e.target.value);setPeriodo("personalizado");}} sx={{ width:140, fontSize:12 }}/>
-          <span style={{ color:T.text3, fontSize:12 }}>até</span>
-          <Inp type="date" value={dataFim} onChange={e=>{setDataFim(e.target.value);setPeriodo("personalizado");}} sx={{ width:140, fontSize:12 }}/>
           <Sel value={respFiltro} onChange={e=>setRespFiltro(e.target.value)} sx={{ width:"auto", minWidth:180, fontSize:12 }}>
             <option value="">Todos os responsáveis</option>
             {resps.map(r=><option key={r}>{r}</option>)}
@@ -2009,7 +2016,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
         {[
           { l:"Total no período", n:total, c:T.accent, sub:"RNCs registradas", icon:"📋" },
-          { l:"Taxa de eficácia", n:`${taxaEficacia}%`, c:taxaEficacia>=70?T.accent:"#ff8c42", sub:`${eficaz} de ${total} resolvidas`, icon:"✅" },
+          { l:"Taxa de eficácia", n:txtEficacia, c:taxaEficacia===null?T.text3:taxaEficacia>=70?T.accent:"#ff8c42", sub:`${eficaz} eficaz(es) de ${encerradas} encerrada(s)`, icon:"✅" },
           { l:"Pendentes", n:abertas+emAndamento, c:"#ffd166", sub:`${taxaAberto}% ainda abertas`, icon:"⏳" },
           { l:"Prazo vencido", n:vencidas, c:vencidas>0?"#ff4f6a":T.text3, sub:vencidas>0?"Ação urgente necessária":"Todos em dia", icon:vencidas>0?"⚠️":"✓" },
         ].map(({l,n,c,sub,icon})=>(
@@ -2106,7 +2113,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
             })}
             <div style={{ marginTop:"1rem", padding:"10px 14px", background:T.surf, borderRadius:10, display:"flex", justifyContent:"space-between" }}>
               <span style={{ fontSize:12, color:T.text2 }}>Eficácia geral do período</span>
-              <span style={{ fontSize:16, fontWeight:700, color:taxaEficacia>=70?T.accent:"#ff8c42" }}>{taxaEficacia}%</span>
+              <span style={{ fontSize:16, fontWeight:700, color:taxaEficacia===null?T.text3:taxaEficacia>=70?T.accent:"#ff8c42" }}>{txtEficacia}</span>
             </div>
           </div>
         </div>

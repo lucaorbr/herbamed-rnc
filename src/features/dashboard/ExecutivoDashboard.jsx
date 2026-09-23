@@ -6,7 +6,8 @@ import {
 import { logoutUser, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
-import { rncAtiva } from "../../core/status";
+import { rncAtiva, taxaEficaciaRNC } from "../../core/status";
+import { ultimosMeses } from "../../shared/periodoLogic";
 import { HerbamedLogo } from "../../shared/ui";
 
 export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onClose }) {
@@ -33,7 +34,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   const rncsVencidas   = rncs.filter(r => r.prazoAC && r.prazoAC < hoje && rncAtiva(r.status)).length;
   const eficaz         = rncs.filter(r => r.status === "Eficaz").length;
   const ineficaz       = rncs.filter(r => r.status === "Ineficaz").length;
-  const taxaEficacia   = eficaz + ineficaz > 0 ? Math.round(eficaz / (eficaz + ineficaz) * 100) : null;
+  const { encerradas, taxa: taxaEficacia } = taxaEficaciaRNC(rncs);
   const docsVencendo   = docs.filter(d => d.proximaRevisao && d.proximaRevisao >= hoje && d.proximaRevisao <= d30str && d.status !== "Obsoleto").length;
   const docsVigentes   = docs.filter(d => d.status === "Vigente").length;
 
@@ -50,10 +51,8 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
     : { cor: "#2ab84a", label: "Sob Controle", icon: "🟢" };
 
   // ── Tendência RNCs por mês (últimos 6 meses) ──
-  const meses6 = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
-    return d.toISOString().slice(0, 7);
-  });
+  // ultimosMeses conta a partir do dia 1: o setMonth() num dia 31 repetia um mês e pulava outro.
+  const meses6 = ultimosMeses(6);
   const tendencia = meses6.map(m => {
     const [ano, ms] = m.split("-").map(Number);
     const label = new Date(ano, ms - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
@@ -192,7 +191,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
           <KpiCard icon="📋" label="RNCs Abertas"    value={rncsAbertas}   color={rncsAbertas > 0 ? C.yellow : C.accent}   sub={`${rncs.length} total no sistema`} alert={rncsAbertas > 5} />
           <KpiCard icon="🔴" label="NC Críticas Ativas" value={rncsCriticas}  color={rncsCriticas > 0 ? "#ff4f6a" : C.accent} sub="Severidade crítica em aberto"  alert={rncsCriticas > 0} />
           <KpiCard icon="⏰" label="Prazos Vencidos"  value={rncsVencidas}  color={rncsVencidas > 0 ? C.orange : C.accent}  sub="Ações corretivas em atraso"    alert={rncsVencidas > 0} />
-          <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz · ${ineficaz} ineficaz`} />
+          <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz de ${encerradas} encerrada(s) · ${ineficaz} ineficaz`} />
           <KpiCard icon="⚠️" label="Desvios em Aberto" value={desviosAbertos} color={desviosAbertos > 0 ? "#4fc3f7" : C.accent} sub={`${desvios.length} total${taxaDesvioRNC !== null ? ` · ${taxaDesvioRNC}% viraram RNC` : ""}`} alert={desviosAbertos > 5} />
           <KpiCard icon="🗂️" label="Docs Vigentes"   value={docsVigentes}  color={C.accent}                                sub={`${docsVencendo > 0 ? `⚠ ${docsVencendo} vencendo em 30d` : "Revisões em dia"}`} alert={docsVencendo > 0} />
         </div>
