@@ -1,5 +1,5 @@
 import {
-  dataIso, dentroDoPeriodo, filtrarPorPeriodo, inicioMesesAtras, mesesDoPeriodo,
+  dataDigitadaCompleta, dataIso, dentroDoPeriodo, filtrarPorPeriodo, inicioMesesAtras, mesesDoPeriodo,
   periodoAnterior, resolverPeriodo, rotuloPeriodo, ultimosMeses,
 } from "./periodoLogic";
 import { taxaEficaciaRNC } from "../core/status";
@@ -131,5 +131,17 @@ describe("taxaEficaciaRNC", () => {
   test("sem nenhuma encerrada a taxa é null, não 0%", () => {
     expect(taxaEficaciaRNC([r("Aberta")]).taxa).toBeNull();
     expect(taxaEficaciaRNC([]).taxa).toBeNull();
+  });
+});
+
+describe("dataDigitadaCompleta — valores intermediários do campo de data", () => {
+  test("anos parciais que o navegador entrega enquanto se digita são recusados", () => {
+    ["0002-03-01", "0020-03-01", "0202-03-01"].forEach(v => expect(dataDigitadaCompleta(v)).toBe(false));
+  });
+  test("ano completo é aceito", () => {
+    expect(dataDigitadaCompleta("2026-03-01")).toBe(true);
+  });
+  test("vazio ou fora do formato é recusado", () => {
+    ["", null, undefined, "01/03/2026"].forEach(v => expect(dataDigitadaCompleta(v)).toBe(false));
   });
 });
