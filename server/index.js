@@ -23,6 +23,7 @@ const {
   requireHomologacaoPermission,
   validateHomologacaoUpdate,
 } = require("./homologacao");
+const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
 const {
   buildDocumentSourceHash,
   createLocalSummary,
@@ -226,19 +227,21 @@ async function handleAuth(req, res, pathname) {
     const ok = await verifyPassword(user.id, password);
     if (!ok) return sendJson(res, 401, { error: "Senha incorreta" });
 
-    // Rota de assinatura (Gestao de Documentos): Revisor e Aprovador ficam travados
-    // ao usuario designado pelo Elaborador. Apenas o designado (ou um admin) assina.
-    if (docId && (papel === "Revisor" || papel === "Aprovador")) {
+    // Rota de assinatura (Gestao de Documentos): so o designado assina como
+    // Revisor/Aprovador (sem excecao para admin), na ordem, e com segregacao de
+    // funcoes. Regra em server/assinaturaDocumento.js.
+    if (docId && ["Elaborador", "Revisor", "Aprovador"].includes(papel)) {
       const docRes = await query(
         "SELECT data FROM generic_documents WHERE collection = 'gestao_docs' AND id = $1",
         [String(docId)]
       );
-      const rota = docRes.rows[0]?.data?.rota || {};
-      const designadoId = papel === "Revisor" ? rota.revisorId : rota.aprovadorId;
-      if (user.role !== "admin" && designadoId && String(designadoId) !== String(user.id)) {
-        return sendJson(res, 403, {
-          error: `Apenas o ${papel.toLowerCase()} designado para este documento pode assinar.`,
-        });
+      const doc = docRes.rows[0]?.data;
+      if (doc) {
+        try {
+          validarAssinaturaDocumento(user, doc, papel);
+        } catch (error) {
+          return sendJson(res, error.status || 403, { error: error.message });
+        }
       }
     }
 
@@ -1029,6 +1032,7 @@ async function handleCollections(req, res, pathname) {
 
     if (collection === "laudos") validateLaudoUpdate(oldData, data);
     if (collection === "homologacoes") validateHomologacaoUpdate(user, oldData, data);
+    if (collection === "gestao_docs") validarGravacaoDocumento(user, oldData, data);
 
     await query(`
       INSERT INTO generic_documents (collection, id, data, updated_at)

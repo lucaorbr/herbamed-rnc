@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.5.1`
+- Versão atual: `3.6.0`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -394,6 +394,15 @@ O documento controlado segue o modelo do SE Suite e dos melhores QMS (MasterCont
 - Backend valida o designado em `/api/auth/signature` via `docId`
 - Admin remaneja designados; trocar papel já assinado invalida a assinatura
 - Segregação mantida: Elaborador ≠ Revisor ≠ Aprovador
+
+#### Rota de assinatura validada no servidor — admin sem exceção (v3.6.0)
+Um admin assinou em produção um documento que estava na rota de outra pessoa: o servidor deixava `role === "admin"` assinar como Revisor/Aprovador fora da rota, e a **segregação de funções só existia na tela**. Regra agora em **`server/assinaturaDocumento.js`** (11 testes), aplicada em **dois pontos** — no pedido da assinatura (`/api/auth/signature`) **e** na gravação do documento (`/api/collections/gestao_docs`), senão bastaria gravar o JSON com a assinatura dentro:
+- Revisor/Aprovador **só o designado**, admin inclusive. Rota errada se corrige em "🔧 Trocar designados" (registrado em `rota.remanejadaPor` + auditoria) — o admin pode se designar e então assinar.
+- Mesma pessoa não assina dois papéis (por `uid`; e-mail/nome só para assinatura antiga sem id). Ordem Elaborador → Revisor → Aprovador.
+- Na gravação: assinatura nova tem de ser **do próprio usuário que grava**; assinatura já registrada **não pode ser substituída** por outra (409) — só anulada pelos fluxos que gravam o campo vazio (recusa, troca de designado, nova revisão).
+- ⚠️ **Documento assinado pelo Elaborador antes da rota existir (PR #55) não tem designados** e ninguém mais consegue assiná-lo até um admin usar "🔧 Definir designados" — a faixa da rota aparece para esses casos com o aviso.
+- O modal de assinatura passou a mostrar a mensagem do servidor (antes dizia "Senha incorreta" para qualquer erro).
+- O documento que o admin já tinha assinado indevidamente ficou para a Qualidade tratar na tela (decisão do usuário).
 
 ### Documentos — Distribuição de cópias físicas ✅ (PR #56)
 - Registro de cópias controladas impressas por setor (setor + data + quem entregou)
