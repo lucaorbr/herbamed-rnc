@@ -103,7 +103,10 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
     try {
       const assinatura = await createElectronicSignature({ password: senha, contexto, papel: papelAssinatura, docId });
       onConfirm(assinatura);
-    } catch { setErr("Senha incorreta. Tente novamente."); }
+    } catch (e) {
+      // 401 é senha errada; qualquer outro erro (rota, segregação) vem explicado pelo servidor.
+      setErr(e?.status === 401 || !e?.message ? "Senha incorreta. Tente novamente." : e.message);
+    }
     setLoading(false);
   };
 

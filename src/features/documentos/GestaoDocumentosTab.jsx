@@ -1363,11 +1363,15 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const diasRev = diasParaRevisaoGD(d.proximaRevisao);
     const mesmoAssinante = (ass) => !!ass && ((ass.email && user?.email && ass.email===user.email) || (!ass.email && ass.nome===user?.name));
     const podeAssElab  = !d.assinaturaElaborador && (isAdmin || d.criadoPor===user?.name);
-    // Rota de assinatura: Revisor/Aprovador travados ao designado pelo Elaborador.
-    // Admin (estrito) pode assinar como override caso necessário. Segregação sempre vale.
-    const souDesignado = (uid) => String(uid||"") === String(user?.id||"");
-    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && (souDesignado(d.rota?.revisorId) || isAdminStrict) && !mesmoAssinante(d.assinaturaElaborador);
-    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && (souDesignado(d.rota?.aprovadorId) || isAdminStrict) && !mesmoAssinante(d.assinaturaElaborador) && !mesmoAssinante(d.assinaturaRevisor);
+    // Rota de assinatura: Revisor/Aprovador só o designado pelo Elaborador — admin
+    // inclusive (v3.6.0). Rota errada se corrige em "Trocar designados". O servidor
+    // valida o mesmo (server/assinaturaDocumento.js); aqui é só para não mostrar botão inútil.
+    const souDesignado = (uid) => !!uid && String(uid) === String(user?.id||"");
+    const podeAssRev   = d.assinaturaElaborador && !d.assinaturaRevisor && souDesignado(d.rota?.revisorId) && !mesmoAssinante(d.assinaturaElaborador);
+    const podeAssAprov = d.assinaturaRevisor && !d.assinaturaAprovador && souDesignado(d.rota?.aprovadorId) && !mesmoAssinante(d.assinaturaElaborador) && !mesmoAssinante(d.assinaturaRevisor);
+    // Documento assinado pelo Elaborador antes da rota existir (PR #55) não tem designados:
+    // sem esta faixa ninguém conseguiria mais assiná-lo.
+    const semRota = d.assinaturaElaborador && !d.assinaturaAprovador && !d.rota?.revisorId;
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
@@ -1688,14 +1692,15 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         )}
         <div style={s.card}>
           <SecTitle icon="✍️" ch="Assinaturas" />
-          {d.rota && (
+          {(d.rota || semRota) && (
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:12}}>
               <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>🧭 Rota</span>
-              <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>
-              <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>
-              {d.rota.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
+              {semRota && <span style={{fontSize:12,color:T.orange}}>Sem Revisor/Aprovador designados — um administrador precisa definir antes da assinatura.</span>}
+              {!semRota && <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>}
+              {!semRota && <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>}
+              {d.rota?.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
               {isAdminStrict && d.status!=="Vigente" && d.status!=="Obsoleto" && (
-                <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalTrocarRota({ doc:d }); }}>🔧 Trocar designados</button>
+                <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalTrocarRota({ doc:d }); }}>{semRota ? "🔧 Definir designados" : "🔧 Trocar designados"}</button>
               )}
             </div>
           )}
