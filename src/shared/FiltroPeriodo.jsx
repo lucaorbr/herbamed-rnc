@@ -1,13 +1,35 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTheme } from "../core/theme";
 import { useS } from "./styles";
-import { PERSONALIZADO, PRESETS, PRESETS_PAINEL, rotuloPeriodo } from "./periodoLogic";
+import { PERSONALIZADO, PRESETS, PRESETS_PAINEL, dataDigitadaCompleta, rotuloPeriodo } from "./periodoLogic";
 
 // Tela do filtro de período dos indicadores. A regra mora em `periodoLogic.js`.
 //
 // As datas "de/até" ficam SEMPRE visíveis, mostrando o que o atalho escolhido
 // significa ("6 meses" = 01/04 a 23/09). Mexer numa delas vira "personalizado"
 // mantendo a outra ponta — é assim que se chega ao "de x até y".
+
+/**
+ * Campo de data com rascunho próprio. O campo nativo entrega um valor a cada
+ * tecla (ano 0002, 0020, 0202…); só a data completa segue para o filtro. Sem o
+ * rascunho, o React devolveria ao campo o valor antigo a cada tecla recusada.
+ * Fora de foco, o campo mostra o período vigente (inclusive quando um atalho muda).
+ */
+function CampoData({ valor, onCommit, ...props }) {
+  const [rascunho, setRascunho] = useState(valor || "");
+  const [foco, setFoco] = useState(false);
+  useEffect(() => { if (!foco) setRascunho(valor || ""); }, [valor, foco]);
+  return (
+    <input type="date" {...props} value={rascunho}
+      onFocus={() => setFoco(true)}
+      onBlur={() => setFoco(false)}
+      onChange={e => {
+        const v = e.target.value;
+        setRascunho(v);
+        if (dataDigitadaCompleta(v) && v !== valor) onCommit(v);
+      }} />
+  );
+}
 
 const chave = tela => `sgq_periodo:${tela}`;
 
@@ -64,11 +86,9 @@ export function FiltroPeriodo({ sel, onChange, periodo, presets = PRESETS_PAINEL
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", padding: "3px 8px", borderRadius: 10, border: `1px solid ${personalizado ? T.accent : "transparent"}`, background: personalizado ? T.accentDim : "transparent" }}
         title={periodo ? `Período: ${rotuloPeriodo(periodo)}` : undefined}>
         <span style={{ fontSize: 12, color: personalizado ? T.accent : T.text3, fontWeight: personalizado ? 700 : 400 }}>De</span>
-        <input type="date" aria-label="Início do período" value={periodo?.de || ""} max={periodo?.ate || undefined}
-          onChange={e => e.target.value && mudarData("de", e.target.value)} style={data} />
+        <CampoData aria-label="Início do período" valor={periodo?.de} onCommit={v => mudarData("de", v)} style={data} />
         <span style={{ fontSize: 12, color: personalizado ? T.accent : T.text3, fontWeight: personalizado ? 700 : 400 }}>até</span>
-        <input type="date" aria-label="Fim do período" value={periodo?.ate || ""} min={periodo?.de || undefined}
-          onChange={e => e.target.value && mudarData("ate", e.target.value)} style={data} />
+        <CampoData aria-label="Fim do período" valor={periodo?.ate} onCommit={v => mudarData("ate", v)} style={data} />
       </div>
       {children && <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>{children}</div>}
     </div>

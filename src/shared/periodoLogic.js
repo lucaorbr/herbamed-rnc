@@ -67,6 +67,16 @@ export const PERSONALIZADO = "personalizado";
 const ehData = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 /**
+ * A data que o campo `type="date"` entregou já é a que a pessoa quis digitar?
+ *
+ * O navegador dispara `onChange` a cada tecla do ano: digitar "2026" entrega
+ * 0002, 0020, 0202 e só então 2026. Aplicar esses valores intermediários fazia o
+ * "até" cair antes do "de", `resolverPeriodo` trocava as pontas no meio da
+ * digitação e o período terminava como "10/03/0002 a 01/10/0026".
+ */
+export const dataDigitadaCompleta = s => ehData(s) && s >= "1900-01-01" && s <= "2999-12-31";
+
+/**
  * Transforma a escolha da tela em período concreto `{ de, ate }` (inclusive nas duas pontas).
  *
  * - `sel`: `{ preset, de, ate }` — `de`/`ate` só importam no personalizado.
