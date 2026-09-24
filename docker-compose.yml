@@ -127,7 +127,16 @@ services:
       - |
         while true; do
           ts=$$(date +%Y%m%d_%H%M%S)
-          pg_dump -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc -f "/backups/sgqherbamed_$$ts.dump"
+          f="/backups/sgqherbamed_$$ts.dump"
+          # Falha (ex.: banco ainda subindo após reboot) não pode virar dump vazio e
+          # esperar 24h: tenta de novo até conseguir. Sem isso a retenção apagava os
+          # dumps bons e sobravam só arquivos de 0 bytes.
+          until pg_dump -h db -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -Fc -f "$$f"; do
+            rm -f "$$f"
+            echo "backup falhou; nova tentativa em 60s"
+            sleep 60
+          done
+          find /backups -type f -name "sgqherbamed_*.dump" -size 0 -delete
           find /backups -type f -name "sgqherbamed_*.dump" -mtime +$${BACKUP_RETENTION_DAYS:-30} -delete
           sleep $${BACKUP_INTERVAL_SECONDS:-86400}
         done

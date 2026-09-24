@@ -433,14 +433,14 @@ export default function App() {
       const acao = data.status ? `Status: ${data.status}` : data.ishikawa ? "Ishikawa atualizado" : data.w2h ? "5W2H atualizado" : data.eficacia ? "Eficácia registrada" : "Editou RNC";
       await auditLog(acao, "rncs", id, antes?.num || id, antes, data);
     } catch(e) { console.error(e); }
-  }, []);
+  }, [rncs, auditLog]);
   const doDeleteRNC = useCallback(async (id) => {
     try {
       const antes = rncs.find(r => r.id === id);
       await fbDeleteRNC(id);
       await auditLog("Excluiu RNC", "rncs", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
-  }, []);
+  }, [rncs, auditLog]);
   const doSaveDesvio = useCallback(async (desvio) => {
     try {
       const isNew = !desvios.find(d => d.id === desvio.id);

@@ -24,6 +24,7 @@ const {
   validateHomologacaoUpdate,
 } = require("./homologacao");
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
+const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
   buildDocumentSourceHash,
   createLocalSummary,
@@ -547,10 +548,13 @@ async function handleRncs(req, res, pathname) {
   await requireUser(req);
   const id = decodeURIComponent(match[1]);
 
-  if (req.method === "PUT" || req.method === "POST" || req.method === "PATCH") {
+  // PATCH NÃO entra aqui: este bloco substitui o registro inteiro (ver rncGravacao.js).
+  if (req.method === "PUT" || req.method === "POST") {
     const body = sanitize(await readBody(req));
     const data = { ...body, id };
     await transaction(async client => {
+      const existing = await client.query("SELECT data FROM rncs WHERE id = $1 FOR UPDATE", [id]);
+      validarSubstituicaoRNC(existing.rows[0]?.data, data);
       await ensureRncNumberAvailable(client, data.num, id);
       await client.query(`
         INSERT INTO rncs (id, num, status, sev, resp, prazo_ac, data, updated_at)
@@ -572,13 +576,13 @@ async function handleRncs(req, res, pathname) {
   if (req.method === "PATCH") {
     const patch = sanitize(await readBody(req));
     await transaction(async client => {
-      const existing = await client.query("SELECT data FROM rncs WHERE id = $1", [id]);
+      const existing = await client.query("SELECT data FROM rncs WHERE id = $1 FOR UPDATE", [id]);
       if (!existing.rowCount) {
         const error = new Error("RNC nao encontrada");
         error.status = 404;
         throw error;
       }
-      const data = { ...(existing.rows[0].data || {}), ...patch, id };
+      const data = mesclarPatchRNC(existing.rows[0].data, patch, id);
       await ensureRncNumberAvailable(client, data.num, id);
       await client.query(`
         UPDATE rncs SET num=$2,status=$3,sev=$4,resp=$5,prazo_ac=$6,data=$7::jsonb,updated_at=now()
