@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.5.0`
+- Versão atual: `3.5.1`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -183,6 +183,7 @@ Veja `/memory` — as memórias contêm:
   - A lista de Desvios ganhou **"Ocorrência de/até"** e o clique nos gráficos dos Indicadores leva o período junto (antes o gráfico dizia "Envase: 4" e a lista abria com todo o histórico de Envase). O clique no aging não leva período. Junto: a busca da lista passou a olhar `tipoOutro` — os Indicadores mandam tipo fora do catálogo como busca, e ela não achava nada.
   - Fix de bug junto: **"voltar N meses" com `setMonth()` num dia 29–31 transbordava** (31/out − 1 mês = 1º/out) e os gráficos mensais do CEP, CQ e Executivo repetiam um mês e pulavam outro. `inicioMesesAtras`/`ultimosMeses` sempre partem do dia 1. Datas em fuso **local** (o `toISOString()` do Relatórios dava "amanhã" depois das 21h).
   - O comparativo ▲▼ dos Desvios passou a ser a janela **de mesma duração em dias** colada antes do período. O "trimestral" do Relatórios virou "Últimos 3 meses" (mês atual + 2 anteriores).
+  - **Fix v3.5.1 — digitar a data não filtrava.** O `type="date"` dispara `onChange` a cada tecla do ano (0002, 0020, 0202, 2026); cada valor intermediário era aplicado, o "até" caía antes do "de", `resolverPeriodo` trocava as pontas no meio da digitação e o período terminava em "10/03/0002 a 01/10/0026". Agora `CampoData` (em `FiltroPeriodo.jsx`) guarda um rascunho e só aplica data completa (`dataDigitadaCompleta`, ano ≥ 1900).
   - Validado na tela (Docker, 8 desvios semeados e removidos): histórico todo = 8 começando no mais antigo; personalizado 01/01–30/06/2026 = 3, comparativo +200% (1 na janela anterior); clique na matriz Envase × tipo abriu a lista só com o DV-T04; Dashboard de RNC com taxa 50% = 2 ÷ 4 encerradas. **450 testes verdes** (420 → 450).
 
 ### ⏭️ Próximas seções
