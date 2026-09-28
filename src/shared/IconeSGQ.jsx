@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { MARCA } from "./marca";
 
 // Ícone do SGQ: as duas folhas do símbolo Herbamed formando um visto.
 // Mesmo desenho do public/favicon.svg (versão sem nervura, legível em tamanho pequeno).
@@ -6,7 +7,7 @@ import React, { useId } from "react";
 const FOLHA_CURTA = "M27.4,55 C29.72,44.77 19.21,35.87 7,30 C8.89,44.29 15.39,56.47 27.4,55Z";
 const FOLHA_LONGA = "M28.6,55 C48.39,53.38 56.21,31.42 55,7 C40.13,22.58 26.04,41.09 28.6,55Z";
 
-export function IconeSGQ({ size = 32, fundo = "#1a4a2e", folha = "#f3f7f1", title }) {
+export function IconeSGQ({ size = 32, fundo = MARCA.verde, folha = MARCA.claro, title }) {
   const id = "sgq-folhas-" + useId().replace(/:/g, "");
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" role={title ? "img" : undefined}

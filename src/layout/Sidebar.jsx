@@ -98,7 +98,7 @@ export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], is
       {sidebarOpen && (
         <div style={{ padding:"10px 14px", borderTop:`1px solid ${T.border}`, fontSize:10, color:T.text3 }}>
           <div style={{ fontWeight:600, color:T.text2, marginBottom:1 }}>SGQ Herbamed®</div>
-          <div>{APP_VERSION_LABEL} � {new Date().getFullYear()}</div>
+          <div>{APP_VERSION_LABEL} · {new Date().getFullYear()}</div>
         </div>
       )}
     </div>

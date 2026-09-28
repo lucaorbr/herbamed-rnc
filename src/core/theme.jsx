@@ -1,8 +1,20 @@
 import React, { createContext, useContext } from "react";
 
 export const THEMES = {
+  // Padrão: as cores da tela de login e dos PDFs (ver shared/marca.js) —
+  // folha branca sobre mesa clara, verde da faixa como acento.
+  herbamedFolha: {
+    name: "🌿 Herbamed Folha", light: true,
+    bg: "#eef1ed", surf: "#ffffff", card: "#ffffff", card2: "#f5f7f4",
+    accent: "#1f6b3a", accent2: "#1a4a2e", accentDim: "#1f6b3a14",
+    accentGlow: "#1f6b3a26", text: "#17231b", text2: "#5b6b60", text3: "#8a978e",
+    border: "rgba(23,35,27,0.08)", border2: "rgba(23,35,27,0.14)",
+    red: "#c23b36", yellow: "#b7801f", blue: "#2f6aa8", orange: "#c0662a", purple: "#7457b0",
+    dataviz: ["#2f6aa8","#2f8f8a","#6a63c4","#a4527a","#b8862c","#c07a3e","#7c5ea3","#4c8f6b"],
+  },
+  // Chave "herbamed" mantida: é o que está salvo no hm_theme de quem escolheu o escuro.
   herbamed: {
-    name: "🌿 Herbamed Verde",
+    name: "🌙 Herbamed Noite",
     bg: "#0a110c", surf: "#101a12", card: "#141f16", card2: "#192118",
     accent: "#2ab84a", accent2: "#1a7a3c", accentDim: "#2ab84a18",
     accentGlow: "#2ab84a40", text: "#eef4ef", text2: "#7a9c7e", text3: "#3d5c42",

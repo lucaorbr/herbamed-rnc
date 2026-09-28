@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { loginUser, getUser } from "../../firebase";
 import { IconeSGQ } from "../../shared/IconeSGQ";
 import { APP_VERSION_LABEL } from "../../config/appVersion";
+import { MARCA } from "../../shared/marca";
 
 // A tela de login é desenhada como o "rosto" dos PDFs do sistema (buildPDFShell):
 // faixa verde no topo, folha branca no meio, rodapé fino. Quem entra já vê a mesma
 // folha que o sistema imprime. Cores fixas de propósito: a tela vem antes do tema do usuário.
 const C = {
-  mesa: "#e9ece8", folha: "#ffffff", borda: "#d5dbd6",
-  verde: "#1a4a2e", verdeHover: "#143a24", claro: "#f3f7f1", verdeTexto: "#b9cfbf",
-  rodape: "#edf2ed", texto: "#17231b", texto2: "#3d4a41", texto3: "#5b6b60",
+  ...MARCA, borda: "#d5dbd6",
+  texto: "#17231b", texto2: "#3d4a41", texto3: "#5b6b60",
   campo: "#cfd8d1",
 };
 
