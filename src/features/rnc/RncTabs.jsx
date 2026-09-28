@@ -144,7 +144,7 @@ export function HomeTab({ rncs, user, setTab }) {
             { l:"Taxa Eficácia", n:taxaEf===null?"—":`${taxaEf}%`,  c:taxaEf===null?T.text3:taxaEf>=70?T.accent:"#ff8c42", icon:"✅", action:()=>setTab("dashboard") },
             { l:"Prazos Vencidos",n:vencidas,     c:vencidas>0?"#ffd166":T.text3, icon:"⏰", action:()=>setTab("lista") },
           ].map(({ l, n, c, icon, action }) => (
-            <div key={l} onClick={action} className="action-card" style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", cursor:"pointer", transition:"all .2s", boxShadow:`0 2px 12px rgba(0,0,0,.2)` }}>
+            <div key={l} onClick={action} className="action-card" style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:"12px 14px", cursor:"pointer", transition:"all .2s", boxShadow: T.light ? "0 1px 2px rgba(23,35,27,.06)" : "0 2px 12px rgba(0,0,0,.2)" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
                 <span style={{ fontSize:18 }}>{icon}</span>
                 <span style={{ fontSize:22, fontWeight:800, color:c }}>{n}</span>

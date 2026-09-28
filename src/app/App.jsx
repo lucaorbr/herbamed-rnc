@@ -30,7 +30,12 @@ import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { TopNav } from "../layout/TopNav";
 import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
-import { HerbamedLogo, Toast } from "../shared/ui";
+import { Toast } from "../shared/ui";
+import { IconeSGQ } from "../shared/IconeSGQ";
+import { MARCA } from "../shared/marca";
+
+// Botão sobre a faixa verde do cabeçalho: contorno claro, sem cor de tema.
+const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
 import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
@@ -86,11 +91,11 @@ async function migrarRevalidacoesLegado() {
 }
 
 export default function App() {
-  // Fallback pra "herbamed": tema salvo pode ser de uma leva antiga (localStorage
-  // de sessão anterior) que não existe mais em THEMES depois de uma poda de temas.
+  // Padrão "herbamedFolha" (as cores do login). Quem escolheu um tema segue com ele;
+  // tema salvo de uma leva antiga, que não existe mais em THEMES, cai no padrão.
   const [themeKey, setThemeKey] = useState(() => {
     const salvo = localStorage.getItem("hm_theme");
-    return salvo && THEMES[salvo] ? salvo : "herbamed";
+    return salvo && THEMES[salvo] ? salvo : "herbamedFolha";
   });
   const [formalMode, setFormalMode] = useState(() => localStorage.getItem("hm_formal") === "true");
   const T = THEMES[themeKey];
@@ -472,12 +477,16 @@ export default function App() {
 
   if (authLoading) return (
     <ThemeCtx.Provider value={T}>
-      <div style={{ background: T.bg, color: T.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit" }}>
+      <div style={{ background: T.bg, color: T.text, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ width: 48, height: 48, border: `3px solid ${T.accent}`, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 1rem" }} />
-          <div style={{ color: T.text2, fontSize: 13 }}>Carregando SGQ Herbamed...</div>
+          <div className="carregando-icone" style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+            <IconeSGQ size={44} />
+          </div>
+          <div style={{ color: T.text2, fontSize: 13 }}>Carregando SGQ Herbamed…</div>
         </div>
-        <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+        <style>{`@keyframes respira{0%,100%{opacity:1}50%{opacity:.55}}
+          .carregando-icone{animation:respira 1.6s ease-in-out infinite;}
+          @media(prefers-reduced-motion:reduce){.carregando-icone{animation:none;}}`}</style>
       </div>
     </ThemeCtx.Provider>
   );
@@ -572,6 +581,8 @@ export default function App() {
           @keyframes skeletonPulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}
           .skeleton-bar{animation:skeletonPulse 1.4s ease-in-out infinite;}
           @media(prefers-reduced-motion:reduce){.skeleton-bar{animation:none;opacity:.75;}}
+          .faixa-btn:hover{background:rgba(255,255,255,.12)!important;}
+          .faixa-btn:focus-visible{outline:2px solid ${MARCA.claro};outline-offset:2px;}
           .menu-item:hover{background:${T.accentDim}!important;color:${T.accent}!important;}
           ${formalMode ? `
             button .emoji-hide, span.emoji-hide { display: none !important; }
@@ -587,6 +598,8 @@ export default function App() {
           .home-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
           .home-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
           .kpi-grid{display:grid;}
+          @media(max-width:1100px){ .header-kpis{display:none!important;} }
+          @media(max-width:900px){ .faixa-sub,.faixa-usuario{display:none!important;} }
           @media(max-width:768px){
             .header-kpis{display:none!important;}
             .sidebar-desktop{display:none!important;}
@@ -617,44 +630,46 @@ export default function App() {
           }
         `}</style>
 
-        {/* ── TOP HEADER ── */}
-        <div className="top-header" style={{ background: `linear-gradient(135deg,${T.surf},${T.card})`, borderBottom:`1px solid ${T.border2}`, height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, backdropFilter:"blur(12px)", flexShrink:0 }}>
+        {/* ── TOP HEADER — a faixa verde ──
+            Mesmo cabeçalho da tela de login e dos PDFs, e não muda com o tema: é a
+            assinatura do sistema. O tema escolhido vale do cabeçalho para baixo. */}
+        <div className="top-header" style={{ background: MARCA.verde, borderBottom:"1px solid rgba(0,0,0,.18)", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 1.5rem", position:"sticky", top:0, zIndex:200, flexShrink:0 }}>
 
-          {/* Left: toggle + logo */}
+          {/* Left: toggle + marca */}
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             {/* Mobile hamburger — só na navegação lateral. Com as abas no topo não há
                 gaveta para abrir: o ☰ abria o overlay preto sobre nada. */}
             {!navTopo && (
-              <button className="mobile-only" onClick={() => setMobileMenuOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>
+              <button className="mobile-only faixa-btn" onClick={() => setMobileMenuOpen(o=>!o)} aria-label="Abrir menu" style={{ ...faixaBtn, fontSize:18 }}>
                 ☰
               </button>
             )}
             {/* Desktop toggle — sem sentido quando a navegação está no topo */}
             {!navTopo && (
-              <button className="sidebar-desktop" onClick={() => setSidebarOpen(o=>!o)} style={{ background:"none", border:`1px solid ${T.border2}`, borderRadius:8, color:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+              <button className="sidebar-desktop faixa-btn" onClick={() => setSidebarOpen(o=>!o)} aria-label={sidebarOpen ? "Recolher menu" : "Expandir menu"} style={{ ...faixaBtn, fontSize:12 }}>
                 {sidebarOpen ? "◀" : "▶"}
               </button>
             )}
-            <div onClick={() => setTab("home")} style={{ background:"#fff", borderRadius:9, padding:"4px 12px", boxShadow:`0 0 14px ${T.accentGlow}`, display:"flex", alignItems:"center", cursor:"pointer" }} title="Ir para Home">
-              <HerbamedLogo height={24} white={false} />
-            </div>
-            <div style={{ display:"flex", flexDirection:"column" }}>
-              <span style={{ fontSize:13, fontWeight:700, color:T.text, lineHeight:1.2 }}>SGQ Herbamed®</span>
-              <span style={{ fontSize:10, color:T.text3 }}>Sistema de Gestão da Qualidade</span>
-            </div>
+            <button onClick={() => setTab("home")} title="Ir para Home" style={{ display:"flex", alignItems:"center", gap:10, background:"none", border:"none", padding:0, cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+              <IconeSGQ size={32} fundo={MARCA.claro} folha={MARCA.verde} />
+              <span style={{ display:"flex", flexDirection:"column", whiteSpace:"nowrap" }}>
+                <span style={{ fontSize:14, fontWeight:600, color:MARCA.claro, lineHeight:1.2 }}>SGQ Herbamed</span>
+                <span className="faixa-sub" style={{ fontSize:11, color:MARCA.verdeTexto }}>Sistema de Gestão da Qualidade</span>
+              </span>
+            </button>
           </div>
 
-          {/* Center: KPI pills */}
+          {/* Center: KPI pills — cores claras sobre a faixa; só o que pede atenção ganha cor */}
           <div className="header-kpis" style={{ display:"flex", gap:8 }}>
             {[
-              ["Total RNCs", rncs.length, T.accent],
-              ["Abertas", rncs.filter(x=>x.status==="Aberta").length, T.red],
-              ["Eficazes", rncs.filter(x=>x.status==="Eficaz").length, T.accent],
-              ["Vencidas", notifs.length, notifs.length>0?T.yellow:T.text3],
-            ].map(([l,n,c])=>(
-              <div key={l} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:20, padding:"4px 14px", display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ fontSize:16, fontWeight:700, color:c }}>{n}</span>
-                <span style={{ fontSize:10, color:T.text3, textTransform:"uppercase", letterSpacing:".04em" }}>{l}</span>
+              ["Total RNCs", rncs.length, MARCA.claro],
+              ["Abertas", rncs.filter(x=>x.status==="Aberta").length, null, "#ffc9c4"],
+              ["Eficazes", rncs.filter(x=>x.status==="Eficaz").length, MARCA.claro],
+              ["Vencidas", notifs.length, null, "#ffdc8f"],
+            ].map(([l,n,cor,alerta])=>(
+              <div key={l} style={{ background:"rgba(255,255,255,.07)", border:"1px solid rgba(255,255,255,.12)", borderRadius:20, padding:"4px 14px", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:16, fontWeight:700, color: cor || (n>0 ? alerta : MARCA.claro) }}>{n}</span>
+                <span style={{ fontSize:10, color:MARCA.verdeTexto, textTransform:"uppercase", letterSpacing:".04em" }}>{l}</span>
               </div>
             ))}
           </div>
@@ -663,14 +678,14 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             {/* Presentation mode button — admin/keyuser/rt only */}
             {["admin","keyuser","rt"].includes(user.role) && (
-              <button onClick={() => setPresentationMode(true)} title="Modo Apresentação" style={{ background: T.accentDim, border: `1px solid ${T.accent}44`, borderRadius: 8, color: T.accent, cursor: "pointer", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>
+              <button className="faixa-btn" onClick={() => setPresentationMode(true)} title="Modo Apresentação" style={{ ...faixaBtn, fontSize:16 }}>
                 📊
               </button>
             )}
             <div style={{ position:"relative" }}>
-              <button onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} style={{ background:totalNotifs>0?"#ffd16618":"none", border:`1px solid ${totalNotifs>0?"#ffd16633":T.border}`, borderRadius:8, color:totalNotifs>0?T.yellow:T.text2, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, position:"relative" }}>
+              <button className="faixa-btn" onClick={()=>{setNotifOpen(o=>!o);setAvatarOpen(false);}} aria-label={`Notificações (${totalNotifs})`} style={{ ...faixaBtn, fontSize:16, position:"relative", ...(totalNotifs>0 ? { background:"rgba(255,220,143,.14)", borderColor:"rgba(255,220,143,.45)" } : {}) }}>
                 🔔
-                {totalNotifs>0 && <span style={{ position:"absolute", top:2, right:2, width:14, height:14, borderRadius:"50%", background:T.red, color:"#fff", fontSize:8, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${T.bg}` }}>{totalNotifs}</span>}
+                {totalNotifs>0 && <span style={{ position:"absolute", top:-4, right:-4, minWidth:16, height:16, padding:"0 3px", boxSizing:"border-box", borderRadius:8, background:"#e5484d", color:"#fff", fontSize:9, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${MARCA.verde}` }}>{totalNotifs}</span>}
               </button>
               {notifOpen && (
                 <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:320, maxHeight:420, overflowY:"auto", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:14, boxShadow:"0 16px 48px #0008", zIndex:500, animation:"fadeIn .15s ease" }}>
@@ -707,15 +722,15 @@ export default function App() {
 
             {/* Avatar dropdown */}
             <div style={{ position:"relative" }}>
-              <button onClick={()=>{setAvatarOpen(o=>!o);setNotifOpen(false);}} style={{ display:"flex", alignItems:"center", gap:8, background:T.surf, border:`1px solid ${T.border2}`, borderRadius:10, padding:"5px 10px 5px 5px", cursor:"pointer", fontFamily:"inherit" }}>
-                <div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#fff", flexShrink:0 }}>
+              <button className="faixa-btn" onClick={()=>{setAvatarOpen(o=>!o);setNotifOpen(false);}} style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(255,255,255,.07)", border:"1px solid rgba(255,255,255,.14)", borderRadius:10, padding:"5px 10px 5px 5px", cursor:"pointer", fontFamily:"inherit" }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", background:MARCA.claro, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:MARCA.verde, flexShrink:0 }}>
                   {user.name?.[0]||"?"}
                 </div>
-                <div style={{ textAlign:"left" }}>
-                  <div style={{ fontSize:12, fontWeight:600, color:T.text, lineHeight:1.2 }}>{user.name}</div>
-                  <div style={{ fontSize:10, color:T.text3 }}>{user.role==="admin"?"Admin":user.role==="viewer"?"Visualizador":"Usuário"}</div>
+                <div className="faixa-usuario" style={{ textAlign:"left", whiteSpace:"nowrap" }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:MARCA.claro, lineHeight:1.2 }}>{user.name}</div>
+                  <div style={{ fontSize:10, color:MARCA.verdeTexto }}>{user.role==="admin"?"Admin":user.role==="viewer"?"Visualizador":"Usuário"}</div>
                 </div>
-                <span style={{ color:T.text3, fontSize:10 }}>▾</span>
+                <span style={{ color:MARCA.verdeTexto, fontSize:10 }}>▾</span>
               </button>
               {avatarOpen && (
                 <div style={{ position:"absolute", right:0, top:"calc(100%+8px)", width:240, maxHeight:"80vh", background:T.card2, border:`1px solid ${T.border2}`, borderRadius:12, boxShadow:"0 16px 48px #0008", zIndex:500, overflowX:"hidden", overflowY:"auto", animation:"fadeIn .15s ease" }}>
