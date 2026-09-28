@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.6.1`
+- Versão atual: `3.6.2`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -192,6 +192,8 @@ Veja `/memory` — as memórias contêm:
   - **Recuperação:** `server/rncRecuperacao.js` (puro, 11 testes) + `server/recuperarRNCs.js` (CLI; fica em `server/` porque só essa pasta vai para a imagem do backend). Fontes: entradas "Criou/Editou RNC" do `audit_log` (JSON cortado em 2000 caracteres — `repararJsonTruncado` fica com o que estava completo e descarta a chave de 1º nível que estava sendo escrita no corte), os patches seguintes em ordem, o `docNome` da auditoria para o número (o servidor devolve `{ ...corpo, id, num }`, então `num` é a última chave e a primeira a ser cortada), `email_log`/`rnc_supplier_tokens`, e opcionalmente um backup restaurado (`--backup-url`). O estado atual fica por cima (tem o histórico completo, que todo patch leva inteiro). ⚠️ `dadosAntes` só serve de **base**, nunca sobrepõe: com o `useCallback` travado ele guardava o estado do carregamento da página, mais velho que patches já aplicados. Número em uso por outra RNC **não é gravado** (a numeração é `MAX` do dia + 1, então a RNC seguinte do mesmo dia pode ter herdado o número) — fica para decisão manual. Nunca apaga: acrescenta ao histórico da RNC "Dados restaurados após falha de gravação do sistema" com campos e fontes, e grava "Restaurou RNC" na auditoria. Padrão é só relatório; grava com `--aplicar`. Idempotente.
   - **Backup (`docker-compose.yml`):** `pg_dump` que falhava (banco ainda subindo após reboot) deixava arquivo de **0 bytes** e dormia 24h, enquanto a retenção de 30 dias seguia apagando os dumps bons. Agora tenta de novo a cada 60s até conseguir e remove dumps vazios. Localmente havia 25 de 28 dumps vazios.
   - Validado no Docker: RNC semeada no estado esvaziado + auditoria no formato real → 14 campos reconstruídos da entrada cortada, histórico e auditoria acrescentados, segunda execução não acha mais nada. **55 testes de servidor** (38 → 55) e **453 de frontend** verdes.
+
+- **UI — Ícone do SGQ redesenhado: "visto de folhas" (v3.6.2)** — as duas folhas do símbolo Herbamed (a curta à esquerda, a longa à direita) redesenhadas nascendo do mesmo vértice, formando um ✓: a marca já tinha um visto dentro dela, o ícone só o torna evidente. Folhas claras (`#f3f7f1`) sobre quadrado `#1a4a2e`, o mesmo verde da faixa do `buildPDFShell` — ícone e PDFs com o mesmo "rosto". **Dois desenhos por tamanho**, como no hinting de fonte: até 48 px sem nervura e com folhas mais encorpadas (`favicon.svg`, `.ico` 16/32/48, PNGs 16/32); de 64 px para cima com nervura (`favicon-512.png`, `apple-touch-icon.png` sangrado, porque o iOS arredonda sozinho). Mestre com nervura em `docs/icone-sgq.svg`. Dois fixes junto: (1) o nginx respondia `/favicon.ico` com o **`logo.png`** (logotipo horizontal inteiro), então o `.ico` do projeto nunca chegou a ser servido; (2) `.png/.ico/.svg` têm cache `immutable` de 1 ano e o nome não tem hash — os links do `index.html` levam **`?v=2`**; ao redesenhar o ícone, subir o número.
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
