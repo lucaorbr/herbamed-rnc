@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.6.2`
+- Versão atual: `3.6.3`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -194,6 +194,8 @@ Veja `/memory` — as memórias contêm:
   - Validado no Docker: RNC semeada no estado esvaziado + auditoria no formato real → 14 campos reconstruídos da entrada cortada, histórico e auditoria acrescentados, segunda execução não acha mais nada. **55 testes de servidor** (38 → 55) e **453 de frontend** verdes.
 
 - **UI — Ícone do SGQ redesenhado: "visto de folhas" (v3.6.2)** — as duas folhas do símbolo Herbamed (a curta à esquerda, a longa à direita) redesenhadas nascendo do mesmo vértice, formando um ✓: a marca já tinha um visto dentro dela, o ícone só o torna evidente. Folhas claras (`#f3f7f1`) sobre quadrado `#1a4a2e`, o mesmo verde da faixa do `buildPDFShell` — ícone e PDFs com o mesmo "rosto". **Dois desenhos por tamanho**, como no hinting de fonte: até 48 px sem nervura e com folhas mais encorpadas (`favicon.svg`, `.ico` 16/32/48, PNGs 16/32); de 64 px para cima com nervura (`favicon-512.png`, `apple-touch-icon.png` sangrado, porque o iOS arredonda sozinho). Mestre com nervura em `docs/icone-sgq.svg`. Dois fixes junto: (1) o nginx respondia `/favicon.ico` com o **`logo.png`** (logotipo horizontal inteiro), então o `.ico` do projeto nunca chegou a ser servido; (2) `.png/.ico/.svg` têm cache `immutable` de 1 ano e o nome não tem hash — os links do `index.html` levam **`?v=2`**; ao redesenhar o ícone, subir o número.
+
+- **UI — Tela de login como o "rosto" do PDF (v3.6.3)** — a tela é uma folha do sistema: faixa verde `#1a4a2e` no topo com o ícone do SGQ e a versão (no lugar do "número do documento"), folha branca com o formulário, rodapé fino `#edf2ed` — o mesmo desenho do `buildPDFShell`. Sai o `banner.jpg` (tinha o logotipo e o @ do Instagram embutidos na imagem, esticada com `backgroundSize: 100% 100%`), o logo repetido três vezes, o selo fixo "Sistema online" (aparecia mesmo com o servidor fora) e os selos decorativos "Login local / Servidor interno / Criptografado". Versão passou a ser legível (antes 18% de opacidade e com caractere corrompido). Virou `<form>` com `onSubmit`, `label`/`htmlFor` e `autoComplete` (gerenciador de senhas funciona), erro em `aria-live`, "Mostrar/Ocultar" em texto no lugar de emoji. Cores fixas de propósito: a tela vem antes do tema do usuário. Ícone reutilizável em `src/shared/IconeSGQ.jsx` (mesmo desenho do `favicon.svg`). Fluxo de login inalterado.
 
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
