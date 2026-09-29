@@ -33,7 +33,8 @@ import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
 import { Toast } from "../shared/ui";
 import { IconeSGQ } from "../shared/IconeSGQ";
 import { MARCA } from "../shared/marca";
-import { abaDaUrl, urlComAba } from "./abaNaUrl";
+import { abaDaUrl, urlComAba, fichaDaUrl, enderecoCorresponde } from "./abaNaUrl";
+import { RncFicha } from "../features/rnc/RncFicha";
 
 // Botão sobre a faixa verde do cabeçalho: contorno claro, sem cor de tema.
 const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
@@ -121,23 +122,34 @@ export default function App() {
   // A tela atual mora no endereço (?aba=...): F5 mantém a tela, link direto abre nela
   // (inclusive depois do login) e o Voltar/Avançar do navegador navega entre telas.
   const [tab, setTab] = useState(() => abaDaUrl(window.location.search));
+  // Ficha de uma RNC aberta (?aba=rnc&rnc=<id>&etapa=causa): qual RNC e qual etapa.
+  const [ficha, setFicha] = useState(() => fichaDaUrl(window.location.search));
   const primeiraSincronia = useRef(true);
   useEffect(() => {
-    // Compara o parâmetro cru: ?aba=nao-existe já abre a Home, mas o endereço precisa ser limpo.
-    const noEndereco = new URLSearchParams(window.location.search).get("aba");
-    if (noEndereco === (tab === "home" ? null : tab)) return;
-    const url = urlComAba(window.location.href, tab);
+    // Compara os parâmetros crus: ?aba=nao-existe já abre a Home, mas o endereço precisa ser limpo.
+    if (enderecoCorresponde(window.location.search, tab, ficha)) return;
+    const url = urlComAba(window.location.href, tab, ficha);
+    // Trocar de etapa dentro da mesma RNC não empilha histórico: o Voltar da ficha
+    // leva de volta à lista, não etapa por etapa.
+    const p = new URLSearchParams(window.location.search);
+    const soEtapa = tab === "rnc" && p.get("aba") === "rnc" && p.get("rnc") === ficha.rnc;
     // Na abertura só corrige o endereço (aba inválida → Home) sem criar entrada no histórico.
-    if (primeiraSincronia.current) window.history.replaceState(null, "", url);
+    if (primeiraSincronia.current || soEtapa) window.history.replaceState(null, "", url);
     else window.history.pushState(null, "", url);
     primeiraSincronia.current = false;
-  }, [tab]);
+  }, [tab, ficha]);
   useEffect(() => { primeiraSincronia.current = false; }, []);
   useEffect(() => {
-    const aoVoltar = () => setTab(abaDaUrl(window.location.search));
+    const aoVoltar = () => { setTab(abaDaUrl(window.location.search)); setFicha(fichaDaUrl(window.location.search)); };
     window.addEventListener("popstate", aoVoltar);
     return () => window.removeEventListener("popstate", aoVoltar);
   }, []);
+  const abrirRnc = useCallback((id, etapa = "resumo") => { setFicha({ rnc: id, etapa }); setTab("rnc"); }, []);
+  const setEtapaFicha = useCallback(etapa => setFicha(p => ({ ...p, etapa })), []);
+  // Ferramenta (Ishikawa/CAPA/Eficácia) aberta a partir da ficha já vem com a RNC selecionada.
+  const [rncFerramenta, setRncFerramenta] = useState("");
+  const abrirFerramenta = useCallback((ferramenta, id) => { setRncFerramenta(id); setTab(ferramenta); }, []);
+  useEffect(() => { if (!["ishikawa", "5w2h", "eficacia"].includes(tab)) setRncFerramenta(""); }, [tab]);
   // Saiu (manual ou por inatividade) → a próxima entrada começa na Home. A tela de
   // login é desenhada dentro do App, sem recarregar a página, então sem isto a `tab`
   // antiga sobrevivia e o sistema reabria onde a pessoa estava.
@@ -462,14 +474,22 @@ export default function App() {
       throw e;
     }
   }, [rncs, auditLog]);
+  // Falha na gravação avisa e INTERROMPE quem chamou: antes o erro ia só para o console
+  // e a tela seguia dizendo "salvo!". Falha só na auditoria não desfaz a gravação.
   const doUpdateRNC = useCallback(async (id, data) => {
+    const antes = rncs.find(r => r.id === id);
     try {
-      const antes = rncs.find(r => r.id === id);
       await updateRNC(id, data);
+    } catch(e) {
+      console.error(e);
+      toast_(`Não foi possível salvar a RNC ${antes?.num || ""}: ${e?.message || "erro no servidor"}`.replace("  ", " "), "red");
+      throw e;
+    }
+    try {
       const acao = data.status ? `Status: ${data.status}` : data.ishikawa ? "Ishikawa atualizado" : data.w2h ? "5W2H atualizado" : data.eficacia ? "Eficácia registrada" : "Editou RNC";
       await auditLog(acao, "rncs", id, antes?.num || id, antes, data);
     } catch(e) { console.error(e); }
-  }, [rncs, auditLog]);
+  }, [rncs, auditLog, toast_]);
   const doDeleteRNC = useCallback(async (id) => {
     try {
       const antes = rncs.find(r => r.id === id);
@@ -733,7 +753,7 @@ export default function App() {
                   ) : (
                     <>
                       {notifs.map(r=>(
-                        <div key={`rnc-${r.id}`} onClick={()=>{setTab("lista");setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
+                        <div key={`rnc-${r.id}`} onClick={()=>{abrirRnc(r.id);setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
                           <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num} — Prazo vencido</div>
                           <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,50)}...</div>
                           <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>Prazo AC: {fmt(r.prazoAC)}</div>
@@ -824,7 +844,7 @@ export default function App() {
 
         {/* ── BARRA DE ABAS (repaginação) ── */}
         {navTopo && (
-          <TopNav tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+          <TopNav tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
         )}
 
         {/* ── BODY: sidebar + content ── */}
@@ -839,14 +859,14 @@ export default function App() {
           {/* SIDEBAR — só na navegação lateral (a de abas dispensa) */}
           {navTopo ? null : (
             <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-              <SidebarNav T={T} tab={tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+              <SidebarNav T={T} tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
             </div>
           )}
 
           {/* MAIN CONTENT */}
           <div style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
             {/* Page header — hidden on home */}
-            {tab !== "home" && (
+            {tab !== "home" && tab !== "rnc" && (
               <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>
                 <div>
                   <div style={{ fontSize:18, fontWeight:700, color:T.text }}>{PAGE_TITLES[tab]||tab}</div>
@@ -868,10 +888,11 @@ export default function App() {
                   propósito: quem volta para a lateral volta inteiro. */}
               <Suspense fallback={<AbaCarregando />}>
               {tab==="home" && (navTopo
-                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} perm={perm} docNotifs={docNotifs}
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
                 : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
-              {tab==="lista"      && <ListaTab rncs={rncs} user={user} users={users} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
+              {tab==="lista"      && <ListaTab rncs={rncs} isViewer={isViewer} abrirRnc={abrirRnc} />}
+              {tab==="rnc"        && <RncFicha rncId={ficha.rnc} etapa={ficha.etapa} setEtapa={setEtapaFicha} rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} abrirFerramenta={abrirFerramenta} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
@@ -880,9 +901,9 @@ export default function App() {
               {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
               {tab==="config-desvios" && isAdmin && <ConfiguracaoDesviosTab catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreas={catalogoAreasSetoresDistribuicao} desvios={desvios} doSaveDesvio={doSaveDesvio} user={user} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
               {tab==="config-revalidacao" && isAdmin && <ConfiguracaoRevalidacaoTab catalogoTiposRevalidacao={catalogoTiposRevalidacao} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
-              {tab==="ishikawa"   && !isViewer && <IshikawaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
-              {tab==="5w2h"       && !isViewer && <CAPATab rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
-              {tab==="eficacia"   && !isViewer && <EficaciaTab rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="ishikawa"   && !isViewer && <IshikawaTab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="5w2h"       && !isViewer && <CAPATab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
+              {tab==="eficacia"   && !isViewer && <EficaciaTab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}

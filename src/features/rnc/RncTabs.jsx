@@ -20,7 +20,7 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
-import { rncEditavelNasFerramentas, errosDasAcoesCapa, patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor } from "./ferramentasLogic";
+import { rncEditavelNasFerramentas, errosDasAcoesCapa, patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, rncTemMaterial } from "./ferramentasLogic";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -28,7 +28,7 @@ import { rncEditavelNasFerramentas, errosDasAcoesCapa, patchSalvarCapa, podeRegi
 // gatilho — "Aberta" significa "registrada, tratamento ainda não começou".
 // Devolve o patch a mesclar no doUpdateRNC (status + entrada de histórico); null se a RNC
 // já saiu de "Aberta".
-function andamentoPatch(r, motivo, autor) {
+export function andamentoPatch(r, motivo, autor) {
   if (!r || r.status !== "Aberta") return null;
   return {
     status: "Em andamento",
@@ -62,12 +62,9 @@ export const DISPOSICOES = [
 ];
 export const dispMeta = (key) => DISPOSICOES.find(d => d.key === key) || null;
 
-// A RNC "toca material/lote" quando o tipo é de material OU quando há produto/lote
-// preenchido. Só nesses casos a disposição é obrigatória antes de encerrar como Eficaz.
-const TIPOS_MATERIAL = ["Matéria-prima", "Material de embalagem", "Insumo", "Produto acabado"];
-export function rncTemMaterial(r) {
-  return !!(r && (TIPOS_MATERIAL.includes(r.tipo) || (r.lote || "").trim() || (r.produto || "").trim()));
-}
+// rncTemMaterial mora em ferramentasLogic (regra pura, testável); reexportada aqui
+// porque ReunioesTab e outros já importam daqui.
+export { rncTemMaterial };
 
 export function HomeTab({ rncs, user, setTab }) {
   const formal = useFormal();
@@ -297,179 +294,15 @@ export function HomeTab({ rncs, user, setTab }) {
   );
 }
 
-export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
+export function ListaTab({ rncs, isViewer, abrirRnc }) {
   const T = useTheme(); const s = useS();
   const [q, setQ] = useState("");
   const [fSt, setFSt] = useState("");
   const [fTp, setFTp] = useState("");
-  const [sel, setSel] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [editData, setEditData] = useState({});
-  // Descrição e contenção não entram no editData: são append-only (onda 11). O que
-  // se digita aqui é só o ACRÉSCIMO — o texto já gravado nunca chega a um input.
-  const [addDesc, setAddDesc] = useState("");
-  const [addCont, setAddCont] = useState("");
-  const [assinaturaModal, setAssinaturaModal] = useState(null);
-  // Disposição do material
-  const [dispForm, setDispForm] = useState(false);
-  const [dispDec, setDispDec] = useState("");
-  const [dispJust, setDispJust] = useState("");
-  const [dispSign, setDispSign] = useState(null); // disposição pendente de assinatura RT
-  useEffect(() => { setDispForm(false); setDispDec(""); setDispJust(""); setDispSign(null); }, [sel?.id]);
-
   const list = rncs.filter(r =>
     (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) &&
     (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp)
   );
-
-  // Verificar se usuário pode editar esta RNC
-  const canEdit = (r) => {
-    if (isViewer) return false;
-    if (isAdmin) return true;
-    return r.criadoPor === user.name || r.detector === user.name;
-  };
-
-  const updStatus = async (id, status) => {
-    const r = rncs.find(x => x.id === id);
-    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `Status alterado -> ${status}`, resp: user.name, tipo: "status" };
-    await doUpdateRNC(id, { status, historico: [...(r?.historico || []), h] });
-    setSel(p => p ? { ...p, status, historico: [...(p.historico || []), h] } : null);
-    toast_("Status atualizado!", "green");
-    const updated = { ...r, status, historico: [...(r?.historico || []), h] };
-    openEmail(updated, "status");
-  };
-
-  const assinarRTRNC = async (r) => {
-    if (user?.role !== "rt" && user?.role !== "admin" && user?.role !== "keyuser") { alert("Apenas o Responsavel Tecnico pode assinar RNCs."); return; }
-    if (!window.confirm(`Confirma assinatura como RT na RNC ${r.num}?`)) return;
-    const password = window.prompt("Confirme sua senha para assinar como RT:");
-    if (!password) return;
-    let ass;
-    try {
-      ass = await createElectronicSignature({ password, contexto:`RNC|${r.num||r.id||""}`, papel:"Responsavel Tecnico" });
-    } catch {
-      alert("Senha incorreta. Assinatura cancelada.");
-      return;
-    }
-    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "RNC aprovada pelo RT", resp: user.name, tipo: "rt" };
-    const updated = { ...r, assinaturaRT: ass, historico: [...(r.historico||[]), h] };
-    await doUpdateRNC(r.id, { assinaturaRT: ass, historico: updated.historico });
-    setSel(updated);
-    toast_("RNC aprovada pelo RT!", "green");
-  };
-
-  // Quem pode registrar disposição (não libera): analisarRNC. Liberar/concessão exige aprovarRNC.
-  const canDispor = () => !isViewer && (isAdmin || (perm && perm("analisarRNC")));
-
-  const gravarDisposicao = async (decisao, justificativa, assinaturaRT) => {
-    const r = rncs.find(x => x.id === sel.id) || sel;
-    const meta = dispMeta(decisao);
-    const disposicao = { decisao, justificativa: (justificativa || "").trim(), data: tod(), por: user.name, assinaturaRT: assinaturaRT || null };
-    const h = {
-      data: tod(), hora: new Date().toLocaleTimeString("pt-BR"),
-      acao: `Disposição do material: ${meta?.label || decisao}${assinaturaRT ? " (assinada pelo RT)" : ""}`,
-      detalhes: [disposicao.justificativa].filter(Boolean), resp: user.name, tipo: "disposicao",
-    };
-    const hist = [...(r.historico || []), h];
-    await doUpdateRNC(sel.id, { disposicao, historico: hist });
-    setSel(p => p ? { ...p, disposicao, historico: hist } : p);
-    setDispForm(false); setDispDec(""); setDispJust("");
-    toast_("Disposição do material registrada.", "green");
-  };
-
-  // Encerramento leve: RNC resolvida pela disposição do material, sem passar pelo ciclo
-  // de eficácia (caso pontual, sem CAPA formal). Status terminal próprio "Encerrada".
-  const encerrarPorDisposicao = async () => {
-    const r = rncs.find(x => x.id === sel.id) || sel;
-    if (!r.disposicao?.decisao) { alert("Registre a disposição do material antes de encerrar."); return; }
-    const pend = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
-    const aviso = pend.length > 0 ? `\n\nAtenção: há ${pend.length} ação(ões) de CAPA pendente(s) — o encerramento por disposição dispensa o ciclo de eficácia.` : "";
-    if (!window.confirm(`Encerrar a RNC ${r.num} como resolvida por disposição do material (${dispMeta(r.disposicao.decisao)?.label})?\n\nA RNC vai para o status "Encerrada", sem passar pela verificação de eficácia.${aviso}`)) return;
-    const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `RNC encerrada por disposição do material (${dispMeta(r.disposicao.decisao)?.label})`, resp: user.name, tipo: "status" };
-    const hist = [...(r.historico || []), h];
-    await doUpdateRNC(sel.id, { status: "Encerrada", historico: hist });
-    setSel(p => p ? { ...p, status: "Encerrada", historico: hist } : p);
-    toast_("RNC encerrada por disposição.", "green");
-  };
-
-  const submitDisposicao = () => {
-    if (!dispDec) { alert("Selecione a decisão de disposição."); return; }
-    if (!dispJust.trim()) { alert("A justificativa técnica da disposição é obrigatória."); return; }
-    const meta = dispMeta(dispDec);
-    if (meta?.libera) {
-      if (!(isAdmin || (perm && perm("aprovarRNC")))) { alert("Liberar material não conforme exige assinatura do RT (permissão \"Aprovar como RT\")."); return; }
-      setDispSign({ decisao: dispDec, justificativa: dispJust });
-    } else {
-      gravarDisposicao(dispDec, dispJust, null);
-    }
-  };
-
-  const startEdit = (r) => {
-    setEditData({
-      produto: r.produto || "", fornecedor: r.fornecedor || "",
-      lote: r.lote || "", nf: r.nf || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
-      tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
-      resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
-      prazoEfic: r.prazoEfic || "", respCont: r.respCont || "",
-    });
-    setAddDesc(""); setAddCont("");
-    setEditing(true);
-  };
-
-  const saveEdit = async () => {
-    const r = rncs.find(x => x.id === sel.id);
-    // Descrição segue obrigatória, mas agora só pode faltar em RNC que nunca teve
-    // uma — quem já tem descrição gravada não consegue esvaziá-la nem tentando.
-    if (campoVazio(r.desc) && campoVazio(addDesc)) { alert("Descrição é obrigatória."); return; }
-
-    // Detectar campos alterados para o histórico. Descrição e contenção saíram desta
-    // lista: são append-only e viram entrada própria, com o texto acrescentado inteiro.
-    // ⚠️ `campos` TEM DE COBRIR TUDO QUE O FORMULÁRIO EDITA. Com o early-return de
-    // "nada mudou" logo abaixo, um campo esquecido aqui não é só uma linha faltando
-    // no histórico: a edição inteira é descartada em silêncio. Setor, evidências,
-    // responsável da contenção e prazo de causa faltavam.
-    const alterados = [];
-    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
-    Object.entries(campos).forEach(([k, label]) => {
-      if ((r[k] || "") !== (editData[k] || "")) {
-        alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
-      }
-    });
-    if (!campoVazio(addDesc)) alterados.push(`Descrição — acréscimo: "${resumoAcrescimo(addDesc)}"`);
-    if (!campoVazio(addCont)) alterados.push(`Ação de contenção — acréscimo: "${resumoAcrescimo(addCont)}"`);
-
-    if (!alterados.length) { setEditing(false); return; }
-
-    const agora = new Date();
-    const h = {
-      data: tod(),
-      hora: agora.toLocaleTimeString("pt-BR"),
-      acao: `RNC editada — ${alterados.length} campo(s) alterado(s)`,
-      detalhes: alterados,
-      resp: user.name,
-      tipo: "edicao"
-    };
-
-    let hist = [...(r?.historico || []), h];
-    const patch = { ...editData };
-    if (!campoVazio(addDesc)) patch.desc = acrescentarAoCampo(r.desc, addDesc, user, agora);
-    if (!campoVazio(addCont)) patch.contencao = acrescentarAoCampo(r.contencao, addCont, user, agora);
-    // Contenção registrada agora (estava vazia) = 1º ato de tratamento -> Em andamento.
-    const contNova = !campoVazio(addCont) && campoVazio(r.contencao);
-    const ap = contNova ? andamentoPatch(r, "contenção registrada", user.name) : null;
-    if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; }
-    patch.historico = hist;
-    await doUpdateRNC(sel.id, patch);
-    setSel(p => ({ ...p, ...patch }));
-    setEditing(false);
-    setAddDesc(""); setAddCont("");
-    toast_(ap ? "RNC atualizada — status movido para Em andamento." : "RNC atualizada com sucesso!", "green");
-  };
-
-  const del = async id => {
-    if (!confirm("Excluir esta RNC permanentemente?")) return;
-    await doDeleteRNC(id); setSel(null); toast_("RNC excluída.", "red");
-  };
 
   // Steps de progresso da RNC
   const getRNCStep = (r) => {
@@ -528,7 +361,7 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
         columns={colunasRNC}
         rows={list}
         rowKey={r => r.id}
-        onRowClick={r => { setSel(r); setEditing(false); }}
+        onRowClick={r => abrirRnc(r.id)}
         rowAccent={r => SMETA[r.status]?.dot || T.accent}
         sortColDefault="data"
         sortDirDefault="desc"
@@ -538,355 +371,6 @@ export function ListaTab({ rncs, user, users, toast_, setTab, openEmail, doUpdat
         emptySubtitle={isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}
       />
 
-      {/* MODAL */}
-      {sel && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.82)", backdropFilter: "blur(6px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }} onClick={e => e.target === e.currentTarget && setSel(null)}>
-          <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 18, padding: "2rem 2.5rem", maxWidth: 1200, width: "100%", maxHeight: "94vh", overflowY: "auto", boxShadow: "0 32px 80px #000a" }}>
-
-            {/* Header do modal */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{sel.num}</div>
-                <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{sel.tipo} · {fmt(sel.data)} · {sel.detector || "—"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <SevB s={sel.sev} /><Badge s={sel.status} />
-                {sel.assinaturaRT ? (
-                  <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"#2ab84a18", color:"#2ab84a", fontWeight:700, display:"flex", alignItems:"center", gap:4 }}>
-                    ✅ RT: {sel.assinaturaRT.nome} · {sel.assinaturaRT.dataHora}
-                  </span>
-                ) : (sel.sev === "Crítica" && (user?.role === "rt" || user?.role === "admin" || user?.role === "keyuser")) ? (
-                  <button onClick={() => assinarRTRNC(sel)} style={{ ...s.btnA, fontSize:10, padding:"3px 12px" }}>
-                    ✍️ Aprovar como RT
-                  </button>
-                ) : sel.sev === "Crítica" && !sel.assinaturaRT ? (
-                  <span style={{ fontSize:10, padding:"3px 10px", borderRadius:20, background:"#ffd16618", color:"#ffd166", fontWeight:700 }}>⏳ Aguardando aprovação RT</span>
-                ) : null}
-                {canEdit(sel) && !editing && (
-                  <button onClick={() => startEdit(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
-                )}
-                <button onClick={() => setSel(null)} style={{ background: T.border, border: "none", color: T.text2, cursor: "pointer", borderRadius: 8, padding: "6px 10px", fontSize: 16, fontFamily: "inherit" }}>✕</button>
-              </div>
-            </div>
-
-            {/* Steps de progresso */}
-            <div style={{ display:"flex", gap:0, marginBottom:"1.25rem", background:T.surf, borderRadius:10, padding:"12px 16px", border:`1px solid ${T.border}` }}>
-              {["Abertura","Análise de Causa","Plano de Ação","Verificação"].map((st,i)=>{
-                const step = getRNCStep(sel);
-                const done = i < step;
-                const active = i === step - 1;
-                return (
-                  <div key={st} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", position:"relative" }}>
-                    {i > 0 && <div style={{ position:"absolute", left:"-50%", top:13, width:"100%", height:2, background: done?T.accent:T.border, zIndex:0 }} />}
-                    <div style={{ width:28, height:28, borderRadius:"50%", background: done?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, color: done?"#fff":T.text3, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, zIndex:1, border: active?`2px solid ${T.accent}`:"none", boxShadow: active?`0 0 10px ${T.accentGlow}`:"none" }}>
-                      {done && i < step-1 ? "✓" : i+1}
-                    </div>
-                    <div style={{ fontSize:10, color: done?T.accent:T.text3, marginTop:4, fontWeight: active?600:400, textAlign:"center" }}>{st}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {editing ? (
-              <div>
-                <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: T.accent, display: "flex", alignItems: "center", gap: 8 }}>
-                  ✏️ <span>Modo edição ativo — todas as alterações serão registradas no histórico</span>
-                </div>
-                <div style={{ ...s.card, marginBottom: "1rem" }}>
-                  <SecTitle icon="📝" ch="Identificação" />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                    <F lbl="Tipo" ch={<Sel value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} />
-                    <F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={editData.sev} onChange={e => setEditData(p => ({ ...p, sev: e.target.value }))}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
-                    <F lbl="Setor" tip="Setor onde a não conformidade foi identificada. Ex: Controle de Qualidade, Produção, Logística." ch={<Inp value={editData.setor} onChange={e => setEditData(p => ({ ...p, setor: e.target.value }))} />} />
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <F lbl="Produto / Material" tip="Nome do produto acabado ou matéria-prima envolvida. Seja específico. Ex: Calcivitam D3 Cápsula 60un ou Celulose Microcristalina." ch={<Inp value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
-                    <F lbl="Fornecedor" tip="Fornecedor relacionado à NC. Preencha apenas se a origem for de matéria-prima ou material de embalagem de terceiros." ch={<Inp value={editData.fornecedor} onChange={e => setEditData(p => ({ ...p, fornecedor: e.target.value }))} />} />
-                    <F lbl="Nº do lote" tip="Número do lote afetado conforme registrado no sistema de rastreabilidade. Essencial para eventual recall ou bloqueio de lote." ch={<Inp value={editData.lote} onChange={e => setEditData(p => ({ ...p, lote: e.target.value }))} />} />
-                    <F lbl="Nº da Nota Fiscal" tip="Nota Fiscal de entrada do material (quando aplicável). Amarra o lote reprovado à entrada para eventual devolução/recusa ao fornecedor." ch={<Inp value={editData.nf} onChange={e => setEditData(p => ({ ...p, nf: e.target.value }))} />} />
-                    <F lbl="Quantidade afetada" tip="Quantidade de unidades, kg ou litros afetados pela não conformidade. Ex: 500 cápsulas, 20kg, 2 tambores." ch={<Inp value={editData.qtd} onChange={e => setEditData(p => ({ ...p, qtd: e.target.value }))} />} />
-                  </div>
-                  <F lbl="Referência normativa" tip="Norma, especificação ou procedimento que define o padrão que foi descumprido. Ex: PO-CQ-003, RDC 658/2022, Especificação Técnica ETE-001." ch={<Inp value={editData.ref} onChange={e => setEditData(p => ({ ...p, ref: e.target.value }))} />} />
-                  <F lbl="Evidências" ch={<Inp value={editData.evidencia} onChange={e => setEditData(p => ({ ...p, evidencia: e.target.value }))} />} />
-                </div>
-                <div style={{ ...s.card, marginBottom: "1rem" }}>
-                  <SecTitle icon="📋" ch="Descrição" />
-                  <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades, diferente do padrão bege estabelecido na especificação." ch={<CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: reinspeção do lote confirmou 3% das unidades fora do padrão." />} />
-                </div>
-                <div style={{ ...s.card, marginBottom: "1rem" }}>
-                  <SecTitle icon="⚡" ch="Ação de contenção" />
-                  <F lbl="Ação realizada" tip="Descreva a ação imediata de contenção já executada. Ex: Lote bloqueado e segregado na área de quarentena. Produção suspensa até investigação." ch={<CampoHistoricoEdicao valorSalvo={sel.contencao} adicao={addCont} setAdicao={setAddCont} rows={3} placeholder="Ex.: lote transferido da quarentena para área de segregação definitiva." />} />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <F lbl="Responsável" tip="Nome do responsável por verificar e atestar a eficácia da ação corretiva. Geralmente o RT ou coordenador de qualidade." tip="Nome do responsável pela ação corretiva e pelo encerramento desta RNC. Geralmente coordenador ou supervisor do setor." ch={<Inp value={editData.respCont} onChange={e => setEditData(p => ({ ...p, respCont: e.target.value }))} />} />
-                  </div>
-                </div>
-                <div style={{ ...s.card, marginBottom: "1rem" }}>
-                  <SecTitle icon="🗓️" ch="Prazos" />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                    <F lbl="Responsável análise" ch={<Inp value={editData.resp} onChange={e => setEditData(p => ({ ...p, resp: e.target.value }))} />} />
-                    <F lbl="Prazo ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H." ch={<Inp type="date" value={editData.prazoAC} onChange={e => setEditData(p => ({ ...p, prazoAC: e.target.value }))} />} />
-                    <F lbl="Prazo eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou." ch={<Inp type="date" value={editData.prazoEfic} onChange={e => setEditData(p => ({ ...p, prazoEfic: e.target.value }))} />} />
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button style={s.btn} onClick={() => setEditing(false)}>Cancelar edição</button>
-                  <button style={s.btnA} onClick={saveEdit}>💾 Salvar alterações</button>
-                </div>
-              </div>
-            ) : (
-              /* MODO VISUALIZAÇÃO */
-              <div>
-                <div style={{ background: T.surf, borderRadius: 10, padding: 14, marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>Descrição</div>
-                  <CampoHistoricoLeitura valor={sel.desc} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-                  {[["Produto", sel.produto], ["Fornecedor", sel.fornecedor], ["Lote", sel.lote], ["Nota Fiscal", sel.nf], ["Qtd.", sel.qtd], ["Responsável", sel.resp], ["Setor", sel.setor], ["Prazo AC", fmt(sel.prazoAC)], ["Prazo Eficácia", fmt(sel.prazoEfic)], ["Referência", sel.ref], ["Evidências", sel.evidencia]].filter(([, v]) => v).map(([k, v]) => (
-                    <div key={k} style={{ background: T.surf, borderRadius: 8, padding: "10px 12px" }}>
-                      <div style={{ fontSize: 10, color: T.text3, textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>{k}</div>
-                      <div style={{ fontSize: 13 }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-                {sel.contencao && <div style={{ background: "#ff8c4212", border: "1px solid #ff8c4230", borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: "#ff8c42", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>⚡ Contenção</div><CampoHistoricoLeitura valor={sel.contencao} compacto /></div>}
-                {sel.ishikawa?.root && <div style={{ background: T.accentDim, border: `1px solid ${T.accent}30`, borderRadius: 10, padding: 14, marginBottom: 14 }}><div style={{ fontSize: 10, color: T.accent, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>🎯 Causa raiz</div><div style={{ fontSize: 13, fontWeight: 500 }}>{sel.ishikawa.root}</div></div>}
-
-                {/* Anexos */}
-                {sel.anexos?.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {sel.anexos.map((a, i) => (
-                        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surf, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.accent, textDecoration: "none", fontSize: 12 }}>
-                          {a.type?.includes("image") ? "🖼️" : a.type?.includes("pdf") ? "📄" : "📎"} {a.name}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Disposição do material / lote */}
-                {(sel.disposicao?.decisao || rncTemMaterial(sel) || canDispor()) && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📦 Disposição do material</div>
-                    {sel.disposicao?.decisao ? (
-                      <div style={{ background: T.surf, border: `1px solid ${dispMeta(sel.disposicao.decisao)?.cor || T.border}44`, borderRadius: 10, padding: 14 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: dispMeta(sel.disposicao.decisao)?.cor || T.text, padding: "3px 12px", borderRadius: 20, background: `${dispMeta(sel.disposicao.decisao)?.cor || T.text3}18` }}>
-                            {dispMeta(sel.disposicao.decisao)?.label || sel.disposicao.decisao}
-                          </span>
-                          <span style={{ fontSize: 10, color: T.text3 }}>por {sel.disposicao.por} · {fmt(sel.disposicao.data)}</span>
-                        </div>
-                        {sel.disposicao.justificativa && <div style={{ fontSize: 13, color: T.text, lineHeight: 1.5, marginBottom: sel.disposicao.assinaturaRT ? 8 : 0 }}>{sel.disposicao.justificativa}</div>}
-                        {sel.disposicao.assinaturaRT && (
-                          <div style={{ fontSize: 10, color: "#2ab84a", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                            ✅ Liberação assinada pelo RT: {sel.disposicao.assinaturaRT.nome} · {sel.disposicao.assinaturaRT.timestamp ? new Date(sel.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR") : sel.disposicao.assinaturaRT.dataHora}
-                          </div>
-                        )}
-                        {canDispor() && !dispForm && (
-                          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                            <button onClick={() => { setDispForm(true); setDispDec(sel.disposicao.decisao); setDispJust(sel.disposicao.justificativa || ""); }} style={{ ...s.btn, fontSize: 10, padding: "4px 10px" }}>✏️ Alterar disposição</button>
-                            {rncAtiva(sel.status) && (
-                              <button onClick={encerrarPorDisposicao} style={{ ...s.btn, fontSize: 10, padding: "4px 10px", color: "#2ab84a", borderColor: "#2ab84a44", background: "#2ab84a12" }}>✅ Encerrar RNC (resolvida por disposição)</button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : rncTemMaterial(sel) && (
-                      <div style={{ fontSize: 11, color: T.yellow, background: "#ffd16612", border: "1px solid #ffd16633", borderRadius: 8, padding: "8px 12px", marginBottom: dispForm ? 10 : 0 }}>
-                        ⚠️ RNC envolve material/lote — registre a disposição antes de encerrar como <b>Eficaz</b>.
-                      </div>
-                    )}
-
-                    {canDispor() && (dispForm || !sel.disposicao?.decisao) && (
-                      <div style={{ ...s.card, marginTop: 10 }}>
-                        <F lbl="Decisão de disposição" ch={
-                          <Sel value={dispDec} onChange={e => setDispDec(e.target.value)}>
-                            <option value="">— Selecione —</option>
-                            {DISPOSICOES.map(d => <option key={d.key} value={d.key}>{d.label}{d.libera ? " (exige RT)" : ""}</option>)}
-                          </Sel>
-                        } />
-                        <F lbl="Justificativa técnica" tip="Por que esta é a decisão correta para o lote? Ex.: liberado sob concessão porque o desvio de rótulo não afeta a identificação nem a segurança; avaliação de impacto sem risco ao produto." ch={
-                          <TA rows={3} value={dispJust} onChange={e => setDispJust(e.target.value)} placeholder="Justificativa da disposição do lote..." />
-                        } />
-                        {dispMeta(dispDec)?.libera && (
-                          <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>🔏 Liberar material não conforme exige assinatura eletrônica do RT ao registrar.</div>
-                        )}
-                        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          {dispForm && <button style={s.btn} onClick={() => { setDispForm(false); setDispDec(""); setDispJust(""); }}>Cancelar</button>}
-                          <button style={s.btnA} onClick={submitDisposicao}>{dispMeta(dispDec)?.libera ? "🔏 Assinar e registrar" : "Registrar disposição"}</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Alterar status — só para não visualizadores */}
-                {!isViewer && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Alterar status</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {Object.keys(SMETA).filter(st => !rncEncerrada(st)).map(st => <button key={st} onClick={() => updStatus(sel.id, st)} style={{ padding: "6px 12px", borderRadius: 20, border: `1px solid ${sel.status === st ? SMETA[st].c + "55" : T.border}`, background: sel.status === st ? SMETA[st].bg : T.surf, color: sel.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>)}
-                    </div>
-                    <div style={{ fontSize: 10, color: T.text3, marginTop: 8, lineHeight: 1.5 }}>
-                      A RNC passa de <b>Aberta</b> para <b>Em andamento</b> automaticamente no 1º ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar a análise de causa). O encerramento (<b>Eficaz</b> / <b>Ineficaz</b>) é feito apenas na aba <b>Verificação de eficácia</b>, após concluir as ações de CAPA e registrar a disposição do material.
-                    </div>
-                  </div>
-                )}
-
-                {/* Histórico de versões */}
-                {sel.historico?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📜 Histórico de versões</div>
-                    <div style={{ borderLeft: `2px solid ${T.border2}`, paddingLeft: "1.25rem", marginLeft: ".5rem" }}>
-                      {[...sel.historico].reverse().map((h, i) => (
-                        <div key={i} style={{ position: "relative", marginBottom: 10, padding: "10px 14px", background: T.surf, border: `1px solid ${h.tipo === "edicao" ? T.accent + "33" : T.border}`, borderRadius: 8 }}>
-                          <div style={{ position: "absolute", left: "-1.6rem", top: "1rem", width: 8, height: 8, borderRadius: "50%", background: h.tipo === "edicao" ? T.accent : h.tipo === "status" ? "#ffd166" : T.text3, border: `2px solid ${T.bg}`, boxShadow: h.tipo === "edicao" ? `0 0 6px ${T.accentGlow}` : "none" }} />
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: h.detalhes?.length ? 6 : 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: T.text }}>{h.acao}</div>
-                            <div style={{ fontSize: 10, color: T.text3, whiteSpace: "nowrap", marginLeft: 8 }}>{fmt(h.data)}{h.hora ? ` · ${h.hora}` : ""}</div>
-                          </div>
-                          <div style={{ fontSize: 11, color: T.text2, marginBottom: h.detalhes?.length ? 6 : 0 }}>por {h.resp}</div>
-                          {h.detalhes?.length > 0 && (
-                            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6, marginTop: 4 }}>
-                              {h.detalhes.map((d, j) => (
-                                <div key={j} style={{ fontSize: 11, color: T.text3, marginBottom: 2 }}>• {d}</div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {sel.assinaturaRT && (
-                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:"#2ab84a0a", border:"1px solid #2ab84a25", borderRadius:10, marginBottom:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:8, background:"#2ab84a18", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>✅</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:"#2ab84a" }}>Aprovado pelo Responsável Técnico</div>
-                      <div style={{ fontSize:11, color:T.text2 }}>{sel.assinaturaRT.nome}{sel.assinaturaRT.cargo ? ` · ${sel.assinaturaRT.cargo}` : ""}{(sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf) ? ` · Registro profissional: ${sel.assinaturaRT.registroProfissional||sel.assinaturaRT.crf}` : ""}</div>
-                      <div style={{ fontSize:10, color:T.text3 }}>✔ Assinado eletronicamente em {sel.assinaturaRT.timestamp?new Date(sel.assinaturaRT.timestamp).toLocaleString("pt-BR"):sel.assinaturaRT.dataHora}</div>
-                      <div style={{ fontSize:9, color:T.text3, fontFamily:"monospace", marginTop:2 }}>Cód.: {sigCodigo(sel.assinaturaRT, `RNC|${sel.num||sel.id||""}`)}</div>
-                    </div>
-                  </div>
-                )}
-
-                {sel.respostaFornecedor && (
-                  <div style={{ ...s.card, background: `linear-gradient(135deg, #1a7a3c0a, #1a7a3c05)`, border: `1px solid #1a7a3c25` }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-                      <div style={{ fontSize:18 }}>🔗</div>
-                      <SecTitle ch="Resposta do Fornecedor" />
-                    </div>
-                    <div style={{ background: T.surf, borderRadius:8, padding:"12px 14px", marginBottom:12, fontSize:11, color:T.text2 }}>
-                      Respondido em {new Date(sel.respostaFornecedor.respondidoEm).toLocaleString("pt-BR")}
-                    </div>
-                    {sel.respostaFornecedor.porques?.length > 0 && (
-                      <div style={{ marginBottom:12 }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>5 Porquês</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                          {sel.respostaFornecedor.porques.map((p, i) => (
-                            <div key={i} style={{ display:"flex", gap:8, fontSize:12, color:T.text }}>
-                              <span style={{ fontWeight:700, color:T.accent, minWidth:20 }}>{i+1}.</span>
-                              <span>{p}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {sel.respostaFornecedor.causaRaiz && (
-                      <div style={{ marginBottom:12, padding:"10px 12px", background:T.accentDim, border:`1px solid ${T.accent}33`, borderRadius:6 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:4 }}>Causa raiz identificada</div>
-                        <div style={{ fontSize:12, color:T.text, lineHeight:1.5 }}>{sel.respostaFornecedor.causaRaiz}</div>
-                      </div>
-                    )}
-                    {sel.respostaFornecedor.planoAcao && Object.keys(sel.respostaFornecedor.planoAcao).some(k => sel.respostaFornecedor.planoAcao[k]) && (
-                      <div style={{ marginBottom:12 }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>Plano de Ação Proposto</div>
-                        <div style={{ display:"grid", gridTemplateColumns:"120px 1fr", gap:8, fontSize:11, color:T.text2 }}>
-                          {sel.respostaFornecedor.planoAcao.oQue && <>
-                            <div style={{ fontWeight:600, color:T.text }}>O quê?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.oQue}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.porQue && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Por quê?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.porQue}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.como && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Como?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.como}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.quem && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Quem?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.quem}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.onde && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Onde?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.onde}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.quando && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Quando?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.quando}</div>
-                          </>}
-                          {sel.respostaFornecedor.planoAcao.quanto && <>
-                            <div style={{ fontWeight:600, color:T.text }}>Quanto?</div>
-                            <div>{sel.respostaFornecedor.planoAcao.quanto}</div>
-                          </>}
-                        </div>
-                      </div>
-                    )}
-                    {sel.respostaFornecedor.observacoes && (
-                      <div>
-                        <div style={{ fontSize:11, fontWeight:700, color:T.accent, textTransform:"uppercase", marginBottom:6 }}>Observações</div>
-                        <div style={{ fontSize:12, color:T.text, lineHeight:1.5 }}>{sel.respostaFornecedor.observacoes}</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: "1.25rem", borderTop: `1px solid ${T.border}`, paddingTop: "1rem" }}>
-                  {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={() => del(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
-                  {/* Exportar/imprimir NÃO assina: reimprime sempre a assinatura do elaborador gravada na RNC. Quem só visualiza não assina nada. */}
-                  <button style={{ ...s.btn, color: "#ff8c42", borderColor: "#ff8c4233", background: "#ff8c4212", display: "flex", alignItems: "center", gap: 6 }} onClick={() => exportRNCPDF(sel)}>📄 Exportar/Imprimir PDF</button>
-                  {/* Regularização de RNCs antigas (sem assinatura do elaborador gravada): só o próprio elaborador (criadoPor) ou admin. */}
-                  {!sel.assinaturaElaborador && (isAdmin || sel.criadoPor === user.name) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => setAssinaturaModal(sel)}>✍️ Assinar como elaborador</button>}
-                  {!isViewer && sel.fornecedor && <button style={{ ...s.btn, color: "#1a7a3c", borderColor: "#1a7a3c33", background: "#1a7a3c12", display: "flex", alignItems: "center", gap: 6 }} onClick={async () => { try { await exportFormularioFornecedor(sel); const ap = andamentoPatch(sel, "encaminhado ao fornecedor", user.name); if (ap) { const hist = [...(sel.historico || []), ap.hEntry]; await doUpdateRNC(sel.id, { status: ap.status, historico: hist }); setSel(p => p ? { ...p, status: ap.status, historico: [...(p.historico || []), ap.hEntry] } : p); } toast_(ap ? "Formulário gerado — status movido para Em andamento." : "Formulário do fornecedor gerado!", "green"); } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); } }}>📋 Formulário p/ fornecedor</button>}
-                  {!isViewer && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim, display: "flex", alignItems: "center", gap: 6 }} onClick={() => openEmail(sel, "manual")}>✉️ Notificar</button>}
-                  {canEdit(sel) && <button style={{ ...s.btn, color: T.accent, borderColor: T.accent + "33", background: T.accentDim }} onClick={() => startEdit(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
-                  <button style={s.btn} onClick={() => setSel(null)}>Fechar</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {assinaturaModal && (
-        <AssinaturaModal
-          user={user}
-          titulo={`RNC ${assinaturaModal.num} — assinatura do elaborador`}
-          contexto={`RNC|${assinaturaModal.num||assinaturaModal.id||""}`}
-          papel="Elaborador"
-          onClose={()=>setAssinaturaModal(null)}
-          onConfirm={async (ass)=>{
-            const h = { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" };
-            const hist = [...(assinaturaModal.historico || []), h];
-            await doUpdateRNC(assinaturaModal.id, { assinaturaElaborador: ass, historico: hist });
-            setSel(p => p ? { ...p, assinaturaElaborador: ass, historico: [...(p.historico || []), h] } : p);
-            setAssinaturaModal(null);
-            toast_("Assinatura do elaborador registrada na RNC.", "green");
-          }}
-        />
-      )}
-
-      {dispSign && (
-        <AssinaturaModal
-          user={user}
-          titulo={`RNC ${sel?.num} — disposição: ${dispMeta(dispSign.decisao)?.label}`}
-          contexto={`RNC-DISP|${sel?.num||sel?.id||""}`}
-          papel="Responsavel Tecnico"
-          onClose={() => setDispSign(null)}
-          onConfirm={async (ass) => { await gravarDisposicao(dispSign.decisao, dispSign.justificativa, ass); setDispSign(null); }}
-        />
-      )}
     </div>
   );
 }
@@ -1123,10 +607,10 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   );
 }
 
-export function IshikawaTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
+export function IshikawaTab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
   const T = useTheme(); const s = useS();
   const autor = user?.name || "—";
-  const [sid, setSid] = useState("");
+  const [sid, setSid] = useState(rncIdInicial);
   const [usouFornecedor, setUsouFornecedor] = useState(false);
   const [efeito, setEfeito] = useState("");
   const [causes, setCauses] = useState({ mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] });
@@ -1266,9 +750,9 @@ Responda APENAS em JSON sem markdown:
   );
 }
 
-export function CAPATab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
+export function CAPATab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
   const T = useTheme(); const s = useS();
-  const [sid, setSid] = useState(""); const [acts, setActs] = useState([]);
+  const [sid, setSid] = useState(rncIdInicial); const [acts, setActs] = useState([]);
   const r = rncs.find(x => x.id === sid);
 
   useEffect(() => {
@@ -1432,9 +916,9 @@ Responda APENAS em JSON sem markdown:
 // alias de retrocompatibilidade — importações antigas do W2HTab continuam funcionando
 export const W2HTab = CAPATab;
 
-export function EficaciaTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
+export function EficaciaTab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
   const T = useTheme(); const s = useS();
-  const [sid, setSid] = useState(""); const [f, setF] = useState({ criterio: "", data: "", resp: "", evidencias: "", anexos: [], resultado: "", obs: "" });
+  const [sid, setSid] = useState(rncIdInicial); const [f, setF] = useState({ criterio: "", data: "", resp: "", evidencias: "", anexos: [], resultado: "", obs: "" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const r = rncs.find(x => x.id === sid);
   useEffect(() => { if (!r) return; setF({ criterio: r.eficacia?.criterio || "", data: r.eficacia?.data || "", resp: r.eficacia?.resp || user?.name || "", evidencias: r.eficacia?.evidencias || "", anexos: r.eficacia?.anexos || [], resultado: r.eficacia?.resultado || "", obs: r.eficacia?.obs || "" }); }, [sid]);

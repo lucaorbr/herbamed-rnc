@@ -1,6 +1,6 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
-  patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor,
+  patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -85,6 +85,44 @@ describe("podeRegistrarEficacia", () => {
   });
   test("porquesPreenchidos ignora espaços", () => {
     expect(porquesPreenchidos({ ishikawa: { whys: ["a", " ", "b"] } })).toBe(2);
+  });
+});
+
+describe("etapasDaRnc", () => {
+  const estados = r => Object.fromEntries(etapasDaRnc(r).map(e => [e.id, e.estado]));
+  test("RNC recém-aberta: registro feito, contenção é a próxima, CAPA e eficácia bloqueadas", () => {
+    expect(estados({ status: "Aberta", desc: "x", tipo: "Processo" })).toEqual({
+      registro: "concluida", contencao: "atual", causa: "pendente", capa: "bloqueada", eficacia: "bloqueada",
+    });
+  });
+  test("contenção sem disposição não conclui a etapa quando há material", () => {
+    const e = estados({ status: "Em andamento", desc: "x", contencao: "segregado", lote: "L1" });
+    expect(e.contencao).toBe("atual");
+    expect(estados({ status: "Em andamento", desc: "x", contencao: "segregado", lote: "L1", disposicao: { decisao: "segregar" } }).contencao).toBe("concluida");
+  });
+  test("com causa raiz, a CAPA destrava e vira a próxima", () => {
+    const e = estados({ status: "Em andamento", desc: "x", contencao: "c", tipo: "Processo", ishikawa: { whys: whys3, root: "r" } });
+    expect(e.causa).toBe("concluida");
+    expect(e.capa).toBe("atual");
+    expect(e.eficacia).toBe("bloqueada");
+  });
+  test("ciclo completo e verificado: tudo concluído", () => {
+    const e = estados({ ...completa, status: "Eficaz", desc: "x", contencao: "c", tipo: "Processo" });
+    expect(Object.values(e).every(v => v === "concluida")).toBe(true);
+  });
+  test("encerrada por disposição dispensa CAPA e eficácia", () => {
+    const e = estados({ status: "Encerrada", desc: "x", contencao: "c", lote: "L1", disposicao: { decisao: "concessao" } });
+    expect(e.capa).toBe("dispensada");
+    expect(e.eficacia).toBe("dispensada");
+  });
+  test("bloqueio traz o motivo", () => {
+    const capa = etapasDaRnc({ status: "Aberta", desc: "x" }).find(e => e.id === "capa");
+    expect(capa.motivo).toMatch(/causa raiz/);
+  });
+  test("rncTemMaterial pelo tipo ou por lote/produto", () => {
+    expect(rncTemMaterial({ tipo: "Matéria-prima" })).toBe(true);
+    expect(rncTemMaterial({ tipo: "Processo", lote: " L1 " })).toBe(true);
+    expect(rncTemMaterial({ tipo: "Processo" })).toBe(false);
   });
 });
 
