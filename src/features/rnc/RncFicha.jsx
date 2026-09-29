@@ -11,13 +11,14 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { AssinaturaModal, exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { DISPOSICOES, andamentoPatch, dispMeta } from "./RncTabs";
+import { AnaliseCausaEditor } from "./AnaliseCausa";
 import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
 // do RT, status, assinaturas, formulário do fornecedor) veio de lá sem mudar as regras.
-// As etapas 3-5 ainda editam nas ferramentas próprias (Ishikawa, CAPA, Eficácia); aqui
-// mostram o que já foi registrado e levam direto à ferramenta com a RNC selecionada.
+// A etapa 3 (análise de causa) edita aqui mesmo (onda 3). As etapas 4-5 ainda editam
+// nas ferramentas próprias (CAPA, Eficácia) e o botão leva até elas com a RNC selecionada.
 
 const CATS_ISHIKAWA = [["mao", "Mão de obra"], ["maquina", "Máquina"], ["metodo", "Método"], ["material", "Material"], ["medicao", "Medição"], ["meioamb", "Meio ambiente"]];
 const ICONE_ESTADO = { concluida: "✓", bloqueada: "🔒", dispensada: "—" };
@@ -342,7 +343,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {rf.causaRaiz && <div style={{ fontSize: 12, marginBottom: 8 }}><b>Causa raiz:</b> {rf.causaRaiz}</div>}
         {linhasPlano.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 4, fontSize: 12, marginBottom: 8 }}>{linhasPlano.map(([k, v]) => <React.Fragment key={k}><div style={{ fontWeight: 600 }}>{k}</div><div>{v}</div></React.Fragment>)}</div>}
         {rf.observacoes && <div style={{ fontSize: 12 }}><b>Observações:</b> {rf.observacoes}</div>}
-        {emTratamento && !isViewer && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>Na análise de causa, o botão "Usar resposta do fornecedor" copia esta análise para os campos ainda vazios.</div>}
+        {emTratamento && !isViewer && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>O botão "Usar resposta do fornecedor", nos 5 Porquês acima, copia esta análise para os campos ainda vazios.</div>}
       </div>
     );
   };
@@ -456,11 +457,15 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {disposicaoBloco(!isViewer)}
       </div>
     ),
-    causa: (
+    causa: (!isViewer && emTratamento) ? (
+      <div>
+        <AnaliseCausaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
+        <div style={{ marginTop: 16 }}>{respostaFornecedorBloco()}</div>
+      </div>
+    ) : (
       <div>
         {causaBloco()}
         {respostaFornecedorBloco()}
-        <div style={{ textAlign: "right" }}>{botaoFerramenta("ishikawa", r.ishikawa?.root ? "Revisar análise de causa" : "Fazer análise de causa")}</div>
       </div>
     ),
     capa: (

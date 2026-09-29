@@ -607,148 +607,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   );
 }
 
-export function IshikawaTab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
-  const T = useTheme(); const s = useS();
-  const autor = user?.name || "—";
-  const [sid, setSid] = useState(rncIdInicial);
-  const [usouFornecedor, setUsouFornecedor] = useState(false);
-  const [efeito, setEfeito] = useState("");
-  const [causes, setCauses] = useState({ mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] });
-  const [inps, setInps] = useState({ mao: "", maquina: "", metodo: "", material: "", medicao: "", meioamb: "" });
-  const [wCausa, setWCausa] = useState(""); const [whys, setWhys] = useState(["", "", "", "", ""]); const [root, setRoot] = useState("");
-  const r = rncs.find(x => x.id === sid);
-  useEffect(() => { if (!r) return; setEfeito(r.ishikawa?.efeito || r.desc?.substring(0, 60) || ""); setCauses(r.ishikawa?.causes || { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }); setWhys(r.ishikawa?.whys?.length ? r.ishikawa.whys : ["", "", "", "", ""]); setRoot(r.ishikawa?.root || ""); setWCausa(r.ishikawa?.whyCausa || ""); }, [sid]);
-  const addC = cat => { const v = inps[cat]?.trim(); if (!v) return; setCauses(p => ({ ...p, [cat]: [...p[cat], v] })); setInps(p => ({ ...p, [cat]: "" })); };
-  const remC = (cat, i) => setCauses(p => ({ ...p, [cat]: p[cat].filter((_, j) => j !== i) }));
-  const [ishiAiLoading, setIshiAiLoading] = React.useState(false);
-  const [porquesAiLoading, setPorquesAiLoading] = React.useState(false);
-  const gerarPorquesIA = async () => {
-    if (!r) { alert("Selecione uma RNC primeiro."); return; }
-    if (!wCausa) { alert("Selecione a causa a aprofundar primeiro."); return; }
-    setPorquesAiLoading(true);
-    try {
-      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:800,
-          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica. Gere a análise dos 5 Porquês para a causa abaixo em uma indústria nutracêutica.
-
-Problema: ${r.desc||""}
-Causa a aprofundar: ${wCausa}
-Produto: ${r.produto||""}
-
-Responda APENAS em JSON sem markdown:
-{"porques":["Por que 1?","Por que 2?","Por que 3?","Por que 4?","Por que 5?"],"causaRaiz":"causa raiz fundamental identificada"}` }]})});
-      const data = await res.json();
-      const txt = data.content?.[0]?.text || "";
-      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
-      if (parsed.porques?.length) setWhys(parsed.porques.slice(0,5).concat(Array(5).fill("")).slice(0,5));
-      if (parsed.causaRaiz) setRoot(parsed.causaRaiz);
-      toast_("5 Porquês gerados pela IA! Revise e ajuste.", "green");
-    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
-    setPorquesAiLoading(false);
-  };
-  const gerarIshikawaIA = async () => {
-    if (!r) { alert("Selecione uma RNC primeiro."); return; }
-    const desc = efeito || r.desc || r.ishikawa?.efeito || "";
-    if (!desc) { alert("Preencha o campo Efeito primeiro."); return; }
-    setIshiAiLoading(true);
-    try {
-      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:1500,
-          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica (BPF, ANVISA). Para o problema abaixo, sugira causas potenciais para o diagrama de Ishikawa em uma indústria nutracêutica.
-
-Problema: ${desc}
-Produto: ${r.produto||""}
-Tipo de NC: ${r.tipo||""}
-
-Responda APENAS em JSON sem markdown:
-{"mao":["causa1","causa2"],"maquina":["causa1","causa2"],"metodo":["causa1","causa2"],"material":["causa1","causa2"],"medicao":["causa1","causa2"],"meioamb":["causa1","causa2"]}` }]})});
-      const data = await res.json();
-      const txt = data.content?.[0]?.text || "";
-      const parsed = JSON.parse(txt.replace(/\`\`\`json|\`\`\`/g,"").trim());
-      setCauses(p => ({
-        mao:     [...(p.mao||[]),     ...(parsed.mao||[])],
-        maquina: [...(p.maquina||[]), ...(parsed.maquina||[])],
-        metodo:  [...(p.metodo||[]),  ...(parsed.metodo||[])],
-        material:[...(p.material||[]),...(parsed.material||[])],
-        medicao: [...(p.medicao||[]), ...(parsed.medicao||[])],
-        meioamb: [...(p.meioamb||[]), ...(parsed.meioamb||[])],
-      }));
-      toast_("Causas geradas pela IA! Revise e ajuste conforme necessário.", "green");
-    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
-    setIshiAiLoading(false);
-  };
-
-  // Autor no histórico: antes gravava "—" e a análise de causa ficava sem responsável.
-  const saveI = async () => { if (!rncEditavelNasFerramentas(r)) return; const ishi = { ...r.ishikawa, efeito, causes }; let hist = [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: autor }]; const ap = andamentoPatch(r, "análise de causa iniciada", autor); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
-  const saveW = async () => { if (!rncEditavelNasFerramentas(r)) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; let hist = [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: autor, ...(usouFornecedor ? { detalhes: ["Partiu da resposta do fornecedor como ponto de partida"] } : {}) }]; const ap = andamentoPatch(r, "análise de causa iniciada", autor); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); setUsouFornecedor(false); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
-  const usarRespostaFornecedor = () => {
-    const res = partirDaRespostaFornecedor(whys, root, r?.respostaFornecedor);
-    if (!res.aproveitou) { toast_("Os campos já estão preenchidos — nada foi alterado.", "yellow"); return; }
-    setWhys(res.whys); setRoot(res.root); setUsouFornecedor(true);
-    toast_("Resposta do fornecedor copiada para os campos vazios. Revise antes de salvar.", "green");
-  };
-  const CATS = [["mao", "👤 Mão de obra", T.blue], ["maquina", "⚙️ Máquina", T.orange], ["metodo", "📋 Método", T.accent], ["material", "📦 Material", T.yellow], ["medicao", "📏 Medição", T.purple], ["meioamb", "🌿 Meio ambiente", "#5dd4b0"]];
-  return (
-    <div>
-      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC em tratamento —</option>{rncs.filter(rncEditavelNasFerramentas).map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
-      {r && <>
-        <div style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}><SecTitle icon="🐟" ch="Diagrama de Ishikawa — 6M" /><span style={{ fontSize: 11, color: T.text3 }}>Clique em uma causa → usar nos 5 Porquês</span></div>
-          <F lbl="Efeito / Problema central" tip="Descreva o problema que será analisado — copie exatamente a descrição da não conformidade. Ex: Cápsulas do lote 2024-001 com coloração fora do padrão." ch={<Inp value={efeito} onChange={e => setEfeito(e.target.value)} sx={{ fontSize: 15, fontWeight: 500, color: T.orange }} />} />
-          <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background:T.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
-              <div>
-                <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — Ishikawa</div>
-                <div style={{ fontSize:11, color:T.text2 }}>Sugere causas potenciais por categoria com base na descrição da RNC</div>
-              </div>
-            </div>
-            <button style={{ ...s.btnA, opacity:ishiAiLoading?.6:1, fontSize:11 }} onClick={gerarIshikawaIA} disabled={ishiAiLoading}>
-              {ishiAiLoading ? "⟳ Gerando..." : "🤖 Gerar causas com IA"}
-            </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: "1rem" }}>
-            {CATS.map(([cat, label, color]) => (
-              <div key={cat} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", marginBottom: 8 }}>{label}</div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}><Inp placeholder="Adicionar causa..." value={inps[cat]} onChange={e => setInps(p => ({ ...p, [cat]: e.target.value }))} onKeyDown={e => e.key === "Enter" && addC(cat)} sx={{ flex: 1, fontSize: 12 }} /><button style={{ ...s.btnA, padding: "6px 12px" }} onClick={() => addC(cat)}>+</button></div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>{causes[cat]?.map((c, i) => <span key={i} onClick={() => setWCausa(c)} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, color: T.text2, cursor: "pointer" }}>{c}<span onClick={ev => { ev.stopPropagation(); remC(cat, i); }} style={{ color: T.text3, marginLeft: 2 }}>✕</span></span>)}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ textAlign: "right" }}><button style={s.btnA} onClick={saveI}>Salvar Ishikawa ✓</button></div>
-        </div>
-        <div style={s.card}>
-          <SecTitle icon="🔍" ch="Análise dos 5 Porquês" />
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, flexWrap:"wrap", gap:8 }}>
-            <div style={{ fontSize:12, color:T.text2 }}>Selecione a causa e gere a análise automaticamente</div>
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {(r.respostaFornecedor?.porques?.some(p => p?.trim()) || r.respostaFornecedor?.causaRaiz?.trim()) && (
-                <button style={{ ...s.btn, fontSize:11 }} onClick={usarRespostaFornecedor} title="Copia a análise enviada pelo fornecedor só para os campos ainda vazios">
-                  Usar resposta do fornecedor
-                </button>
-              )}
-              <button style={{ ...s.btnA, opacity:porquesAiLoading?.6:1, fontSize:11 }} onClick={gerarPorquesIA} disabled={porquesAiLoading}>
-                {porquesAiLoading ? "⟳ Gerando..." : "🤖 Gerar 5 Porquês com IA"}
-              </button>
-            </div>
-          </div>
-          <F lbl="Causa a aprofundar" tip="Após preencher as categorias abaixo, selecione a causa mais provável para aprofundar com os 5 Porquês." ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} sx={{ color: T.yellow, fontWeight: 500 }} />} />
-          {["Por quê ocorreu?", "Por quê isso aconteceu?", "Por quê essa causa existe?", "Por quê não foi controlado?", "Por quê não foi evitado?"].map((q, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <div style={{ minWidth: 30, height: 30, borderRadius: "50%", background: `linear-gradient(135deg,${T.accent},${T.accent2})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#fff", flexShrink: 0, boxShadow: `0 0 10px ${T.accentGlow}` }}>{i + 1}</div>
-              <Inp placeholder={q} value={whys[i]} onChange={e => { const n = [...whys]; n[i] = e.target.value; setWhys(n); }} sx={{ flex: 1 }} />
-              {i < 4 && <span style={{ color: T.text3, fontSize: 18 }}>↓</span>}
-            </div>
-          ))}
-          <Divider />
-          <F lbl="🎯 Causa raiz identificada" tip="Conclusão da análise — a causa fundamental que, se eliminada, evita que o problema se repita. Deve ser específica e acionável." ch={<TA rows={2} value={root} onChange={e => setRoot(e.target.value)} sx={{ borderColor: T.accent, color: T.accent }} placeholder="Conclusão: a causa raiz é..." />} />
-          <div style={{ textAlign: "right" }}><button style={s.btnA} onClick={saveW}>Salvar análise →</button></div>
-        </div>
-      </>}
-    </div>
-  );
-}
+// IshikawaTab saiu na onda 3: a análise de causa é editada dentro da ficha da RNC
+// (AnaliseCausa.jsx), e a entrada do menu virou a fila FilaAnaliseCausa.
 
 export function CAPATab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
   const T = useTheme(); const s = useS();
@@ -770,7 +630,7 @@ export function CAPATab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInici
   const gerarW2HIA = async () => {
     if (!r) { alert("Selecione uma RNC primeiro."); return; }
     const causaRaiz = r.ishikawa?.root || r.ishikawa?.whyCausa || r.desc || "";
-    if (!causaRaiz) { alert("Preencha a causa raiz no Ishikawa primeiro."); return; }
+    if (!causaRaiz) { alert("Registre a causa raiz na etapa 3 da RNC (Análise de causa) primeiro."); return; }
     setW2hAiLoading(true);
     try {
       const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -837,7 +697,7 @@ Responda APENAS em JSON sem markdown:
         {/* Aviso se 5 Porquês incompletos */}
         {!whysOk && (
           <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a44", borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#ff4f6a" }}>
-            Para salvar o plano CAPA, complete ao menos 3 dos 5 Porquês na aba de Análise de Causa (Ishikawa).
+            Para salvar o plano CAPA, complete ao menos 3 dos 5 Porquês na etapa 3 da RNC (Análise de causa).
           </div>
         )}
 

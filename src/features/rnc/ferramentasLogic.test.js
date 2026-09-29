@@ -1,6 +1,7 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
   patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
+  resumoAnaliseCausa, filaAnaliseCausa,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -123,6 +124,34 @@ describe("etapasDaRnc", () => {
     expect(rncTemMaterial({ tipo: "Matéria-prima" })).toBe(true);
     expect(rncTemMaterial({ tipo: "Processo", lote: " L1 " })).toBe(true);
     expect(rncTemMaterial({ tipo: "Processo" })).toBe(false);
+  });
+});
+
+describe("resumoAnaliseCausa", () => {
+  test("primeira análise: causas, porquês e causa raiz definida", () => {
+    const d = resumoAnaliseCausa({}, { causes: { metodo: ["a", "b"] }, whys: whys3, root: "POP", whyCausa: "b" });
+    expect(d).toEqual(["Ishikawa: 0 → 2 causa(s) levantada(s)", "5 Porquês: 3 de 5 preenchido(s) (antes 0)", "Causa raiz definida", "Causa aprofundada: b"]);
+  });
+  test("troca de causa raiz guarda o texto anterior", () => {
+    const d = resumoAnaliseCausa({ whys: whys3, root: "antiga" }, { whys: whys3, root: "nova" });
+    expect(d).toEqual(['Causa raiz alterada — antes: "antiga"']);
+  });
+  test("nada mudou → sem detalhes", () => {
+    const x = { causes: { mao: ["a"] }, whys: whys3, root: "r", whyCausa: "a" };
+    expect(resumoAnaliseCausa(x, { ...x })).toEqual([]);
+  });
+});
+
+describe("filaAnaliseCausa", () => {
+  test("só RNC ativa sem análise completa, ordenada pelo prazo da análise", () => {
+    const rncs = [
+      { id: "a", status: "Aberta", prazoCausa: "2026-10-10" },
+      { id: "b", status: "Em andamento", prazoCausa: "2026-10-01" },
+      { id: "c", status: "Aberta" },
+      { id: "d", status: "Eficaz" },
+      { id: "e", status: "Em andamento", ishikawa: { whys: whys3, root: "r" } },
+    ];
+    expect(filaAnaliseCausa(rncs).map(r => r.id)).toEqual(["b", "a", "c"]);
   });
 });
 

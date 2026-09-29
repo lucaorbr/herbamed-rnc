@@ -24,7 +24,7 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       { id:"indicadores-desvios", icon:"📊", label:"Indicadores" },
     ]},
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
-      { id:"ishikawa", icon:"🐟", label:"Ishikawa / 5 Porquês" },
+      { id:"ishikawa", icon:"🐟", label:"Análise de causa" },
       { id:"5w2h",     icon:"📋", label:"CAPA" },
       { id:"eficacia", icon:"✅", label:"Eficácia" },
       { id:"fmea",     icon:"⚠️", label:"FMEA" },
