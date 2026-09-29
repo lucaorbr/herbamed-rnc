@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
@@ -33,6 +33,7 @@ import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
 import { Toast } from "../shared/ui";
 import { IconeSGQ } from "../shared/IconeSGQ";
 import { MARCA } from "../shared/marca";
+import { abaDaUrl, urlComAba } from "./abaNaUrl";
 
 // Botão sobre a faixa verde do cabeçalho: contorno claro, sem cor de tema.
 const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
@@ -117,7 +118,37 @@ export default function App() {
 
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [tab, setTab] = useState("home");
+  // A tela atual mora no endereço (?aba=...): F5 mantém a tela, link direto abre nela
+  // (inclusive depois do login) e o Voltar/Avançar do navegador navega entre telas.
+  const [tab, setTab] = useState(() => abaDaUrl(window.location.search));
+  const primeiraSincronia = useRef(true);
+  useEffect(() => {
+    // Compara o parâmetro cru: ?aba=nao-existe já abre a Home, mas o endereço precisa ser limpo.
+    const noEndereco = new URLSearchParams(window.location.search).get("aba");
+    if (noEndereco === (tab === "home" ? null : tab)) return;
+    const url = urlComAba(window.location.href, tab);
+    // Na abertura só corrige o endereço (aba inválida → Home) sem criar entrada no histórico.
+    if (primeiraSincronia.current) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+    primeiraSincronia.current = false;
+  }, [tab]);
+  useEffect(() => { primeiraSincronia.current = false; }, []);
+  useEffect(() => {
+    const aoVoltar = () => setTab(abaDaUrl(window.location.search));
+    window.addEventListener("popstate", aoVoltar);
+    return () => window.removeEventListener("popstate", aoVoltar);
+  }, []);
+  // Saiu (manual ou por inatividade) → a próxima entrada começa na Home. A tela de
+  // login é desenhada dentro do App, sem recarregar a página, então sem isto a `tab`
+  // antiga sobrevivia e o sistema reabria onde a pessoa estava.
+  const usuarioAnterior = useRef(null);
+  useEffect(() => {
+    if (usuarioAnterior.current && !user) {
+      window.history.replaceState(null, "", urlComAba(window.location.href, "home"));
+      setTab("home");
+    }
+    usuarioAnterior.current = user;
+  }, [user]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Repaginação: navegação em abas no topo x barra lateral. Enquanto a nova casca
   // amadurece, as duas convivem e a escolha fica por navegador — quem não gostar
@@ -552,7 +583,12 @@ export default function App() {
     "cq-materiais": "CQ — Cadastro de Materiais",
     "cq-analises": "CQ — Fichas de Análise",
     "cq-dashboard": "CQ — Dashboard de Qualidade",
+    desvios: "Registros de Desvios",
+    "novo-desvio": "Novo Desvio",
+    "config-desvios": "Desvios — Configuração",
     "indicadores-desvios": "Desvios — Indicadores",
+    "config-revalidacao": "Revalidações — Configuração",
+    cq: "Controle de Qualidade",
     revalidacao: "Revalidações",
     "nova-revalidacao": "Nova Revalidação",
     auditorias: "Auditorias Internas",
