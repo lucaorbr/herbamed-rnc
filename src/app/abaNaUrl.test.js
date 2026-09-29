@@ -1,4 +1,4 @@
-import { abaDaUrl, urlComAba, ABAS_VALIDAS } from "./abaNaUrl";
+import { abaDaUrl, urlComAba, ABAS_VALIDAS, fichaDaUrl, enderecoCorresponde } from "./abaNaUrl";
 
 describe("abaDaUrl", () => {
   test("sem parâmetro abre a Home", () => {
@@ -22,6 +22,29 @@ describe("abaDaUrl", () => {
   test("a lista de válidas vem do menu, sem id vazio", () => {
     expect(ABAS_VALIDAS.has("desvios")).toBe(true);
     expect(ABAS_VALIDAS.has("")).toBe(false);
+  });
+});
+
+describe("ficha da RNC no endereço", () => {
+  test("?aba=rnc sem a RNC cai na Home", () => {
+    expect(abaDaUrl("?aba=rnc")).toBe("home");
+    expect(abaDaUrl("?aba=rnc&rnc=abc")).toBe("rnc");
+  });
+  test("fichaDaUrl lê a RNC e a etapa; etapa inválida vira resumo", () => {
+    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=causa")).toEqual({ rnc: "abc", etapa: "causa" });
+    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=xyz")).toEqual({ rnc: "abc", etapa: "resumo" });
+  });
+  test("urlComAba monta a ficha e limpa rnc/etapa fora dela", () => {
+    const base = "http://localhost:9027/";
+    expect(urlComAba(base, "rnc", { rnc: "abc", etapa: "capa" })).toBe("/?aba=rnc&rnc=abc&etapa=capa");
+    expect(urlComAba(base, "rnc", { rnc: "abc", etapa: "resumo" })).toBe("/?aba=rnc&rnc=abc");
+    expect(urlComAba(base + "?aba=rnc&rnc=abc&etapa=capa", "lista")).toBe("/?aba=lista");
+  });
+  test("enderecoCorresponde compara aba, RNC e etapa", () => {
+    expect(enderecoCorresponde("?aba=rnc&rnc=abc", "rnc", { rnc: "abc", etapa: "resumo" })).toBe(true);
+    expect(enderecoCorresponde("?aba=rnc&rnc=abc", "rnc", { rnc: "abc", etapa: "causa" })).toBe(false);
+    expect(enderecoCorresponde("", "home")).toBe(true);
+    expect(enderecoCorresponde("?aba=nao-existe", "home")).toBe(false);
   });
 });
 

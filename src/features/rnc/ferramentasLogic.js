@@ -77,6 +77,55 @@ export function podeRegistrarEficacia(r, resultado) {
   return { ok: motivos.length === 0, motivos };
 }
 
+// A RNC "toca material/lote" quando o tipo é de material OU quando há produto/lote
+// preenchido. Só nesses casos a disposição é obrigatória antes de encerrar como Eficaz.
+const TIPOS_MATERIAL = ["Matéria-prima", "Material de embalagem", "Insumo", "Produto acabado"];
+export function rncTemMaterial(r) {
+  return !!(r && (TIPOS_MATERIAL.includes(r.tipo) || (r.lote || "").trim() || (r.produto || "").trim()));
+}
+
+/**
+ * As etapas da ficha da RNC, em ordem, com o estado de cada uma — o que a barra de abas
+ * mostra. Estados: "concluida", "atual" (a próxima a fazer), "pendente", "bloqueada"
+ * (com `motivo`) e "dispensada" (RNC encerrada por disposição, sem ciclo de eficácia).
+ * As travas são as mesmas das ferramentas: aqui elas só ficam visíveis.
+ */
+export const ETAPAS = [
+  { id: "registro", label: "Registro" },
+  { id: "contencao", label: "Contenção e disposição" },
+  { id: "causa", label: "Análise de causa" },
+  { id: "capa", label: "Plano CAPA" },
+  { id: "eficacia", label: "Eficácia" },
+];
+
+export function etapasDaRnc(r) {
+  const acts = r?.w2h || [];
+  const causaOk = porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root);
+  const precisaDisposicao = rncTemMaterial(r) && !r?.disposicao?.decisao;
+  const feito = {
+    registro: cheio(r?.desc),
+    contencao: cheio(r?.contencao) && !precisaDisposicao,
+    causa: causaOk,
+    capa: acts.some(concluida) && !acts.some(a => !fechada(a)),
+    eficacia: r?.status === "Eficaz" || r?.status === "Ineficaz",
+  };
+  const bloqueio = {
+    capa: causaOk ? null : `Precisa da causa raiz com ao menos ${MIN_PORQUES} porquês.`,
+    eficacia: podeRegistrarEficacia(r, "Eficaz").ok ? null : "Conclua o plano CAPA antes de verificar a eficácia.",
+  };
+  const encerradaPorDisposicao = r?.status === "Encerrada";
+  let atualMarcada = false;
+  return ETAPAS.map(e => {
+    if (feito[e.id]) return { ...e, estado: "concluida" };
+    if (encerradaPorDisposicao && (e.id === "capa" || e.id === "eficacia")) {
+      return { ...e, estado: "dispensada", motivo: "RNC encerrada por disposição do material." };
+    }
+    if (bloqueio[e.id]) return { ...e, estado: "bloqueada", motivo: bloqueio[e.id] };
+    if (!atualMarcada && rncAtiva(r?.status)) { atualMarcada = true; return { ...e, estado: "atual" }; }
+    return { ...e, estado: "pendente" };
+  });
+}
+
 /**
  * Ponto de partida vindo da resposta do fornecedor: preenche só o que está vazio,
  * nunca sobrescreve o que a Qualidade já escreveu.

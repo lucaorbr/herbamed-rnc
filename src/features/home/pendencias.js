@@ -34,14 +34,14 @@ export function pendenciasDeRNC({ rncs = [], userName = "", hoje }) {
     const vencida = r.prazoAC && r.prazoAC < hoje;
     if (vencida) {
       out.push(item({
-        id: `rnc-venc-${r.id}`, fonte: "rnc", tab: "lista", minha,
+        id: `rnc-venc-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, minha,
         titulo: `${r.num} — prazo da ação corretiva vencido`,
         detalhe: r.desc || "", dias: diasEntre(r.prazoAC, hoje), urgencia: URGENCIA.CRITICO,
       }));
     } else if (minha && r.status === "Aberta") {
       // Atribuída a mim e ainda sem nenhum ato de tratamento.
       out.push(item({
-        id: `rnc-minha-${r.id}`, fonte: "rnc", tab: "lista", minha: true,
+        id: `rnc-minha-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, minha: true,
         titulo: `${r.num} — aguardando seu tratamento`,
         detalhe: r.desc || "", dias: r.data ? diasEntre(r.data, hoje) : 0,
       }));
