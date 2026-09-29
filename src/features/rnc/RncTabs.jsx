@@ -20,6 +20,7 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
+import { rncEditavelNasFerramentas, errosDasAcoesCapa, patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor } from "./ferramentasLogic";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -1122,9 +1123,11 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   );
 }
 
-export function IshikawaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
+export function IshikawaTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
   const T = useTheme(); const s = useS();
+  const autor = user?.name || "—";
   const [sid, setSid] = useState("");
+  const [usouFornecedor, setUsouFornecedor] = useState(false);
   const [efeito, setEfeito] = useState("");
   const [causes, setCauses] = useState({ mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] });
   const [inps, setInps] = useState({ mao: "", maquina: "", metodo: "", material: "", medicao: "", meioamb: "" });
@@ -1191,12 +1194,19 @@ Responda APENAS em JSON sem markdown:
     setIshiAiLoading(false);
   };
 
-  const saveI = async () => { if (!r) return; const ishi = { ...r.ishikawa, efeito, causes }; let hist = [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: "—" }]; const ap = andamentoPatch(r, "análise de causa iniciada", "—"); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
-  const saveW = async () => { if (!r) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; let hist = [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: "—" }]; const ap = andamentoPatch(r, "análise de causa iniciada", "—"); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
+  // Autor no histórico: antes gravava "—" e a análise de causa ficava sem responsável.
+  const saveI = async () => { if (!rncEditavelNasFerramentas(r)) return; const ishi = { ...r.ishikawa, efeito, causes }; let hist = [...(r.historico || []), { data: tod(), acao: "Ishikawa atualizado", resp: autor }]; const ap = andamentoPatch(r, "análise de causa iniciada", autor); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); toast_("Ishikawa salvo!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
+  const saveW = async () => { if (!rncEditavelNasFerramentas(r)) return; const ishi = { ...r.ishikawa, whys, root, whyCausa: wCausa }; let hist = [...(r.historico || []), { data: tod(), acao: "5 Porquês atualizado", resp: autor, ...(usouFornecedor ? { detalhes: ["Partiu da resposta do fornecedor como ponto de partida"] } : {}) }]; const ap = andamentoPatch(r, "análise de causa iniciada", autor); const patch = { ishikawa: ishi }; if (ap) { patch.status = ap.status; hist = [...hist, ap.hEntry]; } patch.historico = hist; await doUpdateRNC(r.id, patch); setUsouFornecedor(false); toast_("5 Porquês salvos!", "green"); openEmail({ ...r, ishikawa: ishi }, "ishikawa"); };
+  const usarRespostaFornecedor = () => {
+    const res = partirDaRespostaFornecedor(whys, root, r?.respostaFornecedor);
+    if (!res.aproveitou) { toast_("Os campos já estão preenchidos — nada foi alterado.", "yellow"); return; }
+    setWhys(res.whys); setRoot(res.root); setUsouFornecedor(true);
+    toast_("Resposta do fornecedor copiada para os campos vazios. Revise antes de salvar.", "green");
+  };
   const CATS = [["mao", "👤 Mão de obra", T.blue], ["maquina", "⚙️ Máquina", T.orange], ["metodo", "📋 Método", T.accent], ["material", "📦 Material", T.yellow], ["medicao", "📏 Medição", T.purple], ["meioamb", "🌿 Meio ambiente", "#5dd4b0"]];
   return (
     <div>
-      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC —</option>{rncs.map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
+      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC em tratamento —</option>{rncs.filter(rncEditavelNasFerramentas).map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
       {r && <>
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}><SecTitle icon="🐟" ch="Diagrama de Ishikawa — 6M" /><span style={{ fontSize: 11, color: T.text3 }}>Clique em uma causa → usar nos 5 Porquês</span></div>
@@ -1228,9 +1238,16 @@ Responda APENAS em JSON sem markdown:
           <SecTitle icon="🔍" ch="Análise dos 5 Porquês" />
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, flexWrap:"wrap", gap:8 }}>
             <div style={{ fontSize:12, color:T.text2 }}>Selecione a causa e gere a análise automaticamente</div>
-            <button style={{ ...s.btnA, opacity:porquesAiLoading?.6:1, fontSize:11 }} onClick={gerarPorquesIA} disabled={porquesAiLoading}>
-              {porquesAiLoading ? "⟳ Gerando..." : "🤖 Gerar 5 Porquês com IA"}
-            </button>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {(r.respostaFornecedor?.porques?.some(p => p?.trim()) || r.respostaFornecedor?.causaRaiz?.trim()) && (
+                <button style={{ ...s.btn, fontSize:11 }} onClick={usarRespostaFornecedor} title="Copia a análise enviada pelo fornecedor só para os campos ainda vazios">
+                  Usar resposta do fornecedor
+                </button>
+              )}
+              <button style={{ ...s.btnA, opacity:porquesAiLoading?.6:1, fontSize:11 }} onClick={gerarPorquesIA} disabled={porquesAiLoading}>
+                {porquesAiLoading ? "⟳ Gerando..." : "🤖 Gerar 5 Porquês com IA"}
+              </button>
+            </div>
           </div>
           <F lbl="Causa a aprofundar" tip="Após preencher as categorias abaixo, selecione a causa mais provável para aprofundar com os 5 Porquês." ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} sx={{ color: T.yellow, fontWeight: 500 }} />} />
           {["Por quê ocorreu?", "Por quê isso aconteceu?", "Por quê essa causa existe?", "Por quê não foi controlado?", "Por quê não foi evitado?"].map((q, i) => (
@@ -1297,16 +1314,16 @@ Responda APENAS em JSON sem markdown:
   // trava: exige ao menos 3 dos 5 porquês preenchidos
   const whysOk = (r?.ishikawa?.whys || []).filter(w => w?.trim()).length >= 3;
 
+  // Valida ANTES de gravar e grava num patch só. Antes gravava primeiro (ação sem
+  // responsável/prazo ficava salva mesmo com o alerta) e fazia uma segunda gravação a
+  // partir do histórico antigo, apagando a entrada "CAPA — n ações" da primeira.
   const save = async () => {
-    if (!r) return;
+    if (!rncEditavelNasFerramentas(r)) return;
     if (!whysOk) { alert("Preencha ao menos 3 dos 5 Porquês antes de salvar o plano CAPA."); return; }
-    await doUpdateRNC(r.id, { w2h: acts, historico: [...(r.historico || []), { data: tod(), acao: `CAPA — ${acts.length} ação(ões)`, resp: user.name }] });
-    const ativas = acts.filter(a => !String(a.status || "").startsWith("Concl") && a.status !== "Cancelada");
-    if (ativas.some(a => !a.what?.trim() || !a.who?.trim() || !a.when)) { alert("Cada acao ativa precisa de descricao, responsavel e prazo."); return; }
-    const prazoACCalculado = [...ativas.map(a=>a.when)].sort().at(-1) || "";
-    const prorrogacoes = acts.filter(a => { const anterior=(r.w2h||[]).find(x=>x.id===a.id); return anterior?.when && a.when && anterior.when !== a.when; }).map(a => { const anterior=(r.w2h||[]).find(x=>x.id===a.id); return `Acao ${a.what || a.id}: prazo alterado`; });
+    const erros = errosDasAcoesCapa(acts);
+    if (erros.length) { alert("Nada foi salvo. Corrija antes:\n\n" + erros.join("\n")); return; }
+    await doUpdateRNC(r.id, patchSalvarCapa(r, acts, user.name, tod()));
     toast_("CAPA salvo!", "green");
-    await doUpdateRNC(r.id, { prazoAC:prazoACCalculado, modoPrazo:"definido", justificativaPrazo:"", proximaReavaliacao:"", historico:[...(r.historico||[]), {data:tod(),acao:"Prazo geral calculado pelas acoes CAPA",detalhes:[`Prazo calculado: ${prazoACCalculado}`,...prorrogacoes],resp:user.name,tipo:"prazo_capa"}] });
     openEmail({ ...r, w2h: acts }, "5w2h");
   };
 
@@ -1319,7 +1336,7 @@ Responda APENAS em JSON sem markdown:
 
   return (
     <div>
-      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC —</option>{rncs.map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
+      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC em tratamento —</option>{rncs.filter(rncEditavelNasFerramentas).map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
       {r && <div style={s.card}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
           <SecTitle icon="📋" ch="Plano CAPA — Ações Corretivas e Preventivas" />
@@ -1415,12 +1432,14 @@ Responda APENAS em JSON sem markdown:
 // alias de retrocompatibilidade — importações antigas do W2HTab continuam funcionando
 export const W2HTab = CAPATab;
 
-export function EficaciaTab({ rncs, toast_, openEmail, doUpdateRNC }) {
+export function EficaciaTab({ rncs, user, toast_, openEmail, doUpdateRNC }) {
   const T = useTheme(); const s = useS();
-  const [sid, setSid] = useState(""); const [f, setF] = useState({ criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" });
+  const [sid, setSid] = useState(""); const [f, setF] = useState({ criterio: "", data: "", resp: "", evidencias: "", anexos: [], resultado: "", obs: "" });
   const set = (k, v) => setF(p => ({ ...p, [k]: v }));
   const r = rncs.find(x => x.id === sid);
-  useEffect(() => { if (!r) return; setF({ criterio: r.eficacia?.criterio || "", data: r.eficacia?.data || "", resp: r.eficacia?.resp || "", evidencias: r.eficacia?.evidencias || "", resultado: r.eficacia?.resultado || "", obs: r.eficacia?.obs || "" }); }, [sid]);
+  useEffect(() => { if (!r) return; setF({ criterio: r.eficacia?.criterio || "", data: r.eficacia?.data || "", resp: r.eficacia?.resp || user?.name || "", evidencias: r.eficacia?.evidencias || "", anexos: r.eficacia?.anexos || [], resultado: r.eficacia?.resultado || "", obs: r.eficacia?.obs || "" }); }, [sid]);
+  // O que ainda impede fechar a RNC (Eficaz/Ineficaz). "Pendente verificação" nunca é travado.
+  const travaFechar = r ? podeRegistrarEficacia(r, "Eficaz") : { ok: true, motivos: [] };
 
   const [eficAiLoading, setEficAiLoading] = React.useState(false);
   const gerarEficaciaIA = async () => {
@@ -1448,20 +1467,26 @@ Responda APENAS em JSON sem markdown:
   };
 
   const save = async () => {
-    if (!r) return;
+    if (!rncEditavelNasFerramentas(r)) return;
+    if (!f.resultado) { alert("Escolha o resultado da verificação."); return; }
+    // Trava do ciclo completo — antes, RNC sem nenhuma ação CAPA passava.
+    const trava = podeRegistrarEficacia(r, f.resultado);
+    if (!trava.ok) { alert("Ainda não dá para fechar esta RNC:\n\n" + trava.motivos.join("\n")); return; }
     // Trava: RNC de material/lote não fecha como Eficaz sem disposição registrada.
     if (f.resultado === "Eficaz" && rncTemMaterial(r) && !r.disposicao?.decisao) {
       alert("Esta RNC envolve material/lote. Registre a Disposição do material (aba Registros → abra a RNC) antes de encerrar como Eficaz.");
       return;
     }
     const ns = f.resultado === "Eficaz" ? "Eficaz" : f.resultado === "Ineficaz" ? "Ineficaz" : "Pendente verificação";
-    await doUpdateRNC(r.id, { eficacia: f, status: ns, historico: [...(r.historico || []), { data: tod(), acao: `Eficácia: ${f.resultado}`, resp: f.resp || "—" }] });
+    // `resp` é quem a pessoa indicou como verificador; o histórico registra quem gravou.
+    const eficacia = { ...f, registradoPor: user?.name || "—", registradoEm: new Date().toISOString() };
+    await doUpdateRNC(r.id, { eficacia, status: ns, historico: [...(r.historico || []), { data: tod(), acao: `Eficácia: ${f.resultado}`, resp: user?.name || "—", ...(f.resp && f.resp !== user?.name ? { detalhes: [`Verificação indicada como responsabilidade de ${f.resp}`] } : {}) }] });
     toast_("Verificação registrada!", "green");
     openEmail({ ...r, eficacia: f, status: ns }, "eficacia");
   };
   return (
     <div>
-      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC —</option>{rncs.map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
+      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC em tratamento —</option>{rncs.filter(rncEditavelNasFerramentas).map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
       {r && <div style={s.card}>
         <SecTitle icon="✅" ch="Verificação de eficácia" />
         {/* IA Button */}
@@ -1480,24 +1505,28 @@ Responda APENAS em JSON sem markdown:
         <F lbl="Critério de verificação" tip="Defina como será verificado se a ação corretiva resolveu o problema. Ex: Ausência de reclamações do mesmo tipo nos próximos 90 dias, ou lote seguinte aprovado em 100% das análises." ch={<TA rows={3} value={f.criterio} onChange={e => set("criterio", e.target.value)} placeholder="Ex: Ausência de telescopia em 3 lotes consecutivos; Cp ≥ 1,33" />} />
         <G2 ch={<><F lbl="Data da verificação" tip="Data em que a verificação de eficácia foi ou será realizada. Deve coincidir com o prazo de eficácia definido na RNC." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Responsável" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /></>} />
         <F lbl="Evidências coletadas" tip="Descreva as evidências que comprovam que a ação foi eficaz. Ex: Análise dos lotes subsequentes sem desvios, relatório de auditoria interna, registros de treinamento." ch={<TA rows={3} value={f.evidencias} onChange={e => set("evidencias", e.target.value)} />} />
-        {/* trava: bloqueia resultado se há ações CAPA pendentes */}
-        {(() => {
-          const acoesPendentes = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
-          return acoesPendentes.length > 0 ? (
-            <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a44", borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#ff4f6a" }}>
-              Existem {acoesPendentes.length} ação(ões) CAPA ainda pendente(s) ou em andamento. Conclua ou cancele todas as ações antes de registrar o resultado de eficácia.
-              <ul style={{ margin:"6px 0 0 16px", padding:0 }}>{acoesPendentes.map((a,i) => <li key={i}>{a.what || `Ação ${i+1}`} — {a.status}</li>)}</ul>
-            </div>
-          ) : null;
-        })()}
+        <F lbl="Anexos da verificação" tip="Arquivos que comprovam a verificação: relatório de análise dos lotes seguintes, registro de auditoria, fotos." ch={
+          <AnexosUpload inputId="eficacia-anexos" anexos={f.anexos || []} setAnexos={novos => setF(p => ({ ...p, anexos: typeof novos === "function" ? novos(p.anexos || []) : novos }))} />
+        } />
+        {/* trava: Eficaz/Ineficaz fecham a RNC e exigem o ciclo completo */}
+        {!travaFechar.ok && (
+          <div style={{ background:`${T.red}14`, border:`1px solid ${T.red}44`, borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:T.red }}>
+            Para registrar Eficaz ou Ineficaz, falta:
+            <ul style={{ margin:"6px 0 0 16px", padding:0 }}>{travaFechar.motivos.map((m,i) => <li key={i}>{m}</li>)}</ul>
+            <div style={{ marginTop:6, color:T.text2 }}>"Pendente verificação" pode ser registrado a qualquer momento.</div>
+          </div>
+        )}
         <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações foram suficientes. Ineficaz: o problema persistiu — uma nova RNC deverá ser aberta com análise de causa complementar." ch={
-          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap", opacity: (r.w2h||[]).some(a => a.status !== "Concluída" && a.status !== "Cancelada") ? 0.4 : 1, pointerEvents: (r.w2h||[]).some(a => a.status !== "Concluída" && a.status !== "Cancelada") ? "none" : "auto" }}>
-            {[["Eficaz", T.accent, "Causa raiz eliminada"], ["Ineficaz", "#ff4f6a", "NC recorreu, reabrir"], ["Pendente verificação", T.yellow, "Aguardando dados"]].map(([v, color, desc]) => (
-              <label key={v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "10px 16px", background: f.resultado === v ? `${color}18` : T.surf, border: `1px solid ${f.resultado === v ? color + "55" : T.border}`, borderRadius: 8, flex: 1, minWidth: 150 }}>
-                <input type="radio" name="efic_r" value={v} checked={f.resultado === v} onChange={() => set("resultado", v)} style={{ accentColor: color }} />
+          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+            {[["Eficaz", T.accent, "Causa raiz eliminada"], ["Ineficaz", "#ff4f6a", "NC recorreu, reabrir"], ["Pendente verificação", T.yellow, "Aguardando dados"]].map(([v, color, desc]) => {
+              const travado = v !== "Pendente verificação" && !travaFechar.ok;
+              return (
+              <label key={v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: travado ? "not-allowed" : "pointer", opacity: travado ? .45 : 1, padding: "10px 16px", background: f.resultado === v ? `${color}18` : T.surf, border: `1px solid ${f.resultado === v ? color + "55" : T.border}`, borderRadius: 8, flex: 1, minWidth: 150 }}>
+                <input type="radio" name="efic_r" value={v} checked={f.resultado === v} disabled={travado} onChange={() => set("resultado", v)} style={{ accentColor: color }} />
                 <div><div style={{ fontWeight: 600, color, fontSize: 12 }}>{v}</div><div style={{ fontSize: 10, color: T.text3 }}>{desc}</div></div>
               </label>
-            ))}
+              );
+            })}
           </div>
         } />
         <F lbl="Lições aprendidas / Observações finais" tip="Registre o aprendizado gerado por esta NC. O que pode ser melhorado no sistema para evitar recorrências? Este campo alimenta a análise de tendência." ch={<TA rows={3} value={f.obs} onChange={e => set("obs", e.target.value)} />} />
