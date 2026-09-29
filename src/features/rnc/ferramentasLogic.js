@@ -126,6 +126,35 @@ export function etapasDaRnc(r) {
   });
 }
 
+const CATS_ISHIKAWA = ["mao", "maquina", "metodo", "material", "medicao", "meioamb"];
+const totalCausas = ishi => CATS_ISHIKAWA.reduce((n, k) => n + (ishi?.causes?.[k]?.length || 0), 0);
+
+/**
+ * O que mudou numa gravação da análise de causa, para o histórico da RNC. O Ishikawa
+ * e os 5 Porquês salvam juntos (antes eram dois botões e duas entradas sem detalhe).
+ * Troca de causa raiz registra o texto anterior — com plano CAPA já montado sobre ela,
+ * isso é informação que a auditoria vai querer.
+ */
+export function resumoAnaliseCausa(antes, depois) {
+  const d = [];
+  const nA = totalCausas(antes), nD = totalCausas(depois);
+  if (nA !== nD) d.push(`Ishikawa: ${nA} → ${nD} causa(s) levantada(s)`);
+  const pA = (antes?.whys || []).filter(cheio).length, pD = (depois?.whys || []).filter(cheio).length;
+  const porquesMudaram = JSON.stringify(antes?.whys || []) !== JSON.stringify(depois?.whys || []);
+  if (porquesMudaram) d.push(`5 Porquês: ${pD} de 5 preenchido(s)${pA !== pD ? ` (antes ${pA})` : ""}`);
+  const rA = (antes?.root || "").trim(), rD = (depois?.root || "").trim();
+  if (rA !== rD) d.push(rA ? `Causa raiz alterada — antes: "${rA}"` : "Causa raiz definida");
+  if ((antes?.whyCausa || "") !== (depois?.whyCausa || "") && depois?.whyCausa) d.push(`Causa aprofundada: ${depois.whyCausa}`);
+  return d;
+}
+
+/** RNCs ativas que ainda não têm análise de causa completa — a fila da etapa 3. */
+export function filaAnaliseCausa(rncs) {
+  return (rncs || [])
+    .filter(r => rncAtiva(r.status) && !(porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root)))
+    .sort((a, b) => (a.prazoCausa || "9999") < (b.prazoCausa || "9999") ? -1 : (a.prazoCausa || "9999") > (b.prazoCausa || "9999") ? 1 : 0);
+}
+
 /**
  * Ponto de partida vindo da resposta do fornecedor: preenche só o que está vazio,
  * nunca sobrescreve o que a Qualidade já escreveu.

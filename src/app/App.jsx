@@ -24,7 +24,7 @@ import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab"
 import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { ConfiguracaoRevalidacaoTab } from "../features/revalidacao/ConfiguracaoRevalidacaoTab";
-import { CAPATab, DashTab, EficaciaTab, HomeTab, IshikawaTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
+import { CAPATab, DashTab, EficaciaTab, HomeTab, ListaTab, NovaTab, RelatoriosTab, W2HTab } from "../features/rnc/RncTabs";
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
@@ -35,6 +35,7 @@ import { IconeSGQ } from "../shared/IconeSGQ";
 import { MARCA } from "../shared/marca";
 import { abaDaUrl, urlComAba, fichaDaUrl, enderecoCorresponde } from "./abaNaUrl";
 import { RncFicha } from "../features/rnc/RncFicha";
+import { FilaAnaliseCausa } from "../features/rnc/AnaliseCausa";
 
 // Botão sobre a faixa verde do cabeçalho: contorno claro, sem cor de tema.
 const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
@@ -570,7 +571,7 @@ export default function App() {
     { id: "home",        icon: "🏠", label: "Home" },
     { id: "lista",       icon: "📋", label: "Registros", badge: rncs.filter(x => x.status === "Aberta").length },
     ...(!isViewer ? [{ id: "nova",       icon: "➕", label: "Nova RNC" }] : []),
-    ...(!isViewer ? [{ id: "ishikawa",   icon: "🐟", label: "Ishikawa / 5 Porquês" }] : []),
+    ...(!isViewer ? [{ id: "ishikawa",   icon: "🐟", label: "Análise de causa" }] : []),
     ...(!isViewer ? [{ id: "5w2h",       icon: "📋", label: "CAPA" }] : []),
     ...(!isViewer ? [{ id: "eficacia",   icon: "✅", label: "Eficácia" }] : []),
     ...(!isViewer ? [{ id: "fmea",       icon: "⚠️", label: "FMEA" }] : []),
@@ -590,7 +591,7 @@ export default function App() {
 
   const PAGE_TITLES = {
     home: "Home", lista: "Registros de Não Conformidades",
-    nova: "Nova Não Conformidade", ishikawa: "Ishikawa / 5 Porquês",
+    nova: "Nova Não Conformidade", ishikawa: "Análise de causa — RNCs aguardando",
     "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
     reunioes: "Reuniões de Análise Crítica de NCs",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
@@ -901,7 +902,7 @@ export default function App() {
               {tab==="nova-revalidacao" && perm("criarRevalidacao") && <RevalidacaoTab view="nova" user={user} toast_={toast_} setTab={setTab} revalidacoes={revalidacoes} doSaveRevalidacao={doSaveRevalidacao} doDeleteRevalidacao={doDeleteRevalidacao} perm={perm} isAdmin={isAdmin} catalogoTiposRevalidacao={catalogoTiposRevalidacao} />}
               {tab==="config-desvios" && isAdmin && <ConfiguracaoDesviosTab catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreas={catalogoAreasSetoresDistribuicao} desvios={desvios} doSaveDesvio={doSaveDesvio} user={user} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
               {tab==="config-revalidacao" && isAdmin && <ConfiguracaoRevalidacaoTab catalogoTiposRevalidacao={catalogoTiposRevalidacao} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
-              {tab==="ishikawa"   && !isViewer && <IshikawaTab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="ishikawa"   && !isViewer && <FilaAnaliseCausa rncs={rncs} abrirRnc={abrirRnc} />}
               {tab==="5w2h"       && !isViewer && <CAPATab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} user={user} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} isAdmin={isAdmin} />}
               {tab==="eficacia"   && !isViewer && <EficaciaTab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
               {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
