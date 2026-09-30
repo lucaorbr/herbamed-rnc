@@ -1,7 +1,7 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
   patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
-  resumoAnaliseCausa, filaAnaliseCausa,
+  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -168,5 +168,77 @@ describe("partirDaRespostaFornecedor", () => {
     expect(r.whys).toEqual(["q1", "q2", "q3", "q4", "q5"]);
     expect(r.root).toBe("raiz nossa");
     expect(r.aproveitou).toBe(false);
+  });
+});
+
+describe("resumoCapa", () => {
+  test("registra inclusão, mudança de status, evidência e remoção", () => {
+    const antes = [{ id: "1", what: "Revisar POP", status: "Pendente", evidencias: [] }, { id: "2", what: "Treinar", status: "Pendente" }];
+    const depois = [
+      { id: "1", what: "Revisar POP", status: "Concluída", evidencias: [{ name: "pop.pdf" }] },
+      { id: "3", what: "Auditar linha", tipo: "Preventiva", who: "Ana", status: "Pendente" },
+    ];
+    expect(resumoCapa(antes, depois)).toEqual([
+      'Ação "Revisar POP": Pendente → Concluída',
+      'Ação "Revisar POP": 1 evidência(s) anexada(s)',
+      'Ação incluída: "Auditar linha" (Preventiva, Ana)',
+      'Ação removida: "Treinar"',
+    ]);
+  });
+  test("patchSalvarCapa leva o resumo no histórico", () => {
+    const p = patchSalvarCapa({ w2h: [] }, [{ id: "1", what: "X", who: "Ana", when: "2026-10-01", status: "Pendente" }], "Lucas", "2026-09-30");
+    expect(p.historico[0].detalhes).toEqual(['Ação incluída: "X" (Corretiva, Ana)']);
+  });
+});
+
+describe("acaoRemovivel", () => {
+  test("só a ação ainda não salva pode ser apagada", () => {
+    const r = { w2h: [{ id: "1" }] };
+    expect(acaoRemovivel(r, { id: "1" })).toBe(false);
+    expect(acaoRemovivel(r, { id: "2" })).toBe(true);
+    expect(acaoRemovivel({}, { id: "1" })).toBe(true);
+  });
+});
+
+describe("filaCapa", () => {
+  const causa = { ishikawa: { whys: whys3, root: "raiz" } };
+  test("só RNC ativa com causa completa e plano por fazer; sem plano primeiro, depois pelo prazo", () => {
+    const rncs = [
+      { id: "prazo-longe", status: "Em andamento", ...causa, w2h: [{ id: "a", when: "2026-12-01", status: "Pendente" }] },
+      { id: "sem-plano", status: "Em andamento", ...causa, w2h: [] },
+      { id: "prazo-perto", status: "Em andamento", ...causa, w2h: [{ id: "a", when: "2026-10-05", status: "Em andamento" }, { id: "b", when: "2026-09-01", status: "Concluída" }] },
+      { id: "tudo-fechado", status: "Em andamento", ...causa, w2h: [{ id: "a", status: "Concluída" }] },
+      { id: "sem-causa", status: "Em andamento", w2h: [] },
+      { id: "encerrada", status: "Eficaz", ...causa, w2h: [] },
+    ];
+    expect(filaCapa(rncs).map(r => r.id)).toEqual(["sem-plano", "prazo-perto", "prazo-longe"]);
+  });
+});
+
+describe("contagemCapa", () => {
+  test("conta concluídas, abertas, vencidas e o próximo prazo em aberto", () => {
+    const r = { w2h: [
+      { status: "Concluída", when: "2026-01-01" },
+      { status: "Pendente", when: "2026-09-01" },
+      { status: "Em andamento", when: "2026-10-10" },
+      { status: "Cancelada", when: "2026-02-01" },
+    ] };
+    expect(contagemCapa(r, "2026-09-30")).toEqual({ total: 4, concluidas: 1, abertas: 2, vencidas: 1, proximoPrazo: "2026-09-01" });
+  });
+});
+
+describe("ações antigas sem id", () => {
+  // Era o defeito: undefined === undefined casava toda ação antiga com a primeira.
+  const antes = [{ what: "A", status: "Concluída", when: "2026-09-01" }, { what: "B", status: "Pendente", when: "2026-09-10" }];
+  test("casam pela posição", () => {
+    const depois = [{ ...antes[0] }, { ...antes[1], status: "Concluída", when: "2026-09-20" }, { id: "n1", what: "C", who: "Ana", status: "Pendente" }];
+    expect(acaoAnterior(antes, depois[1], 1)).toBe(antes[1]);
+    expect(resumoCapa(antes, depois)).toEqual(['Ação "B": Pendente → Concluída', 'Ação incluída: "C" (Corretiva, Ana)']);
+    const p = patchSalvarCapa({ w2h: antes }, depois, "Lucas", "2026-09-30");
+    expect(p.historico.at(-1).detalhes).toContain('Ação "B": prazo 2026-09-10 → 2026-09-20');
+    expect(p.historico.at(-1).detalhes.some(d => d.startsWith('Ação "A"'))).toBe(false);
+  });
+  test("não se removem", () => {
+    expect(acaoRemovivel({ w2h: antes }, antes[0])).toBe(false);
   });
 });
