@@ -295,3 +295,28 @@ export function partirDaRespostaFornecedor(whys, root, resposta) {
   const novaRaiz = cheio(root) ? root : (cheio(resposta?.causaRaiz) ? resposta.causaRaiz : root);
   return { whys: novos, root: novaRaiz, aproveitou: usados > 0 || novaRaiz !== root };
 }
+
+/**
+ * Investigação da RNC (etapa 3): o que foi apurado — ensaios, medições, comparações —
+ * com laudos anexados. É evidência, então é append-only: cada registro fica com autor
+ * e data e não se edita nem se apaga; correção entra como registro novo.
+ * `rnc.investigacao = [{ id, texto, anexos[], por, em }]`.
+ */
+export function novoRegistroInvestigacao(texto, anexos, autor, agoraIso) {
+  const t = (texto || "").trim();
+  if (!t) return { erro: "Descreva o que foi investigado e o resultado." };
+  return { registro: { id: `inv-${agoraIso}-${Math.random().toString(36).slice(2, 7)}`, texto: t, anexos: anexos || [], por: autor, em: agoraIso } };
+}
+
+/** Patch que ACRESCENTA o registro (nunca reescreve os anteriores) + entrada no histórico. */
+export function patchInvestigacao(r, registro, data, hora) {
+  const nAnexos = (registro.anexos || []).length;
+  const resumo = registro.texto.length > 120 ? `${registro.texto.slice(0, 120)}…` : registro.texto;
+  return {
+    investigacao: [...(r?.investigacao || []), registro],
+    historico: [...(r?.historico || []), {
+      data, hora, acao: "Investigação registrada", resp: registro.por, tipo: "investigacao",
+      detalhes: [resumo, ...(nAnexos ? [`${nAnexos} anexo(s)`] : [])],
+    }],
+  };
+}

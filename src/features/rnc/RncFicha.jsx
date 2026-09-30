@@ -12,6 +12,7 @@ import { AssinaturaModal, exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { DISPOSICOES, andamentoPatch, dispMeta } from "./RncTabs";
 import { AnaliseCausaEditor } from "./AnaliseCausa";
+import { Investigacao } from "./Investigacao";
 import { PlanoCapaEditor } from "./PlanoCapa";
 import { EficaciaEditor } from "./Eficacia";
 import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
@@ -387,6 +388,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {dadosBloco()}
         {r.contencao && <div style={{ ...caixa, borderColor: `${T.orange}40` }}><div style={{ ...rot, color: T.orange }}>⚡ Contenção</div><CampoHistoricoLeitura valor={r.contencao} compacto /></div>}
         {disposicaoBloco(false)}
+        {(r.investigacao || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={rot}>Investigação</div>{r.investigacao.map((reg, i) => <div key={reg.id || i} style={{ fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 6 }}><span style={{ fontSize: 11, color: T.text3 }}>#{i + 1} · {reg.por}{reg.anexos?.length ? ` · ${reg.anexos.length} anexo(s)` : ""} — </span>{reg.texto}</div>)}</div>}
         <div style={{ marginBottom: 14 }}><div style={rot}>Análise de causa</div>{causaBloco()}</div>
         <div style={{ marginBottom: 14 }}><div style={rot}>Plano CAPA</div>{capaBloco()}</div>
         <div style={{ marginBottom: 14 }}><div style={rot}>Verificação de eficácia</div>{eficaciaBloco()}</div>
@@ -456,11 +458,13 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     ),
     causa: (!isViewer && emTratamento) ? (
       <div>
+        <Investigacao r={r} user={user} toast_={toast_} gravar={gravar} podeRegistrar />
         <AnaliseCausaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
         <div style={{ marginTop: 16 }}>{respostaFornecedorBloco()}</div>
       </div>
     ) : (
       <div>
+        <Investigacao r={r} user={user} toast_={toast_} gravar={gravar} podeRegistrar={false} />
         {causaBloco()}
         {respostaFornecedorBloco()}
       </div>

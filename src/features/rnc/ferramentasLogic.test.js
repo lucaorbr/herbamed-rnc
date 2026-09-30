@@ -1,7 +1,7 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
   patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
-  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior, travaEficacia, patchEficacia, filaEficacia, etapaParaContinuar,
+  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior, travaEficacia, patchEficacia, filaEficacia, etapaParaContinuar, novoRegistroInvestigacao, patchInvestigacao,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -303,5 +303,20 @@ describe("etapaParaContinuar", () => {
   });
   test("RNC encerrada não tem para onde continuar", () => {
     expect(etapaParaContinuar({ ...completa, status: "Eficaz" })).toBeNull();
+  });
+});
+
+describe("investigação", () => {
+  test("texto é obrigatório", () => {
+    expect(novoRegistroInvestigacao("  ", [], "Lucas", "2026-09-30T10:00:00Z").erro).toBeTruthy();
+  });
+  test("acrescenta sem mexer nos anteriores e registra no histórico", () => {
+    const antigo = { id: "a", texto: "Umidade fórmula antiga: 3,1%", por: "Ana", em: "2026-09-29T09:00:00Z", anexos: [] };
+    const r = { investigacao: [antigo], historico: [{ acao: "Criou" }] };
+    const { registro } = novoRegistroInvestigacao("Umidade fórmula nova: 1,2%", [{ name: "laudo.pdf" }], "Lucas", "2026-09-30T10:00:00Z");
+    const p = patchInvestigacao(r, registro, "2026-09-30", "10:00:00");
+    expect(p.investigacao[0]).toBe(antigo);
+    expect(p.investigacao[1]).toMatchObject({ texto: "Umidade fórmula nova: 1,2%", por: "Lucas", em: "2026-09-30T10:00:00Z" });
+    expect(p.historico.at(-1)).toMatchObject({ acao: "Investigação registrada", resp: "Lucas", tipo: "investigacao", detalhes: ["Umidade fórmula nova: 1,2%", "1 anexo(s)"] });
   });
 });
