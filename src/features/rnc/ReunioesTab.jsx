@@ -7,7 +7,7 @@ import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
 import { AssinaturaModal, exportAtaReuniaoPDF } from "../pdf/pdfExports";
 import { calcGut, dispMeta, rncTemMaterial } from "./RncTabs";
-import { podeRegistrarEficacia } from "./ferramentasLogic";
+import { travaEficacia } from "./ferramentasLogic";
 
 // Reunião de Análise Crítica (RAC) — o fórum onde a gestão analisa as RNCs em aberto e
 // delibera. O que a reunião produz não é um registro paralelo: cada deliberação age na
@@ -49,9 +49,7 @@ const deliberacaoLabel = (d) => DELIBERACOES[d]?.label || d;
 // Mesma regra da aba de Eficácia (fonte única em ferramentasLogic): antes, RNC sem
 // nenhuma ação CAPA e sem 5 Porquês fechava como Eficaz por deliberação da reunião.
 function podeFecharAgora(rnc) {
-  if (!podeRegistrarEficacia(rnc, "Eficaz").ok) return false;
-  if (rncTemMaterial(rnc) && !rnc.disposicao?.decisao) return false;
-  return true;
+  return travaEficacia(rnc, "Eficaz").ok;
 }
 
 function motivosDaRnc(r) {

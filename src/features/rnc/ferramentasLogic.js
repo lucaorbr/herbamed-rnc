@@ -145,6 +145,53 @@ export function podeRegistrarEficacia(r, resultado) {
   return { ok: motivos.length === 0, motivos };
 }
 
+/**
+ * A trava completa para registrar o resultado da eficácia: o ciclo (podeRegistrarEficacia)
+ * e, para Eficaz de RNC com material/lote, a disposição registrada. Fonte única da etapa 5
+ * da ficha e da deliberação "Aprovar encerramento" da RAC — antes a regra da disposição
+ * estava escrita à parte em cada uma.
+ */
+export function travaEficacia(r, resultado) {
+  const { motivos } = podeRegistrarEficacia(r, resultado);
+  const m = [...motivos];
+  if (resultado === "Eficaz" && rncTemMaterial(r) && !r?.disposicao?.decisao) {
+    m.push("A RNC envolve material/lote: registre a disposição do material (etapa 2).");
+  }
+  return { ok: m.length === 0, motivos: m };
+}
+
+const STATUS_DO_RESULTADO = { "Eficaz": "Eficaz", "Ineficaz": "Ineficaz", "Pendente verificação": "Pendente verificação" };
+
+/**
+ * Patch para registrar a verificação de eficácia. `resp` é quem a pessoa indicou como
+ * verificador; `registradoPor` e o histórico, quem gravou. O histórico diz o que foi
+ * verificado — antes era só "Eficácia: Eficaz".
+ */
+export function patchEficacia(r, f, autor, agoraIso, data, hora) {
+  const status = STATUS_DO_RESULTADO[f.resultado];
+  const eficacia = { ...f, registradoPor: autor, registradoEm: agoraIso };
+  const detalhes = [
+    f.criterio?.trim() && `Critério: ${f.criterio.trim()}`,
+    f.data && `Data da verificação: ${f.data}`,
+    f.resp && f.resp !== autor && `Verificação indicada como responsabilidade de ${f.resp}`,
+    (f.anexos || []).length > (r?.eficacia?.anexos || []).length && `${(f.anexos || []).length - (r?.eficacia?.anexos || []).length} anexo(s) incluído(s)`,
+    r?.eficacia?.resultado && r.eficacia.resultado !== f.resultado && `Resultado anterior: ${r.eficacia.resultado}`,
+  ].filter(Boolean);
+  const historico = [...(r?.historico || []), { data, hora, acao: `Eficácia: ${f.resultado}`, detalhes, resp: autor, tipo: "eficacia" }];
+  return { eficacia, status, historico };
+}
+
+/**
+ * RNCs ativas prontas para a verificação de eficácia (ciclo CAPA fechado) ou já agendadas
+ * como "Pendente verificação" — a fila da etapa 5, pelo prazo de eficácia.
+ */
+export function filaEficacia(rncs) {
+  const chave = r => r.prazoEfic || r.eficacia?.data || "9999";
+  return (rncs || [])
+    .filter(r => rncAtiva(r.status) && (r.status === "Pendente verificação" || podeRegistrarEficacia(r, "Eficaz").ok))
+    .sort((a, b) => chave(a) < chave(b) ? -1 : chave(a) > chave(b) ? 1 : 0);
+}
+
 // A RNC "toca material/lote" quando o tipo é de material OU quando há produto/lote
 // preenchido. Só nesses casos a disposição é obrigatória antes de encerrar como Eficaz.
 const TIPOS_MATERIAL = ["Matéria-prima", "Material de embalagem", "Insumo", "Produto acabado"];

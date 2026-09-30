@@ -1,7 +1,7 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
   patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
-  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior,
+  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior, travaEficacia, patchEficacia, filaEficacia,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -240,5 +240,52 @@ describe("ações antigas sem id", () => {
   });
   test("não se removem", () => {
     expect(acaoRemovivel({ w2h: antes }, antes[0])).toBe(false);
+  });
+});
+
+describe("travaEficacia", () => {
+  test("ciclo completo sem material libera Eficaz", () => {
+    expect(travaEficacia(completa, "Eficaz").ok).toBe(true);
+  });
+  test("RNC com material exige disposição só para Eficaz", () => {
+    const r = { ...completa, lote: "L-01" };
+    expect(travaEficacia(r, "Eficaz").motivos.some(m => m.includes("disposição"))).toBe(true);
+    expect(travaEficacia(r, "Ineficaz").ok).toBe(true);
+    expect(travaEficacia({ ...r, disposicao: { decisao: "liberar" } }, "Eficaz").ok).toBe(true);
+  });
+  test("Pendente verificação nunca trava", () => {
+    expect(travaEficacia({ status: "Aberta", lote: "L" }, "Pendente verificação").ok).toBe(true);
+  });
+});
+
+describe("patchEficacia", () => {
+  test("status, autoria e histórico com o que foi verificado", () => {
+    const r = { historico: [{ acao: "Criou" }], eficacia: { resultado: "Pendente verificação", anexos: [] } };
+    const f = { criterio: "3 lotes sem desvio", data: "2026-10-01", resp: "Ana", resultado: "Eficaz", anexos: [{ name: "rel.pdf" }] };
+    const p = patchEficacia(r, f, "Lucas", "2026-10-01T10:00:00Z", "2026-10-01", "10:00:00");
+    expect(p.status).toBe("Eficaz");
+    expect(p.eficacia).toMatchObject({ criterio: "3 lotes sem desvio", registradoPor: "Lucas", registradoEm: "2026-10-01T10:00:00Z" });
+    const h = p.historico.at(-1);
+    expect(h).toMatchObject({ acao: "Eficácia: Eficaz", resp: "Lucas", tipo: "eficacia" });
+    expect(h.detalhes).toEqual([
+      "Critério: 3 lotes sem desvio",
+      "Data da verificação: 2026-10-01",
+      "Verificação indicada como responsabilidade de Ana",
+      "1 anexo(s) incluído(s)",
+      "Resultado anterior: Pendente verificação",
+    ]);
+  });
+});
+
+describe("filaEficacia", () => {
+  test("CAPA concluída ou já agendada, ativas, pelo prazo de eficácia", () => {
+    const rncs = [
+      { ...completa, id: "longe", prazoEfic: "2026-12-01" },
+      { ...completa, id: "perto", prazoEfic: "2026-10-05" },
+      { id: "agendada", status: "Pendente verificação", prazoEfic: "2026-11-01" },
+      { ...completa, id: "capa-aberta", w2h: [{ id: "1", status: "Pendente" }] },
+      { ...completa, id: "fechada", status: "Eficaz" },
+    ];
+    expect(filaEficacia(rncs).map(r => r.id)).toEqual(["perto", "agendada", "longe"]);
   });
 });
