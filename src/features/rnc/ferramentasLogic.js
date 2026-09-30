@@ -241,7 +241,18 @@ export function etapasDaRnc(r) {
   });
 }
 
-const CATS_ISHIKAWA = ["mao", "maquina", "metodo", "material", "medicao", "meioamb"];
+/**
+ * A etapa em que a pessoa deve continuar a RNC: a próxima a fazer ("atual") ou, se não
+ * houver, a primeira bloqueada (mostrando o motivo). RNC encerrada não tem para onde
+ * continuar → null. Usada pelo botão "Continuar em…" da espiada da lista.
+ */
+export function etapaParaContinuar(r) {
+  if (!rncAtiva(r?.status)) return null;
+  const etapas = etapasDaRnc(r);
+  return etapas.find(e => e.estado === "atual") || etapas.find(e => e.estado === "bloqueada") || null;
+}
+
+const CATS_ISHIKAWA =["mao", "maquina", "metodo", "material", "medicao", "meioamb"];
 const totalCausas = ishi => CATS_ISHIKAWA.reduce((n, k) => n + (ishi?.causes?.[k]?.length || 0), 0);
 
 /**

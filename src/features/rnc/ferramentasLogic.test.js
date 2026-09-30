@@ -1,7 +1,7 @@
 import {
   porquesPreenchidos, rncEditavelNasFerramentas, errosDasAcoesCapa, prazoGeralCapa,
   patchSalvarCapa, podeRegistrarEficacia, partirDaRespostaFornecedor, etapasDaRnc, rncTemMaterial,
-  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior, travaEficacia, patchEficacia, filaEficacia,
+  resumoAnaliseCausa, filaAnaliseCausa, resumoCapa, acaoRemovivel, filaCapa, contagemCapa, acaoAnterior, travaEficacia, patchEficacia, filaEficacia, etapaParaContinuar,
 } from "./ferramentasLogic";
 
 const whys3 = ["a", "b", "c", "", ""];
@@ -287,5 +287,21 @@ describe("filaEficacia", () => {
       { ...completa, id: "fechada", status: "Eficaz" },
     ];
     expect(filaEficacia(rncs).map(r => r.id)).toEqual(["perto", "agendada", "longe"]);
+  });
+});
+
+describe("etapaParaContinuar", () => {
+  test("a próxima a fazer", () => {
+    expect(etapaParaContinuar({ status: "Aberta", desc: "x" }).id).toBe("contencao");
+  });
+  test("sem etapa atual, a bloqueada (com motivo)", () => {
+    const r = { status: "Em andamento", desc: "x", contencao: "feito", ishikawa: { whys: ["a"], root: "" } };
+    // causa ainda aberta vira a atual; se ela estivesse feita e a CAPA aberta, seria a CAPA
+    expect(etapaParaContinuar(r).id).toBe("causa");
+    const semAtual = { ...completa, desc: "x", contencao: "feito", w2h: [{ id: "1", what: "a", who: "b", when: "2026-10-01", status: "Pendente" }] };
+    expect(etapaParaContinuar(semAtual).id).toBe("capa");
+  });
+  test("RNC encerrada não tem para onde continuar", () => {
+    expect(etapaParaContinuar({ ...completa, status: "Eficaz" })).toBeNull();
   });
 });

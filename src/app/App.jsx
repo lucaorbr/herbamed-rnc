@@ -148,6 +148,10 @@ export default function App() {
     return () => window.removeEventListener("popstate", aoVoltar);
   }, []);
   const abrirRnc = useCallback((id, etapa = "resumo") => { setFicha({ rnc: id, etapa }); setTab("rnc"); }, []);
+  // Trocar de tela ou de RNC começa no topo: a área de conteúdo é o que rola, e sem
+  // isto a ficha abria herdando a rolagem da lista (cabeçalho da RNC fora da vista).
+  const areaConteudo = useRef(null);
+  useEffect(() => { if (areaConteudo.current) areaConteudo.current.scrollTop = 0; }, [tab, ficha.rnc]);
   const setEtapaFicha = useCallback(etapa => setFicha(p => ({ ...p, etapa })), []);
   // Saiu (manual ou por inatividade) → a próxima entrada começa na Home. A tela de
   // login é desenhada dentro do App, sem recarregar a página, então sem isto a `tab`
@@ -863,7 +867,7 @@ export default function App() {
           )}
 
           {/* MAIN CONTENT */}
-          <div style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
+          <div ref={areaConteudo} style={{ flex:1, overflowY:"auto", minWidth:0, height:"100%" }}>
             {/* Page header — hidden on home */}
             {tab !== "home" && tab !== "rnc" && (
               <div style={{ padding:"1.25rem 1.5rem .75rem", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${T.border}`, background:T.bg, position:"sticky", top:0, zIndex:50 }}>

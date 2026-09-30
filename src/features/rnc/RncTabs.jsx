@@ -21,6 +21,7 @@ import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { rncTemMaterial } from "./ferramentasLogic";
+import { EspiadaRnc } from "./EspiadaRnc";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -299,6 +300,9 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
   const [q, setQ] = useState("");
   const [fSt, setFSt] = useState("");
   const [fTp, setFTp] = useState("");
+  const [espiada, setEspiada] = useState("");
+  const rEsp = rncs.find(r => r.id === espiada) || null;
+  const fecharEspiada = React.useCallback(() => setEspiada(""), []);
   const list = rncs.filter(r =>
     (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) &&
     (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp)
@@ -355,14 +359,15 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
 
       {/* Tabela enterprise */}
       {list.length > 0 && (
-        <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>{list.length} registro(s) encontrado(s) · clique em uma linha para ver detalhes</div>
+        <div style={{ fontSize:11, color:T.text3, marginBottom:6 }}>{list.length} registro(s) encontrado(s) · clique em uma linha para espiar a RNC ao lado</div>
       )}
+      <div style={{ display: "grid", gridTemplateColumns: rEsp ? "minmax(0,1fr) 300px" : "minmax(0,1fr)", gap: 16, alignItems: "start" }}>
       <Table
-        columns={colunasRNC}
+        columns={rEsp ? colunasRNC.filter(c => !["tipo", "resp"].includes(c.key)) : colunasRNC}
         rows={list}
         rowKey={r => r.id}
-        onRowClick={r => abrirRnc(r.id)}
-        rowAccent={r => SMETA[r.status]?.dot || T.accent}
+        onRowClick={r => setEspiada(e => e === r.id ? "" : r.id)}
+        rowAccent={r => r.id === espiada ? T.blue : (SMETA[r.status]?.dot || T.accent)}
         sortColDefault="data"
         sortDirDefault="desc"
         perPage={20}
@@ -370,6 +375,8 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
         emptyTitle="Nenhuma RNC encontrada"
         emptySubtitle={isViewer ? "Nenhuma não conformidade registrada." : "Clique em \"+ Nova RNC\" para começar."}
       />
+      {rEsp && <EspiadaRnc key={rEsp.id} r={rEsp} onFechar={fecharEspiada} abrirRnc={abrirRnc} />}
+      </div>
 
     </div>
   );
