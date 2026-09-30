@@ -271,6 +271,17 @@ export function exportRNCPDF(rnc, assinatura = null) {
     </div>
   </div>
 
+  <!-- INVESTIGAÇÃO -->
+  ${(rnc.investigacao||[]).length>0?`
+  <div class="section">
+    <div class="section-title">🔬 Investigação</div>
+    ${rnc.investigacao.map((reg,i)=>`
+      <div class="step">
+        <div class="step-num">${i+1}</div>
+        <div class="step-text" style="white-space:pre-wrap">${reg.texto}<div style="font-size:10px;color:#6b7280;margin-top:2px">${reg.por||""} · ${reg.em?new Date(reg.em).toLocaleString("pt-BR"):""}${reg.anexos?.length?` · anexos: ${reg.anexos.map(a=>a.name).join(", ")}`:""}</div></div>
+      </div>`).join("")}
+  </div>`:""}
+
   <!-- ISHIKAWA / 5 PORQUÊS -->
   ${rnc.ishikawa?.root?`
   <div class="section">
