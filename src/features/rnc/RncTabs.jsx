@@ -20,7 +20,7 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
-import { rncEditavelNasFerramentas, podeRegistrarEficacia, partirDaRespostaFornecedor, rncTemMaterial } from "./ferramentasLogic";
+import { rncTemMaterial } from "./ferramentasLogic";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -609,111 +609,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
 // IshikawaTab saiu na onda 3: a análise de causa é editada dentro da ficha da RNC
 // (AnaliseCausa.jsx), e a entrada do menu virou a fila FilaAnaliseCausa. CAPATab saiu na
-// onda 4 pelo mesmo caminho: PlanoCapa.jsx (editor na ficha) + FilaCapa (menu).
-
-export function EficaciaTab({ rncs, user, toast_, openEmail, doUpdateRNC, rncIdInicial = "" }) {
-  const T = useTheme(); const s = useS();
-  const [sid, setSid] = useState(rncIdInicial); const [f, setF] = useState({ criterio: "", data: "", resp: "", evidencias: "", anexos: [], resultado: "", obs: "" });
-  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
-  const r = rncs.find(x => x.id === sid);
-  useEffect(() => { if (!r) return; setF({ criterio: r.eficacia?.criterio || "", data: r.eficacia?.data || "", resp: r.eficacia?.resp || user?.name || "", evidencias: r.eficacia?.evidencias || "", anexos: r.eficacia?.anexos || [], resultado: r.eficacia?.resultado || "", obs: r.eficacia?.obs || "" }); }, [sid]);
-  // O que ainda impede fechar a RNC (Eficaz/Ineficaz). "Pendente verificação" nunca é travado.
-  const travaFechar = r ? podeRegistrarEficacia(r, "Eficaz") : { ok: true, motivos: [] };
-
-  const [eficAiLoading, setEficAiLoading] = React.useState(false);
-  const gerarEficaciaIA = async () => {
-    if (!r) { alert("Selecione uma RNC primeiro."); return; }
-    setEficAiLoading(true);
-    try {
-      const res = await fetch("/api/claude", { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ model:"claude-sonnet-4-5", max_tokens:800,
-          messages:[{ role:"user", content:`Você é especialista em qualidade farmacêutica. Sugira um critério de verificação de eficácia e lições aprendidas para esta NC.
-
-Problema: ${r.desc||""}
-Causa raiz: ${r.ishikawa?.root||r.ishikawa?.whyCausa||""}
-Ações executadas: ${(r.w2h||[]).map(a=>a.what).join("; ")}
-Severidade: ${r.sev||""}
-
-Responda APENAS em JSON sem markdown:
-{"criterio":"critério objetivo e mensurável","obs":"lições aprendidas e recomendações sistêmicas"}` }]})});
-      const data = await res.json();
-      const txt = data.content?.[0]?.text || "";
-      const parsed = JSON.parse(txt.replace(/```json|```/g,"").trim());
-      setF(p => ({ ...p, criterio: parsed.criterio||p.criterio, obs: parsed.obs||p.obs }));
-      toast_("Critério gerado pela IA! Ajuste conforme necessário.", "green");
-    } catch(e) { toast_("Erro ao gerar com IA.", "red"); }
-    setEficAiLoading(false);
-  };
-
-  const save = async () => {
-    if (!rncEditavelNasFerramentas(r)) return;
-    if (!f.resultado) { alert("Escolha o resultado da verificação."); return; }
-    // Trava do ciclo completo — antes, RNC sem nenhuma ação CAPA passava.
-    const trava = podeRegistrarEficacia(r, f.resultado);
-    if (!trava.ok) { alert("Ainda não dá para fechar esta RNC:\n\n" + trava.motivos.join("\n")); return; }
-    // Trava: RNC de material/lote não fecha como Eficaz sem disposição registrada.
-    if (f.resultado === "Eficaz" && rncTemMaterial(r) && !r.disposicao?.decisao) {
-      alert("Esta RNC envolve material/lote. Registre a Disposição do material (aba Registros → abra a RNC) antes de encerrar como Eficaz.");
-      return;
-    }
-    const ns = f.resultado === "Eficaz" ? "Eficaz" : f.resultado === "Ineficaz" ? "Ineficaz" : "Pendente verificação";
-    // `resp` é quem a pessoa indicou como verificador; o histórico registra quem gravou.
-    const eficacia = { ...f, registradoPor: user?.name || "—", registradoEm: new Date().toISOString() };
-    await doUpdateRNC(r.id, { eficacia, status: ns, historico: [...(r.historico || []), { data: tod(), acao: `Eficácia: ${f.resultado}`, resp: user?.name || "—", ...(f.resp && f.resp !== user?.name ? { detalhes: [`Verificação indicada como responsabilidade de ${f.resp}`] } : {}) }] });
-    toast_("Verificação registrada!", "green");
-    openEmail({ ...r, eficacia: f, status: ns }, "eficacia");
-  };
-  return (
-    <div>
-      <div style={s.card}><SecTitle ch="Selecionar RNC" /><Sel value={sid} onChange={e => setSid(e.target.value)} sx={{ fontSize: 14, padding: "10px 14px" }}><option value="">— Selecione uma RNC em tratamento —</option>{rncs.filter(rncEditavelNasFerramentas).map(r => <option key={r.id} value={r.id}>{r.num} — {r.desc?.substring(0, 55)}</option>)}</Sel></div>
-      {r && <div style={s.card}>
-        <SecTitle icon="✅" ch="Verificação de eficácia" />
-        {/* IA Button */}
-        <div style={{ background:`linear-gradient(135deg,${T.accentDim},${T.card2||T.card})`, border:`1px solid ${T.accent}33`, borderRadius:12, padding:"12px 14px", marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:32, height:32, borderRadius:8, background:`linear-gradient(135deg,${T.accent},${T.accent})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
-            <div>
-              <div style={{ fontSize:12, fontWeight:700, color:T.text }}>Assistente IA — Eficácia</div>
-              <div style={{ fontSize:11, color:T.text2 }}>Sugere critério de verificação e lições aprendidas com base nas ações executadas</div>
-            </div>
-          </div>
-          <button style={{ ...s.btnA, opacity:eficAiLoading?.6:1, fontSize:11 }} onClick={gerarEficaciaIA} disabled={eficAiLoading}>
-            {eficAiLoading ? "⟳ Gerando..." : "🤖 Gerar critério com IA"}
-          </button>
-        </div>
-        <F lbl="Critério de verificação" tip="Defina como será verificado se a ação corretiva resolveu o problema. Ex: Ausência de reclamações do mesmo tipo nos próximos 90 dias, ou lote seguinte aprovado em 100% das análises." ch={<TA rows={3} value={f.criterio} onChange={e => set("criterio", e.target.value)} placeholder="Ex: Ausência de telescopia em 3 lotes consecutivos; Cp ≥ 1,33" />} />
-        <G2 ch={<><F lbl="Data da verificação" tip="Data em que a verificação de eficácia foi ou será realizada. Deve coincidir com o prazo de eficácia definido na RNC." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Responsável" ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /></>} />
-        <F lbl="Evidências coletadas" tip="Descreva as evidências que comprovam que a ação foi eficaz. Ex: Análise dos lotes subsequentes sem desvios, relatório de auditoria interna, registros de treinamento." ch={<TA rows={3} value={f.evidencias} onChange={e => set("evidencias", e.target.value)} />} />
-        <F lbl="Anexos da verificação" tip="Arquivos que comprovam a verificação: relatório de análise dos lotes seguintes, registro de auditoria, fotos." ch={
-          <AnexosUpload inputId="eficacia-anexos" anexos={f.anexos || []} setAnexos={novos => setF(p => ({ ...p, anexos: typeof novos === "function" ? novos(p.anexos || []) : novos }))} />
-        } />
-        {/* trava: Eficaz/Ineficaz fecham a RNC e exigem o ciclo completo */}
-        {!travaFechar.ok && (
-          <div style={{ background:`${T.red}14`, border:`1px solid ${T.red}44`, borderRadius:8, padding:"10px 14px", marginBottom:12, fontSize:12, color:T.red }}>
-            Para registrar Eficaz ou Ineficaz, falta:
-            <ul style={{ margin:"6px 0 0 16px", padding:0 }}>{travaFechar.motivos.map((m,i) => <li key={i}>{m}</li>)}</ul>
-            <div style={{ marginTop:6, color:T.text2 }}>"Pendente verificação" pode ser registrado a qualquer momento.</div>
-          </div>
-        )}
-        <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações foram suficientes. Ineficaz: o problema persistiu — uma nova RNC deverá ser aberta com análise de causa complementar." ch={
-          <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-            {[["Eficaz", T.accent, "Causa raiz eliminada"], ["Ineficaz", "#ff4f6a", "NC recorreu, reabrir"], ["Pendente verificação", T.yellow, "Aguardando dados"]].map(([v, color, desc]) => {
-              const travado = v !== "Pendente verificação" && !travaFechar.ok;
-              return (
-              <label key={v} style={{ display: "flex", alignItems: "center", gap: 8, cursor: travado ? "not-allowed" : "pointer", opacity: travado ? .45 : 1, padding: "10px 16px", background: f.resultado === v ? `${color}18` : T.surf, border: `1px solid ${f.resultado === v ? color + "55" : T.border}`, borderRadius: 8, flex: 1, minWidth: 150 }}>
-                <input type="radio" name="efic_r" value={v} checked={f.resultado === v} disabled={travado} onChange={() => set("resultado", v)} style={{ accentColor: color }} />
-                <div><div style={{ fontWeight: 600, color, fontSize: 12 }}>{v}</div><div style={{ fontSize: 10, color: T.text3 }}>{desc}</div></div>
-              </label>
-              );
-            })}
-          </div>
-        } />
-        <F lbl="Lições aprendidas / Observações finais" tip="Registre o aprendizado gerado por esta NC. O que pode ser melhorado no sistema para evitar recorrências? Este campo alimenta a análise de tendência." ch={<TA rows={3} value={f.obs} onChange={e => set("obs", e.target.value)} />} />
-        <div style={{ textAlign: "right" }}><button style={s.btnA} onClick={save}>Registrar e notificar ✓</button></div>
-      </div>}
-    </div>
-  );
-}
+// onda 4 pelo mesmo caminho: PlanoCapa.jsx (editor na ficha) + FilaCapa (menu), e
+// EficaciaTab na onda 5: Eficacia.jsx (editor na ficha) + FilaEficacia (menu).
 
 export function DashTab({ rncs }) {
   const T = useTheme(); const s = useS();

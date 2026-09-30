@@ -24,7 +24,7 @@ import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab"
 import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
 import { ConfiguracaoRevalidacaoTab } from "../features/revalidacao/ConfiguracaoRevalidacaoTab";
-import { DashTab, EficaciaTab, HomeTab, ListaTab, NovaTab, RelatoriosTab } from "../features/rnc/RncTabs";
+import { DashTab, HomeTab, ListaTab, NovaTab, RelatoriosTab } from "../features/rnc/RncTabs";
 import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
@@ -37,6 +37,7 @@ import { abaDaUrl, urlComAba, fichaDaUrl, enderecoCorresponde } from "./abaNaUrl
 import { RncFicha } from "../features/rnc/RncFicha";
 import { FilaAnaliseCausa } from "../features/rnc/AnaliseCausa";
 import { FilaCapa } from "../features/rnc/PlanoCapa";
+import { FilaEficacia } from "../features/rnc/Eficacia";
 
 // Botão sobre a faixa verde do cabeçalho: contorno claro, sem cor de tema.
 const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
@@ -148,10 +149,6 @@ export default function App() {
   }, []);
   const abrirRnc = useCallback((id, etapa = "resumo") => { setFicha({ rnc: id, etapa }); setTab("rnc"); }, []);
   const setEtapaFicha = useCallback(etapa => setFicha(p => ({ ...p, etapa })), []);
-  // Ferramenta (Eficácia) aberta a partir da ficha já vem com a RNC selecionada.
-  const [rncFerramenta, setRncFerramenta] = useState("");
-  const abrirFerramenta = useCallback((ferramenta, id) => { setRncFerramenta(id); setTab(ferramenta); }, []);
-  useEffect(() => { if (tab !== "eficacia") setRncFerramenta(""); }, [tab]);
   // Saiu (manual ou por inatividade) → a próxima entrada começa na Home. A tela de
   // login é desenhada dentro do App, sem recarregar a página, então sem isto a `tab`
   // antiga sobrevivia e o sistema reabria onde a pessoa estava.
@@ -894,7 +891,7 @@ export default function App() {
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
                 : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} isViewer={isViewer} abrirRnc={abrirRnc} />}
-              {tab==="rnc"        && <RncFicha rncId={ficha.rnc} etapa={ficha.etapa} setEtapa={setEtapaFicha} rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} abrirFerramenta={abrirFerramenta} />}
+              {tab==="rnc"        && <RncFicha rncId={ficha.rnc} etapa={ficha.etapa} setEtapa={setEtapaFicha} rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
@@ -905,7 +902,7 @@ export default function App() {
               {tab==="config-revalidacao" && isAdmin && <ConfiguracaoRevalidacaoTab catalogoTiposRevalidacao={catalogoTiposRevalidacao} isAdmin={isAdmin} toast_={toast_} auditLog={auditLog} setTab={setTab} />}
               {tab==="ishikawa"   && !isViewer && <FilaAnaliseCausa rncs={rncs} abrirRnc={abrirRnc} />}
               {tab==="5w2h"       && !isViewer && <FilaCapa rncs={rncs} abrirRnc={abrirRnc} />}
-              {tab==="eficacia"   && !isViewer && <EficaciaTab key={rncFerramenta} rncIdInicial={rncFerramenta} rncs={rncs} toast_={toast_} openEmail={openEmail} doUpdateRNC={doUpdateRNC} user={user} isAdmin={isAdmin} />}
+              {tab==="eficacia"   && !isViewer && <FilaEficacia rncs={rncs} abrirRnc={abrirRnc} />}
               {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}

@@ -13,18 +13,19 @@ import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { DISPOSICOES, andamentoPatch, dispMeta } from "./RncTabs";
 import { AnaliseCausaEditor } from "./AnaliseCausa";
 import { PlanoCapaEditor } from "./PlanoCapa";
+import { EficaciaEditor } from "./Eficacia";
 import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
 // do RT, status, assinaturas, formulário do fornecedor) veio de lá sem mudar as regras.
-// As etapas 3 (análise de causa, onda 3) e 4 (plano CAPA, onda 4) editam aqui mesmo.
-// A etapa 5 ainda edita na ferramenta própria (Eficácia) e o botão leva até ela.
+// As etapas 3 (análise de causa, onda 3), 4 (plano CAPA, onda 4) e 5 (eficácia e
+// encerramento, onda 5) também editam aqui mesmo — não há mais ferramenta solta.
 
 const CATS_ISHIKAWA = [["mao", "Mão de obra"], ["maquina", "Máquina"], ["metodo", "Método"], ["material", "Material"], ["medicao", "Medição"], ["meioamb", "Meio ambiente"]];
 const ICONE_ESTADO = { concluida: "✓", bloqueada: "🔒", dispensada: "—" };
 
-export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm, abrirFerramenta }) {
+export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
   const T = useTheme(); const s = useS();
   const vivo = rncs.find(x => x.id === rncId) || null;
   // Cópia local: mostra a gravação na hora (a lista só relê o servidor a cada 5 s) e é
@@ -365,11 +366,6 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     </div>
   );
 
-  // Botão que leva à ferramenta da etapa com esta RNC já selecionada (ondas 3-5 trazem a edição para cá).
-  const botaoFerramenta = (ferramenta, rotulo) => (!isViewer && emTratamento) ? (
-    <button style={s.btnA} onClick={() => abrirFerramenta(ferramenta, r.id)}>{rotulo} →</button>
-  ) : null;
-
   const botoesEdicaoBloco = () => (
     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
       <button style={s.btn} onClick={() => setEditing(false)}>Cancelar edição</button>
@@ -472,12 +468,9 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     capa: (!isViewer && emTratamento && etapas.find(e => e.id === "capa")?.estado !== "bloqueada")
       ? <PlanoCapaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
       : capaBloco(),
-    eficacia: (
-      <div>
-        {eficaciaBloco()}
-        <div style={{ textAlign: "right" }}>{botaoFerramenta("eficacia", "Registrar verificação")}</div>
-      </div>
-    ),
+    eficacia: (!isViewer && emTratamento)
+      ? <EficaciaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
+      : eficaciaBloco(),
     historico: historicoBloco(),
   };
 
