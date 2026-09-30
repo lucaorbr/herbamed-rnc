@@ -12,13 +12,14 @@ import { AssinaturaModal, exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
 import { DISPOSICOES, andamentoPatch, dispMeta } from "./RncTabs";
 import { AnaliseCausaEditor } from "./AnaliseCausa";
+import { PlanoCapaEditor } from "./PlanoCapa";
 import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
 // do RT, status, assinaturas, formulário do fornecedor) veio de lá sem mudar as regras.
-// A etapa 3 (análise de causa) edita aqui mesmo (onda 3). As etapas 4-5 ainda editam
-// nas ferramentas próprias (CAPA, Eficácia) e o botão leva até elas com a RNC selecionada.
+// As etapas 3 (análise de causa, onda 3) e 4 (plano CAPA, onda 4) editam aqui mesmo.
+// A etapa 5 ainda edita na ferramenta própria (Eficácia) e o botão leva até ela.
 
 const CATS_ISHIKAWA = [["mao", "Mão de obra"], ["maquina", "Máquina"], ["metodo", "Método"], ["material", "Material"], ["medicao", "Medição"], ["meioamb", "Meio ambiente"]];
 const ICONE_ESTADO = { concluida: "✓", bloqueada: "🔒", dispensada: "—" };
@@ -468,12 +469,9 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {respostaFornecedorBloco()}
       </div>
     ),
-    capa: (
-      <div>
-        {capaBloco()}
-        <div style={{ textAlign: "right" }}>{botaoFerramenta("5w2h", (r.w2h || []).length ? "Atualizar plano CAPA" : "Montar plano CAPA")}</div>
-      </div>
-    ),
+    capa: (!isViewer && emTratamento && etapas.find(e => e.id === "capa")?.estado !== "bloqueada")
+      ? <PlanoCapaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
+      : capaBloco(),
     eficacia: (
       <div>
         {eficaciaBloco()}

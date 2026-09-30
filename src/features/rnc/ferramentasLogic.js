@@ -41,6 +41,16 @@ export function prazoGeralCapa(acts) {
 }
 
 /**
+ * A versão gravada de uma ação. Ação antiga pode não ter `id` (comparar `undefined ===
+ * undefined` casava todas com a primeira): essas casam pela posição — não se removem
+ * (acaoRemovivel) e as novas vão sempre para o fim, então a posição não muda.
+ */
+export function acaoAnterior(anteriores, a, i) {
+  if (a?.id == null) return (anteriores || [])[i]?.id == null ? (anteriores || [])[i] : undefined;
+  return (anteriores || []).find(x => x.id === a.id);
+}
+
+/**
  * Um único patch para salvar a CAPA. Antes eram duas gravações seguidas e a segunda
  * partia do histórico antigo, apagando a entrada que a primeira acabara de gravar.
  */
@@ -48,14 +58,72 @@ export function patchSalvarCapa(r, acts, autor, data) {
   const anteriores = r.w2h || [];
   const prazo = prazoGeralCapa(acts);
   const prorrogadas = acts
-    .filter(a => { const ant = anteriores.find(x => x.id === a.id); return ant?.when && a.when && ant.when !== a.when; })
-    .map(a => { const ant = anteriores.find(x => x.id === a.id); return `Ação "${a.what || a.id}": prazo ${ant.when} → ${a.when}`; });
+    .map((a, i) => [a, acaoAnterior(anteriores, a, i)])
+    .filter(([a, ant]) => ant?.when && a.when && ant.when !== a.when)
+    .map(([a, ant]) => `Ação "${a.what || a.id}": prazo ${ant.when} → ${a.when}`);
   const historico = [
     ...(r.historico || []),
-    { data, acao: `CAPA — ${acts.length} ação(ões)`, resp: autor },
+    { data, acao: `CAPA — ${acts.length} ação(ões)`, detalhes: resumoCapa(anteriores, acts), resp: autor, tipo: "capa" },
     { data, acao: "Prazo geral calculado pelas ações CAPA", detalhes: [`Prazo calculado: ${prazo || "—"}`, ...prorrogadas], resp: autor, tipo: "prazo_capa" },
   ];
   return { w2h: acts, prazoAC: prazo, modoPrazo: "definido", justificativaPrazo: "", proximaReavaliacao: "", historico };
+}
+
+const rotuloAcao = a => `"${(a.what || "").trim() || a.id}"`;
+
+/**
+ * O que mudou no plano CAPA, para o histórico da RNC: ações incluídas, removidas,
+ * mudanças de status e evidências anexadas. Antes a entrada dizia só "CAPA — n ação(ões)".
+ */
+export function resumoCapa(anteriores, acts) {
+  const d = [];
+  const antes = anteriores || [];
+  (acts || []).forEach((a, i) => {
+    const ant = acaoAnterior(antes, a, i);
+    if (!ant) { d.push(`Ação incluída: ${rotuloAcao(a)} (${a.tipo || "Corretiva"}, ${a.who || "sem responsável"})`); return; }
+    if ((ant.status || "Pendente") !== (a.status || "Pendente")) d.push(`Ação ${rotuloAcao(a)}: ${ant.status || "Pendente"} → ${a.status || "Pendente"}`);
+    const evA = (ant.evidencias || []).length, evD = (a.evidencias || []).length;
+    if (evD > evA) d.push(`Ação ${rotuloAcao(a)}: ${evD - evA} evidência(s) anexada(s)`);
+  });
+  antes.filter(x => x.id != null && !(acts || []).some(a => a.id === x.id)).forEach(x => d.push(`Ação removida: ${rotuloAcao(x)}`));
+  return d;
+}
+
+/**
+ * Ação já gravada na RNC não se remove: cancela-se (status "Cancelada") e o registro do
+ * que foi planejado fica. Só a ação ainda não salva pode ser apagada.
+ */
+export function acaoRemovivel(r, acao) {
+  if (acao?.id == null) return false; // ação antiga sem id: já estava gravada
+  return !(r?.w2h || []).some(x => x.id === acao.id);
+}
+
+const proximoPrazoCapa = r => (r?.w2h || []).filter(a => !fechada(a) && a.when).map(a => a.when).sort()[0] || "";
+
+/**
+ * RNCs ativas com análise de causa completa e plano CAPA por fazer (sem nenhuma ação ou
+ * com ação em aberto) — a fila da etapa 4. RNC ainda sem plano vem primeiro (é a que está
+ * parada); as demais pelo prazo mais próximo entre as ações em aberto.
+ */
+export function filaCapa(rncs) {
+  const causaOk = r => porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root);
+  const chave = r => !(r.w2h || []).length ? "0000" : (proximoPrazoCapa(r) || "9999");
+  return (rncs || [])
+    .filter(r => rncAtiva(r.status) && causaOk(r) && (!(r.w2h || []).length || r.w2h.some(a => !fechada(a))))
+    .sort((a, b) => chave(a) < chave(b) ? -1 : chave(a) > chave(b) ? 1 : 0);
+}
+
+/** Resumo das ações de uma RNC. Vencida = em aberto com prazo antes de `hoje`. */
+export function contagemCapa(r, hoje) {
+  const acts = r?.w2h || [];
+  const abertas = acts.filter(a => !fechada(a));
+  return {
+    total: acts.length,
+    concluidas: acts.filter(concluida).length,
+    abertas: abertas.length,
+    vencidas: abertas.filter(a => a.when && a.when < hoje).length,
+    proximoPrazo: proximoPrazoCapa(r),
+  };
 }
 
 /**
