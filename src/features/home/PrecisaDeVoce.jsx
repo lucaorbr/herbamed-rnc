@@ -23,7 +23,7 @@ const CORES = (T) => ({
 
 const ROTULO_FONTE = {
   rnc: "RNC", desvio: "Desvio", laudo: "Laudo", ipc: "IPC",
-  treinamento: "Treinamento", documento: "Documento",
+  treinamento: "Treinamento", documento: "Documento", sac: "SAC",
 };
 
 // Pendência de uma RNC abre a ficha dela, não a lista inteira.
@@ -75,7 +75,7 @@ function Indicador({ n, l, cor, T }) {
   );
 }
 
-export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc, perm = () => true, docNotifs = [],
+export function PrecisaDeVoce({ rncs = [], desvios = [], sac = [], user, setTab, abrirRnc, perm = () => true, docNotifs = [],
   colaboradores = [], catalogoCargos = [], catalogoAreas = [] }) {
   const T = useTheme(); const s = useS();
   const hoje = tod();
@@ -109,7 +109,8 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
   }, [user?.uid, colaboradores, catalogoCargos, catalogoAreas, hoje]);
 
   const pendencias = useMemo(() => montarPendencias({
-    rncs, desvios, laudos, ipc, docNotifs, pendentesTreino,
+    rncs, desvios, sac, laudos, ipc, docNotifs, pendentesTreino,
+    podeTratarSac: perm("tratarSAC"),
     // ⚠️ Quem assina laudo como RT é `isRT && criarLaudos` (regra do LaudosTab).
     // Aqui havia `perm("assinarLaudo") || perm("verLaudos")`: "assinarLaudo" não
     // existe em permissions.js, então o `||` caía em `verLaudos` — que é true até
@@ -121,7 +122,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
     // uma tela em branco sem explicação.
     podeVerDesvios: perm("verDesvios"),
     hoje,
-  }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, user?.name, user?.role, perm, hoje]);
+  }), [rncs, desvios, sac, laudos, ipc, docNotifs, pendentesTreino, user?.name, user?.role, perm, hoje]);
 
   const resumo = resumoPendencias(pendencias);
   const [verTudo, setVerTudo] = useState(false);

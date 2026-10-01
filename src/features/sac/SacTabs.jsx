@@ -12,12 +12,16 @@ import {
   CANAIS_SAC, CLASSIFICACOES_SAC, SAC_SMETA, META_RESPOSTA_DIAS, LIMITE_RECORRENCIA_LOTE,
   classificacaoSac, prazoSac, contagemPorLote, mesmoLote, normLote, relatouReacao,
   errosDoRegistro, errosDoEncerramento, avisosDoEncerramento, novaResposta, descParaRNC, entradaHistorico,
+  RESULTADOS_AVALIACAO, etapaAmostra, errosDaAvaliacao, novaAvaliacao,
 } from "./sacLogic";
+import { exportCartaPDF, exportSacPDF } from "./sacPdf";
+import { SacIndicadores } from "./SacIndicadores";
 
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 export function SacTab({ view = "lista", ...props }) {
   if (view === "novo") return <NovoSacForm {...props} />;
+  if (view === "indicadores") return <SacIndicadores atendimentos={props.atendimentos} />;
   return <SacLista {...props} />;
 }
 
@@ -277,6 +281,7 @@ function SacDetalhe({ a, atendimentos, rncs, user, perm, isAdmin, salvar, onClos
             <ClassifChip c={a.classificacao} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => exportSacPDF(a, rnc)} title="Registro completo do atendimento" style={{ ...s.btn, fontSize: 11, padding: "6px 12px" }}>📄 PDF</button>
             {podeEditar && !editando && (
               <button onClick={() => setEditando(true)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px" }}>✏️ Editar</button>
             )}
@@ -347,6 +352,13 @@ function SacDetalhe({ a, atendimentos, rncs, user, perm, isAdmin, salvar, onClos
             </Bloco>
           )}
 
+          {!editando && (cl?.investigar || a.amostra || a.temAmostra === "Sim") && (
+            <AmostraBloco key={`am-${a.id}`} a={a} user={user} perm={perm} salvar={salvar} aberto={aberto} />
+          )}
+          {!editando && (cl?.investigar || a.avaliacao) && (
+            <AvaliacaoBloco key={`av-${a.id}`} a={a} user={user} podeTratar={podeTratar} salvar={salvar} aberto={aberto} />
+          )}
+
           {/* RNC */}
           {(a.rncId || (cl?.investigar && podeTratar && aberto)) && (
             <Bloco titulo="🔗 RNC (investigação)">
@@ -373,7 +385,10 @@ function SacDetalhe({ a, atendimentos, rncs, user, perm, isAdmin, salvar, onClos
               : <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {a.respostas.map(r => (
                   <div key={r.id} style={{ background: T.surf, borderLeft: `3px solid ${T.accent}`, borderRadius: "0 8px 8px 0", padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: T.text3 }}>{fmt(r.data)} · {r.meio} · por {r.por}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 11, color: T.text3 }}>{fmt(r.data)} · {r.meio} · por {r.por}</div>
+                      <button onClick={() => exportCartaPDF(a, r)} title="Gerar carta ao consumidor com esta resposta" style={{ ...s.btn, fontSize: 10, padding: "3px 9px" }}>✉️ Carta</button>
+                    </div>
                     <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap", marginTop: 3 }}>{r.texto}</div>
                   </div>
                 ))}
@@ -423,6 +438,167 @@ function SacDetalhe({ a, atendimentos, rncs, user, perm, isAdmin, salvar, onClos
       {modal === "resposta" && <RespostaModal a={a} user={user} salvar={salvar} onClose={() => setModal(null)} />}
       {modal === "encerrar" && <EncerrarSacModal a={a} rnc={rnc} user={user} salvar={salvar} onClose={() => setModal(null)} />}
     </div>
+  );
+}
+
+function Anexos({ lista = [] }) {
+  const T = useTheme();
+  if (!lista.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+      {lista.map((x, i) => (
+        <a key={i} href={x.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, textDecoration: "none", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "5px 10px" }}>📎 {x.name}</a>
+      ))}
+    </div>
+  );
+}
+
+// Amostra do consumidor: a Qualidade pede, a recepção (ou a Qualidade) registra a
+// chegada. Cada etapa grava uma vez — o servidor recusa reescrever.
+function AmostraBloco({ a, user, perm, salvar, aberto }) {
+  const T = useTheme(); const s = useS();
+  const etapa = etapaAmostra(a);
+  const am = a.amostra || {};
+  const [pedindo, setPedindo] = useState(false);
+  const [instrucoes, setInstrucoes] = useState("");
+  const [recebendo, setRecebendo] = useState(false);
+  const [rec, setRec] = useState({ em: tod(), condicao: "" });
+  const [anexosRec, setAnexosRec] = useState([]);
+  const podePedir = aberto && perm("tratarSAC");
+  const podeReceber = aberto && (perm("tratarSAC") || perm("registrarSAC"));
+
+  const pedir = async () => {
+    const solicitada = { em: new Date().toISOString(), por: user.name, instrucoes: instrucoes.trim() };
+    if (await salvar({
+      ...a, amostra: { ...am, solicitada },
+      historico: [...(a.historico || []), entradaHistorico("Amostra pedida ao consumidor", user, solicitada.instrucoes ? [resumoAcrescimo(solicitada.instrucoes)] : null)],
+    }, "Pedido de amostra registrado.")) setPedindo(false);
+  };
+
+  const receber = async () => {
+    if (!rec.em) { alert("Informe a data de chegada."); return; }
+    const recebida = { em: rec.em, por: user.name, condicao: rec.condicao.trim(), anexos: anexosRec, registradoEm: new Date().toISOString() };
+    if (await salvar({
+      ...a, amostra: { ...am, recebida },
+      historico: [...(a.historico || []), entradaHistorico("Amostra do consumidor recebida", user, [`Chegada: ${fmt(rec.em)}`, rec.condicao.trim() && `Condição: ${rec.condicao.trim()}`].filter(Boolean))],
+    }, "Chegada da amostra registrada.")) setRecebendo(false);
+  };
+
+  return (
+    <Bloco titulo="📦 Amostra do consumidor">
+      {etapa === "nao_solicitada" && !pedindo && !recebendo && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.text2, flex: 1 }}>
+            {a.temAmostra === "Sim" ? "O consumidor ainda tem o produto." : "Nenhuma amostra pedida."} Para analisar, peça que envie a embalagem com o restante do produto.
+          </span>
+          {podePedir && <button style={s.btnA} onClick={() => setPedindo(true)}>Pedir amostra</button>}
+          {podeReceber && <button style={s.btn} onClick={() => setRecebendo(true)} title="O consumidor mandou sem ser pedido">Registrar chegada</button>}
+        </div>
+      )}
+      {pedindo && (
+        <div>
+          <F lbl="Instruções passadas ao consumidor" tip="Como e para onde enviar; se a empresa paga o frete; prazo." ch={
+            <TA rows={3} value={instrucoes} onChange={e => setInstrucoes(e.target.value)} placeholder="Ex.: enviar pelos Correios com logística reversa, código informado por e-mail..." />
+          } />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={s.btn} onClick={() => setPedindo(false)}>Cancelar</button>
+            <button style={s.btnA} onClick={pedir}>Registrar pedido</button>
+          </div>
+        </div>
+      )}
+      {am.solicitada && (
+        <div style={{ fontSize: 13, color: T.text, marginBottom: 6 }}>
+          {<>Pedida em <strong>{fmt(String(am.solicitada.em).slice(0, 10))}</strong> por {am.solicitada.por}.</>}
+          {am.solicitada.instrucoes && <div style={{ fontSize: 12, color: T.text2, whiteSpace: "pre-wrap", marginTop: 2 }}>{am.solicitada.instrucoes}</div>}
+        </div>
+      )}
+      {etapa === "aguardando" && !recebendo && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#ff8c42", flex: 1 }}>⏳ Aguardando a amostra chegar.</span>
+          {podeReceber && <button style={s.btnA} onClick={() => setRecebendo(true)}>Registrar chegada</button>}
+        </div>
+      )}
+      {recebendo && (
+        <div>
+          <G2 ch={<>
+            <F lbl="Data de chegada" ch={<Inp type="date" value={rec.em} max={tod()} onChange={e => setRec(p => ({ ...p, em: e.target.value }))} />} />
+            <F lbl="Condição na chegada" ch={<Inp value={rec.condicao} onChange={e => setRec(p => ({ ...p, condicao: e.target.value }))} placeholder="Ex.: frasco aberto, 40 cápsulas restantes" />} />
+          </>} />
+          <F lbl="📎 Fotos da amostra recebida" ch={<AnexosUpload anexos={anexosRec} setAnexos={setAnexosRec} inputId="sac-amostra-anexo" />} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={s.btn} onClick={() => setRecebendo(false)}>Cancelar</button>
+            <button style={s.btnA} onClick={receber}>Registrar chegada</button>
+          </div>
+        </div>
+      )}
+      {am.recebida && (
+        <div style={{ fontSize: 13, color: T.text }}>
+          {!am.solicitada && <div style={{ fontSize: 12, color: T.text2 }}>Enviada pelo consumidor sem pedido.</div>}
+          ✅ Recebida em <strong>{fmt(am.recebida.em)}</strong> (registrado por {am.recebida.por}).
+          {am.recebida.condicao && <div style={{ fontSize: 12, color: T.text2 }}>Condição: {am.recebida.condicao}</div>}
+          <Anexos lista={am.recebida.anexos} />
+        </div>
+      )}
+    </Bloco>
+  );
+}
+
+// Avaliação técnica: a reclamação tinha fundamento? Gravada uma vez só.
+function AvaliacaoBloco({ a, user, podeTratar, salvar, aberto }) {
+  const T = useTheme(); const s = useS();
+  const av = a.avaliacao;
+  const [f, setF] = useState(() => ({ resultado: "", parecer: "", amostraConsumidor: etapaAmostra(a) === "recebida" ? "Sim" : "Não", amostraRetencao: "Sim" }));
+  const [anexos, setAnexos] = useState([]);
+  const [abrir, setAbrir] = useState(false);
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const gravar = async () => {
+    const erros = errosDaAvaliacao(f);
+    if (erros.length) { alert(erros.join("\n")); return; }
+    if (!window.confirm(`Registrar a avaliação como "${f.resultado}"? Depois de gravada ela não pode ser alterada.`)) return;
+    const nova = novaAvaliacao({ ...f, anexos }, user);
+    await salvar({
+      ...a, avaliacao: nova,
+      historico: [...(a.historico || []), entradaHistorico(`Avaliação técnica: ${nova.resultado}`, user, [resumoAcrescimo(nova.parecer)])],
+    }, "Avaliação técnica registrada.");
+  };
+
+  const cor = av?.resultado === "Procedente" ? "#ff4f6a" : av?.resultado === "Improcedente" ? "#2ab84a" : "#ffd166";
+
+  return (
+    <Bloco titulo="🔬 Avaliação técnica">
+      {av ? (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: cor }}>{av.resultado}</div>
+          <div style={{ fontSize: 12, color: T.text2, margin: "2px 0 6px" }}>Amostra do consumidor analisada: {av.amostraConsumidor} · Amostra de retenção analisada: {av.amostraRetencao}</div>
+          <div style={{ fontSize: 13, color: T.text, whiteSpace: "pre-wrap" }}>{av.parecer}</div>
+          <Anexos lista={av.anexos} />
+          <div style={{ fontSize: 11, color: T.text3, marginTop: 4 }}>por {av.por} em {new Date(av.em).toLocaleString("pt-BR")}</div>
+        </div>
+      ) : !podeTratar || !aberto ? (
+        <div style={{ fontSize: 12, color: T.text3 }}>Ainda não registrada.</div>
+      ) : !abrir ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.text2, flex: 1 }}>Depois de analisar a amostra do consumidor e/ou a de retenção do lote, registre se a reclamação procede.</span>
+          <button style={s.btnA} onClick={() => { set("amostraConsumidor", etapaAmostra(a) === "recebida" ? "Sim" : "Não"); setAbrir(true); }}>Registrar avaliação</button>
+        </div>
+      ) : (
+        <div>
+          <G3 ch={<>
+            <F lbl="Resultado *" ch={<Sel value={f.resultado} onChange={e => set("resultado", e.target.value)}><option value="">Selecione...</option>{RESULTADOS_AVALIACAO.map(r => <option key={r.id}>{r.id}</option>)}</Sel>} />
+            <F lbl="Amostra do consumidor analisada?" ch={<Sel value={f.amostraConsumidor} onChange={e => set("amostraConsumidor", e.target.value)}><option>Sim</option><option>Não</option></Sel>} />
+            <F lbl="Amostra de retenção analisada?" ch={<Sel value={f.amostraRetencao} onChange={e => set("amostraRetencao", e.target.value)}><option>Sim</option><option>Não</option></Sel>} />
+          </>} />
+          {RESULTADOS_AVALIACAO.find(r => r.id === f.resultado) && <div style={{ fontSize: 11, color: T.text3, marginTop: -8, marginBottom: 10 }}>{RESULTADOS_AVALIACAO.find(r => r.id === f.resultado).dica}</div>}
+          <F lbl="Parecer técnico *" ch={<TA rows={4} value={f.parecer} onChange={e => set("parecer", e.target.value)} placeholder="O que foi analisado, resultados e conclusão. Ex.: retenção do lote L-045 com umidade 6,8% (espec. ≤ 5%)..." />} />
+          <F lbl="📎 Laudos e fotos" ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} inputId="sac-avaliacao-anexo" />} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={s.btn} onClick={() => setAbrir(false)}>Cancelar</button>
+            <button style={s.btnA} onClick={gravar}>Registrar avaliação</button>
+          </div>
+        </div>
+      )}
+    </Bloco>
   );
 }
 

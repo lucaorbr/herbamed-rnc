@@ -27,6 +27,7 @@ export function montarGrupos({ rncs = [], desvios = [], sac = [], isViewer = fal
     ...(perm("verSAC") ? [{ id:"sac-grupo", icon:"📞", label:"SAC", items:[
       { id:"sac", icon:"📋", label:"Atendimentos", badge: sac.filter(x=>x.status==="Aberto").length },
       ...(perm("registrarSAC") ? [{ id:"novo-sac", icon:"➕", label:"Novo Atendimento" }] : []),
+      { id:"indicadores-sac", icon:"📊", label:"Indicadores do SAC" },
     ]}] : []),
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Análise de causa" },

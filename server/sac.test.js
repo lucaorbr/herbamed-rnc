@@ -46,3 +46,17 @@ test("exclusao so do admin e so antes da triagem", () => {
   assert.throws(() => validateSACDelete(user("rt"), base), /administrador/);
   assert.throws(() => validateSACDelete(user("admin"), { ...base, status: "Em análise" }), /triado/);
 });
+
+test("recepcao registra chegada da amostra, mas nao pede nem avalia", () => {
+  const pedida = { ...base, status: "Em análise", amostra: { solicitada: { em: "x", por: "Qual" } } };
+  assert.doesNotThrow(() => validateSACUpdate(user("user"), pedida, { ...pedida, amostra: { ...pedida.amostra, recebida: { em: "2026-10-02" } } }));
+  assert.throws(() => validateSACUpdate(user("user"), base, { ...base, amostra: { solicitada: { em: "x" } } }), /Qualidade/);
+  assert.throws(() => validateSACUpdate(user("user"), base, { ...base, avaliacao: { resultado: "Procedente" } }), /Qualidade/);
+});
+
+test("avaliacao e etapas da amostra nao se alteram depois de gravadas", () => {
+  const av = { ...base, status: "Em análise", avaliacao: { resultado: "Procedente", parecer: "a" }, amostra: { solicitada: { em: "x" }, recebida: { em: "y" } } };
+  assert.throws(() => validateSACUpdate(user("rt"), av, { ...av, avaliacao: { resultado: "Improcedente", parecer: "a" } }), /avaliacao/);
+  assert.throws(() => validateSACUpdate(user("rt"), av, { ...av, amostra: { ...av.amostra, recebida: { em: "z" } } }), /recebimento/);
+  assert.throws(() => validateSACUpdate(user("rt"), av, { ...av, amostra: { recebida: av.amostra.recebida } }), /pedido/);
+});

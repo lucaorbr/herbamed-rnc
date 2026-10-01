@@ -1,6 +1,7 @@
 import {
   prazoSac, normLote, contagemPorLote, mesmoLote, errosDoRegistro, errosDoEncerramento,
   avisosDoEncerramento, descParaRNC, novaResposta, META_RESPOSTA_DIAS,
+  etapaAmostra, errosDaAvaliacao, novaAvaliacao, kpisSac, contarPor, lotesRecorrentes, porMesClassificacao, mediana, diasPrimeiraResposta,
 } from "./sacLogic";
 
 describe("prazoSac", () => {
@@ -51,10 +52,19 @@ describe("encerramento", () => {
     expect(errosDoEncerramento({}, "")).toHaveLength(3);
     expect(errosDoEncerramento({ classificacao: "Dúvida", respostas: resp }, "Respondido")).toEqual([]);
   });
-  it("evento adverso exige a decisão sobre notificação", () => {
+  it("evento adverso exige avaliação técnica e decisão sobre notificação", () => {
     const a = { classificacao: "Evento adverso", respostas: resp };
-    expect(errosDoEncerramento(a, "ok")).toHaveLength(1);
-    expect(errosDoEncerramento({ ...a, notificacaoVigilancia: { decisao: "Não notificado" } }, "ok")).toEqual([]);
+    expect(errosDoEncerramento(a, "ok")).toHaveLength(2);
+    expect(errosDoEncerramento({ ...a, avaliacao: { resultado: "Improcedente" }, notificacaoVigilancia: { decisao: "Não notificado" } }, "ok")).toEqual([]);
+  });
+  it("queixa técnica exige avaliação; dúvida não", () => {
+    expect(errosDoEncerramento({ classificacao: "Queixa técnica", respostas: resp }, "ok")).toHaveLength(1);
+    expect(errosDoEncerramento({ classificacao: "Queixa técnica", respostas: resp, avaliacao: { resultado: "Procedente" } }, "ok")).toEqual([]);
+  });
+  it("avisa quando a amostra pedida ainda não chegou", () => {
+    const a = { classificacao: "Dúvida", amostra: { solicitada: { em: "2026-09-10T10:00:00Z" } } };
+    expect(avisosDoEncerramento(a, null)[0]).toContain("2026-09-10");
+    expect(avisosDoEncerramento({ ...a, amostra: { ...a.amostra, recebida: { em: "2026-09-12" } } }, null)).toEqual([]);
   });
   it("avisa — sem travar — RNC em aberto e queixa técnica sem RNC", () => {
     expect(avisosDoEncerramento({ classificacao: "Queixa técnica" }, null)).toHaveLength(1);
@@ -73,5 +83,52 @@ describe("descParaRNC e novaResposta", () => {
   it("carimba autor e momento da resposta", () => {
     const r = novaResposta({ texto: "  Enviaremos troca  ", meio: "E-mail" }, { name: "Ana" }, new Date("2026-10-01T10:00:00Z"));
     expect(r).toMatchObject({ texto: "Enviaremos troca", meio: "E-mail", por: "Ana", em: "2026-10-01T10:00:00.000Z" });
+  });
+});
+
+describe("amostra e avaliação", () => {
+  it("acompanha a amostra: não pedida → aguardando → recebida", () => {
+    expect(etapaAmostra({})).toBe("nao_solicitada");
+    expect(etapaAmostra({ amostra: { solicitada: {} } })).toBe("aguardando");
+    expect(etapaAmostra({ amostra: { solicitada: {}, recebida: {} } })).toBe("recebida");
+  });
+  it("avaliação exige resultado válido e parecer", () => {
+    expect(errosDaAvaliacao({})).toHaveLength(2);
+    expect(errosDaAvaliacao({ resultado: "Talvez", parecer: "x" })).toHaveLength(1);
+    expect(errosDaAvaliacao({ resultado: "Procedente", parecer: "Cápsula fora do peso" })).toEqual([]);
+  });
+  it("avaliação carimba autor", () => {
+    const av = novaAvaliacao({ resultado: "Procedente", parecer: " ok " }, { name: "Ana" }, new Date("2026-10-01T10:00:00Z"));
+    expect(av).toMatchObject({ resultado: "Procedente", parecer: "ok", por: "Ana", amostraConsumidor: "Não" });
+  });
+});
+
+describe("indicadores", () => {
+  const lista = [
+    { num: "S1", dataContato: "2026-09-01", classificacao: "Queixa técnica", lote: "L1", canal: "Telefone", respostas: [{ data: "2026-09-03" }], status: "Encerrado", encerradoEm: "2026-09-10", avaliacao: { resultado: "Procedente" }, rncId: "r" },
+    { num: "S2", dataContato: "2026-09-05", classificacao: "Queixa técnica", lote: "l-1", canal: "E-mail", respostas: [{ data: "2026-09-20" }], avaliacao: { resultado: "Improcedente" } },
+    { num: "S3", dataContato: "2026-10-01", classificacao: "Evento adverso", teveReacao: "Sim", canal: "Telefone" },
+    { num: "S4", dataContato: "2026-10-02" },
+  ];
+  it("calcula taxas só sobre quem tem o dado", () => {
+    const k = kpisSac(lista);
+    expect(k).toMatchObject({ total: 4, queixas: 2, eventos: 1, reacoes: 1, avaliadas: 2, procedentes: 1, taxaProcedencia: 50, respondidos: 2, taxaNoPrazo: 50, medianaEncerramento: 9, comRnc: 1 });
+    expect(kpisSac([]).taxaProcedencia).toBeNull();
+  });
+  it("primeira resposta e mediana", () => {
+    expect(diasPrimeiraResposta(lista[0])).toBe(2);
+    expect(diasPrimeiraResposta(lista[2])).toBeNull();
+    expect(mediana([5, 1, 3])).toBe(3);
+    expect(mediana([1, 2])).toBe(1.5);
+  });
+  it("conta por canal e agrupa lotes recorrentes", () => {
+    expect(contarPor(lista, a => a.canal)[0]).toEqual({ nome: "Telefone", qtd: 2 });
+    expect(contarPor(lista, a => a.canal).find(x => x.nome === "Não informado").qtd).toBe(1);
+    expect(lotesRecorrentes(lista)).toEqual([expect.objectContaining({ qtd: 2, procedentes: 1, nums: ["S1", "S2"] })]);
+  });
+  it("monta a série mensal por classificação", () => {
+    const r = porMesClassificacao(lista, ["2026-09", "2026-10"]);
+    expect(r[0]).toMatchObject({ mes: "2026-09", total: 2, "Queixa técnica": 2 });
+    expect(r[1]).toMatchObject({ total: 2, "Evento adverso": 1, "A classificar": 1 });
   });
 });

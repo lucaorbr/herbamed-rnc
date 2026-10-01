@@ -580,7 +580,7 @@ export default function App() {
 
   if (user.role === "exec") return (
     <ThemeCtx.Provider value={T}>
-      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} />
+      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} sac={perm("verSAC") ? sacAtendimentos : null} />
       <AtualizacaoDisponivel />
     </ThemeCtx.Provider>
   );
@@ -637,6 +637,7 @@ export default function App() {
     "indicadores-desvios": "Desvios — Indicadores",
     sac: "SAC — Atendimentos ao Consumidor",
     "novo-sac": "SAC — Novo Atendimento",
+    "indicadores-sac": "SAC — Indicadores",
     "config-revalidacao": "Revalidações — Configuração",
     cq: "Controle de Qualidade",
     revalidacao: "Revalidações",
@@ -918,13 +919,14 @@ export default function App() {
                   propósito: quem volta para a lateral volta inteiro. */}
               <Suspense fallback={<AbaCarregando />}>
               {tab==="home" && (navTopo
-                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} sac={sacAtendimentos} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
                 : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} isViewer={isViewer} abrirRnc={abrirRnc} />}
               {tab==="rnc"        && <RncFicha rncId={ficha.rnc} etapa={ficha.etapa} setEtapa={setEtapaFicha} rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
               {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} doSaveSac={doSaveSac} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
               {tab==="sac"          && perm("verSAC") && <SacTab view="lista" user={user} toast_={toast_} setTab={setTab} atendimentos={sacAtendimentos} rncs={rncs} doSaveSac={doSaveSac} doDeleteSac={doDeleteSac} perm={perm} isAdmin={isAdmin} setRncPrefill={setRncPrefill} abrirRnc={abrirRnc} />}
+              {tab==="indicadores-sac" && perm("verSAC") && <SacTab view="indicadores" atendimentos={sacAtendimentos} />}
               {tab==="novo-sac"     && perm("registrarSAC") && <SacTab view="novo" user={user} toast_={toast_} setTab={setTab} doSaveSac={doSaveSac} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
@@ -989,7 +991,7 @@ export default function App() {
         {/* ── MODO APRESENTAÇÃO ── */}
         {presentationMode && (
           <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.bg }}>
-            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} onClose={() => setPresentationMode(false)} />
+            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} sac={perm("verSAC") ? sacAtendimentos : null} onClose={() => setPresentationMode(false)} />
           </div>
         )}
 

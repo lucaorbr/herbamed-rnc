@@ -16,7 +16,7 @@ const SAC_ROLE_PERMISSIONS = {
 // Campos que só a Qualidade (tratarSAC) muda: a decisão sobre o atendimento.
 const CAMPOS_DA_TRIAGEM = [
   "status", "classificacao", "respostas", "rncId", "rncNum",
-  "encerradoPor", "encerradoEm", "conclusao", "notificacaoVigilancia",
+  "encerradoPor", "encerradoEm", "conclusao", "notificacaoVigilancia", "avaliacao",
 ];
 
 function hasSACPermission(user, key) {
@@ -52,6 +52,11 @@ function validateSACUpdate(user, oldData, data) {
   if (!podeTratar) {
     requireSACPermission(user, "registrarSAC");
     const mexeu = CAMPOS_DA_TRIAGEM.filter(k => !igual(oldData[k], data[k]));
+    // A recepção pode registrar a CHEGADA da amostra (é ela quem recebe o pacote),
+    // mas não pedir a amostra nem mexer no resto.
+    const { recebida: _r1, ...amostraAntes } = oldData.amostra || {};
+    const { recebida: _r2, ...amostraDepois } = data.amostra || {};
+    if (!igual(amostraAntes, amostraDepois)) mexeu.push("amostra");
     if (mexeu.length) throw erro(403, `Somente a Qualidade altera: ${mexeu.join(", ")}`);
   }
 
@@ -59,6 +64,16 @@ function validateSACUpdate(user, oldData, data) {
   const relatoAntigo = String(oldData.relato || "");
   if (!String(data.relato || "").startsWith(relatoAntigo)) {
     throw erro(409, "O relato registrado nao pode ser alterado, apenas complementado");
+  }
+
+  // Etapas já registradas são evidência: avaliação, pedido e chegada da amostra.
+  const etapas = [
+    ["avaliacao", oldData.avaliacao, data.avaliacao],
+    ["pedido de amostra", oldData.amostra?.solicitada, data.amostra?.solicitada],
+    ["recebimento de amostra", oldData.amostra?.recebida, data.amostra?.recebida],
+  ];
+  for (const [nome, antes, depois] of etapas) {
+    if (antes && !igual(antes, depois)) throw erro(409, `Registro de ${nome} ja gravado nao pode ser alterado`);
   }
 
   // Respostas ao consumidor: só se acrescentam.
