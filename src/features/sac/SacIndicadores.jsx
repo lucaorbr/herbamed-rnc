@@ -5,21 +5,20 @@ import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPer
 import { filtrarPorPeriodo, mesesDoPeriodo, periodoAnterior, resolverPeriodo } from "../../shared/periodoLogic";
 import {
   CLASSIFICACOES_SAC, META_RESPOSTA_DIAS, LIMITE_RECORRENCIA_LOTE,
-  dataRefSac, kpisSac, contarPor, lotesRecorrentes, porMesClassificacao, prazoSac, relatouReacao,
+  dataRefSac, kpisSac, contarPor, contarSetores, lotesRecorrentes, porMesClassificacao, prazoSac, relatouReacao, retornosPendentes,
   diasPrimeiraResposta, diasAteEncerrar,
 } from "./sacLogic";
 
-// Cor fixa por classificação: o que pede ação (queixa, evento) em quente.
+// Cor fixa por tipo: o que pede ação (reclamação, reação) em quente.
 const COR_CLASSIF = {
-  "Evento adverso": "#ff4f6a",
-  "Queixa técnica": "#ff8c42",
-  "Comercial": "#a78bfa",
+  "Reação adversa": "#ff4f6a",
+  "Reclamação": "#ff8c42",
+  "Troca / Devolução": "#a78bfa",
   "Dúvida": "#4fc3f7",
   "Sugestão": "#5dd4b0",
   "Elogio": "#2ab84a",
-  "A classificar": "#94a3b8",
 };
-const SERIES = [...CLASSIFICACOES_SAC.map(c => c.id).reverse(), "A classificar"];
+const SERIES = CLASSIFICACOES_SAC.map(c => c.id).reverse();
 
 export function SacIndicadores({ atendimentos = [] }) {
   const T = useTheme();
@@ -46,18 +45,21 @@ export function SacIndicadores({ atendimentos = [] }) {
 
   const porCanal = useMemo(() => contarPor(lista, a => a.canal), [lista]);
   const porProduto = useMemo(() => {
-    const qualidade = lista.filter(a => ["Queixa técnica", "Evento adverso"].includes(a.classificacao));
+    const qualidade = lista.filter(a => ["Reclamação", "Reação adversa"].includes(a.classificacao));
     return contarPor(qualidade, a => a.produto).slice(0, 8).map(p => ({
       ...p,
       procedentes: qualidade.filter(a => (a.produto || "").trim() === p.nome && a.avaliacao?.resultado === "Procedente").length,
     }));
   }, [lista]);
   const lotes = useMemo(() => lotesRecorrentes(lista), [lista]);
+  const porSolucao = useMemo(() => contarPor(lista.filter(a => a.solucao), a => a.solucao), [lista]);
+  const porSetor = useMemo(() => contarSetores(lista), [lista]);
 
   // Situação de hoje — independe do período.
-  const abertos = atendimentos.filter(a => a.status !== "Encerrado");
+  const abertos = atendimentos.filter(a => a.status !== "Finalizado");
   const hoje = {
-    aClassificar: abertos.filter(a => a.status === "Aberto").length,
+    emAberto: abertos.filter(a => a.status === "Em aberto").length,
+    aguardandoSetor: abertos.filter(a => retornosPendentes(a).length > 0).length,
     atrasados: abertos.filter(a => prazoSac(a)?.atrasado).length,
     reacoes: abertos.filter(relatouReacao).length,
     amostrasAguardando: abertos.filter(a => a.amostra?.solicitada && !a.amostra?.recebida).length,
@@ -65,10 +67,11 @@ export function SacIndicadores({ atendimentos = [] }) {
 
   const exportCSV = () => {
     const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const cab = ["Nº", "Data contato", "Canal", "Produto", "Lote", "Classificação", "Status", "Reação relatada", "Avaliação", "RNC", "Dias até 1ª resposta", "Dias até encerrar", "Cidade", "UF"];
-    // Sem nome, telefone e e-mail: o CSV sai da tela e circula — dado pessoal fica no sistema.
+    const cab = ["Nº", "Data contato", "Canal", "Suplemento", "Lote", "Tipo", "Status", "Encaminhado para", "Solução aplicada", "Reação relatada", "Avaliação", "RNC", "Dias até 1ª resposta", "Dias até finalizar", "Cidade", "UF"];
+    // Sem nome, CPF, endereço, telefone e e-mail: o CSV sai da tela e circula — dado pessoal fica no sistema.
     const linhas = lista.map(a => [
-      a.num, dataRefSac(a), a.canal, a.produto, a.lote, a.classificacao || "A classificar", a.status,
+      a.num, dataRefSac(a), a.canal, a.produto, a.lote, a.classificacao, a.status,
+      [...new Set((a.encaminhamentos || []).map(e => e.setor))].join(", "), a.solucao || "",
       relatouReacao(a) ? "Sim" : "Não", a.avaliacao?.resultado || "", a.rncNum || "",
       diasPrimeiraResposta(a) ?? "", diasAteEncerrar(a) ?? "", a.consumidorCidade, a.consumidorUF,
     ].map(esc).join(";"));
@@ -91,12 +94,12 @@ export function SacIndicadores({ atendimentos = [] }) {
 
   const tiles = [
     { l: "Atendimentos no período", n: k.total, c: T.accent, d: kAnt && <Delta cur={k.total} prev={kAnt.total} /> },
-    { l: "Queixas técnicas", n: k.queixas, c: "#ff8c42", d: kAnt && <Delta cur={k.queixas} prev={kAnt.queixas} /> },
-    { l: "Eventos adversos", n: k.eventos, c: k.eventos ? "#ff4f6a" : T.text3, d: kAnt && <Delta cur={k.eventos} prev={kAnt.eventos} /> },
+    { l: "Reclamações", n: k.reclamacoes, c: "#ff8c42", d: kAnt && <Delta cur={k.reclamacoes} prev={kAnt.reclamacoes} /> },
+    { l: "Reações adversas", n: k.reacoesAdversas, c: k.reacoesAdversas ? "#ff4f6a" : T.text3, d: kAnt && <Delta cur={k.reacoesAdversas} prev={kAnt.reacoesAdversas} /> },
     { l: `Procedentes (de ${k.avaliadas} avaliada${k.avaliadas === 1 ? "" : "s"})`, n: k.taxaProcedencia !== null ? `${k.taxaProcedencia}%` : "—", c: T.accent, d: kAnt && <Delta cur={k.taxaProcedencia} prev={kAnt.taxaProcedencia} unit="%" /> },
     { l: `1ª resposta em até ${META_RESPOSTA_DIAS} dias`, n: k.taxaNoPrazo !== null ? `${k.taxaNoPrazo}%` : "—", c: k.taxaNoPrazo === null ? T.text3 : k.taxaNoPrazo >= 80 ? "#2ab84a" : k.taxaNoPrazo >= 60 ? T.yellow : T.red, d: kAnt && <Delta cur={k.taxaNoPrazo} prev={kAnt.taxaNoPrazo} goodUp unit="%" /> },
     { l: "Mediana até a 1ª resposta", n: k.medianaResposta !== null ? `${k.medianaResposta}d` : "—", c: T.accent },
-    { l: "Mediana até encerrar", n: k.medianaEncerramento !== null ? `${k.medianaEncerramento}d` : "—", c: T.accent },
+    { l: "Mediana até finalizar", n: k.medianaEncerramento !== null ? `${k.medianaEncerramento}d` : "—", c: T.accent },
     { l: "Viraram RNC", n: k.comRnc, c: T.accent, d: kAnt && <Delta cur={k.comRnc} prev={kAnt.comRnc} /> },
   ];
 
@@ -120,7 +123,8 @@ export function SacIndicadores({ atendimentos = [] }) {
       <div style={{ ...card, marginBottom: 16, display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Agora <SituacaoAtual /></div>
         {[
-          ["A classificar", hoje.aClassificar, "#4fc3f7"],
+          ["Em aberto (ninguém agiu)", hoje.emAberto, "#4fc3f7"],
+          ["Aguardando retorno de setor", hoje.aguardandoSetor, "#a78bfa"],
           [`Atrasados (> ${META_RESPOSTA_DIAS}d)`, hoje.atrasados, "#ff8c42"],
           ["Reação relatada em aberto", hoje.reacoes, "#ff4f6a"],
           ["Amostras aguardando chegada", hoje.amostrasAguardando, T.yellow],
@@ -145,7 +149,7 @@ export function SacIndicadores({ atendimentos = [] }) {
       {kAnt && <div style={{ fontSize: 10, color: T.text3, marginBottom: 16 }}>▲▼ variação vs. período anterior de mesma duração</div>}
 
       <div style={{ ...card, marginBottom: 16 }}>
-        {titulo("📈 Atendimentos por mês e classificação", "Pela data do contato")}
+        {titulo("📈 Atendimentos por mês e tipo", "Pela data do contato")}
         {lista.length === 0 ? vazio : (
           <>
             <div style={{ height: 250 }}>
@@ -174,10 +178,10 @@ export function SacIndicadores({ atendimentos = [] }) {
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
         <div style={card}>
-          {titulo("📦 Produtos com mais queixas", "Queixas técnicas e eventos adversos no período")}
+          {titulo("📦 Suplementos com mais reclamações", "Reclamações e reações adversas no período")}
           {porProduto.length === 0 ? vazio : (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead><tr style={{ color: T.text3, textAlign: "left" }}><th style={{ padding: "4px 6px" }}>Produto</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Queixas</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Procedentes</th></tr></thead>
+              <thead><tr style={{ color: T.text3, textAlign: "left" }}><th style={{ padding: "4px 6px" }}>Produto</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Reclamações</th><th style={{ padding: "4px 6px", textAlign: "right" }}>Procedentes</th></tr></thead>
               <tbody>
                 {porProduto.map(p => (
                   <tr key={p.nome} style={{ borderTop: `1px solid ${T.border}`, color: T.text }}>
@@ -205,6 +209,26 @@ export function SacIndicadores({ atendimentos = [] }) {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="grid-2" style={{ marginBottom: 16 }}>
+        {[["✅ Solução aplicada", "Atendimentos finalizados no período", porSolucao], ["↪️ Encaminhado para", "Setores que receberam atendimentos do período", porSetor]].map(([t, sub, dados]) => (
+          <div key={t} style={card}>
+            {titulo(t, sub)}
+            {dados.length === 0 ? vazio : (
+              <div style={{ height: Math.max(140, dados.length * 30) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dados} layout="vertical" margin={{ left: 10 }}>
+                    <XAxis type="number" hide allowDecimals={false} />
+                    <YAxis type="category" dataKey="nome" width={150} tick={{ fill: T.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <RcTooltip {...tip} cursor={{ fill: T.accentDim }} />
+                    <Bar dataKey="qtd" name="Atendimentos" fill={T.accent} radius={[0, 4, 4, 0]} maxBarSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div style={card}>

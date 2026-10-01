@@ -45,8 +45,8 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], sac
   const taxaDesvioRNC     = desvios.length > 0 ? Math.round(desviosConvertidos / desvios.length * 100) : null;
 
   // SAC — só para quem pode ler os atendimentos (sac === null esconde o card).
-  const sacAbertos  = (sac || []).filter(a => a.status !== "Encerrado");
-  const sacEventos  = sacAbertos.filter(a => a.classificacao === "Evento adverso" || a.teveReacao === "Sim").length;
+  const sacAbertos  = (sac || []).filter(a => a.status !== "Finalizado");
+  const sacEventos  = sacAbertos.filter(a => a.classificacao === "Reação adversa" || a.teveReacao === "Sim").length;
   const sacAtrasados = sacAbertos.filter(a => prazoSac(a)?.atrasado).length;
 
   // Semáforo geral

@@ -248,10 +248,10 @@ describe("montarPendencias", () => {
 
 describe("pendenciasDeSac", () => {
   const sac = [
-    { id: 1, num: "SAC-2026-0001", status: "Aberto", dataContato: "2026-08-15", produto: "Ômega 3", lote: "L1" },
-    { id: 2, num: "SAC-2026-0002", status: "Em análise", dataContato: "2026-08-01" },
-    { id: 3, num: "SAC-2026-0003", status: "Aberto", dataContato: "2026-08-16", teveReacao: "Sim" },
-    { id: 4, num: "SAC-2026-0004", status: "Encerrado", dataContato: "2026-01-01" },
+    { id: 1, num: "SAC-2026-0001", status: "Em aberto", dataContato: "2026-08-15", produto: "Ômega 3", lote: "L1" },
+    { id: 2, num: "SAC-2026-0002", status: "Em andamento", dataContato: "2026-08-01" },
+    { id: 3, num: "SAC-2026-0003", status: "Em aberto", dataContato: "2026-08-16", teveReacao: "Sim" },
+    { id: 4, num: "SAC-2026-0004", status: "Finalizado", dataContato: "2026-01-01" },
   ];
   it("só aparece para quem trata o SAC", () => {
     expect(pendenciasDeSac({ sac, hoje: HOJE })).toEqual([]);

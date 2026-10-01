@@ -78,13 +78,13 @@ export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PAD
 export function pendenciasDeSac({ sac = [], hoje, meta = META_TRIAGEM_PADRAO, podeTratarSac = false }) {
   if (!podeTratarSac) return [];
   return (sac || [])
-    .filter(a => a && a.status !== "Encerrado")
+    .filter(a => a && a.status !== "Finalizado")
     .map(a => {
       const dias = diasEntre(a.dataContato || a.dataRegistro, hoje);
       const reacao = a.teveReacao === "Sim";
       return item({
         id: `sac-${a.id}`, fonte: "sac", tab: "sac",
-        titulo: `${a.num || "SAC"} — ${a.status === "Aberto" ? "a classificar" : "responder e concluir"}${reacao ? " · reação relatada" : ""}`,
+        titulo: `${a.num || "SAC"} — ${a.status === "Em aberto" ? "aguardando atendimento" : "responder e finalizar"}${reacao ? " · reação relatada" : ""}`,
         detalhe: [a.produto, a.lote && `lote ${a.lote}`].filter(Boolean).join(" · "),
         dias, urgencia: reacao || dias > meta ? URGENCIA.CRITICO : URGENCIA.ATENCAO,
       });
