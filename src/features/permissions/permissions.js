@@ -13,6 +13,11 @@ export const PERMS_GRUPOS = [
     { key: "criarDesvio",  label: "Registrar novo desvio" },
     { key: "triarDesvio",  label: "Triar desvio (encerrar / converter em RNC)" },
   ]},
+  { grupo: "SAC", items: [
+    { key: "verSAC",       label: "Visualizar atendimentos do SAC (contém dados pessoais)" },
+    { key: "registrarSAC", label: "Registrar atendimento do SAC" },
+    { key: "tratarSAC",    label: "Tratar SAC (classificar, responder, abrir RNC, encerrar)" },
+  ]},
   { grupo: "Revalidações", items: [
     { key: "verRevalidacao",   label: "Visualizar revalidações" },
     { key: "criarRevalidacao", label: "Criar / editar revalidação" },
@@ -69,6 +74,7 @@ export const PERMS_PADRAO = {
   viewer: {
     criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
+    verSAC:false, registrarSAC:false, tratarSAC:false,
     verRevalidacao:true, criarRevalidacao:false,
     verHomologacoes:true, criarHomologacao:false, avaliarHomologacao:false, aprovarHomologacao:false,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:true, criarLaudos:false,
@@ -79,6 +85,7 @@ export const PERMS_PADRAO = {
   user: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:true, triarDesvio:false,
+    verSAC:true, registrarSAC:true, tratarSAC:false,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:false, aprovarHomologacao:false,
     verCQMateriais:true, criarMaterialCQ:false, lancarAnalise:true, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,
@@ -89,6 +96,7 @@ export const PERMS_PADRAO = {
   rt: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verSAC:true, registrarSAC:true, tratarSAC:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -99,6 +107,7 @@ export const PERMS_PADRAO = {
   keyuser: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verSAC:true, registrarSAC:true, tratarSAC:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -109,6 +118,7 @@ export const PERMS_PADRAO = {
   admin: {
     criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
+    verSAC:true, registrarSAC:true, tratarSAC:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
     verCQMateriais:true, criarMaterialCQ:true, lancarAnalise:true, aprovarAnalise:true, editarAnalise:true, verLaudos:true, criarLaudos:true,
@@ -119,6 +129,7 @@ export const PERMS_PADRAO = {
   exec: {
     criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
+    verSAC:false, registrarSAC:false, tratarSAC:false,
     verRevalidacao:true, criarRevalidacao:false,
     verHomologacoes:false, criarHomologacao:false, avaliarHomologacao:false, aprovarHomologacao:false,
     verCQMateriais:false, criarMaterialCQ:false, lancarAnalise:false, aprovarAnalise:false, editarAnalise:false, verLaudos:false, criarLaudos:false,

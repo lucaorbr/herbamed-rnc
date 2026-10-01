@@ -162,6 +162,11 @@ export const incrementHomologacaoCounter = async () => {
   return value;
 };
 
+export const incrementSacCounter = async () => {
+  const { value } = await api("/api/counters/increment-sac", { method: "POST", body: {} });
+  return value;
+};
+
 export const peekDailyCounter = async () => {
   const { value } = await api("/api/counters/peek-daily");
   return value;

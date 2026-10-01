@@ -9,9 +9,9 @@ const rncs = [{ status: "Aberta" }, { status: "Aberta" }, { status: "Eficaz" }];
 const desvios = [{ status: "Registrado" }];
 
 describe("montarGrupos", () => {
-  it("entrega os 8 grupos do menu para o admin", () => {
+  it("entrega os 9 grupos do menu para o admin", () => {
     expect(montarGrupos({ ...admin }).map(g => g.id)).toEqual([
-      "principal", "desvios-grupo", "qualidade", "cq", "producao", "analise", "cadastros", "gestao",
+      "principal", "desvios-grupo", "sac-grupo", "qualidade", "cq", "producao", "analise", "cadastros", "gestao",
     ]);
   });
 
@@ -41,6 +41,13 @@ describe("montarGrupos", () => {
     expect(semPerm.items.map(i => i.id)).not.toContain("laudos");
     const comPerm = montarGrupos({ ...admin, perm: () => true }).find(g => g.id === "cadastros");
     expect(comPerm.items.map(i => i.id)).toContain("laudos");
+  });
+
+  it("SAC só aparece para quem tem verSAC, com badge dos não triados", () => {
+    const sem = montarGrupos({ ...admin, perm: key => key !== "verSAC" }).map(g => g.id);
+    expect(sem).not.toContain("sac-grupo");
+    const com = montarGrupos({ ...admin, sac: [{ status: "Aberto" }, { status: "Encerrado" }] }).find(g => g.id === "sac-grupo");
+    expect(com.items.find(i => i.id === "sac").badge).toBe(1);
   });
 
   it("homologações respeita a permissão própria", () => {
@@ -139,7 +146,7 @@ describe("busca de telas", () => {
 
   it("cada tela carrega o caminho, para desambiguar nomes repetidos", () => {
     const indicadores = telas.filter(t => t.label === "Indicadores");
-    expect(indicadores.map(t => t.caminho)).toEqual(["Desvios"]);
+    expect(indicadores.map(t => t.caminho)).toEqual(["Desvios e SAC"]);
     expect(telas.find(t => t.id === "dashboard").caminho).toBe("Indicadores");
   });
 

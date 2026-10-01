@@ -75,10 +75,10 @@ export function SidebarGrupo({ grupo, tab, setTab, sidebarOpen, T, defaultOpen }
   );
 }
 
-export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], isViewer, isAdmin, perm = () => true }) {
+export function SidebarNav({ T, tab, setTab, sidebarOpen, rncs, desvios = [], sac = [], isViewer, isAdmin, perm = () => true }) {
   // A estrutura do menu mora em `navegacao.js` — a barra lateral e a barra de abas
   // leem a mesma fonte, para tela nova aparecer nas duas sem ninguém lembrar.
-  const GRUPOS = montarGrupos({ rncs, desvios, isViewer, isAdmin, perm });
+  const GRUPOS = montarGrupos({ rncs, desvios, sac, isViewer, isAdmin, perm });
 
   return (
     <div style={{ width:"100%", height:"100%", flexShrink:0, background:T.surf, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden" }}>
