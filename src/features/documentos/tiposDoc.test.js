@@ -1,4 +1,4 @@
-import { prazoRevisaoTipo, TIPOS_DOC_GD } from "./tiposDoc";
+import { prazoRevisaoTipo, TIPOS_DOC_GD, codigoSegueTipo } from "./tiposDoc";
 
 // O prazo de revisão tinha dois campos na tela e só um deles valia. Estes testes
 // fixam a precedência agora que o campo é único: `configuracoes/tipos_revisao`
@@ -47,5 +47,29 @@ describe("prazoRevisaoTipo — precedência das fontes", () => {
     const semente = TIPOS_DOC_GD.find(t => t.id === "MOP");
     expect(prazoRevisaoTipo("MOP", {})).toBe(semente.prazoRevisaoAnos);
     expect(prazoRevisaoTipo("MOP", { MOP: 1 })).toBe(1);
+  });
+});
+
+describe("codigoSegueTipo — o código só acompanha o tipo em rascunho que nunca vigorou", () => {
+  const rascunho = { tipo: "FO", status: "Rascunho", historicoRevisoes: [] };
+
+  it("muda quando o rascunho troca de tipo", () => {
+    expect(codigoSegueTipo(rascunho, "ANX")).toBe(true);
+  });
+
+  it("não muda quando o tipo é o mesmo", () => {
+    expect(codigoSegueTipo(rascunho, "FO")).toBe(false);
+  });
+
+  it.each(["Em Revisão", "Aguardando Aprovação", "Vigente", "Obsoleto"])("não muda em %s", (status) => {
+    expect(codigoSegueTipo({ ...rascunho, status }, "ANX")).toBe(false);
+  });
+
+  it("não muda em rascunho que já teve revisão anterior (recusa devolveu para Rascunho)", () => {
+    expect(codigoSegueTipo({ ...rascunho, historicoRevisoes: [{ versao: "00" }] }, "ANX")).toBe(false);
+  });
+
+  it("documento novo não passa por aqui", () => {
+    expect(codigoSegueTipo(null, "ANX")).toBe(false);
   });
 });
