@@ -24,6 +24,7 @@ const {
   validateHomologacaoUpdate,
 } = require("./homologacao");
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
+const { requireSACPermission, validateSACUpdate, validateSACDelete } = require("./sac");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
   buildDocumentSourceHash,
@@ -722,6 +723,30 @@ async function handleCounters(req, res, pathname) {
     return sendJson(res, 200, { value: `HOM-${ano}-${String(value).padStart(4, "0")}` });
   }
 
+  if (pathname === "/api/counters/increment-sac" && req.method === "POST") {
+    const user = await requireUser(req);
+    requireSACPermission(user, "registrarSAC");
+    const ano = new Date().getFullYear();
+    const value = await transaction(async client => {
+      const result = await client.query(`
+        INSERT INTO counters (key, value, updated_at)
+        VALUES (
+          $1,
+          COALESCE((
+            SELECT MAX((substring(data->>'num' from '([0-9]+)$'))::int)
+            FROM generic_documents
+            WHERE collection = 'sac_atendimentos' AND data->>'num' LIKE $2
+          ), 0) + 1,
+          now()
+        )
+        ON CONFLICT (key) DO UPDATE SET value = GREATEST(counters.value + 1, EXCLUDED.value), updated_at = now()
+        RETURNING value
+      `, [`sac:${ano}`, `SAC-${ano}-%`]);
+      return result.rows[0].value;
+    });
+    return sendJson(res, 200, { value: `SAC-${ano}-${String(value).padStart(4, "0")}` });
+  }
+
   return false;
 }
 
@@ -1012,6 +1037,10 @@ async function handleCollections(req, res, pathname) {
   if (collection === "homologacoes" && req.method === "GET") {
     requireHomologacaoPermission(user, "verHomologacoes");
   }
+  // Atendimento do SAC tem dado pessoal do consumidor: nem a leitura é livre.
+  if (collection === "sac_atendimentos" && req.method === "GET") {
+    requireSACPermission(user, "verSAC");
+  }
 
   if (!id && req.method === "GET") {
     const result = await query(`
@@ -1026,7 +1055,7 @@ async function handleCollections(req, res, pathname) {
     const data = sanitize(await readBody(req));
 
     let oldData = null;
-    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes") {
+    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes" || collection === "sac_atendimentos") {
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
         [collection, id]
@@ -1036,6 +1065,7 @@ async function handleCollections(req, res, pathname) {
 
     if (collection === "laudos") validateLaudoUpdate(oldData, data);
     if (collection === "homologacoes") validateHomologacaoUpdate(user, oldData, data);
+    if (collection === "sac_atendimentos") validateSACUpdate(user, oldData, data);
     if (collection === "gestao_docs") validarGravacaoDocumento(user, oldData, data);
 
     await query(`
@@ -1071,6 +1101,13 @@ async function handleCollections(req, res, pathname) {
         error.status = 409;
         throw error;
       }
+    }
+    if (collection === "sac_atendimentos") {
+      const prev = await query(
+        "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
+        [collection, id]
+      );
+      validateSACDelete(user, prev.rows[0]?.data);
     }
     if (collection === "laudos") {
       const prev = await query(

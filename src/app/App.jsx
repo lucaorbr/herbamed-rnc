@@ -65,6 +65,7 @@ const CQDashboardTab = lazyNamed(cqLoader, "CQDashboardTab");
 
 const GestaoDocumentosTab = lazyNamed(() => import("../features/documentos/GestaoDocumentosTab"), "GestaoDocumentosTab");
 const HomologacoesTab = lazyNamed(() => import("../features/homologacoes/HomologacoesTab"), "HomologacoesTab");
+const SacTab = lazyNamed(() => import("../features/sac/SacTabs"), "SacTab");
 
 function AbaCarregando() {
   return (
@@ -179,6 +180,7 @@ export default function App() {
   const [desvios, setDesvios] = useState([]);
   const [revalidacoes, setRevalidacoes] = useState([]);
   const [homologacoes, setHomologacoes] = useState([]);
+  const [sacAtendimentos, setSacAtendimentos] = useState([]);
   const [docNotifs, setDocNotifs] = useState([]);
   const [users, setUsers] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -302,6 +304,13 @@ export default function App() {
     const unsubHomologacoes = podeLerHomologacoes
       ? subscribeCollection("homologacoes", setHomologacoes)
       : () => {};
+    // SAC tem dado pessoal do consumidor: o servidor recusa a leitura sem verSAC.
+    const podeLerSac = user.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, "verSAC")
+      ? user.permissoes.verSAC === true
+      : PERMS_PADRAO[user.role]?.verSAC === true;
+    const unsubSac = podeLerSac
+      ? subscribeCollection("sac_atendimentos", setSacAtendimentos)
+      : () => {};
     const unsubNotifs = subscribeNotifications(setDocNotifs);
     getAllUsers().then(setUsers);
     const unsubForn = subscribeCollection("fornecedores", (list) => {
@@ -328,7 +337,7 @@ export default function App() {
       setCatalogoCargos(cc?.items || []);
     });
     const unsubColab = subscribeCollection("colaboradores", list => setColaboradores(list || []));
-    return () => { unsub(); unsubDesvios(); unsubReval(); unsubHomologacoes(); unsubNotifs(); unsubForn(); unsubCfg(); unsubColab && unsubColab(); };
+    return () => { unsub(); unsubDesvios(); unsubReval(); unsubHomologacoes(); unsubSac(); unsubNotifs(); unsubForn(); unsubCfg(); unsubColab && unsubColab(); };
   }, [user]);
 
   // Alertas automáticos — verificar RNCs vencendo hoje ou já vencidas
@@ -514,6 +523,22 @@ export default function App() {
       await auditLog("Excluiu desvio", "desvios", id, antes?.num || id, antes, null);
     } catch(e) { console.error(e); }
   }, [desvios]);
+  // Diferente do doSaveDesvio, a falha SOBE: o servidor recusa alterar relato,
+  // resposta ou atendimento encerrado, e quem gravou precisa ver o motivo.
+  const doSaveSac = useCallback(async (at) => {
+    const antes = sacAtendimentos.find(a => a.id === at.id) || null;
+    await saveCollection("sac_atendimentos", at.id, at);
+    setSacAtendimentos(lista => antes ? lista.map(a => a.id === at.id ? at : a) : [at, ...lista]);
+    try {
+      await auditLog(antes ? `SAC: ${at.status}` : "Registrou atendimento SAC", "sac_atendimentos", at.id, at.num || at.id, antes, at);
+    } catch (e) { console.error(e); }
+  }, [sacAtendimentos, auditLog]);
+  const doDeleteSac = useCallback(async (id) => {
+    const antes = sacAtendimentos.find(a => a.id === id);
+    await deleteFromCollection("sac_atendimentos", id);
+    setSacAtendimentos(lista => lista.filter(a => a.id !== id));
+    try { await auditLog("Excluiu atendimento SAC", "sac_atendimentos", id, antes?.num || id, antes, null); } catch (e) { console.error(e); }
+  }, [sacAtendimentos, auditLog]);
   const doSaveRevalidacao = useCallback(async (reg) => {
     try {
       const isNew = !revalidacoes.find(r => r.id === reg.id);
@@ -555,7 +580,7 @@ export default function App() {
 
   if (user.role === "exec") return (
     <ThemeCtx.Provider value={T}>
-      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} />
+      <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} sac={perm("verSAC") ? sacAtendimentos : null} />
       <AtualizacaoDisponivel />
     </ThemeCtx.Provider>
   );
@@ -610,6 +635,9 @@ export default function App() {
     "novo-desvio": "Novo Desvio",
     "config-desvios": "Desvios — Configuração",
     "indicadores-desvios": "Desvios — Indicadores",
+    sac: "SAC — Atendimentos ao Consumidor",
+    "novo-sac": "SAC — Novo Atendimento",
+    "indicadores-sac": "SAC — Indicadores",
     "config-revalidacao": "Revalidações — Configuração",
     cq: "Controle de Qualidade",
     revalidacao: "Revalidações",
@@ -847,7 +875,7 @@ export default function App() {
 
         {/* ── BARRA DE ABAS (repaginação) ── */}
         {navTopo && (
-          <TopNav tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+          <TopNav tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} rncs={rncs} desvios={desvios} sac={sacAtendimentos} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
         )}
 
         {/* ── BODY: sidebar + content ── */}
@@ -862,7 +890,7 @@ export default function App() {
           {/* SIDEBAR — só na navegação lateral (a de abas dispensa) */}
           {navTopo ? null : (
             <div className={`sidebar-nav${mobileMenuOpen ? " mobile-open" : ""}`} style={{ width: sidebarOpen ? 220 : 60, flexShrink:0, background:T.surf, borderRight:`1px solid ${T.border}`, display:"flex", flexDirection:"column", transition:"width .25s ease", overflow:"hidden", height:"100%", zIndex:"auto" }}>
-              <SidebarNav T={T} tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
+              <SidebarNav T={T} tab={tab==="rnc" ? "lista" : tab} setTab={(t)=>{ setTab(t); setMobileMenuOpen(false); }} sidebarOpen={mobileMenuOpen ? true : sidebarOpen} rncs={rncs} desvios={desvios} sac={sacAtendimentos} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />
             </div>
           )}
 
@@ -891,12 +919,15 @@ export default function App() {
                   propósito: quem volta para a lateral volta inteiro. */}
               <Suspense fallback={<AbaCarregando />}>
               {tab==="home" && (navTopo
-                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} sac={sacAtendimentos} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
                 : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} isViewer={isViewer} abrirRnc={abrirRnc} />}
               {tab==="rnc"        && <RncFicha rncId={ficha.rnc} etapa={ficha.etapa} setEtapa={setEtapaFicha} rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doUpdateRNC={doUpdateRNC} doDeleteRNC={doDeleteRNC} isViewer={isViewer} isAdmin={isAdmin} perm={perm} />}
-              {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
+              {tab==="nova"       && !isViewer && perm("criarRNC") && <NovaTab rncs={rncs} user={user} toast_={toast_} setTab={setTab} openEmail={openEmail} doSaveRNC={doSaveRNC} doSaveDesvio={doSaveDesvio} doSaveSac={doSaveSac} fornecedores={fornecedores} rncPrefill={rncPrefill} setRncPrefill={setRncPrefill} />}
+              {tab==="sac"          && perm("verSAC") && <SacTab view="lista" user={user} toast_={toast_} setTab={setTab} atendimentos={sacAtendimentos} rncs={rncs} doSaveSac={doSaveSac} doDeleteSac={doDeleteSac} perm={perm} isAdmin={isAdmin} setRncPrefill={setRncPrefill} abrirRnc={abrirRnc} />}
+              {tab==="indicadores-sac" && perm("verSAC") && <SacTab view="indicadores" atendimentos={sacAtendimentos} />}
+              {tab==="novo-sac"     && perm("registrarSAC") && <SacTab view="novo" user={user} toast_={toast_} setTab={setTab} doSaveSac={doSaveSac} />}
               {tab==="desvios"      && perm("verDesvios") && <DesviosTab view="lista" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
               {tab==="novo-desvio"  && perm("criarDesvio") && <DesviosTab view="novo" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
               {tab==="indicadores-desvios" && perm("verDesvios") && <DesviosTab view="indicadores" user={user} toast_={toast_} setTab={setTab} desvios={desvios} doSaveDesvio={doSaveDesvio} doDeleteDesvio={doDeleteDesvio} perm={perm} setRncPrefill={setRncPrefill} isAdmin={isAdmin} catalogoTiposDesvio={catalogoTiposDesvio} catalogoSetoresDesvio={catalogoSetoresDesvio} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} />}
@@ -960,7 +991,7 @@ export default function App() {
         {/* ── MODO APRESENTAÇÃO ── */}
         {presentationMode && (
           <div style={{ position:"fixed", inset:0, zIndex:9999, background:T.bg }}>
-            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} onClose={() => setPresentationMode(false)} />
+            <ExecutivoDashboard user={user} rncs={rncs} fornecedores={fornecedores} desvios={desvios} sac={perm("verSAC") ? sacAtendimentos : null} onClose={() => setPresentationMode(false)} />
           </div>
         )}
 

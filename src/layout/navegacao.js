@@ -11,7 +11,7 @@
  * Os grupos do menu, já filtrados pelo perfil de quem está logado.
  * Mesma lista que a barra lateral sempre teve, sem alteração de conteúdo.
  */
-export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmin = false, perm = () => true } = {}) {
+export function montarGrupos({ rncs = [], desvios = [], sac = [], isViewer = false, isAdmin = false, perm = () => true } = {}) {
   const grupos = [
     { id:"principal", icon:"📋", label:"RNCs", items:[
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
@@ -23,6 +23,12 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       ...(!isViewer?[{ id:"novo-desvio", icon:"➕", label:"Novo Desvio" }]:[]),
       { id:"indicadores-desvios", icon:"📊", label:"Indicadores" },
     ]},
+    // SAC tem dado pessoal do consumidor: só aparece para quem tem verSAC.
+    ...(perm("verSAC") ? [{ id:"sac-grupo", icon:"📞", label:"SAC", items:[
+      { id:"sac", icon:"📋", label:"Atendimentos", badge: sac.filter(x=>x.status==="Aberto").length },
+      ...(perm("registrarSAC") ? [{ id:"novo-sac", icon:"➕", label:"Novo Atendimento" }] : []),
+      { id:"indicadores-sac", icon:"📊", label:"Indicadores do SAC" },
+    ]}] : []),
     ...(!isViewer?[{ id:"qualidade", icon:"🔬", label:"Ferramentas da Qualidade", items:[
       { id:"ishikawa", icon:"🐟", label:"Análise de causa" },
       { id:"5w2h",     icon:"📋", label:"CAPA" },
@@ -78,7 +84,7 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
 export const ABAS_TOPO = [
   { id:"inicio",      label:"Início",      grupos:[],                        home:true },
   { id:"rncs",        label:"RNCs",        grupos:["principal","qualidade"] },
-  { id:"desvios",     label:"Desvios",     grupos:["desvios-grupo"] },
+  { id:"desvios",     label:"Desvios e SAC", grupos:["desvios-grupo","sac-grupo"] },
   { id:"qualidade",   label:"Qualidade",   grupos:["cq"] },
   { id:"producao",    label:"Produção",    grupos:["producao"] },
   { id:"documentos",  label:"Documentos",  grupos:["gestao"] },

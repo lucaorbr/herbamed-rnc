@@ -94,13 +94,13 @@ function BuscaTelas({ telas, setTab, T }) {
   );
 }
 
-export function TopNav({ tab, setTab, rncs = [], desvios = [], isViewer, isAdmin, perm = () => true }) {
+export function TopNav({ tab, setTab, rncs = [], desvios = [], sac = [], isViewer, isAdmin, perm = () => true }) {
   const T = useTheme();
   const formal = useFormal();
 
   const grupos = useMemo(
-    () => montarGrupos({ rncs, desvios, isViewer, isAdmin, perm }),
-    [rncs, desvios, isViewer, isAdmin, perm]
+    () => montarGrupos({ rncs, desvios, sac, isViewer, isAdmin, perm }),
+    [rncs, desvios, sac, isViewer, isAdmin, perm]
   );
   const abas = useMemo(() => montarAbas(grupos), [grupos]);
   const telasBusca = useMemo(() => telasParaBusca(grupos), [grupos]);

@@ -394,11 +394,12 @@ export function openCOA(coa) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
+export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, doSaveSac, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
   const modoPrazo = f.modoPrazo || "definicao";
   const [origemDesvio, setOrigemDesvio] = useState(null);
+  const [origemSac, setOrigemSac] = useState(null);
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
@@ -415,6 +416,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       produto: rncPrefill.produto || "",
       fornecedor: rncPrefill.fornecedor || "",
       lote: rncPrefill.lote || "",
+      nf: rncPrefill.nf || p.nf,
       detector: rncPrefill.detector || "",
       setor: rncPrefill.setor || p.setor,
       sev: rncPrefill.sev || p.sev,
@@ -423,6 +425,11 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       origemAnalise: rncPrefill.origemAnalise || "",
     }));
     if (rncPrefill.origemDesvioDoc) setOrigemDesvio(rncPrefill.origemDesvioDoc);
+    if (rncPrefill.origemSacDoc) {
+      setOrigemSac(rncPrefill.origemSacDoc);
+      // Fotos e nota fiscal do consumidor já são evidência da RNC.
+      if (rncPrefill.origemSacDoc.anexos?.length) setAnexos(rncPrefill.origemSacDoc.anexos);
+    }
     setIshikawa(p => ({ ...p, whys: ["", "", "", "", ""] }));
     if (setRncPrefill) setRncPrefill(null);
   }, [rncPrefill]);
@@ -465,7 +472,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
   const finalizarSalvar = async (assinaturaElaborador) => {
     try {
-      const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+      const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, origemSac: origemSac?.id || null, origemSacNum: origemSac?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
       if (modoPrazo === "definicao") {
         draft.prazoAC = "";
         draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
@@ -477,6 +484,17 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
         await doSaveDesvio({ ...origemDesvio, status: "Convertido em RNC", convertidoPor: user.name, convertidoEm: tod(), rncId: rnc.id, rncNum: rnc.num,
           historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
         setOrigemDesvio(null);
+      }
+      // Atendimento do SAC: só ganha o vínculo — continua aberto, porque o
+      // consumidor ainda precisa de resposta, e a RNC segue o próprio fluxo.
+      if (origemSac && doSaveSac) {
+        try {
+          await doSaveSac({ ...origemSac, rncId: rnc.id, rncNum: rnc.num,
+            historico: [...(origemSac.historico || []), { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: `RNC aberta: ${rnc.num}`, resp: user.name }] });
+        } catch (e) {
+          toast_(`${rnc.num} registrada, mas o vínculo com ${origemSac.num} falhou: ${e.message}`, "red");
+        }
+        setOrigemSac(null);
       }
       toast_(`${rnc.num} registrada!`, "green");
       openEmail(rnc, "abertura");

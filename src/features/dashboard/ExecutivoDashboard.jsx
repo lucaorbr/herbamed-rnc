@@ -8,9 +8,10 @@ import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
 import { rncAtiva, taxaEficaciaRNC } from "../../core/status";
 import { ultimosMeses } from "../../shared/periodoLogic";
+import { prazoSac } from "../sac/sacLogic";
 import { HerbamedLogo } from "../../shared/ui";
 
-export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onClose }) {
+export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], sac = null, onClose }) {
   const T = useTheme();
   const [docs, setDocs] = useState([]);
   const [clock, setClock] = useState(new Date());
@@ -43,10 +44,15 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   const desviosConvertidos = desvios.filter(d => d.status === "Convertido em RNC").length;
   const taxaDesvioRNC     = desvios.length > 0 ? Math.round(desviosConvertidos / desvios.length * 100) : null;
 
+  // SAC — só para quem pode ler os atendimentos (sac === null esconde o card).
+  const sacAbertos  = (sac || []).filter(a => a.status !== "Finalizado");
+  const sacEventos  = sacAbertos.filter(a => a.classificacao === "Reação adversa" || a.teveReacao === "Sim").length;
+  const sacAtrasados = sacAbertos.filter(a => prazoSac(a)?.atrasado).length;
+
   // Semáforo geral
   const situacao = rncsCriticas > 0 || rncsVencidas > 3
     ? { cor: "#ff4f6a", label: "Atenção Requerida", icon: "🔴" }
-    : rncsVencidas > 0 || rncsAbertas > 5 || desviosAbertos > 5
+    : rncsVencidas > 0 || rncsAbertas > 5 || desviosAbertos > 5 || sacEventos > 0
     ? { cor: "#ffd166", label: "Monitoramento", icon: "🟡" }
     : { cor: "#2ab84a", label: "Sob Controle", icon: "🟢" };
 
@@ -193,6 +199,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
           <KpiCard icon="⏰" label="Prazos Vencidos"  value={rncsVencidas}  color={rncsVencidas > 0 ? C.orange : C.accent}  sub="Ações corretivas em atraso"    alert={rncsVencidas > 0} />
           <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz de ${encerradas} encerrada(s) · ${ineficaz} ineficaz`} />
           <KpiCard icon="⚠️" label="Desvios em Aberto" value={desviosAbertos} color={desviosAbertos > 0 ? "#4fc3f7" : C.accent} sub={`${desvios.length} total${taxaDesvioRNC !== null ? ` · ${taxaDesvioRNC}% viraram RNC` : ""}`} alert={desviosAbertos > 5} />
+          {sac && <KpiCard icon="📞" label="SAC em Aberto" value={sacAbertos.length} color={sacEventos > 0 ? "#ff4f6a" : sacAbertos.length > 0 ? "#4fc3f7" : C.accent} sub={sacEventos > 0 ? `🚨 ${sacEventos} com reação relatada` : `${sacAtrasados} atrasado(s) · meta 7 dias`} alert={sacEventos > 0 || sacAtrasados > 0} />}
           <KpiCard icon="🗂️" label="Docs Vigentes"   value={docsVigentes}  color={C.accent}                                sub={`${docsVencendo > 0 ? `⚠ ${docsVencendo} vencendo em 30d` : "Revisões em dia"}`} alert={docsVencendo > 0} />
         </div>
 

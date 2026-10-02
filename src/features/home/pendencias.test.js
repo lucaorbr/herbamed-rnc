@@ -1,7 +1,7 @@
 import {
   montarPendencias, ordenarPendencias, resumoPendencias, URGENCIA,
   pendenciasDeRNC, pendenciasDeDesvio, pendenciasDeLaudo, pendenciasDeIPC,
-  pendenciasDeTreinamento, pendenciasDeDocumento,
+  pendenciasDeTreinamento, pendenciasDeDocumento, pendenciasDeSac,
 } from "./pendencias";
 
 const HOJE = "2026-08-17";
@@ -243,5 +243,25 @@ describe("montarPendencias", () => {
 
   it("resume o que a tela mostra no cabeçalho", () => {
     expect(resumoPendencias(montarPendencias(ctx))).toEqual({ total: 6, criticas: 2, minhas: 3 });
+  });
+});
+
+describe("pendenciasDeSac", () => {
+  const sac = [
+    { id: 1, num: "SAC-2026-0001", status: "Em aberto", dataContato: "2026-08-15", produto: "Ômega 3", lote: "L1" },
+    { id: 2, num: "SAC-2026-0002", status: "Em andamento", dataContato: "2026-08-01" },
+    { id: 3, num: "SAC-2026-0003", status: "Em aberto", dataContato: "2026-08-16", teveReacao: "Sim" },
+    { id: 4, num: "SAC-2026-0004", status: "Finalizado", dataContato: "2026-01-01" },
+  ];
+  it("só aparece para quem trata o SAC", () => {
+    expect(pendenciasDeSac({ sac, hoje: HOJE })).toEqual([]);
+  });
+  it("traz os abertos; atraso e reação viram crítico", () => {
+    const p = pendenciasDeSac({ sac, hoje: HOJE, podeTratarSac: true });
+    expect(p.map(x => x.id)).toEqual(["sac-1", "sac-2", "sac-3"]);
+    expect(p[0]).toMatchObject({ urgencia: URGENCIA.ATENCAO, dias: 2, tab: "sac", detalhe: "Ômega 3 · lote L1" });
+    expect(p[1].urgencia).toBe(URGENCIA.CRITICO);
+    expect(p[2].urgencia).toBe(URGENCIA.CRITICO);
+    expect(p[2].titulo).toContain("reação relatada");
   });
 });

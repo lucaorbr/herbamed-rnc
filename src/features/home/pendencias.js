@@ -70,6 +70,27 @@ export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PAD
     });
 }
 
+/**
+ * Atendimento do SAC em aberto — só para quem trata (a Qualidade). Reação relatada
+ * ou prazo de resposta estourado sobem para crítico. Mesma meta e mesma data de
+ * referência do SAC (`prazoSac` em sacLogic), para as duas telas concordarem.
+ */
+export function pendenciasDeSac({ sac = [], hoje, meta = META_TRIAGEM_PADRAO, podeTratarSac = false }) {
+  if (!podeTratarSac) return [];
+  return (sac || [])
+    .filter(a => a && a.status !== "Finalizado")
+    .map(a => {
+      const dias = diasEntre(a.dataContato || a.dataRegistro, hoje);
+      const reacao = a.teveReacao === "Sim";
+      return item({
+        id: `sac-${a.id}`, fonte: "sac", tab: "sac",
+        titulo: `${a.num || "SAC"} — ${a.status === "Em aberto" ? "aguardando atendimento" : "responder e finalizar"}${reacao ? " · reação relatada" : ""}`,
+        detalhe: [a.produto, a.lote && `lote ${a.lote}`].filter(Boolean).join(" · "),
+        dias, urgencia: reacao || dias > meta ? URGENCIA.CRITICO : URGENCIA.ATENCAO,
+      });
+    });
+}
+
 /** Laudo emitido esperando a assinatura do RT — só aparece para quem assina. */
 export function pendenciasDeLaudo({ laudos = [], podeAssinar = false }) {
   if (!podeAssinar) return [];
@@ -145,6 +166,7 @@ export function montarPendencias(ctx = {}) {
   return ordenarPendencias([
     ...pendenciasDeRNC(ctx),
     ...pendenciasDeDesvio(ctx),
+    ...pendenciasDeSac(ctx),
     ...pendenciasDeLaudo(ctx),
     ...pendenciasDeIPC(ctx),
     ...pendenciasDeTreinamento(ctx),
