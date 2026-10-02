@@ -19,7 +19,7 @@ import {
 } from "./distribuicao";
 import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
-import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo } from "./tiposDoc";
+import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo, codigoSegueTipo } from "./tiposDoc";
 import { ConfiguracaoDocumentosTab } from "./ConfiguracaoDocumentosTab";
 
 // Reexportados para não quebrar quem já importava daqui.
@@ -681,7 +681,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       return;
     }
     const id  = sel ? sel.id : Date.now();
-    const codigo = sel ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs, form.versao);
+    // Em rascunho que nunca vigorou, trocar o tipo troca o código (FO-… → ANX-…).
+    const trocaCodigo = codigoSegueTipo(sel, form.tipo);
+    const codigo = sel && !trocaCodigo ? sel.codigo : gerarCodigoGD(form.tipo, form.depto, docs.filter(d => d.id !== sel?.id), form.versao);
     const proximaRevisao = sel?.proximaRevisao || calcProximaRevisaoGD(tod(), prazoRevisaoTipo(form.tipo, tiposRevisao, catalogoTipos));
     let status = sel?.status || "Rascunho";
     if (!docArquivo && sel && sel.status === "Em Revisão") {
@@ -713,7 +715,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     await saveCollection("gestao_docs", String(id), doc);
     const acaoLog = !sel ? "Criou Documento" : invalidarAssinaturas ? "Editou Documento (assinaturas invalidadas)" : "Editou Documento";
     await auditLog(acaoLog, "gestao_docs", id, `${codigo} — ${form.titulo}`, sel || null, doc);
-    toast_(sel ? (invalidarAssinaturas ? `${codigo} atualizado — assinaturas invalidadas, voltou para Rascunho.` : `${codigo} atualizado!`) : `${codigo} criado!`, "green");
+    if (trocaCodigo) await auditLog("Alterou código do documento (troca de tipo)", "gestao_docs", id, `${sel.codigo} → ${codigo}`, { codigo: sel.codigo, tipo: sel.tipo }, { codigo, tipo: form.tipo });
+    toast_(sel ? (trocaCodigo ? `Código alterado: ${sel.codigo} → ${codigo}.` : invalidarAssinaturas ? `${codigo} atualizado — assinaturas invalidadas, voltou para Rascunho.` : `${codigo} atualizado!`) : `${codigo} criado!`, "green");
     setSel(doc); setView("detalhe");
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -2615,6 +2618,9 @@ ${docHtml.slice(0,9000)}`}]})
           })()}
           <F lbl="Título do documento" ch={<Inp placeholder="Ex: Procedimento de Análise Microbiológica" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
           {!sel && form.tipo && form.depto && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.accent,marginTop:4}}>💡 Código: <strong>{gerarCodigoGD(form.tipo,form.depto,docs,form.versao)}</strong></div>}
+          {sel && form.tipo && form.depto && (codigoSegueTipo(sel, form.tipo)
+            ? <div style={{background:`${T.orange}18`,border:`1px solid ${T.orange}40`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.orange,marginTop:4}}>🔁 Ao salvar, o código muda de <strong>{sel.codigo}</strong> para <strong>{gerarCodigoGD(form.tipo,form.depto,docs.filter(d=>d.id!==sel.id),form.versao)}</strong> (rascunho que nunca vigorou).</div>
+            : sel.tipo !== form.tipo && <div style={{background:T.accentDim,border:`1px solid ${T.accent}25`,borderRadius:8,padding:"8px 12px",fontSize:12,color:T.text2,marginTop:4}}>ℹ️ O código <strong>{sel.codigo}</strong> é mantido: só muda junto com o tipo em rascunho que nunca vigorou.</div>)}
           {/* A exigência de treinamento deixou de ser um checkbox aqui: ela é
               configurada por CARGO na seção Treinamento do documento, onde dá
               para escolher modo, cargos e prazo. */}
