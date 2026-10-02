@@ -74,3 +74,18 @@ export function prazoRevisaoTipo(tipoId, tiposRevisaoCfg, catalogoTipos = []) {
   const tipo = TIPOS_DOC_GD.find(t => t.id === tipoId);
   return tipo?.prazoRevisaoAnos ?? 3;
 }
+
+/**
+ * Ao editar, o código do documento acompanha a troca de tipo?
+ *
+ * Só em Rascunho que nunca vigorou: o código ainda não circulou (não há cópia
+ * impressa, treinamento nem documento citando-o). Documento com revisão
+ * anterior no histórico já teve um código em uso — mesmo que uma recusa o
+ * tenha devolvido a Rascunho — e esse código não pode mudar.
+ */
+export function codigoSegueTipo(docAtual, tipoNovo) {
+  if (!docAtual || !tipoNovo) return false;
+  if (docAtual.status !== "Rascunho") return false;
+  if ((docAtual.historicoRevisoes || []).length > 0) return false;
+  return docAtual.tipo !== tipoNovo;
+}
