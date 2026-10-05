@@ -134,12 +134,44 @@ export function Badge({ s: status }) {
 
 export function SevB({ s }) { return <span style={{ display: "inline-flex", padding: "2px 9px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: SEVMETA[s]?.bg, color: SEVMETA[s]?.c, border: `1px solid ${SEVMETA[s]?.c}22` }}>{s}</span>; }
 
-export function Toast({ msg, color, onDone }) {
+// Aviso no canto da tela. Com `acao` (ex.: "Notificar responsáveis") vira um
+// cartão de confirmação: fica mais tempo, pausa com o mouse em cima e tem ✕.
+// A ação é oferecida, nunca disparada sozinha — salvar termina no salvar.
+export function Toast({ msg, color, detalhe, acao, onDone }) {
   const T = useTheme();
-  const cols = { green: [T.accent, T.accentDim, T.accentGlow], red: ["#ff4f6a", "#ff4f6a18", "#ff4f6a30"], blue: [T.blue, "#4fc3f718", "#4fc3f730"] };
+  const cols = { green: [T.accent, T.accentDim, T.accentGlow], red: ["#ff4f6a", "#ff4f6a18", "#ff4f6a30"], yellow: [T.yellow, `${T.yellow}18`, `${T.yellow}40`], blue: [T.blue, "#4fc3f718", "#4fc3f730"] };
   const [c, bg, border] = cols[color] || cols.blue;
-  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, []);
-  return <div style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", background: bg, color: c, border: `1px solid ${border}`, borderRadius: 14, padding: "12px 20px", fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 8px 32px #0008", fontFamily: "inherit", maxWidth: 340 }}>✓ {msg}</div>;
+  const icone = { green: "✓", red: "✕", yellow: "!" }[color] || "i";
+  const [pausado, setPausado] = useState(false);
+  useEffect(() => {
+    if (pausado) return;
+    const t = setTimeout(onDone, acao ? 8000 : 3000);
+    return () => clearTimeout(t);
+  }, [pausado]);
+  if (!acao && !detalhe) {
+    return <div role="status" style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", background: bg, color: c, border: `1px solid ${border}`, borderRadius: 14, padding: "12px 20px", fontSize: 13, fontWeight: 500, zIndex: 9999, boxShadow: "0 8px 32px #0008", fontFamily: "inherit", maxWidth: 340 }}>{icone} {msg}</div>;
+  }
+  return (
+    <div role="status" onMouseEnter={() => setPausado(true)} onMouseLeave={() => setPausado(false)}
+      style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", background: T.card, color: T.text, border: `1px solid ${border}`, borderLeft: `4px solid ${c}`, borderRadius: 14, padding: "14px 16px", fontSize: 13, zIndex: 9999, boxShadow: "0 8px 32px #0006", fontFamily: "inherit", width: 340, maxWidth: "calc(100vw - 2rem)" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: "50%", background: bg, color: c, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13 }}>{icone}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, color: c }}>{msg}</div>
+          {detalhe && <div style={{ fontSize: 11, color: T.text3, marginTop: 3 }}>{detalhe}</div>}
+        </div>
+        <button onClick={onDone} aria-label="Fechar aviso" style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+      </div>
+      {acao && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+          <button onClick={() => { onDone(); acao.onClick(); }}
+            style={{ background: "transparent", color: c, border: `1px solid ${c}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            {acao.rotulo}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function HerbamedLogo({ height = 32, white = false }) {

@@ -416,7 +416,8 @@ export default function App() {
     };
   }, [user?.uid]);
 
-  const toast_ = useCallback((msg, color = "green") => setToast({ msg, color, key: Date.now() }), []);
+  // extra: { detalhe, acao: { rotulo, onClick } } — ver Toast em shared/ui.jsx.
+  const toast_ = useCallback((msg, color = "green", extra = {}) => setToast({ msg, color, ...extra, key: Date.now() }), []);
 
   // ── Auditoria ────────────────────────────────────────────────────────────
   const auditLog = useCallback(async (acao, colecao, docId, docNome, dadosAntes = null, dadosDepois = null) => {
@@ -935,7 +936,7 @@ export default function App() {
         </div>
 
         {emailCtx && <EmailModal rnc={emailCtx.rnc} users={users} evento={emailCtx.evento} onClose={() => setEmailCtx(null)} onSent={msg => { toast_(msg, "green"); setEmailCtx(null); }} />}
-        {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} onDone={() => setToast(null)} />}
+        {toast && <Toast key={toast.key} msg={toast.msg} color={toast.color} detalhe={toast.detalhe} acao={toast.acao} onDone={() => setToast(null)} />}
         <AtualizacaoDisponivel />
         <AutocorrectNotice />
 
