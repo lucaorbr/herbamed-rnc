@@ -5,6 +5,7 @@ import { useS } from "../../shared/styles";
 import { AnexosUpload } from "../../shared/AnexosUpload";
 import { F, Inp, SecTitle, SevB, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
+import { ofertaNotificar } from "../email/ofertaNotificar";
 import { acaoRemovivel, contagemCapa, errosDasAcoesCapa, filaCapa, patchSalvarCapa } from "./ferramentasLogic";
 
 // Etapa 4 da ficha da RNC (onda 4): o plano CAPA editado DENTRO da RNC — ações,
@@ -72,8 +73,7 @@ Responda APENAS em JSON sem markdown:
     setSalvando(true);
     try {
       await gravar(patch);
-      toast_("Plano CAPA salvo.", "green");
-      openEmail({ ...r, ...patch }, "5w2h");
+      toast_("Plano CAPA salvo.", "green", ofertaNotificar({ ...r, ...patch }, "5w2h", openEmail));
     } catch { /* doUpdateRNC já avisou */ }
     setSalvando(false);
   };

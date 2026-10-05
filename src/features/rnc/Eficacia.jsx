@@ -5,6 +5,7 @@ import { useS } from "../../shared/styles";
 import { AnexosUpload } from "../../shared/AnexosUpload";
 import { F, G2, Inp, SecTitle, SevB, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
+import { ofertaNotificar } from "../email/ofertaNotificar";
 import { filaEficacia, patchEficacia, travaEficacia } from "./ferramentasLogic";
 
 // Etapa 5 da ficha da RNC (onda 5): verificação de eficácia e encerramento editados
@@ -69,8 +70,7 @@ Responda APENAS em JSON sem markdown:
     setSalvando(true);
     try {
       await gravar(patch);
-      toast_(fecha ? `RNC encerrada como ${f.resultado}.` : "Verificação agendada.", "green");
-      openEmail({ ...r, ...patch }, "eficacia");
+      toast_(fecha ? `RNC encerrada como ${f.resultado}.` : "Verificação agendada.", "green", ofertaNotificar({ ...r, ...patch }, "eficacia", openEmail));
     } catch { /* doUpdateRNC já avisou */ }
     setSalvando(false);
   };

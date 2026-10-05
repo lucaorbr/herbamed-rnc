@@ -15,6 +15,7 @@ import { AnaliseCausaEditor } from "./AnaliseCausa";
 import { Investigacao } from "./Investigacao";
 import { PlanoCapaEditor } from "./PlanoCapa";
 import { EficaciaEditor } from "./Eficacia";
+import { ofertaNotificar } from "../email/ofertaNotificar";
 import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
@@ -70,8 +71,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     const h = { data: tod(), hora: agoraHora(), acao: `Status alterado -> ${status}`, resp: user.name, tipo: "status" };
     const historico = [...(r.historico || []), h];
     await gravar({ status, historico });
-    toast_("Status atualizado!", "green");
-    openEmail({ ...r, status, historico }, "status");
+    toast_(`Status atualizado para ${status}.`, "green", ofertaNotificar({ ...r, status, historico }, "status", openEmail));
   };
 
   const assinarRT = async () => {

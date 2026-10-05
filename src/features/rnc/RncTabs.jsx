@@ -22,6 +22,7 @@ import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { rncTemMaterial } from "./ferramentasLogic";
 import { EspiadaRnc } from "./EspiadaRnc";
+import { ofertaNotificar } from "../email/ofertaNotificar";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -478,8 +479,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
           historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
         setOrigemDesvio(null);
       }
-      toast_(`${rnc.num} registrada!`, "green");
-      openEmail(rnc, "abertura");
+      toast_(`${rnc.num} registrada.`, "green", ofertaNotificar(rnc, "abertura", openEmail));
       setTab("lista");
     } catch(e) {
       toast_(fbErr(e), "red");

@@ -5,6 +5,7 @@ import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle, SevB, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
 import { andamentoPatch } from "./RncTabs";
+import { ofertaNotificar } from "../email/ofertaNotificar";
 import { MIN_PORQUES, filaAnaliseCausa, partirDaRespostaFornecedor, porquesPreenchidos, resumoAnaliseCausa } from "./ferramentasLogic";
 
 // Etapa 3 da ficha da RNC (onda 3): Ishikawa (opcional) + 5 Porquês (obrigatório, mín. 3)
@@ -115,8 +116,7 @@ Responda APENAS em JSON sem markdown:
     try {
       await gravar(patch);
       setUsouFornecedor(false);
-      toast_(completa ? "Análise de causa salva — plano CAPA liberado." : "Análise salva como rascunho.", "green");
-      openEmail({ ...r, ...patch }, "ishikawa");
+      toast_(completa ? "Análise de causa salva — plano CAPA liberado." : "Análise salva como rascunho.", "green", ofertaNotificar({ ...r, ...patch }, "ishikawa", openEmail));
     } catch { /* doUpdateRNC já avisou */ }
     setSalvando(false);
   };
