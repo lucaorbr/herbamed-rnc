@@ -14,6 +14,7 @@ import { dataIso, filtrarPorPeriodo, mesesDoPeriodo, resolverPeriodo } from "../
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 import { BuscaFornecedor } from "./BuscaFornecedor";
 import { sugestoesDoMaterial } from "./fornecedorBuscaLogic";
+import { conformidadeDaTecla, proximaParada, resumoResultados } from "./lancamentoLogic";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
 // (fichas) quanto pelas análises. Só o miolo muda entre os dois; o "rosto" (faixa
@@ -1403,6 +1404,35 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
     setMatSel(null); setResultados([]); setMultiplosState({});
   };
 
+  // Lançamento pelo teclado: Enter anda para a próxima parada (valor → conformidade → próximo
+  // ensaio), Shift+Enter volta; na conformidade, C/N marcam e já avançam. Depois do último
+  // ensaio o foco vai para o Salvar.
+  const [paradaFoco, setParadaFoco] = useState(null);
+  const focarParada = (p) => {
+    const alvo = p ? `${p.idx}-${p.campo}` : "salvar";
+    const el = document.querySelector(`[data-cq-parada="${alvo}"]`);
+    if (el) { el.focus(); if (el.select) el.select(); }
+  };
+  const andar = (e, idx, campo) => {
+    const passo = e.shiftKey ? -1 : 1;
+    const prox = proximaParada(resultados, idx, campo, passo);
+    if (!prox && passo < 0) return;
+    focarParada(prox);
+  };
+  const teclaNoValor = (e, idx) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    andar(e, idx, "res");
+  };
+  const teclaNaConformidade = (e, idx) => {
+    if (e.key === "Enter") { e.preventDefault(); andar(e, idx, "conf"); return; }
+    const v = conformidadeDaTecla(e.key);
+    if (v === undefined || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    updRes(resultados[idx].id, "conforme", v);
+    if (v !== null) focarParada(proximaParada(resultados, idx, "conf", 1));
+  };
+
   const salvar = async () => {
     try {
     if(!matSel) { alert("Selecione o material."); return; }
@@ -1669,6 +1699,9 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
         {/* Resultados */}
         <div style={s.card}>
           <SecTitle icon="🔬" ch={`Resultados — ${matSel.nome}`} />
+          <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
+            ⌨️ Pelo teclado: digite o valor e <strong>Enter</strong> · na conformidade, <strong>C</strong> conforme, <strong>N</strong> não conforme (já vai para o próximo ensaio) · <strong>Shift+Enter</strong> volta
+          </div>
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead><tr style={{ background:T.surf }}>
@@ -1678,7 +1711,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
               </tr></thead>
               <tbody>
                 {resultados.map((r,i)=>(
-                  <tr key={r.id} style={{ background:i%2===0?T.card:T.surf, borderLeft: r.conforme===false?"3px solid #ff4f6a":r.conforme===true?"3px solid #2ab84a":"3px solid transparent" }}>
+                  <tr key={r.id} style={{ background: paradaFoco?.startsWith(`${i}-`) ? T.accentDim : i%2===0?T.card:T.surf, borderLeft: r.conforme===false?"3px solid #ff4f6a":r.conforme===true?"3px solid #2ab84a":"3px solid transparent" }}>
                     <td style={{ padding:"8px 10px", fontSize:12, fontWeight:600, color:T.text, whiteSpace:"nowrap" }}>{r.nome}</td>
                     <td style={{ padding:"8px 10px", fontSize:11, color:T.text2 }}>{r.espec||"—"}</td>
                     <td style={{ padding:"8px 8px" }}>
@@ -1688,7 +1721,8 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                           <button onClick={()=>updRes(r.id,"conforme",false)} style={{ flex:1, padding:"5px", borderRadius:6, border:`1px solid ${r.conforme===false?"#ff4f6a55":T.border}`, background:r.conforme===false?"#ff4f6a22":"transparent", color:r.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗ N.C.</button>
                         </div>
                       ) : r.tipo==="texto" ? (
-                        <Inp placeholder="Resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:110 }}/>
+                        <Inp placeholder="Resultado..." value={r.resultado} onChange={e=>updRes(r.id,"resultado",e.target.value)} sx={{ padding:"5px 8px", fontSize:12, width:110 }}
+                          data-cq-parada={`${i}-res`} onKeyDown={e=>teclaNoValor(e,i)} onFocus={()=>setParadaFoco(`${i}-res`)} onBlur={()=>setParadaFoco(null)}/>
                       ) : (
                         <div>
                           <div style={{ display:"flex", gap:4, alignItems:"center" }}>
@@ -1696,7 +1730,10 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                               placeholder={`0,${"0".repeat(r.casas||2)}`}
                               value={r.resultado}
                               onChange={e=>updRes(r.id,"resultado",e.target.value)}
-                              onBlur={e=>{ if(e.target.value) updRes(r.id,"resultado",fmtNum(e.target.value,r.casas||2)); }}
+                              data-cq-parada={`${i}-res`}
+                              onKeyDown={e=>teclaNoValor(e,i)}
+                              onFocus={()=>setParadaFoco(`${i}-res`)}
+                              onBlur={e=>{ setParadaFoco(null); if(e.target.value) updRes(r.id,"resultado",fmtNum(e.target.value,r.casas||2)); }}
                               sx={{ padding:"5px 8px", fontSize:12, width:80 }}
                             />
                             {r.multiplos && (
@@ -1745,10 +1782,13 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                     <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.unidade||"—"}</td>
                     <td style={{ padding:"8px 8px", fontSize:11, color:T.text3 }}>{r.ref||"—"}</td>
                     <td style={{ padding:"8px 8px" }}>
-                      <div style={{ display:"flex", gap:4 }}>
-                        <button onClick={()=>updRes(r.id,"conforme",true)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===true?"#2ab84a55":T.border}`, background:r.conforme===true?"#2ab84a22":"transparent", color:r.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓</button>
-                        <button onClick={()=>updRes(r.id,"conforme",false)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===false?"#ff4f6a55":T.border}`, background:r.conforme===false?"#ff4f6a22":"transparent", color:r.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗</button>
-                        <button onClick={()=>updRes(r.id,"conforme",null)} style={{ padding:"4px 6px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>—</button>
+                      <div tabIndex={0} data-cq-parada={`${i}-conf`} onKeyDown={e=>teclaNaConformidade(e,i)}
+                        onFocus={()=>setParadaFoco(`${i}-conf`)} onBlur={()=>setParadaFoco(null)}
+                        title="C = conforme · N = não conforme · Enter = próximo"
+                        style={{ display:"inline-flex", gap:4, padding:2, borderRadius:8, outline:"none", boxShadow: paradaFoco===`${i}-conf` ? `0 0 0 2px ${T.accent}` : "none" }}>
+                        <button tabIndex={-1} onClick={()=>updRes(r.id,"conforme",true)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===true?"#2ab84a55":T.border}`, background:r.conforme===true?"#2ab84a22":"transparent", color:r.conforme===true?"#2ab84a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✓</button>
+                        <button tabIndex={-1} onClick={()=>updRes(r.id,"conforme",false)} style={{ padding:"4px 8px", borderRadius:6, border:`1px solid ${r.conforme===false?"#ff4f6a55":T.border}`, background:r.conforme===false?"#ff4f6a22":"transparent", color:r.conforme===false?"#ff4f6a":T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:600 }}>✗</button>
+                        <button tabIndex={-1} onClick={()=>updRes(r.id,"conforme",null)} style={{ padding:"4px 6px", borderRadius:6, border:`1px solid ${T.border}`, background:"transparent", color:T.text3, cursor:"pointer", fontFamily:"inherit", fontSize:10 }}>—</button>
                       </div>
                     </td>
                     <td style={{ padding:"8px 8px" }}>
@@ -1789,10 +1829,26 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
 
         <F lbl="Observações gerais" ch={<TA rows={2} value={form.obs} onChange={e=>setF("obs",e.target.value)} placeholder="Observações sobre o recebimento ou análise..." />} />
 
-        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem", marginTop:"1rem" }}>
-          <button style={s.btn} onClick={()=>{ if(modo==="modal"){ setModalLancar(false); } else { setView("lista"); setSelAnalise(null); } }}>Cancelar</button>
-          <button style={s.btnA} onClick={salvar}>💾 Salvar análise →</button>
-        </div>
+        {/* Barra fixa: resumo do lançamento e Salvar sempre à vista, sem rolar até o fim. */}
+        {(() => {
+          const rs = resumoResultados(resultados);
+          const chip = (txt, cor) => <span style={{ fontSize:11, fontWeight:700, color:cor, background:`${cor}18`, padding:"3px 9px", borderRadius:20, whiteSpace:"nowrap" }}>{txt}</span>;
+          return (
+            <div style={{ position:"sticky", bottom:0, zIndex:20, marginTop:"1rem", display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", padding:"10px 14px", background:T.card, border:`1px solid ${T.border}`, borderRadius:12, boxShadow:"0 -6px 18px rgba(0,0,0,.10)" }}>
+              <div style={{ flex:1, minWidth:160 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>📦 {matSel.nome}</div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:4 }}>
+                  {chip(`${rs.lancados}/${rs.total} lançados`, T.accent)}
+                  {rs.conformes>0 && chip(`✓ ${rs.conformes} conforme${rs.conformes!==1?"s":""}`, "#2ab84a")}
+                  {rs.naoConformes>0 && chip(`✗ ${rs.naoConformes} N.C.`, "#ff4f6a")}
+                  {rs.pendentes>0 && chip(`${rs.pendentes} sem resultado`, T.text3)}
+                </div>
+              </div>
+              <button style={s.btn} onClick={()=>{ if(modo==="modal"){ setModalLancar(false); } else { setView("lista"); setSelAnalise(null); } }}>Cancelar</button>
+              <button style={s.btnA} data-cq-parada="salvar" onClick={salvar}>💾 Salvar análise →</button>
+            </div>
+          );
+        })()}
       </>}
     </div>
   );
