@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { UNIDADES_RECEBIMENTO, fmt, fmtQtd, parseQtd, seloAssHTML, tod } from "../../core/utils";
@@ -12,6 +12,8 @@ import { TableSkeleton, CardGridSkeleton } from "../../shared/Skeleton";
 import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
 import { dataIso, filtrarPorPeriodo, mesesDoPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
+import { BuscaFornecedor } from "./BuscaFornecedor";
+import { sugestoesDoMaterial } from "./fornecedorBuscaLogic";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
 // (fichas) quanto pelas análises. Só o miolo muda entre os dois; o "rosto" (faixa
@@ -389,11 +391,9 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
             <F lbl="Fornecedor" ch={
-              <Sel value={form.fornecedor} onChange={e=>setF("fornecedor",e.target.value)}>
-                <option value="">Selecionar...</option>
-                {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
-                <option value="__outro">Outro (digitar)</option>
-              </Sel>
+              <BuscaFornecedor value={form.fornecedor} onChange={v=>setF("fornecedor",v)}
+                fornecedores={fornecedores.filter(x=>x.status==="Ativo")}
+                extras={[{ value:"__outro", label:"Outro (digitar)" }]} />
             }/>
             {form.fornecedor==="__outro" && <F lbl="Nome do fornecedor" ch={<Inp value={form.fornecedorManual||""} onChange={e=>setF("fornecedorManual",e.target.value)} />} />}
             <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
@@ -1198,11 +1198,9 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
             }/>
           )}
           <F lbl="Fornecedor padrão" ch={
-            <Sel value={form.fornecedorPadrao} onChange={e=>setF("fornecedorPadrao",e.target.value)}>
-              <option value="">Selecionar...</option>
-              {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
-              <option value="Vários">Vários fornecedores</option>
-            </Sel>
+            <BuscaFornecedor value={form.fornecedorPadrao} onChange={v=>setF("fornecedorPadrao",v)}
+              fornecedores={fornecedores.filter(x=>x.status==="Ativo")}
+              extras={[{ value:"Vários", label:"Vários fornecedores" }]} />
           }/>
           <F lbl="Referência / Especificação interna" ch={<Inp placeholder="Ex: EI-MP-001, Farmacopeia Brasileira" value={form.ref} onChange={e=>setF("ref",e.target.value)} />} />
         </div>
@@ -1294,11 +1292,9 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {fichasTecnicas.map(f=>(
               <div key={f.id} style={{ display:"grid", gridTemplateColumns:"1fr 1fr auto auto", gap:8, alignItems:"center", background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 10px" }}>
-                <Sel value={f.fornecedorNome} onChange={e=>updLinhaFicha(f.id,"fornecedorNome",e.target.value)} sx={{ fontSize:12 }}>
-                  <option value="">Selecionar fornecedor...</option>
-                  {fornecedores.filter(x=>x.status==="Ativo").map(forn=><option key={forn.id} value={forn.nome}>{forn.nome}</option>)}
-                  <option value="Outro">Outro</option>
-                </Sel>
+                <BuscaFornecedor value={f.fornecedorNome} onChange={v=>updLinhaFicha(f.id,"fornecedorNome",v)}
+                  fornecedores={fornecedores.filter(x=>x.status==="Ativo")}
+                  extras={[{ value:"Outro", label:"Outro" }]} />
                 {f.url ? (
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <span style={{ fontSize:12, color:T.accent, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={f.nome}>📎 {f.nome}</span>
@@ -1350,6 +1346,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
   const [coa, setCoa] = useState(null);
   const [coaUploading, setCoaUploading] = useState(false);
   const [modalLancar, setModalLancar] = useState(false);
+  const topoFormRef = useRef(null);
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(()=>{
@@ -1395,6 +1392,16 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
   };
 
   const getNCs = () => resultados.filter(r => r.conforme === false);
+
+  const fornecedoresAtivos = fornecedores.filter(x=>x.status==="Ativo");
+  const sugestoesForn = sugestoesDoMaterial(matSel, analises, fornecedoresAtivos);
+
+  // Trocar de material refaz a lista de ensaios: o que já foi lançado se perde, então pergunta antes.
+  const trocarMaterial = () => {
+    const lancados = resultados.some(r => r.resultado !== "" || r.conforme !== null || r.obs);
+    if (lancados && !window.confirm("Trocar o material descarta os resultados já lançados. Continuar?")) return;
+    setMatSel(null); setResultados([]); setMultiplosState({});
+  };
 
   const salvar = async () => {
     try {
@@ -1563,7 +1570,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
 
   // ── NOVA ANÁLISE ──
   const renderNovaForm = (modo="page") => (
-    <div>
+    <div ref={modo==="page" ? topoFormRef : undefined}>
       {modo==="page" && (
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
         <button style={s.btn} onClick={()=>{ setView("lista"); setSelAnalise(null); }}>← Voltar</button>
@@ -1571,7 +1578,20 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
       </div>
       )}
 
-      {modo==="page" && (<>
+      {modo==="page" && matSel && (
+        // Material escolhido: a grade recolhe numa faixa e o formulário sobe para o topo.
+        <div style={{ ...s.card, display:"flex", alignItems:"center", gap:12, padding:"10px 14px", borderColor:T.accent+"55", background:T.accentDim }}>
+          <span style={{ fontSize:20 }}>📦</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:10, fontWeight:700, color:T.text3, textTransform:"uppercase", letterSpacing:".05em" }}>Material</div>
+            <div style={{ fontSize:14, fontWeight:700, color:T.accent, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{matSel.nome}</div>
+            <div style={{ fontSize:11, color:T.text2 }}>{[matSel.tipo, `${matSel.ensaios?.length||0} ensaios`].filter(Boolean).join(" · ")}</div>
+          </div>
+          <button style={s.btn} onClick={trocarMaterial}>↺ Trocar material</button>
+        </div>
+      )}
+
+      {modo==="page" && !matSel && (<>
       {/* Seleção do material */}
       <div style={s.card}>
         <SecTitle icon="📦" ch="Selecionar material" />
@@ -1605,7 +1625,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
               {termo && <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{matFiltrados.length} resultado{matFiltrados.length!==1?"s":""} para "{buscaMat}"</div>}
               <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
                 {matFiltrados.map(m=>(
-                  <div key={m.id} onClick={()=>selecionarMaterial(m)} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
+                  <div key={m.id} onClick={()=>{ selecionarMaterial(m); topoFormRef.current?.scrollIntoView({ block:"start" }); }} style={{ padding:"12px", background: matSel?.id===m.id?T.accentDim:T.surf, border:`1px solid ${matSel?.id===m.id?T.accent+"55":T.border}`, borderRadius:10, cursor:"pointer", transition:"all .15s" }}>
                     <div style={{ fontSize:13, fontWeight:600, color:matSel?.id===m.id?T.accent:T.text }}>{m.nome}</div>
                     <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{m.tipo}</div>
                     <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>{m.ensaios?.length||0} ensaios</div>
@@ -1625,11 +1645,10 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
           <SecTitle icon="🚚" ch="Dados do recebimento" />
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
             <F lbl="Fornecedor" ch={
-              <Sel value={form.fornecedor} onChange={e=>setF("fornecedor",e.target.value)}>
-                <option value="">Selecionar...</option>
-                {fornecedores.filter(x=>x.status==="Ativo").map(f=><option key={f.id} value={f.nome}>{f.nome}</option>)}
-                <option value="Outro">Outro</option>
-              </Sel>
+              <BuscaFornecedor value={form.fornecedor} onChange={v=>setF("fornecedor",v)}
+                fornecedores={fornecedoresAtivos}
+                sugestoes={sugestoesForn}
+                extras={[{ value:"Outro", label:"Outro" }]} />
             }/>
             <F lbl="Nº do lote" ch={<Inp placeholder="Ex: LOT-2026-001" value={form.lote} onChange={e=>setF("lote",e.target.value)} />} />
             <F lbl="Qtd. recebida" ch={
