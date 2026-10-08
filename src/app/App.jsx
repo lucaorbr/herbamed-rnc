@@ -43,7 +43,7 @@ import { FilaEficacia } from "../features/rnc/Eficacia";
 const faixaBtn = { background:"transparent", border:"1px solid rgba(243,247,241,.22)", borderRadius:8, color:MARCA.claro, cursor:"pointer", width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"inherit" };
 import { AtualizacaoDisponivel } from "../shared/AtualizacaoDisponivel";
 import { AutocorrectNotice } from "../shared/AutocorrectNotice";
-import { handleAutocorrectUndo, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
+import { handleAutocorrectUndo, handleWritingBlur, handleWritingInput, prepareAutocorrectField } from "../services/autocorrect";
 import { TrocarSenhaModal } from "../features/profile/TrocarSenhaModal";
 
 // Code-splitting por aba (onda 10) — Desvios, CQ e Gestão de Documentos só
@@ -113,10 +113,12 @@ export default function App() {
     document.addEventListener("focusin", prepareAutocorrectField, true);
     document.addEventListener("input", handleWritingInput, true);
     document.addEventListener("keydown", handleAutocorrectUndo, true);
+    document.addEventListener("focusout", handleWritingBlur, true);
     return () => {
       document.removeEventListener("focusin", prepareAutocorrectField, true);
       document.removeEventListener("input", handleWritingInput, true);
       document.removeEventListener("keydown", handleAutocorrectUndo, true);
+      document.removeEventListener("focusout", handleWritingBlur, true);
     };
   }, []);
 

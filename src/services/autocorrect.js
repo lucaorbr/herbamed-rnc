@@ -204,6 +204,81 @@ export const getAutocorrection = word => {
   return correction ? preserveCase(word, correction) : getFuzzyCorrection(word);
 };
 
+// Operadores: trocam assim que o segundo caractere é digitado, porque é comum
+// escrever colado ao número ("<=5"), sem espaço que sirva de fim de palavra.
+const OPERADORES = Object.freeze([
+  ["+/-", "±"],
+  ["<=", "≤"],
+  [">=", "≥"],
+  ["!=", "≠"],
+  ["~=", "≈"],
+  ["+-", "±"],
+]);
+
+// Unidades: só trocam com o termo inteiro, em minúsculas, logo depois de número,
+// espaço, "/" ou "(" — e só quando o termo termina (espaço, pontuação ou saída
+// do campo). Assim "LM3", "M2" (máquina) ou "PRO-m3" nunca são mexidos.
+const UNIDADES = Object.freeze({
+  cm2: "cm²", cm3: "cm³",
+  mm2: "mm²", mm3: "mm³",
+  m2: "m²", m3: "m³",
+  dm3: "dm³",
+  ug: "µg",
+  ul: "µL", uL: "µL",
+});
+const UNIDADE_FIM = /(^|[\d\s/(])(cm[23]|mm[23]|m[23]|dm3|ug|ul|uL)$/;
+// Graus: só colado ao número ("25oC"), senão "oC" vira coisa em texto comum.
+const GRAUS_FIM = /(\d)(oC)$/;
+
+/** Troca de operador terminada exatamente na posição do cursor. */
+export const autocorrectOperator = (value, cursor) => {
+  if (!value || !cursor) return null;
+  const antes = value.slice(0, cursor);
+  const par = OPERADORES.find(([de]) => antes.endsWith(de));
+  if (!par) return null;
+  const [original, correction] = par;
+  const start = cursor - original.length;
+  return {
+    value: value.slice(0, start) + correction + value.slice(cursor),
+    cursor: start + correction.length,
+    original,
+    correction,
+  };
+};
+
+/** Unidade que termina em `fim` (posição logo após o termo). */
+const unidadeAntesDe = (value, fim) => {
+  const trecho = value.slice(0, fim);
+  const graus = trecho.match(GRAUS_FIM);
+  if (graus) return { original: graus[2], correction: "°C" };
+  const unidade = trecho.match(UNIDADE_FIM);
+  if (unidade) return { original: unidade[2], correction: UNIDADES[unidade[2]] };
+  return null;
+};
+
+const trocarUnidade = (value, fim, cursor) => {
+  const achou = unidadeAntesDe(value, fim);
+  if (!achou) return null;
+  const start = fim - achou.original.length;
+  return {
+    value: value.slice(0, start) + achou.correction + value.slice(fim),
+    cursor: cursor + achou.correction.length - achou.original.length,
+    ...achou,
+  };
+};
+
+/** Unidade fechada pelo delimitador recém-digitado. */
+export const autocorrectCompletedUnit = (value, cursor) => {
+  if (!value || !cursor || !COMPLETION_CHAR.test(value[cursor - 1])) return null;
+  return trocarUnidade(value, cursor - 1, cursor);
+};
+
+/** Unidade no fim do campo, ao sair dele — o último termo não tem delimitador depois. */
+export const autocorrectTrailingUnit = value => {
+  if (!value) return null;
+  return trocarUnidade(value, value.length, value.length);
+};
+
 export const autocorrectCompletedWord = (value, cursor) => {
   if (!value || !cursor || !COMPLETION_CHAR.test(value[cursor - 1])) return null;
   const beforeDelimiter = value.slice(0, cursor - 1);
@@ -272,7 +347,9 @@ export const handleWritingInput = event => {
 
   const before = element.value;
   const cursor = element.selectionStart;
-  const result = autocorrectCompletedWord(before, cursor);
+  const result = autocorrectOperator(before, cursor)
+    || autocorrectCompletedUnit(before, cursor)
+    || autocorrectCompletedWord(before, cursor);
   if (!result) {
     capitalizeWithNativeValue(element);
     return;
@@ -282,6 +359,17 @@ export const handleWritingInput = event => {
   element.setSelectionRange?.(result.cursor, result.cursor);
   capitalizeWithNativeValue(element);
   correctionHistory.set(element, { before, after: element.value, cursor });
+  announceCorrection(element, { original: result.original, correction: result.correction });
+};
+
+export const handleWritingBlur = event => {
+  const element = event?.target;
+  if (!isAutocorrectField(element)) return;
+  const result = autocorrectTrailingUnit(element.value);
+  if (!result) return;
+  setNativeValue(element, result.value);
+  // Avisa o React do valor novo; o handler de input não mexe porque o fim não é delimitador.
+  element.dispatchEvent(new Event("input", { bubbles: true }));
   announceCorrection(element, { original: result.original, correction: result.correction });
 };
 
