@@ -70,3 +70,14 @@ export function sugestoesDoMaterial(material, analises, fornecedores) {
 
   return saida;
 }
+
+// Ao sair do campo com texto digitado e sem ter escolhido na lista: escolhe sozinho quando
+// não há dúvida — nome exato (sem acento/caixa) ou uma única opção restante. Havendo mais de
+// uma, devolve null e o campo avisa, em vez de apagar o que foi digitado.
+export function escolhaAoSair(opcoes, termo) {
+  const t = normalizarBusca(termo);
+  if (!t) return null;
+  const exata = (opcoes || []).find(o => normalizarBusca(o.label) === t);
+  if (exata) return exata;
+  return (opcoes || []).length === 1 ? opcoes[0] : null;
+}

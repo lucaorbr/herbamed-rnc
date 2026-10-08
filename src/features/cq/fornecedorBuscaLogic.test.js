@@ -1,4 +1,4 @@
-import { casaFornecedor, filtrarFornecedores, normalizarBusca, sugestoesDoMaterial } from "./fornecedorBuscaLogic";
+import { casaFornecedor, escolhaAoSair, filtrarFornecedores, normalizarBusca, sugestoesDoMaterial } from "./fornecedorBuscaLogic";
 
 const FORN = [
   { id: 1, nome: "Distribuidora Brasil Ltda", cnpj: "12.345.678/0001-90" },
@@ -71,4 +71,18 @@ describe("sugestoesDoMaterial", () => {
 
 test("normalizarBusca", () => {
   expect(normalizarBusca("  Química ")).toBe("quimica");
+});
+
+describe("escolha ao sair do campo", () => {
+  const ops = [{ value: "Brasil Química Ltda", label: "Brasil Química Ltda" }, { value: "Brasil Embalagens", label: "Brasil Embalagens" }];
+  test("nome exato escolhe, mesmo com outras opções", () => {
+    expect(escolhaAoSair(ops, "brasil quimica ltda")?.value).toBe("Brasil Química Ltda");
+  });
+  test("uma opção só escolhe; várias não", () => {
+    expect(escolhaAoSair([ops[1]], "emb")?.value).toBe("Brasil Embalagens");
+    expect(escolhaAoSair(ops, "brasil")).toBeNull();
+  });
+  test("sem texto não escolhe nada", () => {
+    expect(escolhaAoSair([ops[0]], "  ")).toBeNull();
+  });
 });
