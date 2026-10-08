@@ -1171,7 +1171,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       </Sel>} />
       <F lbl="Tempo de retenção (anos)" ch={
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <Inp type="number" min="1" max="100" step="1" disabled={f.indeterminado} value={f.indeterminado?"":f.retencaoAnos} onChange={e=>setCr("retencaoAnos",e.target.value)} style={{width:90}} />
+          <Inp type="number" min="1" max="100" step="1" disabled={f.indeterminado} value={f.indeterminado?"":f.retencaoAnos} onChange={e=>setCr("retencaoAnos",e.target.value)} sx={{width:90}} />
           <label style={{fontSize:12,color:T.text2,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
             <input type="checkbox" checked={!!f.indeterminado} onChange={e=>setCr("indeterminado",e.target.checked)} /> Indeterminado
           </label>
