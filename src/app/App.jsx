@@ -150,11 +150,14 @@ export default function App() {
     window.addEventListener("popstate", aoVoltar);
     return () => window.removeEventListener("popstate", aoVoltar);
   }, []);
-  const abrirRnc = useCallback((id, etapa = "resumo") => { setFicha({ rnc: id, etapa }); setTab("rnc"); }, []);
+  const abrirRnc = useCallback((id, etapa = "resumo") => { setFicha({ rnc: id, etapa, doc: null }); setTab("rnc"); }, []);
+  // Documento aberto (?aba=gestao-docs&doc=<id>): notificação do sino e pendências abrem direto nele.
+  const abrirDoc = useCallback(id => { setFicha({ rnc: null, etapa: "resumo", doc: String(id) }); setTab("gestao-docs"); }, []);
+  const setDocAberto = useCallback(id => setFicha(p => ((p.doc || null) === (id || null) ? p : { ...p, doc: id || null })), []);
   // Trocar de tela ou de RNC começa no topo: a área de conteúdo é o que rola, e sem
   // isto a ficha abria herdando a rolagem da lista (cabeçalho da RNC fora da vista).
   const areaConteudo = useRef(null);
-  useEffect(() => { if (areaConteudo.current) areaConteudo.current.scrollTop = 0; }, [tab, ficha.rnc]);
+  useEffect(() => { if (areaConteudo.current) areaConteudo.current.scrollTop = 0; }, [tab, ficha.rnc, ficha.doc]);
   const setEtapaFicha = useCallback(etapa => setFicha(p => ({ ...p, etapa })), []);
   // Saiu (manual ou por inatividade) → a próxima entrada começa na Home. A tela de
   // login é desenhada dentro do App, sem recarregar a página, então sem isto a `tab`
@@ -768,7 +771,8 @@ export default function App() {
                       ))}
                       {docNotifsUnread.map(n=>(
                         <div key={`doc-${n.id}`} onClick={async ()=>{
-                          setTab("gestao-docs"); setNotifOpen(false);
+                          if (n.doc_id) abrirDoc(n.doc_id); else setTab("gestao-docs");
+                          setNotifOpen(false);
                           setDocNotifs(prev => prev.map(x => x.id===n.id ? { ...x, lida:true } : x));
                           await markNotificationsRead([n.id]);
                         }} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
@@ -895,7 +899,7 @@ export default function App() {
                   propósito: quem volta para a lateral volta inteiro. */}
               <Suspense fallback={<AbaCarregando />}>
               {tab==="home" && (navTopo
-                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} perm={perm} docNotifs={docNotifs}
+                ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} abrirDoc={abrirDoc} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
                 : <HomeTab rncs={rncs} user={user} setTab={setTab} />)}
               {tab==="lista"      && <ListaTab rncs={rncs} isViewer={isViewer} abrirRnc={abrirRnc} />}
@@ -927,7 +931,7 @@ export default function App() {
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} />}
+              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} docAberto={ficha.doc} onDocAberto={setDocAberto} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}

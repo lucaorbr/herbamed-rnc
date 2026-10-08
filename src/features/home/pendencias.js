@@ -120,7 +120,7 @@ export function pendenciasDeTreinamento({ pendentesTreino = [] }) {
  */
 export function pendenciasDeLeitura({ leiturasPendentes = [] }) {
   return (leiturasPendentes || []).map(p => item({
-    id: `leitura-${p.doc?.id}`, fonte: "documento", tab: "gestao-docs", minha: true,
+    id: `leitura-${p.doc?.id}`, fonte: "documento", tab: "gestao-docs", docId: p.doc?.id, minha: true,
     titulo: `${p.doc?.codigo || "Documento"} — leitura pendente (Rev.${p.doc?.versao || ""})`,
     detalhe: p.doc?.titulo || "",
     dias: p.dias || 0,
@@ -143,7 +143,7 @@ export function pendenciasDeDocumento({ docNotifs = [], hoje }) {
   return (docNotifs || [])
     .filter(n => n && !n.lida)
     .map(n => item({
-      id: `doc-${n.id}`, fonte: "documento", tab: "gestao-docs", minha: true,
+      id: `doc-${n.id}`, fonte: "documento", tab: "gestao-docs", docId: n.doc_id || null, minha: true,
       titulo: n.titulo || "Documento",
       detalhe: n.mensagem || "",
       dias: n.criada_em ? diasEntre(n.criada_em, hoje) : 0,
