@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.19.0`
+- Versão atual: `3.20.0`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
