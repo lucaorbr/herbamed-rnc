@@ -114,6 +114,30 @@ export function pendenciasDeTreinamento({ pendentesTreino = [] }) {
   }));
 }
 
+/**
+ * Documento distribuído para mim e ainda não lido nesta versão. Recebe o
+ * resultado de `leiturasPendentesDoUsuario` (distribuicaoEletronica.js).
+ */
+export function pendenciasDeLeitura({ leiturasPendentes = [] }) {
+  return (leiturasPendentes || []).map(p => item({
+    id: `leitura-${p.doc?.id}`, fonte: "documento", tab: "gestao-docs", minha: true,
+    titulo: `${p.doc?.codigo || "Documento"} — leitura pendente (Rev.${p.doc?.versao || ""})`,
+    detalhe: p.doc?.titulo || "",
+    dias: p.dias || 0,
+  }));
+}
+
+/** Documentos aprovados sem destinatários — só para quem pode distribuir. */
+export function pendenciasDeDistribuicao({ docsSemDistribuicao = [] }) {
+  const lista = docsSemDistribuicao || [];
+  if (!lista.length) return [];
+  return [item({
+    id: "docs-sem-distribuicao", fonte: "documento", tab: "gestao-docs",
+    titulo: `${lista.length} documento(s) aprovado(s) sem distribuição definida`,
+    detalhe: lista.slice(0, 4).map(d => d.codigo).join(", ") + (lista.length > 4 ? "…" : ""),
+  })];
+}
+
 /** Notificações de documento endereçadas a mim (rota de assinatura, vigência…). */
 export function pendenciasDeDocumento({ docNotifs = [], hoje }) {
   return (docNotifs || [])
@@ -148,6 +172,8 @@ export function montarPendencias(ctx = {}) {
     ...pendenciasDeLaudo(ctx),
     ...pendenciasDeIPC(ctx),
     ...pendenciasDeTreinamento(ctx),
+    ...pendenciasDeLeitura(ctx),
+    ...pendenciasDeDistribuicao(ctx),
     ...pendenciasDeDocumento(ctx),
   ]);
 }

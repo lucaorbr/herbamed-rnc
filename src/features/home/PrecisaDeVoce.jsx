@@ -5,6 +5,8 @@ import { rncAtiva, taxaEficaciaRNC } from "../../core/status";
 import { tod } from "../../core/utils";
 import { getCollection, subscribeCollection } from "../../firebase";
 import { pendentesDoUsuario } from "../documentos/treinamento";
+import { leiturasPendentesDoUsuario, semDistribuicao } from "../documentos/distribuicaoEletronica";
+import { MATRIZ_TREINAMENTO_ATIVA } from "../../config/funcionalidades";
 import { montarPendencias, resumoPendencias, URGENCIA } from "./pendencias";
 
 // Tela inicial da repaginação — onda 2.
@@ -83,6 +85,9 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
   const [laudos, setLaudos] = useState([]);
   const [ipc, setIpc] = useState([]);
   const [pendentesTreino, setPendentesTreino] = useState([]);
+  const [leiturasPendentes, setLeiturasPendentes] = useState([]);
+  const [docsSemDistribuicao, setDocsSemDistribuicao] = useState([]);
+  const podeDistribuir = user?.role === "admin" || perm("iniciarRevisao");
 
   useEffect(() => {
     const u1 = subscribeCollection("laudos", list => setLaudos(list || []));
@@ -99,17 +104,19 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
       try {
         const [docs, evid] = await Promise.all([getCollection("gestao_docs"), getCollection("treinamentos")]);
         if (!vivo) return;
-        setPendentesTreino(pendentesDoUsuario({
+        if (MATRIZ_TREINAMENTO_ATIVA) setPendentesTreino(pendentesDoUsuario({
           docs: docs || [], pessoas: colaboradores, evidencias: evid || [],
           catalogoCargos, catalogoAreas, userId: String(user.uid), hoje,
         }));
+        setLeiturasPendentes(leiturasPendentesDoUsuario({ docs: docs || [], evidencias: evid || [], userId: String(user.uid), hoje }));
+        setDocsSemDistribuicao(podeDistribuir ? (docs || []).filter(semDistribuicao) : []);
       } catch { /* a tela vive sem isto; não pode quebrar o login */ }
     })();
     return () => { vivo = false; };
-  }, [user?.uid, colaboradores, catalogoCargos, catalogoAreas, hoje]);
+  }, [user?.uid, colaboradores, catalogoCargos, catalogoAreas, hoje, podeDistribuir]);
 
   const pendencias = useMemo(() => montarPendencias({
-    rncs, desvios, laudos, ipc, docNotifs, pendentesTreino,
+    rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, leiturasPendentes, docsSemDistribuicao,
     // ⚠️ Quem assina laudo como RT é `isRT && criarLaudos` (regra do LaudosTab).
     // Aqui havia `perm("assinarLaudo") || perm("verLaudos")`: "assinarLaudo" não
     // existe em permissions.js, então o `||` caía em `verLaudos` — que é true até
@@ -121,7 +128,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
     // uma tela em branco sem explicação.
     podeVerDesvios: perm("verDesvios"),
     hoje,
-  }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, user?.name, user?.role, perm, hoje]);
+  }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, leiturasPendentes, docsSemDistribuicao, user?.name, user?.role, perm, hoje]);
 
   const resumo = resumoPendencias(pendencias);
   const [verTudo, setVerTudo] = useState(false);
@@ -154,7 +161,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
             <span style={{ fontSize:22 }}>✅</span>
             <div>
               <div style={{ fontSize:13, fontWeight:600, color:T.text }}>Nenhuma pendência</div>
-              <div style={{ fontSize:11, color:T.text3 }}>Sem prazo vencido, desvio parado ou treinamento em atraso.</div>
+              <div style={{ fontSize:11, color:T.text3 }}>Sem prazo vencido, desvio parado ou leitura pendente.</div>
             </div>
           </div>
         ) : (

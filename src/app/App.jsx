@@ -4,6 +4,7 @@ import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { rncAtiva } from "../core/status";
 import { pendentesDoUsuario } from "../features/documentos/treinamento";
+import { MATRIZ_TREINAMENTO_ATIVA } from "../config/funcionalidades";
 import { AdminTab } from "../features/admin/AdminTab";
 import { ArecoRecebimentosTab } from "../features/areco/ArecoRecebimentosTab";
 import { AuditLogTab } from "../features/audit/AuditLogTab";
@@ -367,7 +368,7 @@ export default function App() {
   // Busca one-shot (não assina): o alerta não precisa ser tempo real, e assim
   // não duplica o polling que a aba de Documentos já faz.
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!MATRIZ_TREINAMENTO_ATIVA || !user?.uid) return;
     const hoje = tod();
     if (localStorage.getItem("hm_last_alert_treino") === hoje) return;
     let vivo = true;

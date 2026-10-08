@@ -21,6 +21,12 @@ import { sessoesDoDocumento } from "./sessoes";
 import { cargosAtivos } from "../admin/cargos";
 import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo, codigoSegueTipo } from "./tiposDoc";
 import { ConfiguracaoDocumentosTab } from "./ConfiguracaoDocumentosTab";
+import { MATRIZ_TREINAMENTO_ATIVA } from "../../config/funcionalidades";
+import {
+  comDestinatarios, destinatariosDoDoc, evidenciaDeLeitura, leiturasPendentesDoUsuario,
+  podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
+} from "./distribuicaoEletronica";
+import { enviarEmail } from "../email/enviarEmail";
 
 // Reexportados para não quebrar quem já importava daqui.
 export { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo };
@@ -467,6 +473,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [evidencias, setEvidencias] = useState([]);
   const [sessoes, setSessoes] = useState([]);
   const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
+  const [modalDestinatarios, setModalDestinatarios] = useState(null); // { doc, ids:Set, busca }
   const [novaEvid, setNovaEvid] = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
@@ -698,7 +705,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       invalidarAssinaturas = true;
       status = "Rascunho";
     }
+    // Parte do registro salvo: o PUT substitui o documento inteiro, e sem isto a
+    // edição apagava o que não está no formulário (cópias a recolher, distribuição,
+    // treinamento, apontamentos da recusa).
     const doc = {
+      ...(sel || {}),
       id, codigo, ...form, status, proximaRevisao,
       arquivo: docArquivo || sel?.arquivo || null,
       arquivoFonte: docArquivoFonte || sel?.arquivoFonte || null,
@@ -792,7 +803,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           // vem do cargo e é configurada na seção Treinamento do documento — se
           // ainda não houver cargos vinculados, a seção avisa em vez de exigir
           // que alguém monte uma lista de nomes a cada revisão.
-          if (!agendado && !docFinal.treinamento?.exigido) {
+          if (MATRIZ_TREINAMENTO_ATIVA && !agendado && !docFinal.treinamento?.exigido) {
             setEditTreino({ exigido:true, modo:"leitura", cargos:[], pessoasExtra:[], prazoDias:PRAZO_TREINAMENTO_PADRAO, reciclagemMeses:"" });
           }
         },
@@ -1121,6 +1132,59 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
 
+  // ── Distribuição eletrônica ───────────────────────────────────────────────
+  const salvarDestinatarios = async (doc, ids) => {
+    try {
+      const { doc: updated, incluidos, removidos } = comDestinatarios(doc, [...ids], users, { por: user?.name || "", hoje: tod() });
+      if (!incluidos.length && !removidos.length) { setModalDestinatarios(null); return; }
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Definiu distribuição eletrônica", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`,
+        { destinatarios: destinatariosDoDoc(doc).map(d => d.nome) },
+        { destinatarios: destinatariosDoDoc(updated).map(d => d.nome), incluidos: incluidos.map(d => d.nome), removidos: removidos.map(d => d.nome) });
+      setSel(updated); setModalDestinatarios(null);
+      const comEmail = incluidos.filter(d => d.email);
+      const avisar = updated.status === "Vigente" && comEmail.length > 0;
+      toast_(
+        `Distribuição salva: ${destinatariosDoDoc(updated).length} destinatário(s).`, "green",
+        avisar ? {
+          detalhe: `${incluidos.length} incluído(s)${removidos.length ? ` · ${removidos.length} removido(s)` : ""}`,
+          acao: { rotulo: `✉️ Avisar ${comEmail.length} por e-mail`, onClick: () => avisarDestinatarios(updated, comEmail) },
+        } : {},
+      );
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
+  };
+
+  const avisarDestinatarios = (doc, destinatarios) => {
+    enviarEmail({
+      para: destinatarios.map(d => d.email),
+      assunto: `📄 SGQ Herbamed — leitura do documento ${doc.codigo} Rev.${doc.versao}`,
+      corpo: `Olá,
+
+O documento abaixo foi distribuído para você e precisa da sua leitura:
+
+• ${doc.codigo} — ${doc.titulo} (Rev.${doc.versao})
+
+Acesse o SGQ → Gestão de Documentos, abra o documento e confirme em "Li e entendi".
+
+Herbamed® · Sistema de Gestão da Qualidade`,
+      evento: "distribuicao_documento",
+      entidade: { tipo: "gestao_docs", id: String(doc.id) },
+      nomes: Object.fromEntries(destinatarios.map(d => [d.email, d.nome])),
+    })
+      .then(() => toast_(`E-mail enviado para ${destinatarios.length} destinatário(s).`, "green"))
+      .catch(e => toast_(`E-mail não enviado: ${e.message}`, "red"));
+  };
+
+  const confirmarLeituraDistribuicao = async (doc) => {
+    try {
+      const ev = evidenciaDeLeitura(doc, user, tod());
+      await saveCollection("treinamentos", ev.id, ev);
+      setEvidencias(prev => [...prev, ev]);
+      await auditLog("Confirmou leitura (distribuição)", "treinamentos", ev.id,
+        `${doc.codigo} Rev.${doc.versao} — ${user?.name || ""}`, null, { docId: doc.id, versao: doc.versao, modo: "leitura" });
+      toast_(`Leitura confirmada — ${doc.codigo} Rev.${doc.versao}.`, "green");
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
+  };
 
   const gerarComIA = async () => {
     if (!form.titulo || !form.tipo) { alert("Preencha título e tipo antes de usar a IA."); return; }
@@ -1405,6 +1469,30 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             {isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0) && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir</button>}
           </div>
         </div>
+        {(()=>{
+          // Destinatário com leitura pendente desta versão: confirma aqui, ao abrir.
+          const meuId = String(user?.uid || user?.id || "");
+          const pendente = leiturasPendentesDoUsuario({ docs:[d], evidencias, userId:meuId, hoje:tod() })[0];
+          if (!pendente) return null;
+          return (
+            <div style={{background:`${T.blue||"#4fc3f7"}14`,border:`1px solid ${T.blue||"#4fc3f7"}55`,borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <span style={{fontSize:20}}>📨</span>
+              <div style={{flex:1,minWidth:220}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.text}}>Este documento foi distribuído para você — Rev.{d.versao}</div>
+                <div style={{fontSize:11,color:T.text2,marginTop:2}}>
+                  Leia o documento e confirme a leitura.{pendente.dias>0 ? ` Pendente há ${pendente.dias} dia(s).` : ""}
+                </div>
+              </div>
+              <button style={{...s.btnA,fontSize:12}} onClick={()=>confirmarLeituraDistribuicao(d)}>✅ Li e entendi</button>
+            </div>
+          );
+        })()}
+        {podeDistribuir && semDistribuicao(d) && (
+          <div style={{background:"#e8a33d18",border:"1px solid #e8a33d55",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <span style={{fontSize:12,color:"#c27c0e",fontWeight:600,flex:1,minWidth:220}}>📨 Documento aprovado e ainda sem distribuição — defina quem deve ler.</span>
+            <button style={{...s.btnA,fontSize:11}} onClick={()=>setModalDestinatarios({ doc:d, ids:new Set(), busca:"" })}>Definir destinatários</button>
+          </div>
+        )}
         {d.status==="Aguardando Vigência" && d.dataVigencia && (
           <div style={{background:"#a78bfa18",border:"1px solid #a78bfa44",borderRadius:10,padding:"12px 16px",marginBottom:12,fontSize:13,color:"#a78bfa",fontWeight:700,display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:20}}>📅</span>
@@ -1461,7 +1549,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos} />
             <BadgeStatusGD status={d.status} />
-            {(d.treinamento?.exigido || d.treinamentoObrigatorio) && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
+            {MATRIZ_TREINAMENTO_ATIVA && (d.treinamento?.exigido || d.treinamentoObrigatorio) && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
           </div>
         </div>
         {/* ── ARQUIVO OFICIAL ── */}
@@ -1756,6 +1844,60 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             </div>
           </div>
         )}
+        {/* ── DISTRIBUIÇÃO ELETRÔNICA — quem deve ler, e quem já confirmou ── */}
+        {podeDefinirDistribuicao(d) && (()=>{
+          const sit = situacaoDaDistribuicao(d, evidencias, tod());
+          if (!sit.total && !podeDistribuir) return null;
+          const vigente = d.status === "Vigente";
+          return (
+            <div style={s.card}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+                <SecTitle icon="📨" ch="Distribuição eletrônica" />
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  {sit.total>0 && <span style={{fontSize:12,color:T.text2}}>{sit.confirmados}/{sit.total} confirmaram</span>}
+                  {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>setModalDestinatarios({ doc:d, ids:new Set(destinatariosDoDoc(d).map(x=>String(x.userId))), busca:"" })}>
+                    {sit.total ? "✏️ Alterar destinatários" : "+ Definir destinatários"}
+                  </button>}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
+                Quem recebe confirma a leitura da Rev.{d.versao} ao abrir o documento. Nova revisão reabre a leitura para as mesmas pessoas.
+                {!vigente && " A leitura começa quando o documento entrar em vigor."}
+              </div>
+              {sit.total===0 ? (
+                <div style={{fontSize:12,color:T.text3,textAlign:"center",padding:"1rem 0"}}>Nenhum destinatário definido.</div>
+              ) : (
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead>
+                      <tr style={{background:T.surf}}>
+                        {["Destinatário","Setor","Incluído em","Leitura"].map(h=>(
+                          <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sit.linhas.map((l,i)=>(
+                        <tr key={l.userId} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                          <td style={{padding:"7px 10px",color:T.text,fontWeight:600}}>{l.nome}</td>
+                          <td style={{padding:"7px 10px",color:T.text2}}>{l.setor||"—"}</td>
+                          <td style={{padding:"7px 10px",color:T.text2}}>{l.incluidoEm?fmt(l.incluidoEm):"—"}{l.incluidoPor?` · ${l.incluidoPor}`:""}</td>
+                          <td style={{padding:"7px 10px"}}>
+                            {l.confirmado
+                              ? <span style={{color:T.accent,fontWeight:700}}>✓ Confirmou em {new Date(l.confirmadoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</span>
+                              : vigente
+                                ? <span style={{color:"#c27c0e",fontWeight:700}}>⏳ Pendente{l.dias>0?` há ${l.dias} dia(s)`:""}</span>
+                                : <span style={{color:T.text3}}>Aguardando vigência</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* ── DISTRIBUIÇÃO FÍSICA — cópias controladas impressas (só Vigente) ── */}
         {d.status==="Vigente" && (
           <div style={s.card}>
@@ -1903,6 +2045,61 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         )}
         {/* ── ROTA DE ASSINATURA: Elaborador escolhe Revisor e Aprovador ── */}
         {/* ── REGISTRAR CÓPIA FÍSICA ── */}
+        {modalDestinatarios && (()=>{
+          const md = modalDestinatarios;
+          const grupos = usuariosPorSetor(users, md.busca);
+          const alternar = (ids, marcar) => setModalDestinatarios(p => {
+            const novo = new Set(p.ids);
+            ids.forEach(id => marcar ? novo.add(id) : novo.delete(id));
+            return { ...p, ids: novo };
+          });
+          return (
+            <div onClick={()=>setModalDestinatarios(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
+              <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:560,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{fontSize:16,fontWeight:700,color:T.text}}>📨 Destinatários da distribuição</div>
+                  <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDestinatarios(null)}>✕ Fechar</button>
+                </div>
+                <div style={{fontSize:12,color:T.text2,marginBottom:12}}>{md.doc.codigo} · Rev.{md.doc.versao} — marque quem deve ler o documento. Só aparecem pessoas com login no sistema.</div>
+                <input autoFocus placeholder="Buscar por nome, e-mail ou setor…" value={md.busca}
+                  onChange={e=>setModalDestinatarios(p=>({...p,busca:e.target.value}))}
+                  style={{...s.inp,fontSize:13,width:"100%",marginBottom:10}} />
+                <div style={{maxHeight:"50vh",overflowY:"auto",border:`1px solid ${T.border}`,borderRadius:8}}>
+                  {grupos.length===0 && <div style={{fontSize:12,color:T.text3,textAlign:"center",padding:"1rem"}}>Ninguém encontrado.</div>}
+                  {grupos.map(g=>{
+                    const ids = g.usuarios.map(u=>String(u.id));
+                    const todos = ids.every(id=>md.ids.has(id));
+                    return (
+                      <div key={g.setor}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 12px",background:T.surf,borderBottom:`1px solid ${T.border}`,position:"sticky",top:0}}>
+                          <span style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>{g.setor} · {g.usuarios.length}</span>
+                          <button type="button" style={{...s.btn,fontSize:10,padding:"2px 8px"}} onClick={()=>alternar(ids,!todos)}>{todos?"Desmarcar todos":"Marcar todos"}</button>
+                        </div>
+                        {g.usuarios.map(u=>{
+                          const id = String(u.id);
+                          return (
+                            <label key={id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",borderBottom:`1px solid ${T.border}`,cursor:"pointer"}}>
+                              <input type="checkbox" checked={md.ids.has(id)} onChange={e=>alternar([id],e.target.checked)} />
+                              <span style={{flex:1,fontSize:13,color:T.text}}>{u.name}</span>
+                              <span style={{fontSize:11,color:T.text3}}>{u.cargo||u.email}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:14}}>
+                  <span style={{fontSize:12,color:T.text2}}>{md.ids.size} selecionado(s)</span>
+                  <div style={{display:"flex",gap:8}}>
+                    <button style={s.btn} onClick={()=>setModalDestinatarios(null)}>Cancelar</button>
+                    <button style={s.btnA} onClick={()=>salvarDestinatarios(md.doc, md.ids)}>Salvar destinatários</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         {modalDistribuir && (
           <div onClick={()=>setModalDistribuir(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:480,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
@@ -2094,7 +2291,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
             Substitui os dois controles paralelos anteriores (leitura obrigatória
             nominal + subcoleção de treinos). A exigência é DERIVADA do cargo; a
             evidência é gravada por versão do documento. */}
-        {(()=>{
+        {MATRIZ_TREINAMENTO_ATIVA && (()=>{
           const podeGerirTreino = isAdmin || (perm?.("gerenciarTreinamento") ?? false);
           const podeRegistrar   = isAdmin || (perm?.("registrarTreinamento") ?? false);
           const tr = d.treinamento;
@@ -2624,10 +2821,10 @@ ${docHtml.slice(0,9000)}`}]})
           {/* A exigência de treinamento deixou de ser um checkbox aqui: ela é
               configurada por CARGO na seção Treinamento do documento, onde dá
               para escolher modo, cargos e prazo. */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text3}}>
+          {MATRIZ_TREINAMENTO_ATIVA && <div style={{display:"flex",alignItems:"center",gap:10,marginTop:10,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text3}}>
             <span style={{fontSize:16}}>📚</span>
             <span>O treinamento obrigatório é definido por cargo na seção <strong style={{color:T.text2}}>Treinamento</strong>, depois de salvar o documento.</span>
-          </div>
+          </div>}
           <F lbl="Data de vigência (deixe em branco para entrar em vigor no dia da aprovação)"
             ch={<Inp type="date" value={form.dataVigencia||""} onChange={e=>setF("dataVigencia",e.target.value)} />} />
         </div>
@@ -3048,7 +3245,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
         <div style={{display:"flex",gap:8}}>
           <button style={s.btn} onClick={()=>setView("lista-mestra")}>📋 Lista Mestra</button>
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
-          {(()=>{
+          {MATRIZ_TREINAMENTO_ATIVA && (()=>{
             // Badge com as pendências da própria pessoa — a matriz é acionável, não só relatório.
             const meus = pendentesDoUsuario({ docs, pessoas: colaboradores, evidencias, catalogoCargos, catalogoAreas: catalogoAreasSetoresDistribuicao, userId:String(user?.uid||user?.id||""), hoje:tod() });
             return (
@@ -3067,6 +3264,32 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           {!isViewer&&<button style={s.btnA} onClick={()=>{setSel(null);resetForm();setView("novo");}}>+ Novo Documento</button>}
         </div>
       </div>
+      {!loading && (()=>{
+        const minhas = leiturasPendentesDoUsuario({ docs, evidencias, userId:String(user?.uid||user?.id||""), hoje:tod() });
+        const semDist = podeDistribuir ? docs.filter(semDistribuicao) : [];
+        if (!minhas.length && !semDist.length) return null;
+        const chip = (doc, extra) => (
+          <button key={doc.id} type="button" style={{...s.btn,fontSize:11}} onClick={()=>{setSel(doc);setView("detalhe");}}>
+            {doc.codigo}{extra ? ` · ${extra}` : ""}
+          </button>
+        );
+        return (
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+            {minhas.length>0 && (
+              <div style={{background:`${T.blue||"#4fc3f7"}14`,border:`1px solid ${T.blue||"#4fc3f7"}55`,borderRadius:10,padding:"10px 14px"}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:6}}>📨 {minhas.length} documento(s) distribuído(s) para você aguardando leitura</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{minhas.map(m=>chip(m.doc, m.dias>0?`${m.dias}d`:""))}</div>
+              </div>
+            )}
+            {semDist.length>0 && (
+              <div style={{background:"#e8a33d18",border:"1px solid #e8a33d55",borderRadius:10,padding:"10px 14px"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#c27c0e",marginBottom:6}}>📨 {semDist.length} documento(s) aprovado(s) sem distribuição definida</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{semDist.map(doc=>chip(doc))}</div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {loading?(
         <div style={{textAlign:"center",padding:"3rem",color:T.text2}}>Carregando lista mestra...</div>
       ):filtrados.length===0?(
@@ -3090,7 +3313,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               </div>
               <div style={{fontSize:11,color:T.text2,marginTop:2}}>
                 {d.depto} · Rev.{d.versao} · {d.criadoPor} · {fmt(d.criadoEm)}
-                {(d.treinamento?.exigido||d.treinamentoObrigatorio)&&<span style={{marginLeft:8,color:T.blue||"#4fc3f7"}}>📚</span>}
+                {MATRIZ_TREINAMENTO_ATIVA&&(d.treinamento?.exigido||d.treinamentoObrigatorio)&&<span style={{marginLeft:8,color:T.blue||"#4fc3f7"}}>📚</span>}
               </div>
             </div>
             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
