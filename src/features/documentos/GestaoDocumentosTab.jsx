@@ -27,6 +27,10 @@ import {
   podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
 import { enviarEmail } from "../email/enviarEmail";
+import {
+  ARMAZENAMENTOS, DESCARTES, camposDaRegra, errosDaRegra, faltaControleRegistro, geraRegistro, listaControleRegistros, normBusca, novaRegra, regraMudou,
+  regraDoRegistro, resumoControleRegistros, rotuloArmazenamento, rotuloDescarte, textoRetencao,
+} from "./controleRegistros";
 
 // Reexportados para não quebrar quem já importava daqui.
 export { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo };
@@ -475,6 +479,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
   const [modalDestinatarios, setModalDestinatarios] = useState(null); // { doc, ids:Set, busca }
   const [aberturas, setAberturas] = useState([]); // quem abriu qual versão (libera o "Li e entendi")
+  // Controle de registros
+  const [crEdit, setCrEdit] = useState(null); // regra em edição no formulário
+  const [crErros, setCrErros] = useState([]);
+  const [crBusca, setCrBusca] = useState("");
+  const [crDepto, setCrDepto] = useState("todos");
+  const [crSituacao, setCrSituacao] = useState("todos");
+  const [crObsoletos, setCrObsoletos] = useState(false);
   const [novaEvid, setNovaEvid] = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
@@ -546,7 +557,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     objetivo:"", alcance:"", responsabilidades:"", definicoes:"",
     procedimento:"", infComplementares:"N/A", referencias:"", registros:"", anexos:"N/A",
     etapas:[], materiais:[], obs:"", treinamentoObrigatorio:false, proximaRevisao:"",
-    historicoRevisoes:[], dataVigencia:"",
+    historicoRevisoes:[], dataVigencia:"", cr:null,
   });
   const [form, setForm] = useState(() => makeFormVazio());
   const setF = (k,v) => setForm(p => ({...p,[k]:v}));
@@ -693,6 +704,14 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       toast_("Documento Vigente não pode ser editado. Use Nova Revisão.", "red");
       return;
     }
+    // Formulário (FO): o controle de registro é etapa obrigatória do elaborador.
+    const { cr: crForm, ...formDoc } = form;
+    const camposCR = geraRegistro({ tipo: form.tipo }) ? (crForm || camposDaRegra({ tipo: form.tipo, depto: form.depto })) : null;
+    if (camposCR) {
+      const erros = errosDaRegra(camposCR);
+      if (erros.length) { setCrErros(erros); toast_("Preencha o Controle de registro do formulário.", "red"); return; }
+      setCrErros([]);
+    }
     const id  = sel ? sel.id : Date.now();
     // Em rascunho que nunca vigorou, trocar o tipo troca o código (FO-… → ANX-…).
     const trocaCodigo = codigoSegueTipo(sel, form.tipo);
@@ -716,7 +735,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     // treinamento, apontamentos da recusa).
     const doc = {
       ...(sel || {}),
-      id, codigo, ...form, status, proximaRevisao,
+      id, codigo, ...formDoc, status, proximaRevisao,
       arquivo: docArquivo || sel?.arquivo || null,
       arquivoFonte: docArquivoFonte || sel?.arquivoFonte || null,
       criadoEm:  sel?.criadoEm  || tod(),
@@ -728,6 +747,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       assinaturaAprovador:  invalidarAssinaturas ? null : (sel?.assinaturaAprovador  || null),
       rota:                 invalidarAssinaturas ? null : (sel?.rota || null),
       historicoRevisoes:    form.historicoRevisoes?.length ? form.historicoRevisoes : (sel?.historicoRevisoes || []),
+      controleRegistro: camposCR
+        ? (regraMudou(sel?.controleRegistro, camposCR) ? novaRegra(camposCR, { por: user?.name || "", hoje: tod() }) : sel.controleRegistro)
+        : (sel?.controleRegistro || null),
     };
     await saveCollection("gestao_docs", String(id), doc);
     const acaoLog = !sel ? "Criou Documento" : invalidarAssinaturas ? "Editou Documento (assinaturas invalidadas)" : "Editou Documento";
@@ -1138,6 +1160,89 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
 
+  // ── Controle de registros ─────────────────────────────────────────────────
+  // Mesmos campos no formulário do elaborador e na conferência da Qualidade.
+  const camposControleRegistro = (f, setCr) => (<>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
+      <F lbl="Armazenamento" ch={<Sel value={f.armazenamento} onChange={e=>setCr("armazenamento",e.target.value)}>{ARMAZENAMENTOS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</Sel>} />
+      <F lbl="Setor responsável" ch={<Sel value={f.recuperacao} onChange={e=>setCr("recuperacao",e.target.value)}>
+        <option value="">Selecione…</option>
+        {deptosAtivos.map(dp=><option key={dp.id} value={dp.id}>{dp.id} — {dp.label}</option>)}
+      </Sel>} />
+      <F lbl="Tempo de retenção (anos)" ch={
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <Inp type="number" min="1" max="100" step="1" disabled={f.indeterminado} value={f.indeterminado?"":f.retencaoAnos} onChange={e=>setCr("retencaoAnos",e.target.value)} style={{width:90}} />
+          <label style={{fontSize:12,color:T.text2,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+            <input type="checkbox" checked={!!f.indeterminado} onChange={e=>setCr("indeterminado",e.target.checked)} /> Indeterminado
+          </label>
+        </div>} />
+      <F lbl="Descarte" ch={<Sel value={f.descarte} onChange={e=>setCr("descarte",e.target.value)}>{DESCARTES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}</Sel>} />
+    </div>
+    <F lbl="Observação (opcional)" ch={<Inp placeholder="Ex.: arquivo morto da Qualidade, caixa por ano" value={f.obs} onChange={e=>setCr("obs",e.target.value)} />} />
+    {crErros.length>0 && <div style={{fontSize:12,color:"#ff4f6a",margin:"6px 0"}}>{crErros.map((e,i)=><div key={i}>• {e}</div>)}</div>}
+  </>);
+  const salvarRegraRegistro = async (doc, form) => {
+    const erros = errosDaRegra(form);
+    setCrErros(erros);
+    if (erros.length) return;
+    try {
+      const antes = doc.controleRegistro || null;
+      const updated = { ...doc, controleRegistro: novaRegra(form, { por: user?.name || "", hoje: tod() }) };
+      await saveCollection("gestao_docs", String(doc.id), updated);
+      await auditLog("Definiu controle de registro", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, antes, updated.controleRegistro);
+      setDocs(prev => prev.map(x => x.id === updated.id ? updated : x));
+      setSel(updated); setCrEdit(null); setCrErros([]);
+      toast_(`Controle de registro salvo — ${doc.codigo}.`, "green");
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
+  };
+
+  const linhasCR = () => {
+    const termo = normBusca(crBusca.trim());
+    return listaControleRegistros(docsVisiveis, { incluirObsoletos: crObsoletos }).filter(({ doc, regra }) => {
+      if (crDepto !== "todos" && doc.depto !== crDepto) return false;
+      if (crSituacao === "padrao" && regra.definida) return false;
+      if (crSituacao === "definida" && !regra.definida) return false;
+      if (termo && !normBusca(`${doc.codigo||""} ${doc.titulo||""}`).includes(termo)) return false;
+      return true;
+    });
+  };
+
+  const colunasCR = ({ doc, regra }) => [
+    doc.codigo || "", doc.titulo || "", `Rev.${doc.versao || ""}`,
+    rotuloArmazenamento(regra.armazenamento), deptoInfo(regra.recuperacao)?.label || regra.recuperacao || "",
+    textoRetencao(regra), rotuloDescarte(regra.descarte), doc.status || "",
+    regra.definida ? `Definida por ${regra.atualizadoPor || "—"} em ${fmt(regra.atualizadoEm)}` : "Padrão — conferir",
+  ];
+  const CABECALHO_CR = ["Código", "Identificação", "Versão", "Armazenamento", "Setor responsável", "Tempo de retenção", "Descarte", "Status", "Regra"];
+
+  const exportarControleRegistrosXLSX = async () => {
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Controle de Registros");
+      ws.addRow(["CONTROLE DE REGISTROS — Herbamed"]).font = { bold: true, size: 13 };
+      ws.addRow([`Gerado em ${new Date().toLocaleString("pt-BR")} pelo SGQ Herbamed`]).font = { italic: true, size: 10, color: { argb: "FF888888" } };
+      const head = ws.addRow(CABECALHO_CR);
+      head.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      head.eachCell(c => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1A4A2E" } }; });
+      linhasCR().forEach((l, i) => {
+        const row = ws.addRow(colunasCR(l));
+        row.eachCell(c => {
+          c.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+          if (i % 2 === 1) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+        });
+      });
+      [16, 42, 9, 20, 24, 16, 15, 14, 34].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+      ws.views = [{ state: "frozen", ySplit: 3 }];
+      const buffer = await wb.xlsx.writeBuffer();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+      link.download = `ControleRegistros_${tod()}.xlsx`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      toast_("Controle de Registros exportado em XLSX!", "green");
+    } catch(e) { toast_(`Erro ao exportar: ${e.message}`, "red"); console.error(e); }
+  };
+
   // ── Distribuição eletrônica ───────────────────────────────────────────────
   const salvarDestinatarios = async (doc, ids) => {
     try {
@@ -1481,7 +1586,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             {/* Os três botões de assinatura são o mesmo desenho em matizes diferentes
                 (btnCor): fundo esmaecido + texto e borda na cor. Trocar só o fundo
                 por cor sólida deixava o texto no verde do accent — ilegível. */}
-            {podeAssElab  && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.accent),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
+            {podeAssElab  && <button disabled={!d.arquivo || faltaControleRegistro(d)} title={!d.arquivo?"Anexe o PDF antes de assinar":faltaControleRegistro(d)?"Defina o Controle de registro (✏️ Editar) antes de assinar":undefined} style={{...btnCor(T.accent),fontSize:11,...((!d.arquivo||faltaControleRegistro(d))?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
             {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.blue||"#4fc3f7"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
             {podeAssRev   && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"revisor",show:true}); }}>❌ Recusar</button>}
             {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.orange||"#ff9800"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
@@ -1495,7 +1600,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               onClick={()=>{ setDocSummaryOpen(true); setDocSummary(null); carregarResumoDocumento(d); }}
             >📖 Gerar resumo</button>
             <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
-            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||""}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
+            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||"", cr:camposDaRegra(d)}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
             {isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0) && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir</button>}
           </div>
         </div>
@@ -1884,6 +1989,63 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             </div>
           </div>
         )}
+        {/* ── CONTROLE DE REGISTRO — onde o formulário preenchido é guardado e por quanto tempo ── */}
+        {geraRegistro(d) && (()=>{
+          const regra = regraDoRegistro(d);
+          const editando = crEdit && crEdit.docId === d.id;
+          const f = crEdit || {};
+          const setCr = (k, v) => setCrEdit(p => ({ ...p, [k]: v }));
+          const emRota = ["Em Revisão","Aguardando Aprovação"].includes(d.status);
+          const emElaboracao = d.status === "Rascunho";
+          const podeConferir = podeDistribuir && !emRota && !emElaboracao;
+          const item = (rot, val) => (
+            <div style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
+              <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{rot}</div>
+              <div style={{fontSize:13,color:T.text,fontWeight:600}}>{val}</div>
+            </div>
+          );
+          return (
+            <div style={s.card}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+                <SecTitle icon="🗄️" ch="Controle de registro" />
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {!regra.definida && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:emElaboracao?"#ff4f6a18":"#e8a33d22",color:emElaboracao?"#ff4f6a":"#c27c0e"}}>{emElaboracao ? "Obrigatório antes de assinar" : "Padrão — conferir"}</span>}
+                  {podeConferir && !editando && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setCrErros([]); setCrEdit({ docId:d.id, armazenamento:regra.armazenamento, recuperacao:regra.recuperacao, retencaoAnos:regra.retencaoAnos ?? "", indeterminado:!!regra.indeterminado, descarte:regra.descarte, obs:regra.obs||"" }); }}>
+                    {regra.definida ? "✏️ Alterar" : "✓ Conferir e definir"}
+                  </button>}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
+                Onde o formulário preenchido fica guardado, quem o recupera, por quanto tempo é retido e como é descartado. Sai na Lista de Controle de Registros.
+              </div>
+              {!editando ? (<>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+                  {item("Armazenamento", rotuloArmazenamento(regra.armazenamento))}
+                  {item("Setor responsável", deptoInfo(regra.recuperacao)?.label || regra.recuperacao || "—")}
+                  {item("Tempo de retenção", textoRetencao(regra))}
+                  {item("Descarte", rotuloDescarte(regra.descarte))}
+                </div>
+                {regra.obs && <div style={{fontSize:12,color:T.text2,marginTop:8}}>Obs.: {regra.obs}</div>}
+                <div style={{fontSize:11,color:T.text3,marginTop:8}}>
+                  {regra.definida
+                    ? `Definida por ${regra.atualizadoPor||"—"} em ${fmt(regra.atualizadoEm)}.`
+                    : emElaboracao
+                      ? "O elaborador define em ✏️ Editar → Controle de registro. Sem isso o formulário não pode ser assinado."
+                      : "Ainda não conferida: valendo a regra padrão do sistema (físico, 5 anos, destruição, setor responsável = departamento do documento)."}
+                  {emRota && regra.definida && " Definição do elaborador — confira antes de assinar."}
+                </div>
+              </>) : (
+                <div>
+                  {camposControleRegistro(f, setCr)}
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+                    <button style={s.btn} onClick={()=>{ setCrEdit(null); setCrErros([]); }}>Cancelar</button>
+                    <button style={s.btnA} onClick={()=>salvarRegraRegistro(d, f)}>Salvar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* ── DISTRIBUIÇÃO ELETRÔNICA — quem deve ler, e quem já confirmou ── */}
         {podeDefinirDistribuicao(d) && (()=>{
           const sit = situacaoDaDistribuicao(d, evidencias, tod(), aberturas);
@@ -2871,6 +3033,19 @@ ${docHtml.slice(0,9000)}`}]})
           <F lbl="Data de vigência (deixe em branco para entrar em vigor no dia da aprovação)"
             ch={<Inp type="date" value={form.dataVigencia||""} onChange={e=>setF("dataVigencia",e.target.value)} />} />
         </div>
+        {geraRegistro({ tipo: form.tipo }) && (()=>{
+          const f = form.cr || camposDaRegra({ tipo: form.tipo, depto: form.depto });
+          return (
+            <div style={{...s.card,border:`1px solid ${T.accent}44`}}>
+              <SecTitle icon="🗄️" ch="Controle de registro (obrigatório)" />
+              <div style={{fontSize:12,color:T.text2,marginBottom:10}}>
+                Onde o formulário preenchido vai ser guardado, quem o recupera, por quanto tempo e como é descartado.
+                Já vem com o padrão do sistema — confira e ajuste. Revisor e Aprovador assinam sobre esta definição.
+              </div>
+              {camposControleRegistro(f, (k, v) => setF("cr", { ...f, [k]: v }))}
+            </div>
+          );
+        })()}
         <div style={s.card}>
           <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
           <div style={{display:"flex",gap:8,marginBottom:10}}>
@@ -3113,6 +3288,82 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
     );
   }
 
+  if (view==="controle-registros") {
+    const linhas = linhasCR();
+    const res = resumoControleRegistros(listaControleRegistros(docsVisiveis, { incluirObsoletos: crObsoletos }));
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+          <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>🗄️ Controle de Registros</h2>
+          <div style={{flex:1}}></div>
+          <button style={s.btnA} onClick={exportarControleRegistrosXLSX}>⬇️ Exportar XLSX</button>
+        </div>
+        <div style={{fontSize:12,color:T.text2,marginBottom:12}}>
+          Gerada a partir dos formulários cadastrados: formulário novo entra sozinho, obsoleto sai sozinho. A regra de cada um é definida dentro do próprio formulário.
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:12}}>
+          {[["Formulários", res.total, T.text], ["Regra conferida", res.definidas, T.accent], ["No padrão — conferir", res.noPadrao, res.noPadrao ? "#c27c0e" : T.text3]].map(([rot, n, cor]) => (
+            <div key={rot} style={{...s.card,marginBottom:0,padding:"12px 16px"}}>
+              <div style={{fontSize:22,fontWeight:800,color:cor}}>{n}</div>
+              <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase"}}>{rot}</div>
+            </div>
+          ))}
+        </div>
+        <div style={s.card}>
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            <input placeholder="Buscar código ou identificação..." value={crBusca} onChange={e=>setCrBusca(e.target.value)} style={{...s.inp,flex:1,minWidth:200,fontSize:12}} />
+            <select value={crDepto} onChange={e=>setCrDepto(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todos os departamentos</option>
+              {[...new Set(listaControleRegistros(docsVisiveis, { incluirObsoletos: true }).map(l=>l.doc.depto))].sort().map(dp=><option key={dp} value={dp}>{dp}</option>)}
+            </select>
+            <select value={crSituacao} onChange={e=>setCrSituacao(e.target.value)} style={{...s.inp,fontSize:12}}>
+              <option value="todos">Todas as regras</option>
+              <option value="padrao">No padrão — conferir</option>
+              <option value="definida">Conferidas</option>
+            </select>
+            <label style={{fontSize:12,color:T.text2,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+              <input type="checkbox" checked={crObsoletos} onChange={e=>setCrObsoletos(e.target.checked)} /> Incluir obsoletos
+            </label>
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:T.surf,borderBottom:`2px solid ${T.border}`}}>
+                  {["Código","Identificação","Armazenamento","Setor responsável","Retenção","Descarte","Regra"].map(h=>(
+                    <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:11,textTransform:"uppercase"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {linhas.length===0 ? (
+                  <tr><td colSpan="7" style={{textAlign:"center",padding:"2rem",color:T.text3}}>Nenhum formulário encontrado.</td></tr>
+                ) : linhas.map(({ doc, regra }, i) => (
+                  <tr key={doc.id} className="rnc-row" onClick={()=>{ setSel(doc); setView("detalhe"); }}
+                    style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf,cursor:"pointer"}}>
+                    <td style={{padding:"8px 10px",color:tipoInfo(doc.tipo)?.cor||T.accent,fontWeight:700,whiteSpace:"nowrap"}}>{doc.codigo}</td>
+                    <td style={{padding:"8px 10px",color:T.text}}>{doc.titulo}{doc.status==="Obsoleto" && <span style={{marginLeft:6,fontSize:10,color:T.text3}}>(obsoleto)</span>}</td>
+                    <td style={{padding:"8px 10px",color:T.text2}}>{rotuloArmazenamento(regra.armazenamento)}</td>
+                    <td style={{padding:"8px 10px",color:T.text2}}>{deptoInfo(regra.recuperacao)?.label || regra.recuperacao || "—"}</td>
+                    <td style={{padding:"8px 10px",color:T.text2,whiteSpace:"nowrap"}}>{textoRetencao(regra)}</td>
+                    <td style={{padding:"8px 10px",color:T.text2}}>{rotuloDescarte(regra.descarte)}</td>
+                    <td style={{padding:"8px 10px"}}>
+                      {regra.definida
+                        ? <span style={{color:T.accent,fontWeight:700}} title={`Definida por ${regra.atualizadoPor||"—"} em ${fmt(regra.atualizadoEm)}`}>✓ Conferida</span>
+                        : <span style={{color:"#c27c0e",fontWeight:700}}>Padrão — conferir</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{fontSize:11,color:T.text3,textAlign:"right",paddingTop:8,borderTop:`1px solid ${T.border}`,marginTop:8}}>
+            {linhas.length} formulário(s) · clique numa linha para abrir o formulário e conferir a regra
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (view==="lista-mestra") {
     return (
       <div>
@@ -3287,6 +3538,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
         </div>
         <div style={{display:"flex",gap:8}}>
           <button style={s.btn} onClick={()=>setView("lista-mestra")}>📋 Lista Mestra</button>
+          <button style={s.btn} onClick={()=>setView("controle-registros")}>🗄️ Controle de Registros</button>
           <button style={s.btn} onClick={()=>setView("arvore")}>🌳 Árvore</button>
           {MATRIZ_TREINAMENTO_ATIVA && (()=>{
             // Badge com as pendências da própria pessoa — a matriz é acionável, não só relatório.
