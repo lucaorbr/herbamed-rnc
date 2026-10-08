@@ -1141,6 +1141,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       await auditLog("Definiu distribuição eletrônica", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`,
         { destinatarios: destinatariosDoDoc(doc).map(d => d.nome) },
         { destinatarios: destinatariosDoDoc(updated).map(d => d.nome), incluidos: incluidos.map(d => d.nome), removidos: removidos.map(d => d.nome) });
+      // A tela do documento lê da lista (`docs`), que só é relida do servidor a cada
+      // poucos segundos: sem atualizar aqui, a faixa "sem distribuição" seguia na tela.
+      setDocs(prev => prev.map(x => x.id === updated.id ? updated : x));
       setSel(updated); setModalDestinatarios(null);
       const comEmail = incluidos.filter(d => d.email);
       const avisar = updated.status === "Vigente" && comEmail.length > 0;
