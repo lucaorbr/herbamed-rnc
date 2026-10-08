@@ -31,8 +31,8 @@ describe("ficha da RNC no endereço", () => {
     expect(abaDaUrl("?aba=rnc&rnc=abc")).toBe("rnc");
   });
   test("fichaDaUrl lê a RNC e a etapa; etapa inválida vira resumo", () => {
-    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=causa")).toEqual({ rnc: "abc", etapa: "causa" });
-    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=xyz")).toEqual({ rnc: "abc", etapa: "resumo" });
+    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=causa")).toEqual({ rnc: "abc", etapa: "causa", doc: null });
+    expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=xyz")).toEqual({ rnc: "abc", etapa: "resumo", doc: null });
   });
   test("urlComAba monta a ficha e limpa rnc/etapa fora dela", () => {
     const base = "http://localhost:9027/";
@@ -60,5 +60,24 @@ describe("urlComAba", () => {
   test("preserva outros parâmetros e o #", () => {
     expect(urlComAba(base + "?x=1#topo", "cep")).toBe("/?x=1&aba=cep#topo");
     expect(urlComAba(base + "?x=1&aba=cep", "home")).toBe("/?x=1");
+  });
+});
+
+describe("documento aberto no endereço", () => {
+  const base = "http://localhost:9027/";
+  test("fichaDaUrl lê o documento", () => {
+    expect(fichaDaUrl("?aba=gestao-docs&doc=42").doc).toBe("42");
+    expect(fichaDaUrl("?aba=gestao-docs").doc).toBeNull();
+  });
+  test("urlComAba leva o documento só na Gestão de Documentos", () => {
+    expect(urlComAba(base, "gestao-docs", { doc: "42" })).toBe("/?aba=gestao-docs&doc=42");
+    expect(urlComAba(base + "?aba=gestao-docs&doc=42", "gestao-docs")).toBe("/?aba=gestao-docs");
+    expect(urlComAba(base + "?aba=gestao-docs&doc=42", "lista", { doc: "42" })).toBe("/?aba=lista");
+  });
+  test("enderecoCorresponde compara o documento", () => {
+    expect(enderecoCorresponde("?aba=gestao-docs&doc=42", "gestao-docs", { doc: "42" })).toBe(true);
+    expect(enderecoCorresponde("?aba=gestao-docs&doc=42", "gestao-docs", { doc: null })).toBe(false);
+    expect(enderecoCorresponde("?aba=gestao-docs", "gestao-docs", { doc: "42" })).toBe(false);
+    expect(enderecoCorresponde("?aba=lista&doc=42", "lista")).toBe(false);
   });
 });

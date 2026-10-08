@@ -453,7 +453,7 @@ function ResumoRapidoDocumento({ resumo, loading, error, onRefresh, s, T }) {
   );
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC, docAberto = null, onDocAberto }) {
   const T = useTheme();
   const s = useS();
 
@@ -684,6 +684,33 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       .catch(() => setDistLog([]))
       .finally(() => setDistLogLoading(false));
   }, [sel?.id]);
+
+  // ── Documento aberto ↔ endereço (?aba=gestao-docs&doc=<id>) ─────────────
+  // O endereço manda (notificação do sino, pendência, link, Voltar do navegador) e a
+  // tela avisa quando a pessoa abre/fecha um documento por dentro dela.
+  const docAbertoAnterior = React.useRef(undefined);
+  const abrindoDoc = React.useRef(null); // pedido do endereço ainda não refletido na tela
+  useEffect(() => {
+    if (docAberto && loading) return; // espera a lista carregar para achar o documento
+    const mudou = docAbertoAnterior.current !== docAberto;
+    if (mudou && docAberto) {
+      const alvo = docs.find(x => String(x.id) === String(docAberto));
+      if (alvo) { abrindoDoc.current = String(alvo.id); setSel(alvo); setView("detalhe"); }
+      else { toast_("Documento não encontrado — pode ter sido excluído.", "red"); onDocAberto?.(null); }
+    } else if (mudou && !docAberto && docAbertoAnterior.current !== undefined && view === "detalhe") {
+      setView("lista");
+    }
+    docAbertoAnterior.current = docAberto;
+  }, [docAberto, loading]);
+  useEffect(() => {
+    if (loading) return;
+    const atual = view === "detalhe" && sel ? String(sel.id) : null;
+    if (abrindoDoc.current) {
+      if (atual !== abrindoDoc.current) return; // a tela ainda não abriu o que o endereço pediu
+      abrindoDoc.current = null;
+    }
+    if (atual !== (docAberto || null)) onDocAberto?.(atual);
+  }, [view, sel?.id, loading]);
 
   const salvar = async () => {
     try {
