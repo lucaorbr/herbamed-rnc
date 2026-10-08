@@ -27,7 +27,7 @@ import {
   podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
 import { enviarEmail } from "../email/enviarEmail";
-import { ABAS_DOCUMENTO, abaInicial, pendenciasPorAba } from "./paginaDocumento";
+import { ABAS_DOCUMENTO, abaInicial, itensDaFaixa, pendenciasPorAba } from "./paginaDocumento";
 import {
   ARMAZENAMENTOS, DESCARTES, camposDaRegra, errosDaRegra, faltaControleRegistro, geraRegistro, listaControleRegistros, normBusca, novaRegra, regraMudou,
   regraDoRegistro, resumoControleRegistros, rotuloArmazenamento, rotuloDescarte, textoRetencao,
@@ -481,7 +481,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [modalDestinatarios, setModalDestinatarios] = useState(null); // { doc, ids:Set, busca }
   // Aba da página do documento escolhida pela pessoa; null = a aba da pendência (abaInicial).
   const [abaDoc, setAbaDoc] = useState(null);
-  useEffect(() => { setAbaDoc(null); }, [sel?.id]);
+  const [maisAberto, setMaisAberto] = useState(false); // menu "Mais" do cabeçalho do documento
+  useEffect(() => { setAbaDoc(null); setMaisAberto(false); }, [sel?.id]);
   const [aberturas, setAberturas] = useState([]); // quem abriu qual versão (libera o "Li e entendi")
   // Controle de registros
   const [crEdit, setCrEdit] = useState(null); // regra em edição no formulário
@@ -1198,6 +1199,18 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
 
+  const abrirEdicao = (d) => { setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||"", cr:camposDaRegra(d)}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); };
+
+  // PDF com a marca d'água do status (a mesma regra do "Ver" do arquivo oficial).
+  const verPdf = (d) => {
+    if (d.status === "Vigente") {
+      registrarAbertura(d);
+      if (acessoRestritoVigente) abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", user?.name), true, `${d.codigo}_Rev${d.versao}_CopiaNaoControlada.pdf`);
+      else abrirArquivoAutenticado(renderUrl(d.id, "controlada", user?.name));
+    } else if (d.status === "Obsoleto") abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"));
+    else abrirArquivoAutenticado(renderUrl(d.id, "rascunho"));
+  };
+
   // ── Controle de registros ─────────────────────────────────────────────────
   // Mesmos campos no formulário do elaborador e na conferência da Qualidade.
   const camposControleRegistro = (f, setCr) => (<>
@@ -1619,136 +1632,160 @@ Herbamed® · Sistema de Gestão da Qualidade`,
     const abaAtiva = abaDoc || abaInicial(pendAbas);
     return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        {/* ── CABEÇALHO (repaginação, entrega 2) ──
+            À vista só o dia a dia: Ver PDF, Nova Revisão e Editar. As assinaturas e a
+            recusa estão na faixa de próxima ação logo abaixo; as ações raras, no "Mais". */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
           <button style={s.btn} onClick={()=>setView("lista")}>← Voltar</button>
-          <div style={{flex:1}}>
-            <div style={{fontSize:11,color:T.text3}}>{d.codigo} · Rev.{d.versao}</div>
-            <div style={{fontSize:16,fontWeight:700,color:T.text}}>{d.titulo}</div>
+          <div style={{flex:1,minWidth:220}}>
+            <div style={{fontSize:11,color:T.text3}}>{d.codigo} · Rev.{d.versao} · {tipo?.label||d.tipo}</div>
+            <div style={{fontSize:16,fontWeight:700,color:T.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{d.titulo} <BadgeStatusGD status={d.status}/></div>
           </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {/* Os três botões de assinatura são o mesmo desenho em matizes diferentes
-                (btnCor): fundo esmaecido + texto e borda na cor. Trocar só o fundo
-                por cor sólida deixava o texto no verde do accent — ilegível. */}
-            {podeAssElab  && <button disabled={!d.arquivo || faltaControleRegistro(d)} title={!d.arquivo?"Anexe o PDF antes de assinar":faltaControleRegistro(d)?"Defina o Controle de registro (✏️ Editar) antes de assinar":undefined} style={{...btnCor(T.accent),fontSize:11,...((!d.arquivo||faltaControleRegistro(d))?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); }}>✍️ Elaborador</button>}
-            {podeAssRev   && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.blue||"#4fc3f7"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"revisor"})}>🔎 Revisor</button>}
-            {podeAssRev   && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"revisor",show:true}); }}>❌ Recusar</button>}
-            {podeAssAprov && <button disabled={!d.arquivo} title={!d.arquivo?"Anexe o PDF antes de assinar":undefined} style={{...btnCor(T.orange||"#ff9800"),fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}} onClick={()=>setAssinarGD({doc:d,papel:"aprovador"})}>✅ Aprovador</button>}
-            {podeAssAprov && d.status==="Aguardando Aprovação" && <button style={{...s.btnD,fontSize:11}} onClick={()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"aprovador",show:true}); }}>❌ Recusar</button>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {d.arquivo && <button style={{...s.btn,fontSize:11,color:T.accent}} onClick={()=>verPdf(d)}>👁️ Ver PDF</button>}
             {podeIniciarRevisao && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button>}
-            {podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência") && <button style={{...s.btnD,fontSize:11}} onClick={()=>tornarObsoleto(d)}>🗄️ Obsoleto</button>}
-            <button
-              disabled={!d.arquivo}
-              title={d.arquivo ? "Ler o PDF e gerar um resumo rápido" : "Anexe o PDF oficial para gerar o resumo"}
-              style={{...s.btn,fontSize:11,...(!d.arquivo?{opacity:0.5,cursor:"not-allowed"}:{})}}
-              onClick={()=>{ setDocSummaryOpen(true); setDocSummary(null); carregarResumoDocumento(d); }}
-            >📖 Gerar resumo</button>
-            <button style={{...s.btn,fontSize:11}} onClick={()=>exportPDF(d)}>🖨️ Folha de Rosto</button>
-            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>{ setSel(d); setForm({tipo:d.tipo,depto:d.depto,titulo:d.titulo,versao:d.versao,objetivo:d.objetivo||"",alcance:d.alcance||"",responsabilidades:d.responsabilidades||"",definicoes:d.definicoes||"",procedimento:d.procedimento||"",infComplementares:d.infComplementares||"N/A",referencias:d.referencias||"",registros:d.registros||"",anexos:d.anexos||"N/A",etapas:d.etapas||[],materiais:d.materiais||[],obs:d.obs||"",treinamentoObrigatorio:d.treinamentoObrigatorio||false,proximaRevisao:d.proximaRevisao||"",historicoRevisoes:d.historicoRevisoes||[],dataVigencia:d.dataVigencia||"", cr:camposDaRegra(d)}); setDocArquivo(d.arquivo||null); setDocArquivoFonte(d.arquivoFonte||null); setCapitulosAberto(false); setView("novo"); }}>✏️ Editar</button>}
-            {isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0) && <button style={{...s.btnD,fontSize:11}} onClick={()=>deletar(d.id)}>🗑️ Excluir</button>}
-          </div>
-        </div>
-        {(()=>{
-          // Destinatário com leitura pendente desta versão: confirma aqui, ao abrir.
-          const meuId = String(user?.uid || user?.id || "");
-          const pendente = leiturasPendentesDoUsuario({ docs:[d], evidencias, userId:meuId, hoje:tod() })[0];
-          if (!pendente) return null;
-          const aberto = abriuEm(d, meuId, aberturas);
-          return (
-            <div style={{background:`${T.blue||"#4fc3f7"}14`,border:`1px solid ${T.blue||"#4fc3f7"}55`,borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-              <span style={{fontSize:20}}>📨</span>
-              <div style={{flex:1,minWidth:220}}>
-                <div style={{fontSize:13,fontWeight:700,color:T.text}}>Este documento foi distribuído para você — Rev.{d.versao}</div>
-                <div style={{fontSize:11,color:T.text2,marginTop:2}}>
-                  {aberto
-                    ? `Documento aberto em ${new Date(aberto).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}. Depois de ler, confirme.`
-                    : "Passo 1: abra o documento e leia. Passo 2: confirme a leitura."}
-                  {pendente.dias>0 ? ` Pendente há ${pendente.dias} dia(s).` : ""}
-                </div>
-              </div>
-              {!d.arquivo ? (
-                <span style={{fontSize:11,color:T.text3}}>Documento sem arquivo anexado — avise a Qualidade.</span>
-              ) : (<>
-                <button style={{...(aberto ? s.btn : s.btnA),fontSize:12}} onClick={()=>abrirParaLeitura(d)}>📄 {aberto ? "Abrir de novo" : "Abrir documento"}</button>
-                <button style={{...s.btnA,fontSize:12,...(!aberto?{opacity:0.45,cursor:"not-allowed"}:{})}} disabled={!aberto}
-                  title={aberto ? undefined : "Abra o documento primeiro"} onClick={()=>confirmarLeituraDistribuicao(d)}>✅ Li e entendi</button>
-              </>)}
-            </div>
-          );
-        })()}
-        {podeDistribuir && semDistribuicao(d) && (
-          <div style={{background:"#e8a33d18",border:"1px solid #e8a33d55",borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-            <span style={{fontSize:12,color:"#c27c0e",fontWeight:600,flex:1,minWidth:220}}>📨 Documento aprovado e ainda sem distribuição — defina quem deve ler.</span>
-            <button style={{...s.btnA,fontSize:11}} onClick={()=>setModalDestinatarios({ doc:d, ids:new Set(), busca:"" })}>Definir destinatários</button>
-          </div>
-        )}
-        {d.status==="Aguardando Vigência" && d.dataVigencia && (
-          <div style={{background:"#a78bfa18",border:"1px solid #a78bfa44",borderRadius:10,padding:"12px 16px",marginBottom:12,fontSize:13,color:"#a78bfa",fontWeight:700,display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:20}}>📅</span>
-            <div>
-              <div>Documento aprovado — vigência agendada para <strong>{fmt(d.dataVigencia)}</strong></div>
-              <div style={{fontSize:11,fontWeight:400,marginTop:2}}>O documento ficará Vigente automaticamente nesta data.</div>
-            </div>
-          </div>
-        )}
-        {(()=>{
-          // Recusas anteriores DESTA revisão, depois que o elaborador corrigiu e reassinou:
-          // Revisor e Aprovador conferem se os apontamentos foram atendidos.
-          const recusas = (d.historicoRecusas || []).filter(r => String(r.versao) === String(d.versao));
-          if (!recusas.length || d.apontamentos?.length > 0 || !["Em Revisão","Aguardando Aprovação"].includes(d.status)) return null;
-          return (
-            <div style={{background:"#e8a33d14",border:"1px solid #e8a33d55",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#c27c0e",marginBottom:4}}>
-                ↩️ Esta revisão já foi recusada {recusas.length===1 ? "1 vez" : `${recusas.length} vezes`} — confira se os apontamentos foram atendidos antes de assinar
-              </div>
-              {recusas.slice().reverse().map(r => (
-                <div key={r.id} style={{marginTop:8}}>
-                  <div style={{fontSize:11,color:T.text3,fontWeight:700}}>
-                    Recusado por {r.autor||"—"} ({r.autorPapel==="aprovador"?"Aprovador":"Revisor"}) em {new Date(r.data).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}
-                  </div>
-                  {(r.apontamentos||[]).map((a,i)=>(
-                    <div key={a.id||i} style={{fontSize:12,color:T.text,background:T.surf,borderRadius:6,padding:"6px 10px",marginTop:4,borderLeft:"3px solid #e8a33d"}}>
-                      <span style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginRight:6}}>{a.secao||"Geral"}</span>{a.descricao}
-                    </div>
+            {!isViewer && d.status!=="Vigente" && <button style={{...s.btn,fontSize:11}} onClick={()=>abrirEdicao(d)}>✏️ Editar</button>}
+            <div style={{position:"relative"}}>
+              <button style={{...s.btn,fontSize:11}} onClick={()=>setMaisAberto(o=>!o)} aria-expanded={maisAberto}>⋯ Mais ▾</button>
+              {maisAberto && (<>
+                <div onClick={()=>setMaisAberto(false)} style={{position:"fixed",inset:0,zIndex:40}} />
+                <div role="menu" style={{position:"absolute",right:0,top:"calc(100% + 4px)",zIndex:41,minWidth:220,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,.18)",padding:4}}>
+                  {[
+                    { k:"resumo", rot:"📖 Gerar resumo", ok:true, desab:!d.arquivo, dica:d.arquivo?"Ler o PDF e gerar um resumo rápido":"Anexe o PDF oficial para gerar o resumo",
+                      acao:()=>{ setDocSummaryOpen(true); setDocSummary(null); carregarResumoDocumento(d); } },
+                    { k:"rosto", rot:"🖨️ Folha de Rosto", ok:true, acao:()=>exportPDF(d) },
+                    { k:"obsoleto", rot:"🗄️ Tornar obsoleto", perigo:true, ok: podeTornarObsoleto && (d.status==="Vigente"||d.status==="Aguardando Vigência"), acao:()=>tornarObsoleto(d) },
+                    { k:"excluir", rot:"🗑️ Excluir", perigo:true, ok: isAdmin && !["Vigente","Aguardando Vigência","Obsoleto"].includes(d.status) && !(d.historicoRevisoes?.length>0), acao:()=>deletar(d.id) },
+                  ].filter(i=>i.ok).map(i => (
+                    <button key={i.k} role="menuitem" disabled={i.desab} title={i.dica}
+                      onClick={()=>{ setMaisAberto(false); i.acao(); }}
+                      style={{display:"block",width:"100%",textAlign:"left",padding:"8px 10px",border:"none",borderRadius:6,background:"transparent",
+                        fontFamily:"inherit",fontSize:12,cursor:i.desab?"not-allowed":"pointer",opacity:i.desab?0.5:1,color:i.perigo?"#ff4f6a":T.text}}>
+                      {i.rot}
+                    </button>
                   ))}
                 </div>
-              ))}
+              </>)}
             </div>
+          </div>
+        </div>
+        {/* ── FAIXA DE PRÓXIMA AÇÃO (entrega 2) ──
+            No lugar de até 7 faixas soltas: a primeira ação de quem está vendo em destaque,
+            as demais (e os avisos) em linhas curtas abaixo. Ordem em itensDaFaixa(). */}
+        {(()=>{
+          const meuId = String(user?.uid || user?.id || "");
+          const leitura = leiturasPendentesDoUsuario({ docs:[d], evidencias, userId:meuId, hoje:tod() })[0];
+          const aberto = abriuEm(d, meuId, aberturas);
+          const recusas = (d.historicoRecusas || []).filter(r => String(r.versao) === String(d.versao));
+          const itens = itensDaFaixa({
+            status: d.status, podeAssElab: !!podeAssElab, podeAssRev: !!podeAssRev, podeAssAprov: !!podeAssAprov,
+            apontamentosAbertos: (d.apontamentos || []).length, semRotaAdmin: !!semRota && isAdmin, leituraPendente: !!leitura,
+            podeDistribuir, semDistribuicao: semDistribuicao(d), recolhas: (d.recolhaPendente || []).length,
+            diasRev, podeIniciarRevisao, recusasAnteriores: recusas.length,
+            vigenciaAgendada: !!d.dataVigencia, revisaoRegistrada: !!d.revisaoRegistrada,
+          });
+          if (!itens.length) return null;
+          const COR = { azul:T.blue||"#4fc3f7", vermelho:"#ff4f6a", laranja:"#e8a33d", roxo:"#a78bfa", verde:T.accent };
+          const semPdf = !d.arquivo;
+          const bt = (rot, acao, { cor, desab, dica, perigo } = {}) => (
+            <button disabled={desab} title={dica} onClick={acao}
+              style={{...(perigo ? s.btnD : cor ? btnCor(cor) : s.btnA),fontSize:11,...(desab?{opacity:0.5,cursor:"not-allowed"}:{})}}>{rot}</button>
           );
-        })()}
-        {d.apontamentos?.length>0 && ["Rascunho","Em Revisão"].includes(d.status) && (
-          <div style={{background:"#ff4f6a14",border:"1px solid #ff4f6a44",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#ff4f6a",display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-              <span style={{fontSize:18}}>❌</span> Documento recusado — {d.apontamentos.length} apontamento(s) a corrigir
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {d.apontamentos.map((a,i)=>(
-                <div key={a.id||i} style={{background:T.surf,borderRadius:8,padding:"8px 12px",borderLeft:"3px solid #ff4f6a"}}>
+          const listaApontamentos = (lista, corBorda) => (
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:10}}>
+              {lista.map((a,i)=>(
+                <div key={a.id||i} style={{background:T.surf,borderRadius:8,padding:"8px 12px",borderLeft:`3px solid ${corBorda}`}}>
                   <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:3,display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
                     <span>{a.secao||"Geral"}</span>
-                    <span style={{color:T.text3,fontWeight:400,textTransform:"none"}}>{a.autor||"—"} · {a.autorPapel==="aprovador"?"Aprovador":"Revisor"}{a.data?` · ${new Date(a.data).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}`:""}</span>
+                    {a.autor && <span style={{fontWeight:400,textTransform:"none"}}>{a.autor} · {a.autorPapel==="aprovador"?"Aprovador":"Revisor"}{a.data?` · ${new Date(a.data).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}`:""}</span>}
                   </div>
                   <div style={{fontSize:13,color:T.text}}>{a.descricao}</div>
                 </div>
               ))}
             </div>
-            <div style={{fontSize:11,color:T.text3,marginTop:8}}>Corrija o conteúdo, anexe o PDF revisado e reassine como Elaborador para reiniciar a rota.</div>
-          </div>
-        )}
-        {diasRev!==null && diasRev<=90 && d.status==="Vigente" && (
-          <div style={{background:diasRev<=0?"#ff4f6a18":"#ffd16618",border:`1px solid ${diasRev<=0?"#ff4f6a":"#ffd166"}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-            <span style={{fontSize:12,color:diasRev<=0?"#ff4f6a":"#ffd166",fontWeight:600}}>
-              {diasRev<=0?`⚠️ Revisão vencida há ${Math.abs(diasRev)} dias!`:`⏰ Revisão necessária em ${diasRev} dias (${fmt(d.proximaRevisao)})`}
-            </span>
-            {diasRev<=30 && podeIniciarRevisao && (
-              <button style={{...s.btnA,fontSize:11}} onClick={()=>revisarSemAlteracoes(d)}>✓ Revisar (sem alterações)</button>
-            )}
-          </div>
-        )}
-        {d.revisaoRegistrada && d.status==="Vigente" && (!diasRev || diasRev>30) && (
-          <div style={{background:T.accentDim,border:`1px solid ${T.accent}30`,borderRadius:10,padding:"10px 16px",marginBottom:12,fontSize:12,color:T.accent,fontWeight:600}}>
-            ✓ Revisão registrada em {fmt(d.revisaoRegistrada.data)}{d.revisaoRegistrada.responsavel?` por ${d.revisaoRegistrada.responsavel}`:""}{d.revisaoRegistrada.obs?` — ${d.revisaoRegistrada.obs}`:""}
-          </div>
-        )}
+          );
+          const avisoRecusas = recusas.length ? ` Já foi recusado ${recusas.length===1?"1 vez":`${recusas.length} vezes`} nesta revisão — confira os apontamentos abaixo.` : "";
+          const conteudo = (it) => {
+            switch (it.id) {
+              case "assinar_aprovador": return { icone:"✅", titulo:"É a sua vez: aprovar este documento",
+                sub:(semPdf?"Anexe o PDF antes de assinar.":"Leia o PDF e aprove ou recuse com apontamentos.")+avisoRecusas,
+                botoes:<>{bt("✅ Aprovar",()=>setAssinarGD({doc:d,papel:"aprovador"}),{cor:T.orange||"#ff9800",desab:semPdf,dica:semPdf?"Anexe o PDF antes de assinar":undefined})}
+                  {d.status==="Aguardando Aprovação" && bt("❌ Recusar",()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"aprovador",show:true}); },{perigo:true})}</> };
+              case "assinar_revisor": return { icone:"🔎", titulo:"É a sua vez: revisar este documento",
+                sub:(semPdf?"Anexe o PDF antes de assinar.":"Leia o PDF e assine como Revisor ou recuse com apontamentos.")+avisoRecusas,
+                botoes:<>{bt("🔎 Assinar como Revisor",()=>setAssinarGD({doc:d,papel:"revisor"}),{cor:T.blue||"#4fc3f7",desab:semPdf,dica:semPdf?"Anexe o PDF antes de assinar":undefined})}
+                  {bt("❌ Recusar",()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"revisor",show:true}); },{perigo:true})}</> };
+              case "corrigir_recusa": return { icone:"❌", titulo:`Documento recusado — ${d.apontamentos.length} apontamento(s) a corrigir`,
+                sub:"Corrija o conteúdo, anexe o PDF revisado e reassine como Elaborador para reiniciar a rota.",
+                detalhe: listaApontamentos(d.apontamentos, "#ff4f6a"),
+                botoes: !isViewer ? bt("✏️ Editar",()=>abrirEdicao(d)) : null };
+              case "assinar_elaborador": {
+                const falta = semPdf ? "Anexe o PDF antes de assinar (✏️ Editar)." : faltaControleRegistro(d) ? "Defina o Controle de registro (✏️ Editar) antes de assinar." : null;
+                return { icone:"✍️", titulo:"Falta a sua assinatura como Elaborador", sub: falta || "Ao assinar você escolhe o Revisor e o Aprovador.",
+                  botoes: bt("✍️ Assinar como Elaborador",()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalRota({ doc:d }); },{cor:T.accent,desab:!!falta,dica:falta||undefined}) };
+              }
+              case "definir_rota": return { icone:"🔀", titulo:"Documento sem Revisor e Aprovador designados", sub:"Um administrador precisa definir antes da assinatura.",
+                botoes: bt("Definir designados",()=>setAbaDoc("assinaturas")) };
+              case "ler": return { icone:"📨", titulo:`Este documento foi distribuído para você — Rev.${d.versao}`,
+                sub:(aberto ? `Documento aberto em ${new Date(aberto).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}. Depois de ler, confirme.` : "Passo 1: abra o documento e leia. Passo 2: confirme a leitura.")+(leitura.dias>0?` Pendente há ${leitura.dias} dia(s).`:""),
+                botoes: semPdf ? <span style={{fontSize:11,color:T.text3}}>Documento sem arquivo anexado — avise a Qualidade.</span> : <>
+                  <button style={{...(aberto ? s.btn : s.btnA),fontSize:11}} onClick={()=>abrirParaLeitura(d)}>📄 {aberto ? "Abrir de novo" : "Abrir documento"}</button>
+                  {bt("✅ Li e entendi",()=>confirmarLeituraDistribuicao(d),{desab:!aberto,dica:aberto?undefined:"Abra o documento primeiro"})}</> };
+              case "distribuir": return { icone:"📨", titulo:"Documento aprovado e ainda sem distribuição", sub:"Defina quem deve ler.",
+                botoes: bt("Definir destinatários",()=>setModalDestinatarios({ doc:d, ids:new Set(), busca:"" })) };
+              case "recolher": return { icone:"⚠️", titulo:`${d.recolhaPendente.length} cópia(s) física(s) obsoleta(s) a recolher`, sub:"Recolha e destrua antes de distribuir a nova versão.",
+                botoes: bt("Ver na Distribuição",()=>setAbaDoc("distribuicao")) };
+              case "revisao_periodica": return { icone: diasRev<=0 ? "⚠️" : "⏰",
+                titulo: diasRev<=0 ? `Revisão periódica vencida há ${Math.abs(diasRev)} dia(s)` : `Revisão periódica em ${diasRev} dia(s) (${fmt(d.proximaRevisao)})`,
+                sub:"Se o documento continua válido, registre a revisão sem alterações; senão, abra uma nova revisão.",
+                botoes:<>{bt("✓ Revisar (sem alterações)",()=>revisarSemAlteracoes(d))}<button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button></> };
+              case "recusas_anteriores": return { icone:"↩️",
+                titulo:`Esta revisão já foi recusada ${recusas.length===1?"1 vez":`${recusas.length} vezes`} — confira se os apontamentos foram atendidos antes de assinar`,
+                detalhe: listaApontamentos(recusas.slice().reverse().flatMap(r => (r.apontamentos||[]).map(a => ({ ...a, autor:r.autor, autorPapel:r.autorPapel, data:r.data }))), "#e8a33d"),
+                detalheSempre:true };
+              case "vigencia_agendada": return { icone:"📅", titulo:`Documento aprovado — vigência agendada para ${fmt(d.dataVigencia)}`, sub:"Ficará Vigente automaticamente nesta data." };
+              case "revisao_proxima": return { icone: diasRev<=0 ? "⚠️" : "⏰",
+                titulo: diasRev<=0 ? `Revisão periódica vencida há ${Math.abs(diasRev)} dia(s)` : `Revisão periódica em ${diasRev} dia(s) (${fmt(d.proximaRevisao)})` };
+              case "revisao_registrada": return { icone:"✓",
+                titulo:`Revisão registrada em ${fmt(d.revisaoRegistrada.data)}${d.revisaoRegistrada.responsavel?` por ${d.revisaoRegistrada.responsavel}`:""}`,
+                sub: d.revisaoRegistrada.obs || null };
+              default: return { icone:"•", titulo: it.id };
+            }
+          };
+          const [prim, ...resto] = itens;
+          const p = conteudo(prim);
+          return (
+            <div style={{background:`${COR[prim.tom]}12`,border:`1px solid ${COR[prim.tom]}55`,borderRadius:10,padding:"12px 16px",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <span style={{fontSize:20}}>{p.icone}</span>
+                <div style={{flex:1,minWidth:220}}>
+                  <div style={{fontSize:10,fontWeight:700,color:COR[prim.tom],textTransform:"uppercase",letterSpacing:".04em"}}>{prim.tipo==="acao" ? "Próxima ação" : "Aviso"}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:T.text}}>{p.titulo}</div>
+                  {p.sub && <div style={{fontSize:11,color:T.text2,marginTop:2}}>{p.sub}</div>}
+                </div>
+                {p.botoes && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{p.botoes}</div>}
+              </div>
+              {p.detalhe}
+              {resto.length>0 && (
+                <div style={{marginTop:10,paddingTop:8,borderTop:`1px solid ${COR[prim.tom]}33`,display:"flex",flexDirection:"column",gap:8}}>
+                  {resto.map(it => {
+                    const c = conteudo(it);
+                    return (
+                      <div key={it.id}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:12}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:COR[it.tom],flexShrink:0}} />
+                          <span style={{flex:1,minWidth:200,color:T.text}}>{c.icone} {c.titulo}{c.sub ? <span style={{color:T.text3}}> — {c.sub}</span> : null}</span>
+                          {c.botoes && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c.botoes}</div>}
+                        </div>
+                        {c.detalheSempre && c.detalhe}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* ── ABAS + PAINEL DE RESUMO (repaginação, entrega 1) ──
             Os blocos não mudaram por dentro: só foram agrupados por assunto. */}
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,borderBottom:`1px solid ${T.border}`,paddingBottom:8}}>
