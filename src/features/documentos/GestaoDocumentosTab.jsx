@@ -27,6 +27,7 @@ import {
   podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
 import { enviarEmail } from "../email/enviarEmail";
+import { ABAS_DOCUMENTO, abaInicial, pendenciasPorAba } from "./paginaDocumento";
 import {
   ARMAZENAMENTOS, DESCARTES, camposDaRegra, errosDaRegra, faltaControleRegistro, geraRegistro, listaControleRegistros, normBusca, novaRegra, regraMudou,
   regraDoRegistro, resumoControleRegistros, rotuloArmazenamento, rotuloDescarte, textoRetencao,
@@ -478,6 +479,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [sessoes, setSessoes] = useState([]);
   const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
   const [modalDestinatarios, setModalDestinatarios] = useState(null); // { doc, ids:Set, busca }
+  // Aba da página do documento escolhida pela pessoa; null = a aba da pendência (abaInicial).
+  const [abaDoc, setAbaDoc] = useState(null);
+  useEffect(() => { setAbaDoc(null); }, [sel?.id]);
   const [aberturas, setAberturas] = useState([]); // quem abriu qual versão (libera o "Li e entendi")
   // Controle de registros
   const [crEdit, setCrEdit] = useState(null); // regra em edição no formulário
@@ -1608,6 +1612,11 @@ Herbamed® · Sistema de Gestão da Qualidade`,
     // Documento assinado pelo Elaborador antes da rota existir (PR #55) não tem designados:
     // sem esta faixa ninguém conseguiria mais assiná-lo.
     const semRota = d.assinaturaElaborador && !d.assinaturaAprovador && !d.rota?.revisorId;
+    const pendAbas = pendenciasPorAba({
+      doc: d, minhaAssinatura: !!(podeAssRev || podeAssAprov), semRota: !!semRota && isAdmin,
+      faltaRegistro: faltaControleRegistro(d), podeDistribuir, semDistribuicao: semDistribuicao(d),
+    });
+    const abaAtiva = abaDoc || abaInicial(pendAbas);
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
@@ -1740,484 +1749,562 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             ✓ Revisão registrada em {fmt(d.revisaoRegistrada.data)}{d.revisaoRegistrada.responsavel?` por ${d.revisaoRegistrada.responsavel}`:""}{d.revisaoRegistrada.obs?` — ${d.revisaoRegistrada.obs}`:""}
           </div>
         )}
-        <div style={s.card}>
-          <SecTitle icon="🗂️" ch="Identificação" />
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
-            {[["Código",d.codigo],["Versão",`Rev.${d.versao}`],["Tipo",tipo?.label||d.tipo],["Departamento",depto?.label||d.depto],["Elaborado por",d.criadoPor],["Data",fmt(d.criadoEm)],["Próx. revisão",fmt(d.proximaRevisao)],["Atualizado",fmt(d.atualizadoEm)]].map(([k,v])=>(
-              <div key={k} style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
-                <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{k}</div>
-                <div style={{fontSize:12,color:T.text,fontWeight:600}}>{v}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos} />
-            <BadgeStatusGD status={d.status} />
-            {MATRIZ_TREINAMENTO_ATIVA && (d.treinamento?.exigido || d.treinamentoObrigatorio) && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
-          </div>
+        {/* ── ABAS + PAINEL DE RESUMO (repaginação, entrega 1) ──
+            Os blocos não mudaram por dentro: só foram agrupados por assunto. */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12,borderBottom:`1px solid ${T.border}`,paddingBottom:8}}>
+          {ABAS_DOCUMENTO.map(a => {
+            const on = abaAtiva === a.id;
+            return (
+              <button key={a.id} type="button" onClick={()=>setAbaDoc(a.id)}
+                style={{...s.btn,fontSize:12,display:"flex",alignItems:"center",gap:6,
+                  ...(on ? { background:T.accentDim, color:T.accent, borderColor:T.accent+"66", fontWeight:700 } : {})}}>
+                <span>{a.icon}</span>{a.label}
+                {pendAbas[a.id] && <span title="Tem algo pendente para você" style={{width:7,height:7,borderRadius:"50%",background:"#e8a33d",display:"inline-block"}} />}
+              </button>
+            );
+          })}
         </div>
-        {/* ── ARQUIVO OFICIAL ── */}
-        <div style={{ ...s.card, border:`2px solid ${d.arquivo ? T.accent+"33" : "#ff8c4244"}`, background: d.arquivo ? `${T.accent}08` : "#ff8c4208" }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-            <SecTitle icon="📎" ch="Documento Oficial (Arquivo Controlado)" />
-            {d.arquivo
-              ? <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.accent+"22", color:T.accent }}>📎 Arquivo anexado</span>
-              : <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:"#ff8c4222", color:"#ff8c42" }}>⚠️ Sem arquivo oficial</span>
-            }
-          </div>
-          {d.arquivo ? (
-            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}`, marginTop:8 }}>
-              <span style={{ fontSize:28 }}>📄</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{d.arquivo.nome}</div>
-                <div style={{ fontSize:11, color:T.text2 }}>
-                  {d.arquivo.tamanho ? (d.arquivo.tamanho/1024).toFixed(1)+" KB · " : ""}
-                  Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
-                </div>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{flex:"1 1 560px",minWidth:0}}>
+          {abaAtiva==="documento" && (<>
+            {/* ── ARQUIVO OFICIAL ── */}
+            <div style={{ ...s.card, border:`2px solid ${d.arquivo ? T.accent+"33" : "#ff8c4244"}`, background: d.arquivo ? `${T.accent}08` : "#ff8c4208" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                <SecTitle icon="📎" ch="Documento Oficial (Arquivo Controlado)" />
+                {d.arquivo
+                  ? <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.accent+"22", color:T.accent }}>📎 Arquivo anexado</span>
+                  : <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:"#ff8c4222", color:"#ff8c42" }}>⚠️ Sem arquivo oficial</span>
+                }
               </div>
-              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding:"12px 16px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}`, marginTop:8, fontSize:12, color:T.text3, textAlign:"center" }}>
-              Nenhum arquivo oficial anexado a este documento. Clique em "Editar" para anexar.
-            </div>
-          )}
-        </div>
-        {/* ── ARQUIVO FONTE (não controlado) — Fase 4/5, só para quem pode baixar fonte ── */}
-        {podeBaixarFonte && (
-          <div style={{ ...s.card, border:`1px dashed ${T.border2}`, background:T.surf }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-              <SecTitle icon="🛠️" ch="Arquivo Fonte (não controlado)" />
-              <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>ARQUIVO DE TRABALHO</span>
-            </div>
-            <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:8 }}>
-              Arquivo editável (Word/Excel/PPT) usado apenas para gerar futuras revisões. Não é o documento oficial — não é distribuído, assinado nem carimbado.
-            </div>
-            {d.arquivoFonte ? (
-              <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
-                <span style={{ fontSize:24 }}>🛠️</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:T.text2 }}>{d.arquivoFonte.nome}</div>
-                  <div style={{ fontSize:11, color:T.text3 }}>
-                    {d.arquivoFonte.tamanho ? (d.arquivoFonte.tamanho/1024).toFixed(1)+" KB · " : ""}
-                    Enviado por {d.arquivoFonte.enviadoPor}{d.arquivoFonte.enviadoEm ? ` em ${fmt(d.arquivoFonte.enviadoEm)}` : ""}
-                  </div>
-                </div>
-                <button onClick={()=>abrirArquivoAutenticado(d.arquivoFonte.url, true, d.arquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar fonte</button>
-              </div>
-            ) : (
-              <div style={{ padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}`, fontSize:12, color:T.text3, textAlign:"center" }}>
-                Nenhum arquivo fonte anexado.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── FORMULÁRIO EM EXCEL PARA O FORNECEDOR — RETIRADO ──
-            A emissão carimbava o .xlsx fonte com ExcelJS, que não edita o
-            arquivo: parseia para um modelo próprio e o reescreve do zero. Tudo
-            que esse modelo não representa não voltava — checkbox e demais
-            controles de formulário sumiam — e as células desciam sem que as
-            fórmulas fossem reescritas, então o total passava a somar linhas
-            vazias e o fornecedor recebia um formulário que dava zero, sem erro
-            nenhum na tela. Fórmula arrastada (shared formula) nem chegava a
-            gerar: estourava.
-            Retirado do ar até existir uma emissão que preserve o fonte. O
-            caminho medido é editar o .xlsx como pacote ZIP, sem round-trip.
-            Ver o histórico deste commit para o código anterior. */}
-
-        {/* ── FASE 7: LOG DE DISTRIBUIÇÃO ── */}
-        {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
-          <div style={s.card}>
-            <SecTitle icon="📋" ch="Log de distribuição" />
-            {distLogLoading ? (
-              <div style={{ fontSize:12, color:T.text3, padding:"8px 0" }}>Carregando...</div>
-            ) : distLog.length === 0 ? (
-              <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem 0" }}>Nenhuma cópia distribuída ainda.</div>
-            ) : (
-              <div style={{ overflowX:"auto" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                  <thead>
-                    <tr style={{ background:T.surf }}>
-                      {["Data/Hora","Usuário","Modo"].map(h=>(
-                        <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:T.text3, fontWeight:700, fontSize:10, textTransform:"uppercase", borderBottom:`1px solid ${T.border}` }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {distLog.map((row,i)=>(
-                      <tr key={row.id||i} style={{ borderBottom:`1px solid ${T.border}`, background:i%2===0?T.bg:T.surf }}>
-                        <td style={{ padding:"7px 10px", color:T.text2 }}>{row.data_download ? new Date(row.data_download).toLocaleString("pt-BR") : "—"}</td>
-                        <td style={{ padding:"7px 10px", color:T.text }}>{row.usuario_nome || "—"}</td>
-                        {/* O modo `formulario_fornecedor` não é mais emitido (seção retirada
-                            acima), mas o rótulo FICA: o log é registro de distribuição e as
-                            emissões já feitas continuam tendo de aparecer por extenso. */}
-                        <td style={{ padding:"7px 10px" }}>
-                          <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12,
-                            background:row.modo==="formulario_fornecedor" ? "#8a5a0022" : T.border,
-                            color:row.modo==="formulario_fornecedor" ? "#8a5a00" : T.text2 }}>
-                            {row.modo==="formulario_fornecedor" ? "📗 formulário p/ fornecedor" : (row.modo || "—")}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {d.materiais?.length>0 && (
-          <div style={s.card}>
-            <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {d.materiais.map((m,i)=><span key={i} style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:T.surf,border:`1px solid ${T.border}`,color:T.text}}>{m}</span>)}
-            </div>
-          </div>
-        )}
-        {/* ── HISTÓRICO DE VERSÕES (elevado) ── */}
-        <div style={s.card}>
-          <SecTitle icon="🕐" ch="Histórico de Versões" />
-          <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
-            {/* Versão atual — sempre no topo */}
-            <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:T.accentDim,border:`1px solid ${T.accent}33`,borderRadius:10}}>
-              <div style={{width:44,height:44,borderRadius:10,background:T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>
-                {d.versao}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                  <span style={{fontSize:13,fontWeight:700,color:T.accent}}>Rev.{d.versao}</span>
-                  <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:T.accent,color:"#fff"}}>ATUAL</span>
-                  <BadgeStatusGD status={d.status}/>
-                </div>
-                <div style={{fontSize:11,color:T.text2,marginTop:3}}>
-                  {fmt(d.atualizadoEm)} · {d.atualizadoPor||d.criadoPor}
-                </div>
-              </div>
-              <div style={{display:"flex",gap:6,flexShrink:0}}>
-                {d.arquivo ? (
-                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
-                ) : (
-                  <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
-                )}
-              </div>
-            </div>
-            {/* Revisões anteriores */}
-            {(!d.historicoRevisoes||d.historicoRevisoes.length===0) ? (
-              <div style={{fontSize:12,color:T.text3,padding:"10px 16px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,textAlign:"center"}}>
-                Versão {d.versao} — atual. Sem revisões anteriores ainda.
-              </div>
-            ) : (
-              [...d.historicoRevisoes].reverse().map((h,i)=>{
-                const arq = h.conteudo?.arquivo;
-                return (
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:10}}>
-                    <div style={{width:44,height:44,borderRadius:10,background:T.border,color:T.text2,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>
-                      {h.versao}
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versaoAlvo||h.versao}</span>
-                        {h.status&&<BadgeStatusGD status={h.status}/>}
-                      </div>
-                      <div style={{fontSize:11,color:T.text2,marginTop:2}}>
-                        {fmt(h.data)} · {h.responsavel||"—"}{h.aprovador?` · Aprov.: ${h.aprovador}`:""}
-                      </div>
-                      {h.itemModificado&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Item modificado: {h.itemModificado}</div>}
-                      {h.motivo&&<div style={{fontSize:11,color:T.text3,marginTop:2,fontStyle:"italic"}}>{h.motivo}</div>}
-                    </div>
-                    <div style={{display:"flex",gap:6,flexShrink:0}}>
-                      {arq ? (<>
-                        <button onClick={()=>abrirArquivoAutenticado(arq.url)} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
-                        <button onClick={()=>abrirArquivoAutenticado(arq.url, true, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
-                      </>) : h.conteudo ? (
-                        <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
-                      ) : (
-                        <span style={{fontSize:10,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
-                      )}
+              {d.arquivo ? (
+                <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}`, marginTop:8 }}>
+                  <span style={{ fontSize:28 }}>📄</span>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{d.arquivo.nome}</div>
+                    <div style={{ fontSize:11, color:T.text2 }}>
+                      {d.arquivo.tamanho ? (d.arquivo.tamanho/1024).toFixed(1)+" KB · " : ""}
+                      Enviado por {d.arquivo.enviadoPor}{d.arquivo.enviadoEm ? ` em ${fmt(d.arquivo.enviadoEm)}` : ""}
                     </div>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {(()=>{
-          const capsPreenchidos = CAPITULOS_GD.filter(cap=>{
-            if(cap.special) return false;
-            const v = d[cap.id];
-            if(!v || v==="N/A") return false;
-            const stripped = v.replace(/<[^>]*>/g,"").trim();
-            return stripped.length > 0;
-          });
-          if(capsPreenchidos.length===0) return null;
-          return (
-            <div style={s.card}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-                <SecTitle icon="📝" ch="Rascunho / Anotações" />
-                <span style={{fontSize:10,color:T.text3,fontStyle:"italic"}}>(não é o documento oficial)</span>
-              </div>
-              {capsPreenchidos.map(cap=>(
-                <div key={cap.id} style={{marginBottom:14}}>
-                  <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
-                  <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:T.text,lineHeight:1.7}}
-                    dangerouslySetInnerHTML={{__html:d[cap.id]}} />
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                    <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
+                  </div>
                 </div>
-              ))}
-            </div>
-          );
-        })()}
-        {d.etapas?.length>0 && (
-          <div style={s.card}>
-            <SecTitle icon="📋" ch="Etapas Detalhadas" />
-            {d.etapas.map((e,i)=>(
-              <div key={e.id||i} style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:T.accent,color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
-                <div style={{flex:1,background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
-                  {e.titulo&&<div style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:3}}>{e.titulo}</div>}
-                  <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>{e.descricao}</div>
+              ) : (
+                <div style={{ padding:"12px 16px", background:T.surf, borderRadius:10, border:`1px solid ${T.border}`, marginTop:8, fontSize:12, color:T.text3, textAlign:"center" }}>
+                  Nenhum arquivo oficial anexado a este documento. Clique em "Editar" para anexar.
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <div style={s.card}>
-          <SecTitle icon="✍️" ch="Assinaturas" />
-          {(d.rota || semRota) && (
-            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:12}}>
-              <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>🧭 Rota</span>
-              {semRota && <span style={{fontSize:12,color:T.orange}}>Sem Revisor/Aprovador designados — um administrador precisa definir antes da assinatura.</span>}
-              {!semRota && <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>}
-              {!semRota && <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>}
-              {d.rota?.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
-              {isAdminStrict && d.status!=="Vigente" && d.status!=="Obsoleto" && (
-                <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalTrocarRota({ doc:d }); }}>{semRota ? "🔧 Definir designados" : "🔧 Trocar designados"}</button>
               )}
             </div>
-          )}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-            {[{campo:d.assinaturaElaborador,label:"Elaborador"},{campo:d.assinaturaRevisor,label:"Revisor"},{campo:d.assinaturaAprovador,label:"Aprovador"}].map(({campo,label})=>(
-              <div key={label} style={{textAlign:"center",padding:"1rem",background:T.surf,borderRadius:10,border:`1px solid ${T.border}`}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase",marginBottom:10}}>{label}</div>
-                {campo?(<>
-                  <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
-                  {(campo.cargo||cargoCadastroAtual(campo))&&(
-                    <div style={{fontSize:11,color:T.text2}} title={campo.cargo?"Cargo gravado na assinatura":"Cargo atual do cadastro — esta assinatura foi feita antes de o cargo existir no perfil"}>
-                      {campo.cargo||cargoCadastroAtual(campo)}
-                      {!campo.cargo&&<span style={{fontSize:9,color:T.text3}}> · cadastro atual</span>}
+            <div style={s.card}>
+              <SecTitle icon="🗂️" ch="Identificação" />
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:12}}>
+                {[["Código",d.codigo],["Versão",`Rev.${d.versao}`],["Tipo",tipo?.label||d.tipo],["Departamento",depto?.label||d.depto],["Elaborado por",d.criadoPor],["Data",fmt(d.criadoEm)],["Próx. revisão",fmt(d.proximaRevisao)],["Atualizado",fmt(d.atualizadoEm)]].map(([k,v])=>(
+                  <div key={k} style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
+                    <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{k}</div>
+                    <div style={{fontSize:12,color:T.text,fontWeight:600}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <BadgeTipoGD tipo={d.tipo} tipos={tiposAtivos} />
+                <BadgeStatusGD status={d.status} />
+                {MATRIZ_TREINAMENTO_ATIVA && (d.treinamento?.exigido || d.treinamentoObrigatorio) && <span style={{fontSize:10,padding:"3px 10px",borderRadius:20,background:(T.blue||"#4fc3f7")+"20",color:T.blue||"#4fc3f7",fontWeight:700}}>📚 Treinamento Obrigatório</span>}
+              </div>
+            </div>
+            {/* ── ARQUIVO FONTE (não controlado) — Fase 4/5, só para quem pode baixar fonte ── */}
+            {podeBaixarFonte && (
+              <div style={{ ...s.card, border:`1px dashed ${T.border2}`, background:T.surf }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                  <SecTitle icon="🛠️" ch="Arquivo Fonte (não controlado)" />
+                  <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>ARQUIVO DE TRABALHO</span>
+                </div>
+                <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:8 }}>
+                  Arquivo editável (Word/Excel/PPT) usado apenas para gerar futuras revisões. Não é o documento oficial — não é distribuído, assinado nem carimbado.
+                </div>
+                {d.arquivoFonte ? (
+                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
+                    <span style={{ fontSize:24 }}>🛠️</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:T.text2 }}>{d.arquivoFonte.nome}</div>
+                      <div style={{ fontSize:11, color:T.text3 }}>
+                        {d.arquivoFonte.tamanho ? (d.arquivoFonte.tamanho/1024).toFixed(1)+" KB · " : ""}
+                        Enviado por {d.arquivoFonte.enviadoPor}{d.arquivoFonte.enviadoEm ? ` em ${fmt(d.arquivoFonte.enviadoEm)}` : ""}
+                      </div>
+                    </div>
+                    <button onClick={()=>abrirArquivoAutenticado(d.arquivoFonte.url, true, d.arquivoFonte.nome)} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar fonte</button>
+                  </div>
+                ) : (
+                  <div style={{ padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}`, fontSize:12, color:T.text3, textAlign:"center" }}>
+                    Nenhum arquivo fonte anexado.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── CONTROLE DE REGISTRO — onde o formulário preenchido é guardado e por quanto tempo ── */}
+            {geraRegistro(d) && (()=>{
+              const regra = regraDoRegistro(d);
+              const editando = crEdit && crEdit.docId === d.id;
+              const f = crEdit || {};
+              const setCr = (k, v) => setCrEdit(p => ({ ...p, [k]: v }));
+              const emRota = ["Em Revisão","Aguardando Aprovação"].includes(d.status);
+              const emElaboracao = d.status === "Rascunho";
+              const podeConferir = podeDistribuir && !emRota && !emElaboracao;
+              const item = (rot, val) => (
+                <div style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
+                  <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{rot}</div>
+                  <div style={{fontSize:13,color:T.text,fontWeight:600}}>{val}</div>
+                </div>
+              );
+              return (
+                <div style={s.card}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+                    <SecTitle icon="🗄️" ch="Controle de registro" />
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      {!regra.definida && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:emElaboracao?"#ff4f6a18":"#e8a33d22",color:emElaboracao?"#ff4f6a":"#c27c0e"}}>{emElaboracao ? "Obrigatório antes de assinar" : "Padrão — conferir"}</span>}
+                      {podeConferir && !editando && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setCrErros([]); setCrEdit({ docId:d.id, armazenamento:regra.armazenamento, recuperacao:regra.recuperacao, retencaoAnos:regra.retencaoAnos ?? "", indeterminado:!!regra.indeterminado, descarte:regra.descarte, obs:regra.obs||"" }); }}>
+                        {regra.definida ? "✏️ Alterar" : "✓ Conferir e definir"}
+                      </button>}
+                    </div>
+                  </div>
+                  <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
+                    Onde o formulário preenchido fica guardado, quem o recupera, por quanto tempo é retido e como é descartado. Sai na Lista de Controle de Registros.
+                  </div>
+                  {!editando ? (<>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+                      {item("Armazenamento", rotuloArmazenamento(regra.armazenamento))}
+                      {item("Setor responsável", deptoInfo(regra.recuperacao)?.label || regra.recuperacao || "—")}
+                      {item("Tempo de retenção", textoRetencao(regra))}
+                      {item("Descarte", rotuloDescarte(regra.descarte))}
+                    </div>
+                    {regra.obs && <div style={{fontSize:12,color:T.text2,marginTop:8}}>Obs.: {regra.obs}</div>}
+                    <div style={{fontSize:11,color:T.text3,marginTop:8}}>
+                      {regra.definida
+                        ? `Definida por ${regra.atualizadoPor||"—"} em ${fmt(regra.atualizadoEm)}.`
+                        : emElaboracao
+                          ? "O elaborador define em ✏️ Editar → Controle de registro. Sem isso o formulário não pode ser assinado."
+                          : "Ainda não conferida: valendo a regra padrão do sistema (físico, 5 anos, destruição, setor responsável = departamento do documento)."}
+                      {emRota && regra.definida && " Definição do elaborador — confira antes de assinar."}
+                    </div>
+                  </>) : (
+                    <div>
+                      {camposControleRegistro(f, setCr)}
+                      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+                        <button style={s.btn} onClick={()=>{ setCrEdit(null); setCrErros([]); }}>Cancelar</button>
+                        <button style={s.btnA} onClick={()=>salvarRegraRegistro(d, f)}>Salvar</button>
+                      </div>
                     </div>
                   )}
-                  {(campo.registroProfissional||campo.crf)&&<div style={{fontSize:10,color:T.text3}}>Registro profissional: {campo.registroProfissional||campo.crf}</div>}
-                  <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
-                  <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
-                  <div style={{fontSize:9,color:T.text3,marginTop:3,fontFamily:"monospace"}}>Cód.: {sigCodigo(campo, `${d.codigo}|R${d.versao}`)}</div>
-                </>):(
-                  <div style={{fontSize:12,color:T.text3,padding:"1rem 0"}}>Aguardando</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* ── PENDÊNCIA DE RECOLHA — cópias obsoletas após nova revisão ── */}
-        {d.recolhaPendente?.length > 0 && (
-          <div style={{...s.card, border:"1px solid #ff4f6a55", background:"#ff4f6a0d"}}>
-            <SecTitle icon="⚠️" ch="Cópias obsoletas a recolher" />
-            <div style={{fontSize:12,color:T.text2,marginBottom:10}}>
-              Estes setores têm cópias impressas de versões anteriores que precisam ser recolhidas e destruídas antes de distribuir a nova versão.
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {d.recolhaPendente.map((p,i)=>{
-                return (
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
-                    <span style={{fontSize:18}}>📄</span>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(p)}</div>
-                      <div style={{fontSize:11,color:T.text2}}>
-                        Cópia da Rev.{p.versaoAnterior} pendente de recolha
-                        {p.recebidoPor ? ` · com ${p.recebidoPor}` : ""}
-                      </div>
-                    </div>
-                    {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>abrirRecolha(d,p,"obsoleta")}>✓ Recolhida</button>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {/* ── CONTROLE DE REGISTRO — onde o formulário preenchido é guardado e por quanto tempo ── */}
-        {geraRegistro(d) && (()=>{
-          const regra = regraDoRegistro(d);
-          const editando = crEdit && crEdit.docId === d.id;
-          const f = crEdit || {};
-          const setCr = (k, v) => setCrEdit(p => ({ ...p, [k]: v }));
-          const emRota = ["Em Revisão","Aguardando Aprovação"].includes(d.status);
-          const emElaboracao = d.status === "Rascunho";
-          const podeConferir = podeDistribuir && !emRota && !emElaboracao;
-          const item = (rot, val) => (
-            <div style={{background:T.surf,borderRadius:8,padding:"8px 12px"}}>
-              <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>{rot}</div>
-              <div style={{fontSize:13,color:T.text,fontWeight:600}}>{val}</div>
-            </div>
-          );
-          return (
-            <div style={s.card}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
-                <SecTitle icon="🗄️" ch="Controle de registro" />
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  {!regra.definida && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:emElaboracao?"#ff4f6a18":"#e8a33d22",color:emElaboracao?"#ff4f6a":"#c27c0e"}}>{emElaboracao ? "Obrigatório antes de assinar" : "Padrão — conferir"}</span>}
-                  {podeConferir && !editando && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setCrErros([]); setCrEdit({ docId:d.id, armazenamento:regra.armazenamento, recuperacao:regra.recuperacao, retencaoAnos:regra.retencaoAnos ?? "", indeterminado:!!regra.indeterminado, descarte:regra.descarte, obs:regra.obs||"" }); }}>
-                    {regra.definida ? "✏️ Alterar" : "✓ Conferir e definir"}
-                  </button>}
                 </div>
-              </div>
-              <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
-                Onde o formulário preenchido fica guardado, quem o recupera, por quanto tempo é retido e como é descartado. Sai na Lista de Controle de Registros.
-              </div>
-              {!editando ? (<>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
-                  {item("Armazenamento", rotuloArmazenamento(regra.armazenamento))}
-                  {item("Setor responsável", deptoInfo(regra.recuperacao)?.label || regra.recuperacao || "—")}
-                  {item("Tempo de retenção", textoRetencao(regra))}
-                  {item("Descarte", rotuloDescarte(regra.descarte))}
+              );
+            })()}
+            {/* ── FORMULÁRIO EM EXCEL PARA O FORNECEDOR — RETIRADO ──
+                A emissão carimbava o .xlsx fonte com ExcelJS, que não edita o
+                arquivo: parseia para um modelo próprio e o reescreve do zero. Tudo
+                que esse modelo não representa não voltava — checkbox e demais
+                controles de formulário sumiam — e as células desciam sem que as
+                fórmulas fossem reescritas, então o total passava a somar linhas
+                vazias e o fornecedor recebia um formulário que dava zero, sem erro
+                nenhum na tela. Fórmula arrastada (shared formula) nem chegava a
+                gerar: estourava.
+                Retirado do ar até existir uma emissão que preserve o fonte. O
+                caminho medido é editar o .xlsx como pacote ZIP, sem round-trip.
+                Ver o histórico deste commit para o código anterior. */}
+
+          </>)}
+          {abaAtiva==="documento" && (<>
+            {(d.materiais?.length>0 || d.etapas?.length>0) && (
+              <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase",margin:"4px 0 8px"}}>Conteúdo de apoio (não é o documento oficial)</div>
+            )}
+            {d.materiais?.length>0 && (
+              <div style={s.card}>
+                <SecTitle icon="🧪" ch="Materiais e Equipamentos" />
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {d.materiais.map((m,i)=><span key={i} style={{fontSize:12,padding:"4px 12px",borderRadius:20,background:T.surf,border:`1px solid ${T.border}`,color:T.text}}>{m}</span>)}
                 </div>
-                {regra.obs && <div style={{fontSize:12,color:T.text2,marginTop:8}}>Obs.: {regra.obs}</div>}
-                <div style={{fontSize:11,color:T.text3,marginTop:8}}>
-                  {regra.definida
-                    ? `Definida por ${regra.atualizadoPor||"—"} em ${fmt(regra.atualizadoEm)}.`
-                    : emElaboracao
-                      ? "O elaborador define em ✏️ Editar → Controle de registro. Sem isso o formulário não pode ser assinado."
-                      : "Ainda não conferida: valendo a regra padrão do sistema (físico, 5 anos, destruição, setor responsável = departamento do documento)."}
-                  {emRota && regra.definida && " Definição do elaborador — confira antes de assinar."}
-                </div>
-              </>) : (
-                <div>
-                  {camposControleRegistro(f, setCr)}
-                  <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                    <button style={s.btn} onClick={()=>{ setCrEdit(null); setCrErros([]); }}>Cancelar</button>
-                    <button style={s.btnA} onClick={()=>salvarRegraRegistro(d, f)}>Salvar</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {/* ── DISTRIBUIÇÃO ELETRÔNICA — quem deve ler, e quem já confirmou ── */}
-        {podeDefinirDistribuicao(d) && (()=>{
-          const sit = situacaoDaDistribuicao(d, evidencias, tod(), aberturas);
-          if (!sit.total && !podeDistribuir) return null;
-          const vigente = d.status === "Vigente";
-          return (
-            <div style={s.card}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
-                <SecTitle icon="📨" ch="Distribuição eletrônica" />
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  {sit.total>0 && <span style={{fontSize:12,color:T.text2}}>{sit.confirmados}/{sit.total} confirmaram</span>}
-                  {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>setModalDestinatarios({ doc:d, ids:new Set(destinatariosDoDoc(d).map(x=>String(x.userId))), busca:"" })}>
-                    {sit.total ? "✏️ Alterar destinatários" : "+ Definir destinatários"}
-                  </button>}
-                </div>
-              </div>
-              <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
-                Quem recebe confirma a leitura da Rev.{d.versao} ao abrir o documento. Nova revisão reabre a leitura para as mesmas pessoas.
-                {!vigente && " A leitura começa quando o documento entrar em vigor."}
-              </div>
-              {sit.total===0 ? (
-                <div style={{fontSize:12,color:T.text3,textAlign:"center",padding:"1rem 0"}}>Nenhum destinatário definido.</div>
-              ) : (
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead>
-                      <tr style={{background:T.surf}}>
-                        {["Destinatário","Setor","Incluído em","Leitura"].map(h=>(
-                          <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sit.linhas.map((l,i)=>(
-                        <tr key={l.userId} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
-                          <td style={{padding:"7px 10px",color:T.text,fontWeight:600}}>{l.nome}</td>
-                          <td style={{padding:"7px 10px",color:T.text2}}>{l.setor||"—"}</td>
-                          <td style={{padding:"7px 10px",color:T.text2}}>{l.incluidoEm?fmt(l.incluidoEm):"—"}{l.incluidoPor?` · ${l.incluidoPor}`:""}</td>
-                          <td style={{padding:"7px 10px"}}>
-                            {l.confirmado
-                              ? <span style={{color:T.accent,fontWeight:700}}>✓ Confirmou em {new Date(l.confirmadoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</span>
-                              : vigente
-                                ? <span style={{color:"#c27c0e",fontWeight:700}}>
-                                    {l.abertoEm ? `👁️ Abriu em ${new Date(l.abertoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}, não confirmou` : "⏳ Ainda não abriu"}
-                                    {l.dias>0?` · ${l.dias} dia(s)`:""}
-                                  </span>
-                                : <span style={{color:T.text3}}>Aguardando vigência</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {/* ── DISTRIBUIÇÃO FÍSICA — cópias controladas impressas (só Vigente) ── */}
-        {d.status==="Vigente" && (
-          <div style={s.card}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
-              <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
-              {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"", recebidoPorId:"", recebidoPor:"", dataEntrega:tod() }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
-            </div>
-            <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Setores com cópia controlada impressa da Rev.{d.versao}.</div>
-            {(d.distribuicaoFisica||[]).length===0 ? (
-              <div style={{fontSize:12,color:T.text3,padding:"0.5rem 0"}}>Nenhuma cópia física registrada.</div>
-            ) : (
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {d.distribuicaoFisica.map((c,i)=>{
-                  return (
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
-                      <span style={{fontSize:18}}>🗂️</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(c)}</div>
-                        <div style={{fontSize:11,color:T.text2}}>
-                          Recebida por <strong style={{color:T.text}}>{c.recebidoPor||"—"}</strong> em {fmt(c.dataEntrega)}
-                        </div>
-                        <div style={{fontSize:11,color:T.text3}}>Entregue por {c.entreguePor||"—"}</div>
-                      </div>
-                      {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>abrirRecolha(d,c,"vigente")}>🗑️ Recolher</button>}
-                    </div>
-                  );
-                })}
               </div>
             )}
-            {/* Histórico: a recolha arquiva o ciclo em vez de apagar a linha — é o
-                que prova que o setor teve (e devolveu) a cópia daquela revisão. */}
-            {(d.historicoDistribuicao||[]).length>0 && (
-              <details style={{marginTop:12}}>
-                <summary style={{fontSize:11,color:T.text3,cursor:"pointer"}}>
-                  📚 Histórico de cópias recolhidas ({d.historicoDistribuicao.length})
-                </summary>
-                <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
-                  {[...d.historicoDistribuicao].reverse().map((h,i)=>(
-                    <div key={h.id||i} style={{padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
-                      <div style={{fontSize:12,fontWeight:600,color:T.text2}}>
-                        {h.destinoLabel} · Rev.{h.versao||"—"}
-                        {h.motivo==="obsoleta" && <span style={{fontSize:10,color:T.text3,fontWeight:400}}> · cópia obsoleta</span>}
-                      </div>
-                      <div style={{fontSize:11,color:T.text3}}>
-                        {h.entregaEm ? `Entregue em ${fmt(h.entregaEm)}` : "Entrega sem data registrada"}
-                        {h.recebidoPor ? ` a ${h.recebidoPor}` : ""}
-                        {" · "}recolhida em {fmt(h.recolhaEm)} por {h.recolhidoPor||"—"}
-                        {h.devolvidoPor ? ` (devolvida por ${h.devolvidoPor})` : ""}
-                      </div>
+            {d.etapas?.length>0 && (
+              <div style={s.card}>
+                <SecTitle icon="📋" ch="Etapas Detalhadas" />
+                {d.etapas.map((e,i)=>(
+                  <div key={e.id||i} style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:T.accent,color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</div>
+                    <div style={{flex:1,background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px"}}>
+                      {e.titulo&&<div style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:3}}>{e.titulo}</div>}
+                      <div style={{fontSize:12,color:T.text2,lineHeight:1.6}}>{e.descricao}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(()=>{
+              const capsPreenchidos = CAPITULOS_GD.filter(cap=>{
+                if(cap.special) return false;
+                const v = d[cap.id];
+                if(!v || v==="N/A") return false;
+                const stripped = v.replace(/<[^>]*>/g,"").trim();
+                return stripped.length > 0;
+              });
+              if(capsPreenchidos.length===0) return null;
+              return (
+                <div style={s.card}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                    <SecTitle icon="📝" ch="Rascunho / Anotações" />
+                    <span style={{fontSize:10,color:T.text3,fontStyle:"italic"}}>(não é o documento oficial)</span>
+                  </div>
+                  {capsPreenchidos.map(cap=>(
+                    <div key={cap.id} style={{marginBottom:14}}>
+                      <div style={{fontSize:11,color:T.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".05em",marginBottom:5}}>{cap.label}</div>
+                      <div style={{padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:T.text,lineHeight:1.7}}
+                        dangerouslySetInnerHTML={{__html:d[cap.id]}} />
                     </div>
                   ))}
                 </div>
-              </details>
+              );
+            })()}
+          </>)}
+          {abaAtiva==="assinaturas" && (<>
+            <div style={s.card}>
+              <SecTitle icon="✍️" ch="Assinaturas" />
+              {(d.rota || semRota) && (
+                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:12}}>
+                  <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>🧭 Rota</span>
+                  {semRota && <span style={{fontSize:12,color:T.orange}}>Sem Revisor/Aprovador designados — um administrador precisa definir antes da assinatura.</span>}
+                  {!semRota && <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>}
+                  {!semRota && <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>}
+                  {d.rota?.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
+                  {isAdminStrict && d.status!=="Vigente" && d.status!=="Obsoleto" && (
+                    <button style={{...s.btn,fontSize:10,padding:"3px 8px",marginLeft:"auto"}} onClick={()=>{ setRotaForm({ revisorId:d.rota?.revisorId||"", aprovadorId:d.rota?.aprovadorId||"" }); setModalTrocarRota({ doc:d }); }}>{semRota ? "🔧 Definir designados" : "🔧 Trocar designados"}</button>
+                  )}
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                {[{campo:d.assinaturaElaborador,label:"Elaborador"},{campo:d.assinaturaRevisor,label:"Revisor"},{campo:d.assinaturaAprovador,label:"Aprovador"}].map(({campo,label})=>(
+                  <div key={label} style={{textAlign:"center",padding:"1rem",background:T.surf,borderRadius:10,border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:"uppercase",marginBottom:10}}>{label}</div>
+                    {campo?(<>
+                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
+                      {(campo.cargo||cargoCadastroAtual(campo))&&(
+                        <div style={{fontSize:11,color:T.text2}} title={campo.cargo?"Cargo gravado na assinatura":"Cargo atual do cadastro — esta assinatura foi feita antes de o cargo existir no perfil"}>
+                          {campo.cargo||cargoCadastroAtual(campo)}
+                          {!campo.cargo&&<span style={{fontSize:9,color:T.text3}}> · cadastro atual</span>}
+                        </div>
+                      )}
+                      {(campo.registroProfissional||campo.crf)&&<div style={{fontSize:10,color:T.text3}}>Registro profissional: {campo.registroProfissional||campo.crf}</div>}
+                      <div style={{fontSize:10,color:T.accent,marginTop:8,paddingTop:8,borderTop:`1px dashed ${T.border}`}}>✔ Assinado eletronicamente</div>
+                      <div style={{fontSize:10,color:T.text2}}>{campo.timestamp?new Date(campo.timestamp).toLocaleString("pt-BR"):campo.dataHora}</div>
+                      <div style={{fontSize:9,color:T.text3,marginTop:3,fontFamily:"monospace"}}>Cód.: {sigCodigo(campo, `${d.codigo}|R${d.versao}`)}</div>
+                    </>):(
+                      <div style={{fontSize:12,color:T.text3,padding:"1rem 0"}}>Aguardando</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>)}
+          {abaAtiva==="distribuicao" && (<>
+            {/* ── DISTRIBUIÇÃO ELETRÔNICA — quem deve ler, e quem já confirmou ── */}
+            {podeDefinirDistribuicao(d) && (()=>{
+              const sit = situacaoDaDistribuicao(d, evidencias, tod(), aberturas);
+              if (!sit.total && !podeDistribuir) return null;
+              const vigente = d.status === "Vigente";
+              return (
+                <div style={s.card}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+                    <SecTitle icon="📨" ch="Distribuição eletrônica" />
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      {sit.total>0 && <span style={{fontSize:12,color:T.text2}}>{sit.confirmados}/{sit.total} confirmaram</span>}
+                      {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>setModalDestinatarios({ doc:d, ids:new Set(destinatariosDoDoc(d).map(x=>String(x.userId))), busca:"" })}>
+                        {sit.total ? "✏️ Alterar destinatários" : "+ Definir destinatários"}
+                      </button>}
+                    </div>
+                  </div>
+                  <div style={{fontSize:11,color:T.text3,marginBottom:10}}>
+                    Quem recebe confirma a leitura da Rev.{d.versao} ao abrir o documento. Nova revisão reabre a leitura para as mesmas pessoas.
+                    {!vigente && " A leitura começa quando o documento entrar em vigor."}
+                  </div>
+                  {sit.total===0 ? (
+                    <div style={{fontSize:12,color:T.text3,textAlign:"center",padding:"1rem 0"}}>Nenhum destinatário definido.</div>
+                  ) : (
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead>
+                          <tr style={{background:T.surf}}>
+                            {["Destinatário","Setor","Incluído em","Leitura"].map(h=>(
+                              <th key={h} style={{padding:"8px 10px",textAlign:"left",color:T.text3,fontWeight:700,fontSize:10,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sit.linhas.map((l,i)=>(
+                            <tr key={l.userId} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.bg:T.surf}}>
+                              <td style={{padding:"7px 10px",color:T.text,fontWeight:600}}>{l.nome}</td>
+                              <td style={{padding:"7px 10px",color:T.text2}}>{l.setor||"—"}</td>
+                              <td style={{padding:"7px 10px",color:T.text2}}>{l.incluidoEm?fmt(l.incluidoEm):"—"}{l.incluidoPor?` · ${l.incluidoPor}`:""}</td>
+                              <td style={{padding:"7px 10px"}}>
+                                {l.confirmado
+                                  ? <span style={{color:T.accent,fontWeight:700}}>✓ Confirmou em {new Date(l.confirmadoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</span>
+                                  : vigente
+                                    ? <span style={{color:"#c27c0e",fontWeight:700}}>
+                                        {l.abertoEm ? `👁️ Abriu em ${new Date(l.abertoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}, não confirmou` : "⏳ Ainda não abriu"}
+                                        {l.dias>0?` · ${l.dias} dia(s)`:""}
+                                      </span>
+                                    : <span style={{color:T.text3}}>Aguardando vigência</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {/* ── DISTRIBUIÇÃO FÍSICA — cópias controladas impressas (só Vigente) ── */}
+            {d.status==="Vigente" && (
+              <div style={s.card}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
+                  <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
+                  {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"", recebidoPorId:"", recebidoPor:"", dataEntrega:tod() }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
+                </div>
+                <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Setores com cópia controlada impressa da Rev.{d.versao}.</div>
+                {(d.distribuicaoFisica||[]).length===0 ? (
+                  <div style={{fontSize:12,color:T.text3,padding:"0.5rem 0"}}>Nenhuma cópia física registrada.</div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {d.distribuicaoFisica.map((c,i)=>{
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                          <span style={{fontSize:18}}>🗂️</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(c)}</div>
+                            <div style={{fontSize:11,color:T.text2}}>
+                              Recebida por <strong style={{color:T.text}}>{c.recebidoPor||"—"}</strong> em {fmt(c.dataEntrega)}
+                            </div>
+                            <div style={{fontSize:11,color:T.text3}}>Entregue por {c.entreguePor||"—"}</div>
+                          </div>
+                          {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>abrirRecolha(d,c,"vigente")}>🗑️ Recolher</button>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Histórico: a recolha arquiva o ciclo em vez de apagar a linha — é o
+                    que prova que o setor teve (e devolveu) a cópia daquela revisão. */}
+                {(d.historicoDistribuicao||[]).length>0 && (
+                  <details style={{marginTop:12}}>
+                    <summary style={{fontSize:11,color:T.text3,cursor:"pointer"}}>
+                      📚 Histórico de cópias recolhidas ({d.historicoDistribuicao.length})
+                    </summary>
+                    <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                      {[...d.historicoDistribuicao].reverse().map((h,i)=>(
+                        <div key={h.id||i} style={{padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                          <div style={{fontSize:12,fontWeight:600,color:T.text2}}>
+                            {h.destinoLabel} · Rev.{h.versao||"—"}
+                            {h.motivo==="obsoleta" && <span style={{fontSize:10,color:T.text3,fontWeight:400}}> · cópia obsoleta</span>}
+                          </div>
+                          <div style={{fontSize:11,color:T.text3}}>
+                            {h.entregaEm ? `Entregue em ${fmt(h.entregaEm)}` : "Entrega sem data registrada"}
+                            {h.recebidoPor ? ` a ${h.recebidoPor}` : ""}
+                            {" · "}recolhida em {fmt(h.recolhaEm)} por {h.recolhidoPor||"—"}
+                            {h.devolvidoPor ? ` (devolvida por ${h.devolvidoPor})` : ""}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
             )}
+            {/* ── PENDÊNCIA DE RECOLHA — cópias obsoletas após nova revisão ── */}
+            {d.recolhaPendente?.length > 0 && (
+              <div style={{...s.card, border:"1px solid #ff4f6a55", background:"#ff4f6a0d"}}>
+                <SecTitle icon="⚠️" ch="Cópias obsoletas a recolher" />
+                <div style={{fontSize:12,color:T.text2,marginBottom:10}}>
+                  Estes setores têm cópias impressas de versões anteriores que precisam ser recolhidas e destruídas antes de distribuir a nova versão.
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {d.recolhaPendente.map((p,i)=>{
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
+                        <span style={{fontSize:18}}>📄</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(p)}</div>
+                          <div style={{fontSize:11,color:T.text2}}>
+                            Cópia da Rev.{p.versaoAnterior} pendente de recolha
+                            {p.recebidoPor ? ` · com ${p.recebidoPor}` : ""}
+                          </div>
+                        </div>
+                        {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>abrirRecolha(d,p,"obsoleta")}>✓ Recolhida</button>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* ── FASE 7: LOG DE DISTRIBUIÇÃO ── */}
+            {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
+              <div style={s.card}>
+                <SecTitle icon="📋" ch="Log de distribuição" />
+                {distLogLoading ? (
+                  <div style={{ fontSize:12, color:T.text3, padding:"8px 0" }}>Carregando...</div>
+                ) : distLog.length === 0 ? (
+                  <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem 0" }}>Nenhuma cópia distribuída ainda.</div>
+                ) : (
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                      <thead>
+                        <tr style={{ background:T.surf }}>
+                          {["Data/Hora","Usuário","Modo"].map(h=>(
+                            <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:T.text3, fontWeight:700, fontSize:10, textTransform:"uppercase", borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {distLog.map((row,i)=>(
+                          <tr key={row.id||i} style={{ borderBottom:`1px solid ${T.border}`, background:i%2===0?T.bg:T.surf }}>
+                            <td style={{ padding:"7px 10px", color:T.text2 }}>{row.data_download ? new Date(row.data_download).toLocaleString("pt-BR") : "—"}</td>
+                            <td style={{ padding:"7px 10px", color:T.text }}>{row.usuario_nome || "—"}</td>
+                            {/* O modo `formulario_fornecedor` não é mais emitido (seção retirada
+                                acima), mas o rótulo FICA: o log é registro de distribuição e as
+                                emissões já feitas continuam tendo de aparecer por extenso. */}
+                            <td style={{ padding:"7px 10px" }}>
+                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12,
+                                background:row.modo==="formulario_fornecedor" ? "#8a5a0022" : T.border,
+                                color:row.modo==="formulario_fornecedor" ? "#8a5a00" : T.text2 }}>
+                                {row.modo==="formulario_fornecedor" ? "📗 formulário p/ fornecedor" : (row.modo || "—")}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </>)}
+          {abaAtiva==="historico" && (<>
+            {/* ── HISTÓRICO DE VERSÕES (elevado) ── */}
+            <div style={s.card}>
+              <SecTitle icon="🕐" ch="Histórico de Versões" />
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:8}}>
+                {/* Versão atual — sempre no topo */}
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:T.accentDim,border:`1px solid ${T.accent}33`,borderRadius:10}}>
+                  <div style={{width:44,height:44,borderRadius:10,background:T.accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>
+                    {d.versao}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <span style={{fontSize:13,fontWeight:700,color:T.accent}}>Rev.{d.versao}</span>
+                      <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:T.accent,color:"#fff"}}>ATUAL</span>
+                      <BadgeStatusGD status={d.status}/>
+                    </div>
+                    <div style={{fontSize:11,color:T.text2,marginTop:3}}>
+                      {fmt(d.atualizadoEm)} · {d.atualizadoPor||d.criadoPor}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6,flexShrink:0}}>
+                    {d.arquivo ? (
+                      <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
+                    ) : (
+                      <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
+                    )}
+                  </div>
+                </div>
+                {/* Revisões anteriores */}
+                {(!d.historicoRevisoes||d.historicoRevisoes.length===0) ? (
+                  <div style={{fontSize:12,color:T.text3,padding:"10px 16px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,textAlign:"center"}}>
+                    Versão {d.versao} — atual. Sem revisões anteriores ainda.
+                  </div>
+                ) : (
+                  [...d.historicoRevisoes].reverse().map((h,i)=>{
+                    const arq = h.conteudo?.arquivo;
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:10}}>
+                        <div style={{width:44,height:44,borderRadius:10,background:T.border,color:T.text2,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,flexShrink:0}}>
+                          {h.versao}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versaoAlvo||h.versao}</span>
+                            {h.status&&<BadgeStatusGD status={h.status}/>}
+                          </div>
+                          <div style={{fontSize:11,color:T.text2,marginTop:2}}>
+                            {fmt(h.data)} · {h.responsavel||"—"}{h.aprovador?` · Aprov.: ${h.aprovador}`:""}
+                          </div>
+                          {h.itemModificado&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Item modificado: {h.itemModificado}</div>}
+                          {h.motivo&&<div style={{fontSize:11,color:T.text3,marginTop:2,fontStyle:"italic"}}>{h.motivo}</div>}
+                        </div>
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          {arq ? (<>
+                            <button onClick={()=>abrirArquivoAutenticado(arq.url)} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                            <button onClick={()=>abrirArquivoAutenticado(arq.url, true, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
+                          </>) : h.conteudo ? (
+                            <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
+                          ) : (
+                            <span style={{fontSize:10,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+          </>)}
           </div>
-        )}
+          {/* Painel de resumo: o essencial do documento sempre à vista. */}
+          <aside style={{flex:"0 0 250px",maxWidth:"100%",position:"sticky",top:12,...s.card,marginBottom:0}}>
+            <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:8}}>Resumo</div>
+            {[
+              ["Status", <BadgeStatusGD status={d.status} />],
+              ["Versão", `Rev.${d.versao}`],
+              ["Vigência", d.dataVigencia ? fmt(d.dataVigencia) : "—"],
+              ["Próx. revisão", d.proximaRevisao ? fmt(d.proximaRevisao) : "—"],
+            ].map(([k,v]) => (
+              <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
+                <span style={{color:T.text3}}>{k}</span><span style={{color:T.text,fontWeight:600,textAlign:"right"}}>{v}</span>
+              </div>
+            ))}
+            <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase",margin:"12px 0 4px"}}>Assinaturas</div>
+            {[
+              ["Elaborador", d.assinaturaElaborador, d.criadoPor],
+              ["Revisor", d.assinaturaRevisor, d.rota?.revisorNome],
+              ["Aprovador", d.assinaturaAprovador, d.rota?.aprovadorNome],
+            ].map(([papel, ass, nome]) => (
+              <div key={papel} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
+                <span style={{color:T.text3}}>{papel}</span>
+                <span style={{textAlign:"right",color:ass ? T.accent : T.text2,fontWeight:ass ? 700 : 400}} title={nome || ""}>
+                  {ass ? `✓ ${ass.nome || nome || ""}` : (nome ? `⏳ ${nome}` : "—")}
+                </span>
+              </div>
+            ))}
+            {(()=>{
+              const sit = situacaoDaDistribuicao(d, evidencias, tod(), aberturas);
+              const copias = (d.distribuicaoFisica || []).length;
+              const linhas = [
+                sit.total > 0 && ["Leituras", `${sit.confirmados}/${sit.total}`],
+                d.status === "Vigente" && ["Cópias físicas", copias],
+                (d.recolhaPendente || []).length > 0 && ["A recolher", <span style={{color:"#ff4f6a"}}>{d.recolhaPendente.length}</span>],
+                geraRegistro(d) && ["Retenção", `${textoRetencao(regraDoRegistro(d))}${regraDoRegistro(d).definida ? "" : " (padrão)"}`],
+              ].filter(Boolean);
+              if (!linhas.length) return null;
+              return (<>
+                <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase",margin:"12px 0 4px"}}>Distribuição e registro</div>
+                {linhas.map(([k,v]) => (
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}`,fontSize:12}}>
+                    <span style={{color:T.text3}}>{k}</span><span style={{color:T.text,fontWeight:600}}>{v}</span>
+                  </div>
+                ))}
+              </>);
+            })()}
+          </aside>
+        </div>
         {verSnapshot && (
           <div onClick={()=>setVerSnapshot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,maxWidth:760,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
