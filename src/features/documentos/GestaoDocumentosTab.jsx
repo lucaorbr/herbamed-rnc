@@ -3309,8 +3309,9 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
       </div>
       {!loading && (()=>{
         const minhas = leiturasPendentesDoUsuario({ docs, evidencias, userId:String(user?.uid||user?.id||""), hoje:tod() });
-        const semDist = podeDistribuir ? docs.filter(semDistribuicao) : [];
-        if (!minhas.length && !semDist.length) return null;
+        // A lista de "aprovados sem distribuição" saiu daqui a pedido do usuário:
+        // a faixa dentro do documento e o "Precisa de você" já avisam.
+        if (!minhas.length) return null;
         const chip = (doc, extra) => (
           <button key={doc.id} type="button" style={{...s.btn,fontSize:11}} onClick={()=>{setSel(doc);setView("detalhe");}}>
             {doc.codigo}{extra ? ` · ${extra}` : ""}
@@ -3322,12 +3323,6 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
               <div style={{background:`${T.blue||"#4fc3f7"}14`,border:`1px solid ${T.blue||"#4fc3f7"}55`,borderRadius:10,padding:"10px 14px"}}>
                 <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:6}}>📨 {minhas.length} documento(s) distribuído(s) para você aguardando leitura</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{minhas.map(m=>chip(m.doc, m.dias>0?`${m.dias}d`:""))}</div>
-              </div>
-            )}
-            {semDist.length>0 && (
-              <div style={{background:"#e8a33d18",border:"1px solid #e8a33d55",borderRadius:10,padding:"10px 14px"}}>
-                <div style={{fontSize:13,fontWeight:700,color:"#c27c0e",marginBottom:6}}>📨 {semDist.length} documento(s) aprovado(s) sem distribuição definida</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{semDist.map(doc=>chip(doc))}</div>
               </div>
             )}
           </div>
