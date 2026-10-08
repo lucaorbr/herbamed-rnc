@@ -1,4 +1,5 @@
 import {
+  abriuEm, novaAbertura,
   comDestinatarios, evidenciaDeLeitura, leiturasPendentesDoUsuario,
   semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
@@ -60,6 +61,23 @@ describe("distribuição eletrônica", () => {
     const grupos = usuariosPorSetor(users);
     expect(grupos.map(g => g.setor)).toEqual(["Produção", "Qualidade", "Sem setor informado"]);
     expect(usuariosPorSetor(users, "producao").map(g => g.setor)).toEqual(["Produção"]);
+  });
+
+  test("registra a abertura por versão e a leva para a evidência", () => {
+    const doc = comDest(docBase, ["u1", "u2"]);
+    const ab = novaAbertura(doc, { uid: "u1", name: "Ana Souza" }, new Date("2026-10-03T10:00:00Z"));
+    expect(ab).toMatchObject({ id: "10|01|u1", docId: "10", versao: "01", userId: "u1" });
+    expect(abriuEm(doc, "u1", [ab])).toBe("2026-10-03T10:00:00.000Z");
+    expect(abriuEm(doc, "u2", [ab])).toBeNull();
+    // Abertura da Rev.01 não libera a confirmação da Rev.02.
+    expect(abriuEm({ ...doc, versao: "02" }, "u1", [ab])).toBeNull();
+
+    const sit = situacaoDaDistribuicao(doc, [], "2026-10-04", [ab]);
+    expect(sit.linhas.find(l => l.userId === "u1")).toMatchObject({ abertoEm: ab.abertoEm, confirmado: false });
+    expect(sit.linhas.find(l => l.userId === "u2").abertoEm).toBeNull();
+
+    const ev = evidenciaDeLeitura(doc, { uid: "u1", name: "Ana Souza" }, "2026-10-04", ab.abertoEm);
+    expect(ev.abertoEm).toBe(ab.abertoEm);
   });
 
   test("vira pendência na tela inicial", () => {

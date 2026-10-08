@@ -23,7 +23,7 @@ import { TIPOS_DOC_GD, DEPARTAMENTOS_GD, prazoRevisaoTipo, codigoSegueTipo } fro
 import { ConfiguracaoDocumentosTab } from "./ConfiguracaoDocumentosTab";
 import { MATRIZ_TREINAMENTO_ATIVA } from "../../config/funcionalidades";
 import {
-  comDestinatarios, destinatariosDoDoc, evidenciaDeLeitura, leiturasPendentesDoUsuario,
+  abriuEm, comDestinatarios, destinatariosDoDoc, evidenciaDeLeitura, leiturasPendentesDoUsuario, novaAbertura,
   podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
 import { enviarEmail } from "../email/enviarEmail";
@@ -333,17 +333,17 @@ function renderUrl(docId, modo, userName) {
 
 // Botões "Ver"/"Baixar" do arquivo oficial vigente, agora pela renderização
 // controlada. O modo (e a marca d'água resultante) depende do status do doc.
-function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrito }) {
+function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrito, onAbrir }) {
   const codigo = d.codigo || "documento";
   const versao = d.versao || "01";
   if (d.status === "Vigente") {
     // Acesso restrito: usuário só pode baixar a cópia não controlada, sem ver a versão controlada na tela
     if (acessoRestrito) {
-      return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>;
+      return <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`); }} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>;
     }
     return (<>
-      <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-      {podeBaixarCopia && <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`)} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
+      <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName)); }} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+      {podeBaixarCopia && <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`); }} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
     </>);
   }
   if (acessoRestrito) return null; // não vê Obsoleto/Rascunho/etc.
@@ -474,6 +474,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   const [sessoes, setSessoes] = useState([]);
   const [editTreino, setEditTreino] = useState(null); // config de exigência em edição
   const [modalDestinatarios, setModalDestinatarios] = useState(null); // { doc, ids:Set, busca }
+  const [aberturas, setAberturas] = useState([]); // quem abriu qual versão (libera o "Li e entendi")
   const [novaEvid, setNovaEvid] = useState({ userId:"", dataRealizacao:tod(), obs:"" });
   const [capituloAtivo, setCapituloAtivo] = useState("objetivo");
   const [verSnapshot, setVerSnapshot] = useState(null);
@@ -666,6 +667,11 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
   // `handleCollections` no servidor atende qualquer nome, sem whitelist.
   useEffect(() => {
     const unsub = subscribeCollection("treinamento_sessoes", list => setSessoes(list || []));
+    return () => unsub && unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeCollection("leitura_aberturas", list => setAberturas(list || []));
     return () => unsub && unsub();
   }, []);
 
@@ -1178,9 +1184,30 @@ Herbamed® · Sistema de Gestão da Qualidade`,
       .catch(e => toast_(`E-mail não enviado: ${e.message}`, "red"));
   };
 
+  // Só destinatário com leitura pendente gera registro; fica a primeira abertura.
+  const registrarAbertura = (doc) => {
+    const meuId = String(user?.uid || user?.id || "");
+    if (doc?.status !== "Vigente" || abriuEm(doc, meuId, aberturas)) return;
+    if (!leiturasPendentesDoUsuario({ docs:[doc], evidencias, userId:meuId, hoje:tod() }).length) return;
+    const ab = novaAbertura(doc, user);
+    setAberturas(prev => [...prev, ab]);
+    saveCollection("leitura_aberturas", ab.id, ab).catch(e => console.error("Abertura não registrada:", e));
+  };
+
+  const abrirParaLeitura = (doc) => {
+    registrarAbertura(doc);
+    if (acessoRestritoVigente) {
+      abrirArquivoAutenticado(renderUrl(doc.id, "nao_controlada", user?.name), true, `${doc.codigo}_Rev${doc.versao}_CopiaNaoControlada.pdf`);
+    } else {
+      abrirArquivoAutenticado(renderUrl(doc.id, "controlada", user?.name));
+    }
+  };
+
   const confirmarLeituraDistribuicao = async (doc) => {
     try {
-      const ev = evidenciaDeLeitura(doc, user, tod());
+      const aberto = abriuEm(doc, String(user?.uid || user?.id || ""), aberturas);
+      if (!aberto) { toast_("Abra o documento antes de confirmar a leitura.", "red"); return; }
+      const ev = evidenciaDeLeitura(doc, user, tod(), aberto);
       await saveCollection("treinamentos", ev.id, ev);
       setEvidencias(prev => [...prev, ev]);
       await auditLog("Confirmou leitura (distribuição)", "treinamentos", ev.id,
@@ -1477,16 +1504,26 @@ Herbamed® · Sistema de Gestão da Qualidade`,
           const meuId = String(user?.uid || user?.id || "");
           const pendente = leiturasPendentesDoUsuario({ docs:[d], evidencias, userId:meuId, hoje:tod() })[0];
           if (!pendente) return null;
+          const aberto = abriuEm(d, meuId, aberturas);
           return (
             <div style={{background:`${T.blue||"#4fc3f7"}14`,border:`1px solid ${T.blue||"#4fc3f7"}55`,borderRadius:10,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
               <span style={{fontSize:20}}>📨</span>
               <div style={{flex:1,minWidth:220}}>
                 <div style={{fontSize:13,fontWeight:700,color:T.text}}>Este documento foi distribuído para você — Rev.{d.versao}</div>
                 <div style={{fontSize:11,color:T.text2,marginTop:2}}>
-                  Leia o documento e confirme a leitura.{pendente.dias>0 ? ` Pendente há ${pendente.dias} dia(s).` : ""}
+                  {aberto
+                    ? `Documento aberto em ${new Date(aberto).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}. Depois de ler, confirme.`
+                    : "Passo 1: abra o documento e leia. Passo 2: confirme a leitura."}
+                  {pendente.dias>0 ? ` Pendente há ${pendente.dias} dia(s).` : ""}
                 </div>
               </div>
-              <button style={{...s.btnA,fontSize:12}} onClick={()=>confirmarLeituraDistribuicao(d)}>✅ Li e entendi</button>
+              {!d.arquivo ? (
+                <span style={{fontSize:11,color:T.text3}}>Documento sem arquivo anexado — avise a Qualidade.</span>
+              ) : (<>
+                <button style={{...(aberto ? s.btn : s.btnA),fontSize:12}} onClick={()=>abrirParaLeitura(d)}>📄 {aberto ? "Abrir de novo" : "Abrir documento"}</button>
+                <button style={{...s.btnA,fontSize:12,...(!aberto?{opacity:0.45,cursor:"not-allowed"}:{})}} disabled={!aberto}
+                  title={aberto ? undefined : "Abra o documento primeiro"} onClick={()=>confirmarLeituraDistribuicao(d)}>✅ Li e entendi</button>
+              </>)}
             </div>
           );
         })()}
@@ -1575,7 +1612,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 </div>
               </div>
               <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} />
+                <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
               </div>
             </div>
           ) : (
@@ -1698,7 +1735,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 {d.arquivo ? (
-                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} />
+                  <BotoesArquivoRender d={d} s={s} T={T} podeBaixarCopia={podeBaixarCopiaNaoControlada} userName={user?.name} acessoRestrito={acessoRestritoVigente} onAbrir={registrarAbertura} />
                 ) : (
                   <span style={{fontSize:11,color:T.text3,fontStyle:"italic"}}>Sem arquivo</span>
                 )}
@@ -1849,7 +1886,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
         )}
         {/* ── DISTRIBUIÇÃO ELETRÔNICA — quem deve ler, e quem já confirmou ── */}
         {podeDefinirDistribuicao(d) && (()=>{
-          const sit = situacaoDaDistribuicao(d, evidencias, tod());
+          const sit = situacaoDaDistribuicao(d, evidencias, tod(), aberturas);
           if (!sit.total && !podeDistribuir) return null;
           const vigente = d.status === "Vigente";
           return (
@@ -1889,7 +1926,10 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                             {l.confirmado
                               ? <span style={{color:T.accent,fontWeight:700}}>✓ Confirmou em {new Date(l.confirmadoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</span>
                               : vigente
-                                ? <span style={{color:"#c27c0e",fontWeight:700}}>⏳ Pendente{l.dias>0?` há ${l.dias} dia(s)`:""}</span>
+                                ? <span style={{color:"#c27c0e",fontWeight:700}}>
+                                    {l.abertoEm ? `👁️ Abriu em ${new Date(l.abertoEm).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}, não confirmou` : "⏳ Ainda não abriu"}
+                                    {l.dias>0?` · ${l.dias} dia(s)`:""}
+                                  </span>
                                 : <span style={{color:T.text3}}>Aguardando vigência</span>}
                           </td>
                         </tr>
