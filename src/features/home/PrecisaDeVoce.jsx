@@ -28,12 +28,12 @@ const ROTULO_FONTE = {
   treinamento: "Treinamento", documento: "Documento",
 };
 
-// Pendência de uma RNC abre a ficha dela, não a lista inteira.
-function LinhaPendencia({ p, setTab, abrirRnc, T }) {
+// Pendência de uma RNC abre a ficha dela, e a de um documento abre o documento — não a lista inteira.
+function LinhaPendencia({ p, setTab, abrirRnc, abrirDoc, T }) {
   const cor = CORES(T)[p.urgencia] || T.text3;
   return (
     <button
-      onClick={() => (p.rncId && abrirRnc ? abrirRnc(p.rncId) : setTab(p.tab))}
+      onClick={() => (p.rncId && abrirRnc ? abrirRnc(p.rncId) : p.docId && abrirDoc ? abrirDoc(p.docId) : setTab(p.tab))}
       style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 14px",
         background:"transparent", border:"none", borderBottom:`1px solid ${T.border}`,
         cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
@@ -77,7 +77,7 @@ function Indicador({ n, l, cor, T }) {
   );
 }
 
-export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc, perm = () => true, docNotifs = [],
+export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc, abrirDoc, perm = () => true, docNotifs = [],
   colaboradores = [], catalogoCargos = [], catalogoAreas = [] }) {
   const T = useTheme(); const s = useS();
   const hoje = tod();
@@ -166,7 +166,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
           </div>
         ) : (
           <>
-            {mostradas.map(p => <LinhaPendencia key={p.id} p={p} setTab={setTab} abrirRnc={abrirRnc} T={T} />)}
+            {mostradas.map(p => <LinhaPendencia key={p.id} p={p} setTab={setTab} abrirRnc={abrirRnc} abrirDoc={abrirDoc} T={T} />)}
             {pendencias.length > 8 && (
               <button onClick={() => setVerTudo(v => !v)}
                 style={{ width:"100%", padding:"9px", background:"transparent", border:"none", color:T.accent,

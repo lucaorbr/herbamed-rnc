@@ -24,6 +24,7 @@ const {
   validateHomologacaoUpdate,
 } = require("./homologacao");
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
+const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
   buildDocumentSourceHash,
@@ -844,6 +845,11 @@ async function notifyDocumentSignatureRoute(docId, oldData, newData) {
       `${refDoc} foi revisado e aguarda sua aprovação.`,
       docId, codigo, link
     );
+  }
+
+  // Recusa do Revisor/Aprovador: avisa o Elaborador (e o Revisor, se foi o Aprovador), com o motivo.
+  for (const n of notificacoesDeRecusa(oldData, newData)) {
+    await createNotification(n.userId, n.tipo, n.titulo, n.mensagem, docId, codigo, link);
   }
 
   const tornouVigente = oldData?.status !== "Vigente" && newData?.status === "Vigente";

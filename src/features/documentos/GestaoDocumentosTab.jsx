@@ -457,7 +457,7 @@ function ResumoRapidoDocumento({ resumo, loading, error, onRefresh, s, T }) {
   );
 }
 
-export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC }) {
+export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tiposRevisao = {}, catalogoDeptos = [], catalogoTipos = [], catalogoAreasSetoresDistribuicao = [], catalogoCargos = [], colaboradores = [], doSaveRNC, docAberto = null, onDocAberto }) {
   const T = useTheme();
   const s = useS();
 
@@ -695,6 +695,33 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       .catch(() => setDistLog([]))
       .finally(() => setDistLogLoading(false));
   }, [sel?.id]);
+
+  // ── Documento aberto ↔ endereço (?aba=gestao-docs&doc=<id>) ─────────────
+  // O endereço manda (notificação do sino, pendência, link, Voltar do navegador) e a
+  // tela avisa quando a pessoa abre/fecha um documento por dentro dela.
+  const docAbertoAnterior = React.useRef(undefined);
+  const abrindoDoc = React.useRef(null); // pedido do endereço ainda não refletido na tela
+  useEffect(() => {
+    if (docAberto && loading) return; // espera a lista carregar para achar o documento
+    const mudou = docAbertoAnterior.current !== docAberto;
+    if (mudou && docAberto) {
+      const alvo = docs.find(x => String(x.id) === String(docAberto));
+      if (alvo) { abrindoDoc.current = String(alvo.id); setSel(alvo); setView("detalhe"); }
+      else { toast_("Documento não encontrado — pode ter sido excluído.", "red"); onDocAberto?.(null); }
+    } else if (mudou && !docAberto && docAbertoAnterior.current !== undefined && view === "detalhe") {
+      setView("lista");
+    }
+    docAbertoAnterior.current = docAberto;
+  }, [docAberto, loading]);
+  useEffect(() => {
+    if (loading) return;
+    const atual = view === "detalhe" && sel ? String(sel.id) : null;
+    if (abrindoDoc.current) {
+      if (atual !== abrindoDoc.current) return; // a tela ainda não abriu o que o endereço pediu
+      abrindoDoc.current = null;
+    }
+    if (atual !== (docAberto || null)) onDocAberto?.(atual);
+  }, [view, sel?.id, loading]);
 
   const salvar = async () => {
     try {
@@ -1076,6 +1103,13 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         assinaturaRevisor: null,
         assinaturaAprovador: null,
         apontamentos,
+        // Histórico de recusas: `apontamentos` é limpo quando o elaborador reassina, e com
+        // isso o Revisor nunca sabia por que o Aprovador recusou. Aqui fica para sempre.
+        historicoRecusas: [...(doc.historicoRecusas || []), {
+          id: `${Date.now()}`, versao: doc.versao || "00",
+          autor: user?.name || "", autorId: String(user?.id || user?.uid || ""), autorPapel: papel,
+          data: new Date().toISOString(), apontamentos,
+        }],
         atualizadoEm: tod(), atualizadoTs: Date.now(), atualizadoPor: user?.name,
       };
       await saveCollection("gestao_docs", String(doc.id), updated);
@@ -1647,6 +1681,31 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             </div>
           </div>
         )}
+        {(()=>{
+          // Recusas anteriores DESTA revisão, depois que o elaborador corrigiu e reassinou:
+          // Revisor e Aprovador conferem se os apontamentos foram atendidos.
+          const recusas = (d.historicoRecusas || []).filter(r => String(r.versao) === String(d.versao));
+          if (!recusas.length || d.apontamentos?.length > 0 || !["Em Revisão","Aguardando Aprovação"].includes(d.status)) return null;
+          return (
+            <div style={{background:"#e8a33d14",border:"1px solid #e8a33d55",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#c27c0e",marginBottom:4}}>
+                ↩️ Esta revisão já foi recusada {recusas.length===1 ? "1 vez" : `${recusas.length} vezes`} — confira se os apontamentos foram atendidos antes de assinar
+              </div>
+              {recusas.slice().reverse().map(r => (
+                <div key={r.id} style={{marginTop:8}}>
+                  <div style={{fontSize:11,color:T.text3,fontWeight:700}}>
+                    Recusado por {r.autor||"—"} ({r.autorPapel==="aprovador"?"Aprovador":"Revisor"}) em {new Date(r.data).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}
+                  </div>
+                  {(r.apontamentos||[]).map((a,i)=>(
+                    <div key={a.id||i} style={{fontSize:12,color:T.text,background:T.surf,borderRadius:6,padding:"6px 10px",marginTop:4,borderLeft:"3px solid #e8a33d"}}>
+                      <span style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginRight:6}}>{a.secao||"Geral"}</span>{a.descricao}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         {d.apontamentos?.length>0 && ["Rascunho","Em Revisão"].includes(d.status) && (
           <div style={{background:"#ff4f6a14",border:"1px solid #ff4f6a44",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
             <div style={{fontSize:13,fontWeight:700,color:"#ff4f6a",display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -1657,7 +1716,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div key={a.id||i} style={{background:T.surf,borderRadius:8,padding:"8px 12px",borderLeft:"3px solid #ff4f6a"}}>
                   <div style={{fontSize:10,color:T.text3,fontWeight:700,textTransform:"uppercase",marginBottom:3,display:"flex",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
                     <span>{a.secao||"Geral"}</span>
-                    <span style={{color:T.text3,fontWeight:400,textTransform:"none"}}>{a.autor||"—"} · {a.autorPapel==="aprovador"?"Aprovador":"Revisor"}{a.data?` · ${fmt(a.data)}`:""}</span>
+                    <span style={{color:T.text3,fontWeight:400,textTransform:"none"}}>{a.autor||"—"} · {a.autorPapel==="aprovador"?"Aprovador":"Revisor"}{a.data?` · ${new Date(a.data).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}`:""}</span>
                   </div>
                   <div style={{fontSize:13,color:T.text}}>{a.descricao}</div>
                 </div>

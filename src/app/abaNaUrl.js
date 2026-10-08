@@ -2,6 +2,8 @@
 // navegação: sem isso o sistema inteiro era uma página só, o Voltar saía do SGQ e o
 // F5 jogava de volta para a Home. A Home não leva parâmetro (endereço limpo).
 // A ficha de uma RNC leva também qual RNC e qual etapa: ?aba=rnc&rnc=<id>&etapa=causa.
+// Um documento aberto na Gestão de Documentos leva qual documento: ?aba=gestao-docs&doc=<id>
+// (é o que o clique na notificação do sino usa para abrir direto no documento).
 import { montarGrupos } from "../layout/navegacao";
 
 // Telas que abrem por atalho e não estão no menu.
@@ -28,35 +30,39 @@ export function abaDaUrl(search, validas = ABAS_VALIDAS) {
   return aba && validas.has(aba) ? aba : "home";
 }
 
-/** Qual RNC e qual etapa da ficha o endereço pede (etapa inválida vira "resumo"). */
+/** Qual RNC e qual etapa da ficha, e qual documento, o endereço pede (etapa inválida vira "resumo"). */
 export function fichaDaUrl(search) {
   const p = new URLSearchParams(search || "");
   const etapa = p.get("etapa");
-  return { rnc: p.get("rnc") || null, etapa: ETAPAS_FICHA.has(etapa) ? etapa : "resumo" };
+  return { rnc: p.get("rnc") || null, etapa: ETAPAS_FICHA.has(etapa) ? etapa : "resumo", doc: p.get("doc") || null };
 }
 
 /**
  * Endereço com a tela trocada, preservando o resto (caminho, outros parâmetros, #).
  * `rnc`/`etapa` só existem na ficha: fora dela saem do endereço.
  */
-export function urlComAba(href, aba, { rnc = null, etapa = null } = {}) {
+export function urlComAba(href, aba, { rnc = null, etapa = null, doc = null } = {}) {
   const url = new URL(href);
   url.searchParams.delete("rnc");
   url.searchParams.delete("etapa");
+  url.searchParams.delete("doc");
   if (!aba || aba === "home") url.searchParams.delete("aba");
   else url.searchParams.set("aba", aba);
   if (aba === "rnc" && rnc) {
     url.searchParams.set("rnc", rnc);
     if (etapa && etapa !== "resumo") url.searchParams.set("etapa", etapa);
   }
+  if (aba === "gestao-docs" && doc) url.searchParams.set("doc", doc);
   return url.pathname + url.search + url.hash;
 }
 
 /** O endereço já representa este estado? (compara os parâmetros crus) */
-export function enderecoCorresponde(search, aba, { rnc = null, etapa = null } = {}) {
+export function enderecoCorresponde(search, aba, { rnc = null, etapa = null, doc = null } = {}) {
   const p = new URLSearchParams(search || "");
   const abaEsperada = aba === "home" ? null : aba;
   if (p.get("aba") !== abaEsperada) return false;
+  const docEsperado = aba === "gestao-docs" ? (doc || null) : null;
+  if ((p.get("doc") || null) !== docEsperado) return false;
   if (aba !== "rnc") return !p.get("rnc") && !p.get("etapa");
   return p.get("rnc") === rnc && (p.get("etapa") || "resumo") === (etapa || "resumo");
 }
