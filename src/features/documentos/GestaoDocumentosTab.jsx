@@ -336,6 +336,20 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
   return `${codigo || "documento"}_Rev${versao || "01"}${ext}`;
 }
 
+// Rótulos do log de distribuição. `formulario_fornecedor` não é mais emitido, mas fica:
+// as emissões já feitas continuam tendo de aparecer por extenso.
+const MODO_LOG_ROTULO = {
+  controlada: "👁️ vista na tela",
+  nao_controlada: "⬇️ cópia não controlada",
+  formulario_fornecedor: "📗 formulário p/ fornecedor",
+};
+function rotulosDoLog(rows = []) {
+  return {
+    tela: rows.filter(r => r.modo === "controlada").length,
+    download: rows.filter(r => r.modo === "nao_controlada").length,
+  };
+}
+
 // Fase 2/3 — endpoint de renderização controlada (capa + marca d'água no conteúdo).
 function renderUrl(docId, modo, userName, versao) {
   const base = `/api/documents/${docId}/render?modo=${modo}${versao ? `&versao=${encodeURIComponent(versao)}` : ""}`;
@@ -2191,10 +2205,17 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             {(isAdmin || (perm?.("gerenciarTreinamento") ?? false)) && (
               <div style={s.card}>
                 <SecTitle icon="📋" ch="Log de distribuição" />
+                {/* Desde a v3.21.0 a visualização na tela também é registrada — a cópia
+                    controlada vista na tela pode ser impressa pelo navegador. */}
+                {!distLogLoading && distLog.length > 0 && (
+                  <div style={{ fontSize:11, color:T.text2, margin:"-4px 0 10px" }}>
+                    {(() => { const n = rotulosDoLog(distLog); return `${n.tela} visualização(ões) na tela · ${n.download} cópia(s) não controlada(s) baixada(s)`; })()}
+                  </div>
+                )}
                 {distLogLoading ? (
                   <div style={{ fontSize:12, color:T.text3, padding:"8px 0" }}>Carregando...</div>
                 ) : distLog.length === 0 ? (
-                  <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem 0" }}>Nenhuma cópia distribuída ainda.</div>
+                  <div style={{ fontSize:12, color:T.text3, textAlign:"center", padding:"1rem 0" }}>Nenhum acesso registrado ainda.</div>
                 ) : (
                   <div style={{ overflowX:"auto" }}>
                     <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
@@ -2217,7 +2238,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                               <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:12,
                                 background:row.modo==="formulario_fornecedor" ? "#8a5a0022" : T.border,
                                 color:row.modo==="formulario_fornecedor" ? "#8a5a00" : T.text2 }}>
-                                {row.modo==="formulario_fornecedor" ? "📗 formulário p/ fornecedor" : (row.modo || "—")}
+                                {MODO_LOG_ROTULO[row.modo] || row.modo || "—"}
                               </span>
                             </td>
                           </tr>

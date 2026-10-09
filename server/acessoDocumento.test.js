@@ -82,3 +82,38 @@ test("documento da revisão antiga usa o conteúdo da época, sem as assinaturas
   assert.equal(documentoDaRevisao(doc, "05"), null);
   assert.equal(documentoDaRevisao({ historicoRevisoes: [{ versao: "00", conteudo: {} }] }, "00"), null);
 });
+
+const { identificacaoDaCopia, marcaSecundaria, rodapeDaPagina, registraNoLog } = require("./acessoDocumento");
+const quando = new Date("2026-10-09T12:31:00Z"); // 09:31 em Brasília
+
+test("identificação: quem e quando, pela sessão, só em cópia de documento vigente", () => {
+  assert.equal(identificacaoDaCopia("controlada", { name: "Ana Lima" }, quando), "vista por Ana Lima em 09/10/2026 09:31");
+  assert.equal(identificacaoDaCopia("nao_controlada", { name: "Ana Lima" }, quando), "emitida para Ana Lima em 09/10/2026 09:31");
+  assert.equal(identificacaoDaCopia("obsoleto", { name: "Ana" }, quando), "");
+  assert.equal(identificacaoDaCopia("rascunho", { name: "Ana" }, quando), "");
+  const longo = identificacaoDaCopia("controlada", { name: "X".repeat(60) }, quando);
+  assert.ok(longo.includes(`${"X".repeat(39)}…`));
+});
+
+test("marca diagonal: segunda linha só na cópia controlada da tela", () => {
+  assert.equal(marcaSecundaria("controlada"), "VÁLIDA SOMENTE EM TELA");
+  assert.equal(marcaSecundaria("nao_controlada"), "");
+  assert.equal(marcaSecundaria("obsoleto"), "");
+});
+
+test("rodapé: modo + identificação + página; formulário segue só com a página", () => {
+  const base = { codigo: "PO-SGQ-001", versao: "02", numPag: 1, total: 3, identificacao: "vista por Ana em 09/10/2026 09:31" };
+  assert.equal(rodapeDaPagina({ ...base, modo: "controlada", wmTexto: "CÓPIA CONTROLADA" }),
+    "CÓPIA CONTROLADA - VÁLIDA SOMENTE EM TELA · vista por Ana em 09/10/2026 09:31 · PO-SGQ-001 Rev. 02 · Página 1 de 3");
+  assert.equal(rodapeDaPagina({ ...base, modo: "obsoleto", wmTexto: "DOCUMENTO OBSOLETO", identificacao: "" }),
+    "DOCUMENTO OBSOLETO · PO-SGQ-001 Rev. 02 · Página 1 de 3");
+  assert.equal(rodapeDaPagina({ ...base, modo: "controlada", wmTexto: "CÓPIA CONTROLADA", semMarcaDagua: true }),
+    "PO-SGQ-001 Rev. 02 · Página 1 de 3");
+});
+
+test("log: registra tela e download do vigente, não rascunho nem obsoleto", () => {
+  assert.equal(registraNoLog("controlada"), true);
+  assert.equal(registraNoLog("nao_controlada"), true);
+  assert.equal(registraNoLog("obsoleto"), false);
+  assert.equal(registraNoLog("rascunho"), false);
+});
