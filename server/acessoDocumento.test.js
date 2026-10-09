@@ -98,7 +98,7 @@ test("identificação: quem e quando, pela sessão, só em cópia de documento v
 test("rodapé: modo + identificação + página; formulário segue só com a página", () => {
   const base = { codigo: "PO-SGQ-001", versao: "02", numPag: 1, total: 3, identificacao: "vista por Ana em 09/10/2026 09:31" };
   assert.equal(rodapeDaPagina({ ...base, modo: "controlada", wmTexto: "CÓPIA CONTROLADA" }),
-    "CÓPIA CONTROLADA - VÁLIDA SOMENTE EM TELA · vista por Ana em 09/10/2026 09:31 · PO-SGQ-001 Rev. 02 · Página 1 de 3");
+    "CÓPIA CONTROLADA · vista por Ana em 09/10/2026 09:31 · PO-SGQ-001 Rev. 02 · Página 1 de 3");
   assert.equal(rodapeDaPagina({ ...base, modo: "obsoleto", wmTexto: "DOCUMENTO OBSOLETO", identificacao: "" }),
     "DOCUMENTO OBSOLETO · PO-SGQ-001 Rev. 02 · Página 1 de 3");
   assert.equal(rodapeDaPagina({ ...base, modo: "controlada", wmTexto: "CÓPIA CONTROLADA", semMarcaDagua: true }),

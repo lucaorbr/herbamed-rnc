@@ -120,11 +120,10 @@ function documentoDaRevisao(doc, versao) {
 // ── Identificação da cópia (v3.21.0) ─────────────────────────────────────────
 // A "CÓPIA CONTROLADA" vista na tela podia ser impressa pelo navegador e virava um
 // papel idêntico ao da cópia oficial entregue ao setor — sem registro de quem
-// imprimiu. O PDF não sabe se está sendo impresso, então ele passa a carregar:
-//   - no rodapé, "VÁLIDA SOMENTE EM TELA" (cópia da tela) e para quem e quando foi
-//     gerado (também na cópia não controlada).
-// A marca diagonal continua só com o texto do modo — decisão do usuário: a segunda
-// linha "VÁLIDA SOMENTE EM TELA" na diagonal foi testada e retirada.
+// imprimiu. O PDF não sabe se está sendo impresso, então ele passa a carregar, no
+// rodapé, para quem e quando foi gerado (também na cópia não controlada).
+// Decisão do usuário: "VÁLIDA SOMENTE EM TELA" foi testado na marca diagonal e no
+// rodapé e retirado dos dois — a marca e o rótulo do rodapé seguem só o texto do modo.
 // Quem gerou vem da SESSÃO, nunca do `userName` do endereço.
 // Formulário (FO, sem marca d'água) fica de fora: ele é impresso de propósito.
 
@@ -146,16 +145,11 @@ function identificacaoDaCopia(modo, user, quando = new Date()) {
   return `${verbo} ${nome} em ${dataHoraBR(quando)}`;
 }
 
-/** Texto do modo no rodapé (página e capa). */
-function rotuloDoModo(modo, wmTexto) {
-  return modo === "controlada" ? `${wmTexto} - VÁLIDA SOMENTE EM TELA` : wmTexto;
-}
-
 /** Rodapé das páginas de conteúdo. */
 function rodapeDaPagina({ modo, semMarcaDagua, wmTexto, codigo, versao, numPag, total, identificacao }) {
   const pagina = `${codigo} Rev. ${versao} · Página ${numPag} de ${total}`;
   if (semMarcaDagua) return pagina;
-  return [rotuloDoModo(modo, wmTexto), identificacao, pagina].filter(Boolean).join(" · ");
+  return [wmTexto, identificacao, pagina].filter(Boolean).join(" · ");
 }
 
 /** A geração entra no log de distribuição? (tela e download do Vigente) */
@@ -165,7 +159,6 @@ function registraNoLog(modo) {
 
 module.exports = {
   identificacaoDaCopia,
-  rotuloDoModo,
   rodapeDaPagina,
   registraNoLog,
   temPermissaoDoc,

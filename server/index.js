@@ -26,7 +26,7 @@ const {
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
 const {
   temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao,
-  identificacaoDaCopia, rotuloDoModo, rodapeDaPagina, registraNoLog,
+  identificacaoDaCopia, rodapeDaPagina, registraNoLog,
 } = require("./acessoDocumento");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
@@ -1627,7 +1627,7 @@ async function handleDocumentRender(req, res, pathname, url) {
 
     // Rodapé da capa: esquerda = empresa, direita = modo
     draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
-    drawRight(capa, pdfSafe(rotuloDoModo(modo, wmTexto)), W - 40, 30, 8, fontR, cinza);
+    drawRight(capa, wmTexto, W - 40, 30, 8, fontR, cinza);
     if (identificacao && !semMarcaDagua) drawRight(capa, identificacao, W - 40, 19, 7, fontR, cinza);
     } // fim if(!semCapa)
 
