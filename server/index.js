@@ -27,6 +27,7 @@ const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assi
 const {
   temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao,
   identificacaoDaCopia, rodapeDaPagina, registraNoLog,
+  copiaParaEmitir, marcaDaCopia, identificacaoDaCopiaFisica, numeroDaCopia, destinoDaCopia,
 } = require("./acessoDocumento");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
@@ -1252,7 +1253,7 @@ async function handleDistributionLog(req, res, pathname, url) {
   const docId = url.searchParams.get("docId");
   if (!docId) return sendJson(res, 400, { error: "docId obrigatório" });
   const result = await query(
-    `SELECT id, doc_id, doc_codigo, usuario_id, usuario_nome, data_download, modo
+    `SELECT id, doc_id, doc_codigo, usuario_id, usuario_nome, data_download, modo, detalhe
      FROM distribution_log WHERE doc_id = $1 ORDER BY data_download DESC LIMIT 500`,
     [docId]
   );
@@ -1389,7 +1390,13 @@ async function handleDocumentRender(req, res, pathname, url) {
     } catch (e) {
       return sendJson(res, e.status || 403, { error: e.message });
     }
-    const wm = WATERMARK_MODOS[modo];
+    // Cópia física numerada: tem de estar entre as entregues e já ter número.
+    let copia = null;
+    if (modo === "copia") {
+      copia = copiaParaEmitir(docAtual, url.searchParams.get("copia"));
+      if (!copia) return sendJson(res, 404, { error: "Cópia não encontrada entre as entregues deste documento, ou ainda sem número." });
+    }
+    const wm = WATERMARK_MODOS[modo === "copia" ? "controlada" : modo];
 
     const arquivoUrl = doc.arquivo && doc.arquivo.url ? String(doc.arquivo.url) : "";
     const fileId = arquivoUrl.includes("/api/files/") ? arquivoUrl.split("/api/files/").pop() : "";
@@ -1434,10 +1441,12 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Revisão antiga sai sem capa: o histórico não guardou as assinaturas da época,
     // e a capa com as assinaturas da versão atual seria registro falso.
     if (revisaoAntiga) semCapa = true;
-    // Marca diagonal: sempre o texto limpo do modo. Quem gerou e quando vai no
-    // rodapé, a partir da sessão (server/acessoDocumento.js).
-    const wmTexto = pdfSafe(wm.texto);
-    const identificacao = pdfSafe(identificacaoDaCopia(modo, reqUser));
+    // Marca diagonal: sempre o texto limpo do modo — inclusive na cópia numerada
+    // (decisão do usuário: o número fica só no rodapé). O rótulo do rodapé/capa leva
+    // o número da cópia; quem gerou e quando vem da sessão (server/acessoDocumento.js).
+    const wmDiagonal = pdfSafe(wm.texto);
+    const wmTexto = pdfSafe(modo === "copia" ? marcaDaCopia(copia) : wm.texto);
+    const identificacao = pdfSafe(modo === "copia" ? identificacaoDaCopiaFisica(copia, reqUser) : identificacaoDaCopia(modo, reqUser));
 
     const contentPdf = await PDFDocument.load(file.data);
     const out = await PDFDocument.create();
@@ -1652,11 +1661,11 @@ async function handleDocumentRender(req, res, pathname, url) {
       if (!semMarcaDagua) {
         const wmSize = Math.max(36, Math.min(width, height) * 0.07);
         const angle = (45 * Math.PI) / 180;
-        const tw = fontB.widthOfTextAtSize(wmTexto, wmSize);
+        const tw = fontB.widthOfTextAtSize(wmDiagonal, wmSize);
         const th = fontB.heightAtSize(wmSize);
         const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
         const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
-        page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
+        page.drawText(wmDiagonal, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
       }
 
       // Cabeçalho e rodapé nas páginas de conteúdo
@@ -1712,9 +1721,10 @@ async function handleDocumentRender(req, res, pathname, url) {
     // desde a Fase 7) e, desde a v3.21.0, também a visualização na tela.
     if (registraNoLog(modo)) {
       query(
-        `INSERT INTO distribution_log (doc_id, doc_codigo, usuario_id, usuario_nome, modo)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [docId, doc.codigo || "", reqUser?.id || "", reqUser?.name || userNameParam, modo]
+        `INSERT INTO distribution_log (doc_id, doc_codigo, usuario_id, usuario_nome, modo, detalhe)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [docId, doc.codigo || "", reqUser?.id || "", reqUser?.name || userNameParam, modo,
+         copia ? `${numeroDaCopia(copia)} · ${destinoDaCopia(copia)}` : null]
       ).catch(e => console.error("distribution_log insert failed:", e));
     }
 

@@ -1,6 +1,7 @@
 import {
   chaveDestino, destinoDaSelecao, destinoLabel, validarDistribuicao, novaCopiaFisica,
   colaboradoresDoDestino, registroDeRecolha, validarRecolha, comRecolha, comRecolhaObsoleta, comCopiasARecolher,
+  chaveCopia, rotuloNumero, proximoNumeroCopia, comNumeroNaCopia,
 } from "./distribuicao";
 
 const area = { id: "PRO", label: "Produção", ativo: true, setores: [
@@ -81,11 +82,9 @@ describe("validarDistribuicao", () => {
     expect(validarDistribuicao({ form: formOk({ dataEntrega: "2026-08-10" }), area, setor: setorEnc, hoje: "2026-08-17" }).ok).toBe(true);
   });
 
-  it("barra destino duplicado", () => {
+  it("aceita segunda cópia no mesmo destino — cada uma tem número próprio", () => {
     const existente = destinoDaSelecao({ area, setor: setorEnc, tipoDestino: "setor" });
-    const r = validarDistribuicao({ form: formOk(), area, setor: setorEnc, existentes: [existente], hoje: "2026-08-17" });
-    expect(r.ok).toBe(false);
-    expect(r.erro).toMatch(/já tem/i);
+    expect(validarDistribuicao({ form: formOk(), area, setor: setorEnc, existentes: [existente], hoje: "2026-08-17" }).ok).toBe(true);
   });
 
   it("barra sem área e sem setor", () => {
@@ -228,5 +227,45 @@ describe("comCopiasARecolher", () => {
     expect(comCopiasARecolher({ versao: "02" }).recolhaPendente).toBeNull();
     const pend = [{ setor: "X" }];
     expect(comCopiasARecolher({ versao: "02", recolhaPendente: pend }).recolhaPendente).toBe(pend);
+  });
+});
+
+describe("cópia numerada", () => {
+  const nova = (numero, extra = {}) => ({ ...novaCopiaFisica({ area, setor: setorEnc, tipoDestino: "setor", numero }), ...extra });
+
+  it("próximo número conta entregues e recolhidas da revisão atual, nunca reaproveita", () => {
+    const doc = { versao: "02", distribuicaoFisica: [nova(1), nova(3)],
+      historicoDistribuicao: [{ versao: "02", numero: 4 }, { versao: "01", numero: 9 }] };
+    expect(proximoNumeroCopia(doc)).toBe(5);
+  });
+
+  it("revisão nova recomeça do 1", () => {
+    expect(proximoNumeroCopia({ versao: "03", distribuicaoFisica: [], historicoDistribuicao: [{ versao: "02", numero: 7 }] })).toBe(1);
+  });
+
+  it("rótulo com três dígitos; registro antigo fica sem rótulo", () => {
+    expect(rotuloNumero({ numero: 3 })).toBe("Nº 003");
+    expect(rotuloNumero({ setor: "PRO" })).toBe("");
+  });
+
+  it("duas cópias no mesmo destino: recolher uma não leva a outra", () => {
+    const a = nova(1), b = nova(2);
+    const d = comRecolha({ versao: "02", distribuicaoFisica: [a, b] }, a, { data: "2026-10-01", recolhidoPor: "Lucas" });
+    expect(d.distribuicaoFisica.map(c => c.numero)).toEqual([2]);
+    expect(d.historicoDistribuicao[0]).toMatchObject({ numero: 1, copiaId: a.id });
+  });
+
+  it("registro antigo ganha id e número na primeira emissão, sem mexer nas outras", () => {
+    const antiga = { setor: "PRO", recebidoPor: "Fulano" };
+    const { doc, copia } = comNumeroNaCopia({ versao: "02", distribuicaoFisica: [nova(1), antiga] }, antiga);
+    expect(copia).toMatchObject({ numero: 2, recebidoPor: "Fulano" });
+    expect(copia.id).toBeTruthy();
+    expect(doc.distribuicaoFisica.map(c => c.numero)).toEqual([1, 2]);
+    expect(chaveCopia(copia)).toBe(copia.id);
+  });
+
+  it("revisão nova leva número e id para a pendência de recolha", () => {
+    const r = comCopiasARecolher({ versao: "02", distribuicaoFisica: [nova(1)] });
+    expect(r.recolhaPendente[0]).toMatchObject({ numero: 1, versaoAnterior: "02" });
   });
 });

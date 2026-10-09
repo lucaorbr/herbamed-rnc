@@ -18,12 +18,12 @@
 // Mesmos padrões de `PERMS_PADRAO` (src/features/permissions/permissions.js) para
 // as chaves que o servidor confere. Permissão gravada no usuário prevalece.
 const DOC_ROLE_PERMISSIONS = {
-  viewer:  { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: false, acessoRestritoVigente: true },
-  user:    { verDocumentos: true,  baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false },
-  rt:      { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false },
-  keyuser: { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false },
-  admin:   { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false },
-  exec:    { verDocumentos: false, baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false },
+  viewer:  { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: false, acessoRestritoVigente: true,  iniciarRevisao: false },
+  user:    { verDocumentos: true,  baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false, iniciarRevisao: false },
+  rt:      { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
+  keyuser: { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
+  admin:   { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
+  exec:    { verDocumentos: false, baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false, iniciarRevisao: false },
 };
 
 function temPermissaoDoc(user, key) {
@@ -59,6 +59,16 @@ function modoDeRenderizacao(user, doc, pedido, { revisaoAntiga = false } = {}) {
 
   if (restrito && (status !== "Vigente" || revisaoAntiga)) {
     throw erro(403, "Acesso restrito: somente documentos vigentes podem ser visualizados.");
+  }
+
+  // Cópia física numerada (v3.22.0): só documento Vigente, e só quem distribui
+  // cópias — a mesma permissão que registra a entrega na tela.
+  if (pedido === "copia" && !revisaoAntiga) {
+    if (status !== "Vigente") throw erro(409, "Cópia controlada numerada só se emite de documento Vigente.");
+    if (!(user?.role === "admin" || temPermissaoDoc(user, "iniciarRevisao"))) {
+      throw erro(403, "Sem permissão para emitir cópia controlada.");
+    }
+    return "copia";
   }
 
   let modo;
@@ -127,7 +137,7 @@ function documentoDaRevisao(doc, versao) {
 // Quem gerou vem da SESSÃO, nunca do `userName` do endereço.
 // Formulário (FO, sem marca d'água) fica de fora: ele é impresso de propósito.
 
-const MODOS_IDENTIFICADOS = new Set(["controlada", "nao_controlada"]);
+const MODOS_IDENTIFICADOS = new Set(["controlada", "nao_controlada", "copia"]);
 
 function dataHoraBR(quando = new Date()) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -148,8 +158,51 @@ function identificacaoDaCopia(modo, user, quando = new Date()) {
 /** Rodapé das páginas de conteúdo. */
 function rodapeDaPagina({ modo, semMarcaDagua, wmTexto, codigo, versao, numPag, total, identificacao }) {
   const pagina = `${codigo} Rev. ${versao} · Página ${numPag} de ${total}`;
-  if (semMarcaDagua) return pagina;
+  // A cópia numerada leva número e destino mesmo em formulário (sem marca d'água).
+  if (semMarcaDagua && modo !== "copia") return pagina;
   return [wmTexto, identificacao, pagina].filter(Boolean).join(" · ");
+}
+
+// ── Cópia física numerada (v3.22.0) ──────────────────────────────────────────
+
+/** "Nº 003" */
+function numeroDaCopia(copia) {
+  return copia?.numero ? `Nº ${String(copia.numero).padStart(3, "0")}` : "";
+}
+
+/** Mesmo rótulo de destino da tela (destinoLabel em distribuicao.js). */
+function destinoDaCopia(copia) {
+  if (!copia) return "";
+  if (copia.areaNome) {
+    return copia.tipoDestino === "area"
+      ? `${copia.areaId} — ${copia.areaNome} (área inteira)`
+      : `${copia.areaId} — ${copia.areaNome} / ${copia.setorNome || copia.setorId}`;
+  }
+  return copia.setor || "";
+}
+
+/**
+ * A cópia a emitir: tem de estar entre as entregues do documento e já ter número.
+ * Cópia recolhida, inexistente ou ainda sem número não se emite.
+ */
+function copiaParaEmitir(doc, copiaId) {
+  const id = String(copiaId || "");
+  if (!id) return null;
+  const c = (doc?.distribuicaoFisica || []).find(x => String(x?.id || "") === id);
+  return c?.numero ? c : null;
+}
+
+/** Rótulo do rodapé (e da capa) da cópia numerada. A marca diagonal fica só com
+ *  "CÓPIA CONTROLADA" — decisão do usuário: o número aparece só no rodapé. */
+function marcaDaCopia(copia) {
+  return `CÓPIA CONTROLADA ${numeroDaCopia(copia)}`.trim();
+}
+
+/** Segunda parte do rodapé: destino, quando e por quem foi emitida. */
+function identificacaoDaCopiaFisica(copia, user, quando = new Date()) {
+  let nome = String(user?.name || user?.email || "usuário").trim();
+  if (nome.length > 40) nome = `${nome.slice(0, 39)}…`;
+  return [destinoDaCopia(copia), `emitida em ${dataHoraBR(quando)} por ${nome}`].filter(Boolean).join(" · ");
 }
 
 /** A geração entra no log de distribuição? (tela e download do Vigente) */
@@ -158,6 +211,11 @@ function registraNoLog(modo) {
 }
 
 module.exports = {
+  numeroDaCopia,
+  destinoDaCopia,
+  copiaParaEmitir,
+  marcaDaCopia,
+  identificacaoDaCopiaFisica,
   identificacaoDaCopia,
   rodapeDaPagina,
   registraNoLog,
