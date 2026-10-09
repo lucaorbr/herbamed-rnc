@@ -146,6 +146,21 @@ export function comRecolha(doc, copia, dados = {}) {
   };
 }
 
+/**
+ * Cópias físicas que deixam de valer viram pendência de recolha. Vale para a nova
+ * revisão E para "Tornar obsoleto" — até a v3.20.0 só a revisão fazia isso, e o
+ * documento obsoleto continuava constando como entregue nos setores, sem cobrança.
+ */
+export function comCopiasARecolher(doc) {
+  const copias = doc?.distribuicaoFisica || [];
+  if (!copias.length) return { ...doc, distribuicaoFisica: [], recolhaPendente: doc?.recolhaPendente || null };
+  return {
+    ...doc,
+    distribuicaoFisica: [],
+    recolhaPendente: [...(doc?.recolhaPendente || []), ...copias.map(c => ({ ...c, versaoAnterior: doc?.versao || null }))],
+  };
+}
+
 /** Baixa da pendência de recolha aberta pela revisão nova — mesmo arquivamento. */
 export function comRecolhaObsoleta(doc, pendencia, dados = {}) {
   const entrada = registroDeRecolha({ copia: pendencia, ...dados, motivo: "obsoleta", versaoDoc: doc?.versao });

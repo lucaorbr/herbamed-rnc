@@ -1,6 +1,6 @@
 import {
   chaveDestino, destinoDaSelecao, destinoLabel, validarDistribuicao, novaCopiaFisica,
-  colaboradoresDoDestino, registroDeRecolha, validarRecolha, comRecolha, comRecolhaObsoleta,
+  colaboradoresDoDestino, registroDeRecolha, validarRecolha, comRecolha, comRecolhaObsoleta, comCopiasARecolher,
 } from "./distribuicao";
 
 const area = { id: "PRO", label: "Produção", ativo: true, setores: [
@@ -211,5 +211,22 @@ describe("recolha", () => {
     const outra = novaCopiaFisica({ area, setor: area.setores[1], tipoDestino: "setor", dataEntrega: "2026-04-01" });
     const dois = comRecolha({ ...um, distribuicaoFisica: [outra] }, outra, dados);
     expect(dois.historicoDistribuicao).toHaveLength(2);
+  });
+});
+
+describe("comCopiasARecolher", () => {
+  const copia = { destinoKey: "setor:PRO:enc", setor: "PRO/enc", recebidoPor: "Cleber" };
+
+  it("cópias entregues viram pendência de recolha com a versão que deixa de valer", () => {
+    const r = comCopiasARecolher({ versao: "02", distribuicaoFisica: [copia], recolhaPendente: [{ setor: "X", versaoAnterior: "01" }] });
+    expect(r.distribuicaoFisica).toEqual([]);
+    expect(r.recolhaPendente).toHaveLength(2);
+    expect(r.recolhaPendente[1]).toMatchObject({ recebidoPor: "Cleber", versaoAnterior: "02" });
+  });
+
+  it("sem cópias entregues, mantém a pendência que já existia", () => {
+    expect(comCopiasARecolher({ versao: "02" }).recolhaPendente).toBeNull();
+    const pend = [{ setor: "X" }];
+    expect(comCopiasARecolher({ versao: "02", recolhaPendente: pend }).recolhaPendente).toBe(pend);
   });
 });

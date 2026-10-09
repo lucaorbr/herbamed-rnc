@@ -24,6 +24,7 @@ const {
   validateHomologacaoUpdate,
 } = require("./homologacao");
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
+const { temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao } = require("./acessoDocumento");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
@@ -773,7 +774,19 @@ async function handleFiles(req, res, pathname) {
 
   const match = pathname.match(/^\/api\/files\/([0-9a-f-]{36})$/i);
   if (!match || req.method !== "GET") return false;
-  await requireUser(req);
+  const reqUser = await requireUser(req);
+  // PDF original (sem marca d'água) de documento que já vigorou ou de revisão
+  // antiga: só quem administra documentos. Os demais passam pela renderização.
+  if (!podeBaixarOriginal(reqUser)) {
+    const donos = await query(
+      `SELECT data FROM generic_documents
+        WHERE collection = 'gestao_docs' AND data::text LIKE '%' || $1 || '%'`,
+      [match[1].toLowerCase()]
+    );
+    if (arquivoProtegido(match[1], donos.rows.map(r => r.data))) {
+      return sendJson(res, 403, { error: "O arquivo original do documento controlado só é acessível pela visualização com marca d'água." });
+    }
+  }
   const result = await query(
     "SELECT original_name, mime_type, size_bytes, data FROM stored_files WHERE id = $1",
     [match[1]]
@@ -1261,7 +1274,10 @@ async function handleDocumentSummary(req, res, pathname, url) {
   if (!docResult.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
 
   const doc = { ...docResult.rows[0].data, id: docId };
-  if (reqUser?.permissoes?.acessoRestritoVigente === true && doc.status !== "Vigente") {
+  if (!temPermissaoDoc(reqUser, "verDocumentos")) {
+    return sendJson(res, 403, { error: "Sem permissão para ver documentos." });
+  }
+  if (temPermissaoDoc(reqUser, "acessoRestritoVigente") && doc.status !== "Vigente") {
     return sendJson(res, 403, { error: "Acesso restrito: somente documentos vigentes podem ser resumidos." });
   }
 
@@ -1347,14 +1363,9 @@ async function handleDocumentRender(req, res, pathname, url) {
 
   const docId = decodeURIComponent(match[1]);
   const modoRaw = (url.searchParams.get("modo") || "nao_controlada").toLowerCase();
-  // Acesso restrito: usuário só pode renderizar documento Vigente, e somente em modo "cópia não controlada"
-  const acessoRestritoVigente = reqUser?.permissoes?.acessoRestritoVigente === true;
-  const modo = acessoRestritoVigente
-    ? "nao_controlada"
-    : (WATERMARK_MODOS[modoRaw] ? modoRaw : "nao_controlada");
+  // `versao`: revisão arquivada no histórico — sai sempre como DOCUMENTO OBSOLETO.
+  const versaoAntiga = url.searchParams.get("versao") || "";
   const userNameParam = url.searchParams.get("userName") || reqUser?.name || "";
-  const wm = WATERMARK_MODOS[modo];
-  console.log(`[RENDER] docId=${docId} modoRaw=${modoRaw} modo=${modo} wmTexto=${wm.texto}`);
 
   try {
     const docRes = await query(
@@ -1362,11 +1373,20 @@ async function handleDocumentRender(req, res, pathname, url) {
       [docId]
     );
     if (!docRes.rowCount) return sendJson(res, 404, { error: "Documento não encontrado" });
-    const doc = docRes.rows[0].data || {};
+    const docAtual = docRes.rows[0].data || {};
+    const revisaoAntiga = !!versaoAntiga && String(versaoAntiga) !== String(docAtual.versao || "");
+    const doc = revisaoAntiga ? documentoDaRevisao(docAtual, versaoAntiga) : docAtual;
+    if (!doc) return sendJson(res, 404, { error: "Revisão não encontrada no histórico ou sem arquivo" });
 
-    if (acessoRestritoVigente && doc.status !== "Vigente") {
-      return sendJson(res, 403, { error: "Acesso restrito: somente documentos vigentes podem ser visualizados." });
+    // A marca d'água vem do status do documento, não do que o navegador pediu
+    // (regra em server/acessoDocumento.js).
+    let modo;
+    try {
+      modo = modoDeRenderizacao(reqUser, docAtual, modoRaw, { revisaoAntiga });
+    } catch (e) {
+      return sendJson(res, e.status || 403, { error: e.message });
     }
+    const wm = WATERMARK_MODOS[modo];
 
     const arquivoUrl = doc.arquivo && doc.arquivo.url ? String(doc.arquivo.url) : "";
     const fileId = arquivoUrl.includes("/api/files/") ? arquivoUrl.split("/api/files/").pop() : "";
@@ -1408,6 +1428,9 @@ async function handleDocumentRender(req, res, pathname, url) {
       const def = TIPO_MODELO_DEFAULTS[doc.tipo] || {};
       semCapa = !!def.semCapa; semMarcaDagua = !!def.semMarcaDagua;
     }
+    // Revisão antiga sai sem capa: o histórico não guardou as assinaturas da época,
+    // e a capa com as assinaturas da versão atual seria registro falso.
+    if (revisaoAntiga) semCapa = true;
     const impressoEm = new Date().toLocaleString("pt-BR");
     // Marca d'água: sempre o texto limpo do modo — quem imprimiu fica só no distribution_log.
     const wmTexto = pdfSafe(wm.texto);
