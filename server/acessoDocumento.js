@@ -121,8 +121,10 @@ function documentoDaRevisao(doc, versao) {
 // A "CÓPIA CONTROLADA" vista na tela podia ser impressa pelo navegador e virava um
 // papel idêntico ao da cópia oficial entregue ao setor — sem registro de quem
 // imprimiu. O PDF não sabe se está sendo impresso, então ele passa a carregar:
-//   - na marca diagonal, a segunda linha "VÁLIDA SOMENTE EM TELA";
-//   - no rodapé, para quem e quando foi gerado (também na cópia não controlada).
+//   - no rodapé, "VÁLIDA SOMENTE EM TELA" (cópia da tela) e para quem e quando foi
+//     gerado (também na cópia não controlada).
+// A marca diagonal continua só com o texto do modo — decisão do usuário: a segunda
+// linha "VÁLIDA SOMENTE EM TELA" na diagonal foi testada e retirada.
 // Quem gerou vem da SESSÃO, nunca do `userName` do endereço.
 // Formulário (FO, sem marca d'água) fica de fora: ele é impresso de propósito.
 
@@ -144,11 +146,6 @@ function identificacaoDaCopia(modo, user, quando = new Date()) {
   return `${verbo} ${nome} em ${dataHoraBR(quando)}`;
 }
 
-/** Linha menor sob a marca diagonal. */
-function marcaSecundaria(modo) {
-  return modo === "controlada" ? "VÁLIDA SOMENTE EM TELA" : "";
-}
-
 /** Texto do modo no rodapé (página e capa). */
 function rotuloDoModo(modo, wmTexto) {
   return modo === "controlada" ? `${wmTexto} - VÁLIDA SOMENTE EM TELA` : wmTexto;
@@ -168,7 +165,6 @@ function registraNoLog(modo) {
 
 module.exports = {
   identificacaoDaCopia,
-  marcaSecundaria,
   rotuloDoModo,
   rodapeDaPagina,
   registraNoLog,

@@ -83,7 +83,7 @@ test("documento da revisão antiga usa o conteúdo da época, sem as assinaturas
   assert.equal(documentoDaRevisao({ historicoRevisoes: [{ versao: "00", conteudo: {} }] }, "00"), null);
 });
 
-const { identificacaoDaCopia, marcaSecundaria, rodapeDaPagina, registraNoLog } = require("./acessoDocumento");
+const { identificacaoDaCopia, rodapeDaPagina, registraNoLog } = require("./acessoDocumento");
 const quando = new Date("2026-10-09T12:31:00Z"); // 09:31 em Brasília
 
 test("identificação: quem e quando, pela sessão, só em cópia de documento vigente", () => {
@@ -93,12 +93,6 @@ test("identificação: quem e quando, pela sessão, só em cópia de documento v
   assert.equal(identificacaoDaCopia("rascunho", { name: "Ana" }, quando), "");
   const longo = identificacaoDaCopia("controlada", { name: "X".repeat(60) }, quando);
   assert.ok(longo.includes(`${"X".repeat(39)}…`));
-});
-
-test("marca diagonal: segunda linha só na cópia controlada da tela", () => {
-  assert.equal(marcaSecundaria("controlada"), "VÁLIDA SOMENTE EM TELA");
-  assert.equal(marcaSecundaria("nao_controlada"), "");
-  assert.equal(marcaSecundaria("obsoleto"), "");
 });
 
 test("rodapé: modo + identificação + página; formulário segue só com a página", () => {

@@ -26,7 +26,7 @@ const {
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
 const {
   temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao,
-  identificacaoDaCopia, marcaSecundaria, rotuloDoModo, rodapeDaPagina, registraNoLog,
+  identificacaoDaCopia, rotuloDoModo, rodapeDaPagina, registraNoLog,
 } = require("./acessoDocumento");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
@@ -1434,10 +1434,9 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Revisão antiga sai sem capa: o histórico não guardou as assinaturas da época,
     // e a capa com as assinaturas da versão atual seria registro falso.
     if (revisaoAntiga) semCapa = true;
-    // Marca diagonal: o texto do modo (+ "VÁLIDA SOMENTE EM TELA" na cópia controlada).
-    // Quem gerou e quando vai no rodapé, a partir da sessão (server/acessoDocumento.js).
+    // Marca diagonal: sempre o texto limpo do modo. Quem gerou e quando vai no
+    // rodapé, a partir da sessão (server/acessoDocumento.js).
     const wmTexto = pdfSafe(wm.texto);
-    const wmSecundaria = pdfSafe(marcaSecundaria(modo));
     const identificacao = pdfSafe(identificacaoDaCopia(modo, reqUser));
 
     const contentPdf = await PDFDocument.load(file.data);
@@ -1658,19 +1657,6 @@ async function handleDocumentRender(req, res, pathname, url) {
         const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
         const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
         page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
-        // Segunda linha, menor, logo abaixo da principal (perpendicular à diagonal).
-        if (wmSecundaria) {
-          const s2 = wmSize * 0.45;
-          const tw2 = fontB.widthOfTextAtSize(wmSecundaria, s2);
-          const th2 = fontB.heightAtSize(s2);
-          const d = th * 0.95;
-          const cx = width / 2 + d * Math.sin(angle);
-          const cy = height / 2 - d * Math.cos(angle);
-          const x2 = cx - (tw2 / 2) * Math.cos(angle) + (th2 / 2) * Math.sin(angle);
-          const y2 = cy - (tw2 / 2) * Math.sin(angle) - (th2 / 2) * Math.cos(angle);
-          // Mais forte que a principal: é letra menor e precisa ser lida no papel.
-          page.drawText(wmSecundaria, { x: x2, y: y2, size: s2, font: fontB, color: wm.cor, opacity: Math.min(0.22, wm.opacidade * 2.5), rotate: degrees(45) });
-        }
       }
 
       // Cabeçalho e rodapé nas páginas de conteúdo
