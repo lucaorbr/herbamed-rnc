@@ -14,7 +14,7 @@ import { MatrizTreinamentoTab } from "./MatrizTreinamentoTab";
 import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
 import { opcoesDeLocal } from "../colaboradores/colaboradores";
 import {
-  colaboradoresDoDestino, comRecolha, comRecolhaObsoleta,
+  colaboradoresDoDestino, comCopiasARecolher, comRecolha, comRecolhaObsoleta,
   destinoLabel, novaCopiaFisica, validarDistribuicao, validarRecolha,
 } from "./distribuicao";
 import { sessoesDoDocumento } from "./sessoes";
@@ -298,7 +298,13 @@ async function abrirArquivoAutenticado(url, download = false, nome = "documento"
   try {
     const token = getToken();
     const resp = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      // Recusa do servidor (permissão, arquivo protegido) vira aviso legível — antes
+      // caía no window.open abaixo, que abria uma aba sem sessão.
+      const corpo = await resp.json().catch(() => ({}));
+      alert(corpo.error || `Não foi possível abrir o arquivo (HTTP ${resp.status}).`);
+      return;
+    }
     const blob = await resp.blob();
     const objUrl = URL.createObjectURL(blob);
     if (download) {
@@ -331,8 +337,8 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
 }
 
 // Fase 2/3 — endpoint de renderização controlada (capa + marca d'água no conteúdo).
-function renderUrl(docId, modo, userName) {
-  const base = `/api/documents/${docId}/render?modo=${modo}`;
+function renderUrl(docId, modo, userName, versao) {
+  const base = `/api/documents/${docId}/render?modo=${modo}${versao ? `&versao=${encodeURIComponent(versao)}` : ""}`;
   return userName ? `${base}&userName=${encodeURIComponent(userName)}` : base;
 }
 
@@ -1028,10 +1034,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     // Arquivo controlado (PDF) da versão anterior fica no snapshot; nova revisão exige novo upload.
     // O arquivo fonte é mantido: o elaborador baixa o fonte anterior, edita e substitui.
     // Cópias físicas da versão anterior viram pendência de recolha na nova revisão.
-    const copiasAnteriores = doc.distribuicaoFisica || [];
-    const recolhaPendente = copiasAnteriores.length
-      ? [...(doc.recolhaPendente||[]), ...copiasAnteriores.map(c => ({ ...c, versaoAnterior: versaoAtual }))]
-      : (doc.recolhaPendente || null);
+    const { recolhaPendente } = comCopiasARecolher({ ...doc, versao: versaoAtual });
     const updated = { ...doc, versao:novaVersao, status:"Em Revisão", arquivo:null, arquivoFonte: doc.arquivoFonte || null, assinaturaElaborador:null, assinaturaRevisor:null, assinaturaAprovador:null, rota:null, distribuicaoFisica:[], recolhaPendente, leituraObrigatoria:leituraReaberta,
       // A exigência de treinamento continua valendo, mas o relógio do prazo só
       // recomeça quando a nova versão entrar em vigor (a evidência já é por versão).
@@ -1051,11 +1054,14 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
 
   const tornarObsoleto = async (doc) => {
     try {
-    if (!window.confirm("Marcar como Obsoleto?")) return;
-    const updated = { ...doc, status:"Obsoleto", atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
+    const copias = (doc.distribuicaoFisica || []).length;
+    if (!window.confirm(copias
+      ? `Marcar como Obsoleto?\n\n${copias} cópia(s) física(s) entregue(s) passam a ficar pendentes de recolha.`
+      : "Marcar como Obsoleto?")) return;
+    const updated = { ...comCopiasARecolher(doc), status:"Obsoleto", atualizadoEm:tod(), atualizadoTs:Date.now(), atualizadoPor:user?.name };
     await saveCollection("gestao_docs", String(doc.id), updated);
-    await auditLog("Marcou como Obsoleto", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { status: doc.status }, { status: "Obsoleto" });
-    toast_("Documento obsoleto.", "red");
+    await auditLog("Marcou como Obsoleto", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, { status: doc.status }, { status: "Obsoleto", copiasARecolher: copias });
+    toast_(copias ? `Documento obsoleto — ${copias} cópia(s) física(s) a recolher.` : "Documento obsoleto.", "red");
     setSel(updated);
     } catch(e) {
       toast_(fbErr(e), "red");
@@ -2278,8 +2284,9 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         </div>
                         <div style={{display:"flex",gap:6,flexShrink:0}}>
                           {arq ? (<>
-                            <button onClick={()=>abrirArquivoAutenticado(arq.url)} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
-                            <button onClick={()=>abrirArquivoAutenticado(arq.url, true, nomeDownloadDoc(d.codigo, h.versao, arq))} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
+                            {/* Revisão antiga sai pela renderização, com DOCUMENTO OBSOLETO — nunca o original limpo. */}
+                            <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, h.versao))} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                            <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, h.versao), true, `${d.codigo}_Rev${h.versao}_Obsoleto.pdf`)} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
                           </>) : h.conteudo ? (
                             <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
                           ) : (
@@ -2354,8 +2361,8 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:14}}>
                   <span style={{fontSize:18}}>📄</span>
                   <div style={{flex:1,fontSize:12,color:T.text}}>{verSnapshot.conteudo.arquivo.nome}</div>
-                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url)} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
-                  <button onClick={()=>abrirArquivoAutenticado(verSnapshot.conteudo.arquivo.url, true, nomeDownloadDoc(d.codigo, verSnapshot.versao, verSnapshot.conteudo.arquivo))} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
+                  <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, verSnapshot.versao))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, verSnapshot.versao), true, `${d.codigo}_Rev${verSnapshot.versao}_Obsoleto.pdf`)} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
                 </div>
               )}
               {verSnapshot.conteudo ? (<>
