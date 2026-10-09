@@ -1441,8 +1441,10 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Revisão antiga sai sem capa: o histórico não guardou as assinaturas da época,
     // e a capa com as assinaturas da versão atual seria registro falso.
     if (revisaoAntiga) semCapa = true;
-    // Marca diagonal: sempre o texto limpo do modo. Quem gerou e quando vai no
-    // rodapé, a partir da sessão (server/acessoDocumento.js).
+    // Marca diagonal: sempre o texto limpo do modo — inclusive na cópia numerada
+    // (decisão do usuário: o número fica só no rodapé). O rótulo do rodapé/capa leva
+    // o número da cópia; quem gerou e quando vem da sessão (server/acessoDocumento.js).
+    const wmDiagonal = pdfSafe(wm.texto);
     const wmTexto = pdfSafe(modo === "copia" ? marcaDaCopia(copia) : wm.texto);
     const identificacao = pdfSafe(modo === "copia" ? identificacaoDaCopiaFisica(copia, reqUser) : identificacaoDaCopia(modo, reqUser));
 
@@ -1659,11 +1661,11 @@ async function handleDocumentRender(req, res, pathname, url) {
       if (!semMarcaDagua) {
         const wmSize = Math.max(36, Math.min(width, height) * 0.07);
         const angle = (45 * Math.PI) / 180;
-        const tw = fontB.widthOfTextAtSize(wmTexto, wmSize);
+        const tw = fontB.widthOfTextAtSize(wmDiagonal, wmSize);
         const th = fontB.heightAtSize(wmSize);
         const x = width / 2 - (tw / 2) * Math.cos(angle) + (th / 2) * Math.sin(angle);
         const yPos = height / 2 - (tw / 2) * Math.sin(angle) - (th / 2) * Math.cos(angle);
-        page.drawText(wmTexto, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
+        page.drawText(wmDiagonal, { x, y: yPos, size: wmSize, font: fontB, color: wm.cor, opacity: wm.opacidade, rotate: degrees(45) });
       }
 
       // Cabeçalho e rodapé nas páginas de conteúdo

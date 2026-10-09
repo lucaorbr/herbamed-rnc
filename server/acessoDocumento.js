@@ -192,7 +192,8 @@ function copiaParaEmitir(doc, copiaId) {
   return c?.numero ? c : null;
 }
 
-/** Texto da marca diagonal e do rótulo do rodapé da cópia numerada. */
+/** Rótulo do rodapé (e da capa) da cópia numerada. A marca diagonal fica só com
+ *  "CÓPIA CONTROLADA" — decisão do usuário: o número aparece só no rodapé. */
 function marcaDaCopia(copia) {
   return `CÓPIA CONTROLADA ${numeroDaCopia(copia)}`.trim();
 }
