@@ -24,7 +24,10 @@ const {
   validateHomologacaoUpdate,
 } = require("./homologacao");
 const { validarAssinaturaDocumento, validarGravacaoDocumento } = require("./assinaturaDocumento");
-const { temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao } = require("./acessoDocumento");
+const {
+  temPermissaoDoc, modoDeRenderizacao, arquivoProtegido, podeBaixarOriginal, documentoDaRevisao,
+  identificacaoDaCopia, rodapeDaPagina, registraNoLog,
+} = require("./acessoDocumento");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
@@ -1250,7 +1253,7 @@ async function handleDistributionLog(req, res, pathname, url) {
   if (!docId) return sendJson(res, 400, { error: "docId obrigatório" });
   const result = await query(
     `SELECT id, doc_id, doc_codigo, usuario_id, usuario_nome, data_download, modo
-     FROM distribution_log WHERE doc_id = $1 ORDER BY data_download DESC LIMIT 200`,
+     FROM distribution_log WHERE doc_id = $1 ORDER BY data_download DESC LIMIT 500`,
     [docId]
   );
   return sendJson(res, 200, result.rows);
@@ -1431,9 +1434,10 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Revisão antiga sai sem capa: o histórico não guardou as assinaturas da época,
     // e a capa com as assinaturas da versão atual seria registro falso.
     if (revisaoAntiga) semCapa = true;
-    const impressoEm = new Date().toLocaleString("pt-BR");
-    // Marca d'água: sempre o texto limpo do modo — quem imprimiu fica só no distribution_log.
+    // Marca diagonal: sempre o texto limpo do modo. Quem gerou e quando vai no
+    // rodapé, a partir da sessão (server/acessoDocumento.js).
     const wmTexto = pdfSafe(wm.texto);
+    const identificacao = pdfSafe(identificacaoDaCopia(modo, reqUser));
 
     const contentPdf = await PDFDocument.load(file.data);
     const out = await PDFDocument.create();
@@ -1624,6 +1628,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     // Rodapé da capa: esquerda = empresa, direita = modo
     draw(capa, "Herbamed Laboratório Nutracêutico LTDA", 40, 30, 8, fontR, cinza);
     drawRight(capa, wmTexto, W - 40, 30, 8, fontR, cinza);
+    if (identificacao && !semMarcaDagua) drawRight(capa, identificacao, W - 40, 19, 7, fontR, cinza);
     } // fim if(!semCapa)
 
     // ── CONTEÚDO (páginas 2+) ──
@@ -1692,16 +1697,20 @@ async function handleDocumentRender(req, res, pathname, url) {
       drawRight(page, pdfSafe(`${codigo} · Rev. ${versao} · ${status}`), width - 16, height - hdrH + 12, 8, fontR, rgb(0.85, 0.93, 0.87));
       // Faixa de rodapé — sem o texto da marca quando o tipo é "modelo formulário"
       page.drawRectangle({ x: 0, y: 0, width, height: 16, color: rgb(0.93, 0.95, 0.93) });
-      const rodape = semMarcaDagua
-        ? `${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`
-        : `${wmTexto} · ${codigo} Rev. ${versao} · Página ${numPag} de ${totalConteudo}`;
-      page.drawText(pdfSafe(rodape), { x: 16, y: 5, size: 7, font: fontR, color: cinza });
+      const rodape = pdfSafe(rodapeDaPagina({
+        modo, semMarcaDagua, wmTexto, codigo, versao, numPag, total: totalConteudo, identificacao,
+      }));
+      // Encolhe a fonte se o rodapé (agora com quem/quando) não couber na largura.
+      let rodSize = 7;
+      while (rodSize > 5 && fontR.widthOfTextAtSize(rodape, rodSize) > width - 32) rodSize -= 0.25;
+      page.drawText(rodape, { x: 16, y: 5, size: rodSize, font: fontR, color: cinza });
     });
 
     const bytes = await out.save();
 
-    // Fase 7 — registra distribuição de cópias não controladas
-    if (modo === "nao_controlada") {
+    // Registra quem gerou cópia do documento vigente: download (não controlada,
+    // desde a Fase 7) e, desde a v3.21.0, também a visualização na tela.
+    if (registraNoLog(modo)) {
       query(
         `INSERT INTO distribution_log (doc_id, doc_codigo, usuario_id, usuario_nome, modo)
          VALUES ($1, $2, $3, $4, $5)`,
