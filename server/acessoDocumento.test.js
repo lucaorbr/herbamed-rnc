@@ -111,3 +111,33 @@ test("log: registra tela e download do vigente, não rascunho nem obsoleto", () 
   assert.equal(registraNoLog("obsoleto"), false);
   assert.equal(registraNoLog("rascunho"), false);
 });
+
+const { copiaParaEmitir, marcaDaCopia, identificacaoDaCopiaFisica, numeroDaCopia } = require("./acessoDocumento");
+
+test("cópia numerada: só documento vigente e só quem distribui", () => {
+  assert.equal(modoDeRenderizacao(u("rt"), { status: "Vigente" }, "copia"), "copia");
+  assert.equal(modoDeRenderizacao(u("admin"), { status: "Vigente" }, "copia"), "copia");
+  assert.equal(status(() => modoDeRenderizacao(u("user"), { status: "Vigente" }, "copia")), 403);
+  assert.equal(status(() => modoDeRenderizacao(u("viewer"), { status: "Vigente" }, "copia")), 403);
+  assert.equal(status(() => modoDeRenderizacao(u("rt"), { status: "Obsoleto" }, "copia")), 409);
+  assert.equal(modoDeRenderizacao(u("user", { iniciarRevisao: true }), { status: "Vigente" }, "copia"), "copia");
+});
+
+test("cópia a emitir: entregue e numerada; recolhida ou sem número não", () => {
+  const doc = { distribuicaoFisica: [{ id: "c1", numero: 3 }, { id: "c2" }] };
+  assert.equal(copiaParaEmitir(doc, "c1").numero, 3);
+  assert.equal(copiaParaEmitir(doc, "c2"), null);
+  assert.equal(copiaParaEmitir(doc, "c9"), null);
+  assert.equal(copiaParaEmitir(doc, ""), null);
+});
+
+test("marca e rodapé da cópia numerada", () => {
+  const c = { numero: 3, areaId: "PRO", areaNome: "Produção", setorNome: "Encapsulamento", tipoDestino: "setor" };
+  assert.equal(numeroDaCopia(c), "Nº 003");
+  assert.equal(marcaDaCopia(c), "CÓPIA CONTROLADA Nº 003");
+  const id = identificacaoDaCopiaFisica(c, { name: "Ana" }, quando);
+  assert.equal(id, "PRO — Produção / Encapsulamento · emitida em 09/10/2026 09:31 por Ana");
+  assert.equal(rodapeDaPagina({ modo: "copia", semMarcaDagua: true, wmTexto: marcaDaCopia(c), codigo: "FO-SGQ-001", versao: "00", numPag: 1, total: 1, identificacao: id }),
+    `CÓPIA CONTROLADA Nº 003 · ${id} · FO-SGQ-001 Rev. 00 · Página 1 de 1`);
+  assert.equal(registraNoLog("copia"), true);
+});

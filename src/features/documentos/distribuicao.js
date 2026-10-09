@@ -21,6 +21,44 @@ import { normNome } from "../colaboradores/colaboradores";
  */
 export const chaveDestino = (x) => x?.destinoKey || `legado:${x?.setor ?? ""}`;
 
+// ── Cópia numerada (v3.22.0) ────────────────────────────────────────────────
+// Cada cópia física ganha `id` e `numero` (sequencial por documento e revisão), e o
+// PDF oficial é emitido com "CÓPIA CONTROLADA Nº 003" e o destino em todas as
+// páginas. Com isso um setor pode ter mais de uma cópia, e a recolha baixa a cópia
+// pelo número. Registro antigo (sem id) segue identificado pelo destino.
+
+/** Identidade de uma cópia: o id; o registro antigo, sem id, cai no destino. */
+export const chaveCopia = (x) => x?.id || chaveDestino(x);
+
+/** "Nº 003" — vazio para registro antigo, ainda sem número. */
+export const rotuloNumero = (x) => (x?.numero ? `Nº ${String(x.numero).padStart(3, "0")}` : "");
+
+/**
+ * Próximo número da revisão atual. Conta as cópias entregues E as já recolhidas da
+ * mesma revisão, para um número nunca ser reaproveitado — "Nº 003" tem de apontar
+ * sempre para o mesmo papel. Revisão nova recomeça do 1.
+ */
+export function proximoNumeroCopia(doc) {
+  const versao = doc?.versao || null;
+  const daRevisao = [
+    ...(doc?.distribuicaoFisica || []),
+    ...(doc?.historicoDistribuicao || []).filter(h => (h?.versao || null) === versao),
+  ];
+  return daRevisao.reduce((max, c) => Math.max(max, Number(c?.numero) || 0), 0) + 1;
+}
+
+const novoIdCopia = () => `copia-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+/** Registro antigo, sem número, ganha id e número na primeira emissão. */
+export function comNumeroNaCopia(doc, copia) {
+  const alvo = chaveCopia(copia);
+  const numerada = { ...copia, id: copia?.id || novoIdCopia(), numero: proximoNumeroCopia(doc) };
+  return {
+    doc: { ...doc, distribuicaoFisica: (doc?.distribuicaoFisica || []).map(c => (chaveCopia(c) === alvo ? numerada : c)) },
+    copia: numerada,
+  };
+}
+
 /** Identificação do destino a partir da seleção de área/setor. */
 export function destinoDaSelecao({ area, setor, tipoDestino }) {
   if (!area) return null;
@@ -53,10 +91,8 @@ export function destinoLabel(destino) {
 export function validarDistribuicao({ form = {}, area, setor, existentes = [], hoje }) {
   if (!area) return { ok: false, erro: "Selecione a área que recebeu a cópia." };
   if (form.tipoDestino === "setor" && !setor) return { ok: false, erro: "Selecione o setor que recebeu a cópia." };
-  const destino = destinoDaSelecao({ area, setor, tipoDestino: form.tipoDestino });
-  if ((existentes || []).some(x => chaveDestino(x) === chaveDestino(destino))) {
-    return { ok: false, erro: "Este destino já tem cópia controlada registrada." };
-  }
+  // Mais de uma cópia no mesmo destino é permitido desde a v3.22.0: cada uma tem
+  // número próprio (ex.: uma por bancada).
   if (!String(form.entreguePor || "").trim()) return { ok: false, erro: "Informe quem entregou a cópia." };
   if (!String(form.recebidoPor || "").trim()) return { ok: false, erro: "Informe quem recebeu a cópia no destino." };
   if (!form.dataEntrega) return { ok: false, erro: "Informe a data da entrega." };
@@ -64,8 +100,10 @@ export function validarDistribuicao({ form = {}, area, setor, existentes = [], h
   return { ok: true, erro: "" };
 }
 
-export function novaCopiaFisica({ area, setor, tipoDestino, dataEntrega, entreguePor, recebidoPor, recebidoPorId, versao, registradoPor }) {
+export function novaCopiaFisica({ area, setor, tipoDestino, dataEntrega, entreguePor, recebidoPor, recebidoPorId, versao, registradoPor, numero }) {
   return {
+    id: novoIdCopia(),
+    numero: numero || null,
     ...destinoDaSelecao({ area, setor, tipoDestino }),
     dataEntrega: dataEntrega || null,
     entreguePor: String(entreguePor || "").trim(),
@@ -109,6 +147,8 @@ export function colaboradoresDoDestino(colaboradores = [], { areaId, setorId, ti
 export function registroDeRecolha({ copia, data, recolhidoPor, devolvidoPor, motivo = "recolha", versaoDoc }) {
   return {
     id: `dist-${chaveDestino(copia)}-${Date.now()}`,
+    copiaId: copia?.id || null,
+    numero: copia?.numero || null,
     destinoKey: copia?.destinoKey || null,
     destinoLabel: destinoLabel(copia),
     tipoDestino: copia?.tipoDestino || null,
@@ -141,7 +181,7 @@ export function comRecolha(doc, copia, dados = {}) {
   const entrada = registroDeRecolha({ copia, ...dados, motivo: "recolha", versaoDoc: doc?.versao });
   return {
     ...doc,
-    distribuicaoFisica: (doc?.distribuicaoFisica || []).filter(x => chaveDestino(x) !== chaveDestino(copia)),
+    distribuicaoFisica: (doc?.distribuicaoFisica || []).filter(x => chaveCopia(x) !== chaveCopia(copia)),
     historicoDistribuicao: [...(doc?.historicoDistribuicao || []), entrada],
   };
 }
@@ -164,7 +204,7 @@ export function comCopiasARecolher(doc) {
 /** Baixa da pendência de recolha aberta pela revisão nova — mesmo arquivamento. */
 export function comRecolhaObsoleta(doc, pendencia, dados = {}) {
   const entrada = registroDeRecolha({ copia: pendencia, ...dados, motivo: "obsoleta", versaoDoc: doc?.versao });
-  const restantes = (doc?.recolhaPendente || []).filter(x => chaveDestino(x) !== chaveDestino(pendencia));
+  const restantes = (doc?.recolhaPendente || []).filter(x => chaveCopia(x) !== chaveCopia(pendencia));
   return {
     ...doc,
     recolhaPendente: restantes.length ? restantes : null,

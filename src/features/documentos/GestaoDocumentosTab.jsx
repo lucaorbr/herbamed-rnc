@@ -15,6 +15,7 @@ import { SessoesTreinamentoTab } from "./SessoesTreinamentoTab";
 import { opcoesDeLocal } from "../colaboradores/colaboradores";
 import {
   colaboradoresDoDestino, comCopiasARecolher, comRecolha, comRecolhaObsoleta,
+  rotuloNumero, proximoNumeroCopia, comNumeroNaCopia,
   destinoLabel, novaCopiaFisica, validarDistribuicao, validarRecolha,
 } from "./distribuicao";
 import { sessoesDoDocumento } from "./sessoes";
@@ -340,6 +341,7 @@ function nomeDownloadDoc(codigo, versao, arquivo) {
 // as emissões já feitas continuam tendo de aparecer por extenso.
 const MODO_LOG_ROTULO = {
   controlada: "👁️ vista na tela",
+  copia: "🖨️ cópia controlada emitida",
   nao_controlada: "⬇️ cópia não controlada",
   formulario_fornecedor: "📗 formulário p/ fornecedor",
 };
@@ -347,6 +349,7 @@ function rotulosDoLog(rows = []) {
   return {
     tela: rows.filter(r => r.modo === "controlada").length,
     download: rows.filter(r => r.modo === "nao_controlada").length,
+    copias: rows.filter(r => r.modo === "copia").length,
   };
 }
 
@@ -574,6 +577,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     const dep = deptosAtivos.find(x => x.id === destino?.setor);
     return dep ? `${dep.id} — ${dep.label}` : destino?.setor || "—";
   };
+  // "Nº 003 · PRO — Produção / Encapsulamento" (registro antigo, sem número, só o destino).
+  const copiaLabel = c => [rotuloNumero(c), destinoDistribLabel(c)].filter(Boolean).join(" · ");
 
   const tipoInicial = tiposAtivos[0]?.id || "PO";
   const deptoInicial = deptosAtivos.find(d => d.id === "SGQ")?.id || deptosAtivos[0]?.id || "SGQ";
@@ -967,14 +972,34 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
       recebidoPor: distribForm.recebidoPor,
       recebidoPorId: distribForm.recebidoPorId || null,
       versao: doc.versao, registradoPor: user?.name || "",
+      numero: proximoNumeroCopia(doc),
     });
     const updated = { ...doc, distribuicaoFisica: [...(doc.distribuicaoFisica || []), nova] };
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog("Registrou cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null,
-      { destino:destinoDistribLabel(nova), entreguePor: nova.entreguePor, recebidoPor: nova.recebidoPor, dataEntrega: nova.dataEntrega });
-    toast_(`Cópia controlada registrada em ${destinoDistribLabel(nova)}, recebida por ${nova.recebidoPor}.`, "green");
+      { copia:copiaLabel(nova), entreguePor: nova.entreguePor, recebidoPor: nova.recebidoPor, dataEntrega: nova.dataEntrega });
+    // Salvar não abre nada sozinho: a emissão do papel é oferecida no aviso.
+    toast_(`Cópia controlada ${rotuloNumero(nova)} registrada em ${destinoDistribLabel(nova)}, recebida por ${nova.recebidoPor}.`, "green",
+      { acao: { rotulo: `🖨️ Emitir cópia ${rotuloNumero(nova)}`, onClick: () => emitirCopia(updated, nova) } });
     setSel(updated);
     setModalDistribuir(null);
+  };
+
+  // Emite o PDF oficial da cópia física: "CÓPIA CONTROLADA Nº 003" + destino em todas
+  // as páginas, gerado no servidor e registrado no log. Registro antigo, sem número,
+  // ganha o número aqui, na primeira emissão.
+  const emitirCopia = async (doc, copia) => {
+    try {
+      let alvo = copia;
+      if (!copia?.id || !copia?.numero) {
+        const r = comNumeroNaCopia(doc, copia);
+        await saveCollection("gestao_docs", String(doc.id), r.doc);
+        await auditLog("Numerou cópia física", "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`, null, { copia: copiaLabel(r.copia) });
+        setSel(r.doc);
+        alvo = r.copia;
+      }
+      abrirArquivoAutenticado(`${renderUrl(doc.id, "copia")}&copia=${encodeURIComponent(alvo.id)}`);
+    } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
 
   // Recolha — vale tanto para a cópia vigente quanto para a baixa da pendência
@@ -995,8 +1020,8 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     await saveCollection("gestao_docs", String(doc.id), updated);
     await auditLog(tipo === "obsoleta" ? "Confirmou recolha de cópia obsoleta" : "Recolheu cópia física",
       "gestao_docs", doc.id, `${doc.codigo} — ${doc.titulo}`,
-      { destino:destinoDistribLabel(destino) }, { recolhidoPor: dados.recolhidoPor, devolvidoPor: dados.devolvidoPor, data: dados.data });
-    toast_(`Recolha registrada: ${destinoDistribLabel(destino)}.`, "green");
+      { copia:copiaLabel(destino) }, { recolhidoPor: dados.recolhidoPor, devolvidoPor: dados.devolvidoPor, data: dados.data });
+    toast_(`Recolha registrada: ${copiaLabel(destino)}.`, "green");
     setSel(updated);
     setModalRecolher(null);
   };
@@ -1473,7 +1498,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
         d.depto || "",
         d.atualizadoEm || "",
         d.proximaRevisao || "",
-        `"${(d.distribuicaoFisica||[]).map(destinoDistribLabel).join(", ")}"`,
+        `"${(d.distribuicaoFisica||[]).map(copiaLabel).join(", ")}"`,
         d.status || "",
       ].join(","));
     });
@@ -1514,7 +1539,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
           d.depto || "",
           fmt(d.atualizadoEm) || "",
           fmt(d.proximaRevisao) || "",
-          (d.distribuicaoFisica||[]).map(destinoDistribLabel).join(", "),
+          (d.distribuicaoFisica||[]).map(copiaLabel).join(", "),
           d.status || "",
         ]);
 
@@ -2126,7 +2151,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
                   {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"", recebidoPorId:"", recebidoPor:"", dataEntrega:tod() }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
                 </div>
-                <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Setores com cópia controlada impressa da Rev.{d.versao}.</div>
+                <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Cópias controladas impressas da Rev.{d.versao}. Cada uma tem número próprio — o papel oficial sai pelo "🖨️ Emitir".</div>
                 {(d.distribuicaoFisica||[]).length===0 ? (
                   <div style={{fontSize:12,color:T.text3,padding:"0.5rem 0"}}>Nenhuma cópia física registrada.</div>
                 ) : (
@@ -2136,12 +2161,18 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
                           <span style={{fontSize:18}}>🗂️</span>
                           <div style={{flex:1}}>
-                            <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(c)}</div>
+                            <div style={{fontSize:13,fontWeight:600,color:T.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                              {c.numero
+                                ? <span style={{fontSize:11,fontWeight:800,padding:"1px 8px",borderRadius:10,background:`${T.accent}18`,color:T.accent}}>{rotuloNumero(c)}</span>
+                                : <span title="Registrada antes da numeração — ganha número na primeira emissão" style={{fontSize:10,padding:"1px 8px",borderRadius:10,background:T.border,color:T.text3}}>sem número</span>}
+                              {destinoDistribLabel(c)}
+                            </div>
                             <div style={{fontSize:11,color:T.text2}}>
                               Recebida por <strong style={{color:T.text}}>{c.recebidoPor||"—"}</strong> em {fmt(c.dataEntrega)}
                             </div>
                             <div style={{fontSize:11,color:T.text3}}>Entregue por {c.entreguePor||"—"}</div>
                           </div>
+                          {podeDistribuir && <button style={{...s.btnA,fontSize:11}} title="Gera o PDF oficial com o número e o destino em todas as páginas" onClick={()=>emitirCopia(d,c)}>🖨️ {c.numero ? "Emitir" : "Numerar e emitir"}</button>}
                           {podeDistribuir && <button style={{...s.btnD,fontSize:11}} onClick={()=>abrirRecolha(d,c,"vigente")}>🗑️ Recolher</button>}
                         </div>
                       );
@@ -2159,7 +2190,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                       {[...d.historicoDistribuicao].reverse().map((h,i)=>(
                         <div key={h.id||i} style={{padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
                           <div style={{fontSize:12,fontWeight:600,color:T.text2}}>
-                            {h.destinoLabel} · Rev.{h.versao||"—"}
+                            {[rotuloNumero(h), h.destinoLabel].filter(Boolean).join(" · ")} · Rev.{h.versao||"—"}
                             {h.motivo==="obsoleta" && <span style={{fontSize:10,color:T.text3,fontWeight:400}}> · cópia obsoleta</span>}
                           </div>
                           <div style={{fontSize:11,color:T.text3}}>
@@ -2188,7 +2219,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                       <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8}}>
                         <span style={{fontSize:18}}>📄</span>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:13,fontWeight:600,color:T.text}}>{destinoDistribLabel(p)}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:T.text}}>{copiaLabel(p)}</div>
                           <div style={{fontSize:11,color:T.text2}}>
                             Cópia da Rev.{p.versaoAnterior} pendente de recolha
                             {p.recebidoPor ? ` · com ${p.recebidoPor}` : ""}
@@ -2209,7 +2240,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                     controlada vista na tela pode ser impressa pelo navegador. */}
                 {!distLogLoading && distLog.length > 0 && (
                   <div style={{ fontSize:11, color:T.text2, margin:"-4px 0 10px" }}>
-                    {(() => { const n = rotulosDoLog(distLog); return `${n.tela} visualização(ões) na tela · ${n.download} cópia(s) não controlada(s) baixada(s)`; })()}
+                    {(() => { const n = rotulosDoLog(distLog); return `${n.tela} visualização(ões) na tela · ${n.download} cópia(s) não controlada(s) baixada(s) · ${n.copias} cópia(s) controlada(s) emitida(s)`; })()}
                   </div>
                 )}
                 {distLogLoading ? (
@@ -2240,6 +2271,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                                 color:row.modo==="formulario_fornecedor" ? "#8a5a00" : T.text2 }}>
                                 {MODO_LOG_ROTULO[row.modo] || row.modo || "—"}
                               </span>
+                              {row.detalhe && <span style={{ fontSize:11, color:T.text2, marginLeft:6 }}>{row.detalhe}</span>}
                             </td>
                           </tr>
                         ))}
@@ -2604,7 +2636,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{fontSize:16,fontWeight:700,color:T.text}}>{obsoleta ? "⚠️ Confirmar recolha da cópia obsoleta" : "🗑️ Recolher cópia física"}</div>
                 <button style={{...s.btn,fontSize:11}} onClick={()=>setModalRecolher(null)}>✕ Fechar</button>
               </div>
-              <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{destinoDistribLabel(modalRecolher.destino)}</div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{copiaLabel(modalRecolher.destino)}</div>
               <div style={{fontSize:11,color:T.text3,marginBottom:14}}>
                 {modalRecolher.destino?.dataEntrega
                   ? <>Entregue em {fmt(modalRecolher.destino.dataEntrega)}{modalRecolher.destino.recebidoPor ? <> · recebida por <strong style={{color:T.text2}}>{modalRecolher.destino.recebidoPor}</strong></> : ""}.</>
@@ -3638,7 +3670,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                         </td>
                         <td style={{padding:"8px 10px",color:T.text2}}>
                           {(d.distribuicaoFisica||[]).length>0
-                            ? <span title={d.distribuicaoFisica.map(destinoDistribLabel).join(", ")}>🗂️ {d.distribuicaoFisica.length} destino{d.distribuicaoFisica.length!==1?"s":""}</span>
+                            ? <span title={d.distribuicaoFisica.map(copiaLabel).join(", ")}>🗂️ {d.distribuicaoFisica.length} cópia{d.distribuicaoFisica.length!==1?"s":""}</span>
                             : "—"}
                           {d.recolhaPendente?.length>0 && <span title={`${d.recolhaPendente.length} cópia(s) obsoleta(s) a recolher`} style={{color:"#ff4f6a",marginLeft:6}}>⚠️{d.recolhaPendente.length}</span>}
                         </td>

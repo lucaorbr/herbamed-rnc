@@ -225,6 +225,9 @@ async function migrate() {
     )
   `);
 
+  // v3.22.0 — cópia física numerada: "Nº 003 · destino" da emissão.
+  await query(`ALTER TABLE distribution_log ADD COLUMN IF NOT EXISTS detalhe text`);
+
   await query(`
     CREATE INDEX IF NOT EXISTS idx_distribution_log_doc_id
     ON distribution_log (doc_id, data_download DESC)
