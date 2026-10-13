@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
+import { DISPOSICOES, SEVMETA, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
 import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
 import { filtrarPorPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 import { useFormal, useTheme } from "../../core/theme";
@@ -51,18 +51,9 @@ export function calcGut(r) {
 export const gutRank = (rncs) =>
   rncs.filter(x => x.status === "Aberta" || x.status === "Em andamento").map(calcGut).sort((a, b) => b.gut - a.gut);
 
-// Disposição do material/lote (padrão farma / SE Suite). `libera` marca as decisões que
-// liberam material NÃO CONFORME para uso — por isso exigem assinatura do RT (segregação:
-// quem libera NC ≠ quem detectou). As demais gravam só justificativa + autor.
-export const DISPOSICOES = [
-  { key: "liberar",    label: "Liberar (uso normal)",    libera: true,  cor: "#2ab84a" },
-  { key: "concessao",  label: "Liberar sob concessão",   libera: true,  cor: "#ffd166" },
-  { key: "segregar",   label: "Segregar / Quarentena",   libera: false, cor: "#4fc3f7" },
-  { key: "retrabalho", label: "Retrabalho / Reprocesso", libera: false, cor: "#a78bfa" },
-  { key: "reprovar",   label: "Reprovar / Descartar",    libera: false, cor: "#ff4f6a" },
-  { key: "devolver",   label: "Devolver ao fornecedor",  libera: false, cor: "#ff8c42" },
-];
-export const dispMeta = (key) => DISPOSICOES.find(d => d.key === key) || null;
+// DISPOSICOES/dispMeta moram em core/status (o e-mail da RNC também usa); reexportadas
+// aqui porque RncFicha e ReunioesTab já importam daqui.
+export { DISPOSICOES, dispMeta };
 
 // rncTemMaterial mora em ferramentasLogic (regra pura, testável); reexportada aqui
 // porque ReunioesTab e outros já importam daqui.

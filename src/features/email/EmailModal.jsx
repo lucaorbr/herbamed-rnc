@@ -1,63 +1,12 @@
 import React, { useState } from "react";
 import { useTheme } from "../../core/theme";
-import { fmt, past } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle } from "../../shared/ui";
 import { enviarEmail } from "./enviarEmail";
+import { buildEmail, comBlocoAntesDoRodape } from "./emailRncLogic";
 
-export function buildEmail(rnc, evento) {
-  const sev = { Crítica: "🔴 CRÍTICA", Maior: "🟠 MAIOR", Menor: "🟡 MENOR" }[rnc.sev] || rnc.sev;
-  const evLabel = {
-    abertura: "NOVA NÃO CONFORMIDADE REGISTRADA",
-    status: "ATUALIZAÇÃO DE STATUS",
-    ishikawa: "ANÁLISE DE CAUSA CONCLUÍDA",
-    "5w2h": "PLANO DE AÇÃO 5W2H ATUALIZADO",
-    eficacia: "VERIFICAÇÃO DE EFICÁCIA REGISTRADA",
-    manual: "NOTIFICAÇÃO DE NÃO CONFORMIDADE",
-  }[evento] || "ATUALIZAÇÃO";
-  const pfx = rnc.sev === "Crítica" ? "🔴 [CRÍTICO] " : rnc.sev === "Maior" ? "🟠 [IMPORTANTE] " : "🟡 ";
-  const subject = `${pfx}${evLabel} | ${rnc.num} — ${rnc.produto || rnc.tipo}`;
-  const body = `Prezado(a),
-
-Este é um comunicado automático do Sistema de Gestão da Qualidade da Herbamed®.
-Evento: ${evLabel}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 DADOS DA NÃO CONFORMIDADE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Número:           ${rnc.num}
-Status:           ${rnc.status}
-Severidade:       ${sev}
-Tipo:             ${rnc.tipo}
-Data abertura:    ${fmt(rnc.data)}
-Produto/Material: ${rnc.produto || "—"}
-Fornecedor:       ${rnc.fornecedor || "—"}
-Lote:             ${rnc.lote || "—"}
-Qtd. afetada:     ${rnc.qtd || "—"}
-Setor:            ${rnc.setor || "—"}
-Detectado por:    ${rnc.detector || "—"}
-Responsável:      ${rnc.resp || "—"}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 DESCRIÇÃO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${rnc.desc}
-${rnc.ref ? `\nReferência: ${rnc.ref}` : ""}${rnc.evidencia ? `\nEvidências: ${rnc.evidencia}` : ""}
-${rnc.contencao ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ AÇÃO DE CONTENÇÃO\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${rnc.contencao}\nResponsável: ${rnc.respCont || "—"} | Data: ${fmt(rnc.dataContencao)}` : ""}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🗓️ PRAZOS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Análise de causa:     ${fmt(rnc.prazoCausa)}
-Ação corretiva:       ${fmt(rnc.prazoAC)}${past(rnc.prazoAC) && rnc.status !== "Eficaz" && rnc.status !== "Encerrada" ? " ⚠ VENCIDO" : ""}
-Verificação eficácia: ${fmt(rnc.prazoEfic)}
-${rnc.ishikawa?.root ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🎯 CAUSA RAIZ\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${rnc.ishikawa.root}` : ""}${rnc.eficacia?.resultado ? `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n✅ EFICÁCIA: ${rnc.eficacia.resultado.toUpperCase()}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${rnc.eficacia.obs || ""}` : ""}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Herbamed® · Sistema de Gestão da Qualidade
-"Fornecendo Saúde. Cultivando Qualidade de Vida."`;
-  return { subject, body };
-}
+// O texto mora em emailRncLogic (puro, testado); reexportado para quem já importava daqui.
+export { buildEmail };
 
 async function gerarLinkFornecedor(rncId, rncNum, diasValidade = 30) {
   const res = await fetch(`/api/rnc-supplier/gerar-token`, {
@@ -75,7 +24,7 @@ async function gerarLinkFornecedor(rncId, rncNum, diasValidade = 30) {
 // backend — o cliente não escolhe mais quem assina o e-mail.
 export function EmailModal({ rnc, users, evento, onClose, onSent }) {
   const T = useTheme(); const s = useS();
-  const tpl = buildEmail(rnc, evento);
+  const tpl = buildEmail(rnc, evento, { origem: window.location.origin });
   const [to, setTo] = useState([]);
   const [subject, setSubject] = useState(tpl.subject);
   const [body, setBody] = useState(tpl.body);
@@ -190,7 +139,7 @@ export function EmailModal({ rnc, users, evento, onClose, onSent }) {
                         const url = `${base}?rnc_token=${token}`;
                         setLinkForn(url);
                         // Insere link no corpo do email
-                        setBody(prev => prev + `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔗 FORMULÁRIO DE RESPOSTA\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nPreencha a análise de causa e plano de ação pelo link abaixo:\n${url}\n\n✅ Nenhum login necessário · Válido por 30 dias`);
+                        setBody(prev => comBlocoAntesDoRodape(prev, `FORMULÁRIO DE RESPOSTA DO FORNECEDOR\n------------------------------------\nPreencha a análise de causa e o plano de ação pelo link abaixo:\n${url}\n\nNão é preciso login. O link vale por 30 dias.`));
                       } catch(e) { setErr("Erro ao gerar link: " + e.message); }
                       setGerandoLink(false);
                     }}>
