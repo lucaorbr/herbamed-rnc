@@ -191,7 +191,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     await salvar({
       ...sel, status: "Em andamento", realizadaEm: tod(),
       historico: [...(sel.historico || []), hEntry("Reunião iniciada")],
-    }, "Reunião iniciada — registre a presença e percorra a pauta.");
+    }, "Reunião iniciada. Registre a presença e percorra a pauta.");
   };
 
   const togglePresenca = (idx) => {
@@ -207,7 +207,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
     if (!it.deliberacao) { toast_("Escolha a deliberação do item.", "red"); return; }
     if (it.deliberacao === "reforcar_prazo" && !it.novoPrazo) { toast_("Informe o novo prazo de ação corretiva.", "red"); return; }
     const rnc = rncs.find(r => r.id === it.rncId);
-    if (!rnc) { toast_(`RNC ${it.rncNum} não encontrada — pode ter sido excluída.`, "red"); return; }
+    if (!rnc) { toast_(`RNC ${it.rncNum} não encontrada. Pode ter sido excluída.`, "red"); return; }
 
     // "Aprovar encerramento" só fecha de verdade quando as mesmas travas do
     // encerramento por disposição já estão satisfeitas; senão, aprova a
@@ -280,8 +280,8 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           <SecTitle icon="🗓️" ch="Agendar reunião de análise crítica" />
           <G3 ch={<>
             <F lbl="Data da reunião *" ch={<Inp type="date" value={nova.data} onChange={e => setNova(p => ({ ...p, data: e.target.value }))} />} />
-            <F lbl="Período de referência — de" ch={<Inp type="date" value={nova.de} onChange={e => setNova(p => ({ ...p, de: e.target.value }))} />} />
-            <F lbl="Período de referência — até" ch={<Inp type="date" value={nova.ate} onChange={e => setNova(p => ({ ...p, ate: e.target.value }))} />} />
+            <F lbl="Período de referência: de" ch={<Inp type="date" value={nova.de} onChange={e => setNova(p => ({ ...p, de: e.target.value }))} />} />
+            <F lbl="Período de referência: até" ch={<Inp type="date" value={nova.ate} onChange={e => setNova(p => ({ ...p, ate: e.target.value }))} />} />
           </>} />
           <F lbl="Facilitador" ch={<div style={{ ...s.inp, color: T.text2 }}>{user.name}</div>} />
         </div>
@@ -307,9 +307,9 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
         </div>
 
         <div style={s.card}>
-          <SecTitle icon="📋" ch={`Pauta sugerida — ${nova.pautaIds.length} de ${candidatas.length} RNC(s)`} />
+          <SecTitle icon="📋" ch={`Pauta sugerida (${nova.pautaIds.length} de ${candidatas.length} RNC(s))`} />
           <div style={{ fontSize: 11, color: T.text2, marginBottom: 10 }}>
-            Sugestão automática: RNCs em tratamento, com prazo vencido, críticas sem aprovação do RT ou pendentes de verificação — ordenadas por GUT. Ajuste antes de agendar.
+            Sugestão automática: RNCs em tratamento, com prazo vencido, críticas sem aprovação do RT ou pendentes de verificação, ordenadas por GUT. Ajuste antes de agendar.
           </div>
           {candidatas.length === 0 ? <div style={{ color: T.text3, fontSize: 13, textAlign: "center", padding: "1.5rem" }}>Nenhuma RNC pede análise crítica no momento.</div> :
             candidatas.map(r => {
@@ -377,7 +377,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
         )}
 
         <div style={s.card}>
-          <SecTitle icon="👥" ch={`Participantes — ${presentes} presente(s) de ${(sel.participantes || []).length}`} />
+          <SecTitle icon="👥" ch={`Participantes (${presentes} presente(s) de ${(sel.participantes || []).length})`} />
           {(sel.participantes || []).length === 0 ? <div style={{ color: T.text3, fontSize: 13 }}>Nenhum participante registrado.</div> :
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 6 }}>
               {sel.participantes.map((p, i) => (
@@ -393,7 +393,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
         </div>
 
         <div style={s.card}>
-          <SecTitle icon="📋" ch={`Pauta — ${sel.pauta?.length || 0} item(ns)`} />
+          <SecTitle icon="📋" ch={`Pauta (${sel.pauta?.length || 0} item(ns))`} />
           {(sel.pauta || []).map((it, i) => {
             const rnc = rncs.find(r => r.id === it.rncId);
             const feito = it.itemStatus === "deliberado";
@@ -416,12 +416,12 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                 {feito ? (
                   <div style={{ background: it.aprovacaoPendente ? "#ffd16612" : "#2ab84a12", border: `1px solid ${it.aprovacaoPendente ? "#ffd16633" : "#2ab84a22"}`, borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: it.aprovacaoPendente ? "#8a6000" : "#2ab84a" }}>
-                      {it.fechadaNaReuniao ? "✅ Encerramento aprovado e efetivado — RNC encerrada" : it.aprovacaoPendente ? "⏳ Encerramento aprovado — pendente conclusão da eficácia" : deliberacaoLabel(it.deliberacao)}
+                      {it.fechadaNaReuniao ? "✅ Encerramento aprovado e efetivado. RNC encerrada" : it.aprovacaoPendente ? "⏳ Encerramento aprovado, aguardando a conclusão da eficácia" : deliberacaoLabel(it.deliberacao)}
                     </div>
                     {it.encaminhamento && <div style={{ fontSize: 12, color: T.text, marginTop: 4 }}>{it.encaminhamento}</div>}
                     {it.novoResponsavel && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Responsável indicado: {it.novoResponsavel}</div>}
                     {it.novoPrazo && <div style={{ fontSize: 11, color: T.text2, marginTop: 2 }}>Novo prazo: {fmt(it.novoPrazo)}</div>}
-                    <div style={{ fontSize: 10, color: T.text3, marginTop: 4 }}>Registrado por {it.deliberadoPor} em {fmt(it.deliberadoEm)} — gravado no histórico da RNC.</div>
+                    <div style={{ fontSize: 10, color: T.text3, marginTop: 4 }}>Registrado por {it.deliberadoPor} em {fmt(it.deliberadoEm)}, gravado no histórico da RNC.</div>
                   </div>
                 ) : !editavel ? (
                   <div style={{ fontSize: 11, color: T.text3 }}>{sel.status === "Agendada" ? "A deliberação fica disponível quando a reunião for iniciada." : "Sem deliberação registrada."}</div>
@@ -493,7 +493,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           <AssinaturaModal
             user={user}
             titulo={`Ata da reunião ${assinaturaModal.num}`}
-            contexto={`Ata de análise crítica ${assinaturaModal.num} — ${assinaturaModal.pauta?.length || 0} item(ns) deliberado(s)`}
+            contexto={`Ata de análise crítica ${assinaturaModal.num}: ${assinaturaModal.pauta?.length || 0} item(ns) deliberado(s)`}
             papel="Facilitador da Análise Crítica"
             onClose={() => setAssinaturaModal(null)}
             onConfirm={async (ass) => {
@@ -505,7 +505,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
                 historico: [...(assinaturaModal.historico || []), hEntry("Reunião encerrada e ata assinada")],
               };
               setAssinaturaModal(null);
-              await salvar(encerrada, `Reunião ${encerrada.num} encerrada — ata assinada.`);
+              await salvar(encerrada, `Reunião ${encerrada.num} encerrada, com ata assinada.`);
             }}
           />
         )}
@@ -533,7 +533,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
           <div style={{ fontSize: 32, marginBottom: 8 }}>🗓️</div>
           <div style={{ fontSize: 14, color: T.text, fontWeight: 600 }}>Nenhuma reunião registrada</div>
           <div style={{ fontSize: 12, color: T.text2, marginTop: 4 }}>
-            A reunião de análise crítica é onde a gestão delibera sobre as RNCs em aberto — e a ata é a evidência de que essa análise aconteceu.
+            A reunião de análise crítica é onde a gestão delibera sobre as RNCs em aberto. A ata é a evidência de que essa análise aconteceu.
           </div>
         </div>
       ) : lista.map(r => {

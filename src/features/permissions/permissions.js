@@ -51,7 +51,7 @@ export const PERMS_GRUPOS = [
     { key: "editarFornecedores",  label: "Criar / editar Fornecedores" },
     { key: "criarAuditorias",     label: "Criar / editar Auditorias" },
     { key: "editarClientes",      label: "Criar / editar Clientes terceiros" },
-    { key: "editarIPC",           label: "Lançar IPC — Controle de processo" },
+    { key: "editarIPC",           label: "Lançar IPC (controle de processo)" },
     { key: "editarIPCProdutos",   label: "Gerenciar catálogo IPC Produtos" },
   ]},
 ];

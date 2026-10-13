@@ -177,7 +177,7 @@ export function MatrizTreinamentoTab({
               <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 18 }}>{status === "atrasado" ? "🔴" : status === "vencido" ? "↻" : "📄"}</span>
                 <div style={{ flex: 1, minWidth: 180 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.codigo} — {doc.titulo}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{doc.codigo} · {doc.titulo}</div>
                   <div style={{ fontSize: 11, color: T.text2 }}>
                     Rev.{doc.versao} · {status === "vencido" ? "reciclagem vencida" : "em aberto"} há {dias} dia(s)
                     {status === "atrasado" && <strong style={{ color: COR.atrasado }}> · prazo vencido</strong>}
@@ -209,7 +209,7 @@ export function MatrizTreinamentoTab({
               <div key={`${f.doc.id}-${f.userId}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{f.userName}</div>
-                  <div style={{ fontSize: 11, color: T.text2 }}>{f.doc.codigo} — {f.doc.titulo} · {f.cargoNome}</div>
+                  <div style={{ fontSize: 11, color: T.text2 }}>{f.doc.codigo} · {f.doc.titulo} · {f.cargoNome}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: f.diasParaVencer <= 15 ? COR.atrasado : COR.vencido }}>
                   vence em {f.diasParaVencer}d · {fmt(f.venceEm)}
@@ -219,7 +219,7 @@ export function MatrizTreinamentoTab({
             ))}
             {filaVisivel.length > 12 && (
               <div style={{ fontSize: 11, color: T.text3, textAlign: "center", paddingTop: 4 }}>
-                e mais {filaVisivel.length - 12} — use o CSV para a lista completa.
+                e mais {filaVisivel.length - 12}. A lista completa está no CSV.
               </div>
             )}
           </div>
@@ -285,7 +285,7 @@ export function MatrizTreinamentoTab({
                     Colaborador
                   </th>
                   {colunasPaginadas.map(doc => (
-                    <th key={doc.id} title={`${doc.codigo} — ${doc.titulo} (Rev.${doc.versao})`}
+                    <th key={doc.id} title={`${doc.codigo} · ${doc.titulo} (Rev.${doc.versao})`}
                       style={{ padding: "8px 6px", borderBottom: `1px solid ${T.border}`, background: T.surf, color: T.text3, fontSize: 10, fontWeight: 700, minWidth: 46, maxWidth: 46 }}>
                       <div style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap", maxHeight: 130, overflow: "hidden", margin: "0 auto", cursor: "pointer" }}
                         onClick={() => onAbrirDoc?.(doc)}>
@@ -311,7 +311,7 @@ export function MatrizTreinamentoTab({
                         if (!cel) return <td key={doc.id} style={{ borderBottom: `1px solid ${T.border}`, textAlign: "center", color: T.border }}>·</td>;
                         return (
                           <td key={doc.id} style={{ borderBottom: `1px solid ${T.border}`, textAlign: "center", padding: "4px 2px" }}
-                            title={`${l.userName} — ${doc.codigo} Rev.${doc.versao}\n${ROTULO[cel.status]}${cel.status === "treinado" ? ` em ${fmt(cel.evidencia?.dataRealizacao)}` : ` há ${cel.dias} dia(s)`}`}>
+                            title={`${l.userName} · ${doc.codigo} Rev.${doc.versao}\n${ROTULO[cel.status]}${cel.status === "treinado" ? ` em ${fmt(cel.evidencia?.dataRealizacao)}` : ` há ${cel.dias} dia(s)`}`}>
                             <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: 6, fontSize: 11, fontWeight: 800, background: COR[cel.status] + "22", color: COR[cel.status] }}>
                               {ICONE[cel.status]}
                             </span>

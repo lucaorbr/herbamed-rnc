@@ -121,7 +121,7 @@ Responda APENAS em JSON válido, sem markdown:
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
         <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg,${T.accent},${T.accent2})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: `0 0 12px ${T.accentGlow}` }}>🤖</div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Assistente de IA — Claude</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>Assistente de IA (Claude)</div>
           <div style={{ fontSize: 11, color: T.text2 }}>Análise automática com inteligência artificial</div>
         </div>
       </div>

@@ -84,7 +84,7 @@ function abrirRA_PDF({ num, dataAnalise, identFields, tableHead, tableRows, extr
     <div>${disp ? seloAssHTML(disp.ass, "Aprovou a disposição", "#1a5fb4", disp.ctx) : `<div style="padding:10px 12px;border:1px dashed #ddd;border-radius:8px;background:#fafafa;text-align:center;"><div style="font-size:9px;color:#888;text-transform:uppercase;">Aprovou a disposição</div><div style="font-size:11px;color:#ccc;padding:8px 0;">Aguardando aprovação</div></div>`}</div>
     <div style="text-align:center;"><div style="border-top:1px solid #333;padding-top:6px;margin-top:30px;font-size:11px;">______________________<br/>Gerente de Qualidade</div></div>
   </div>`;
-  openPDFWindow(`${num} — Herbamed®`, buildPDFShell({
+  openPDFWindow(`${num} · Herbamed®`, buildPDFShell({
     titulo: "Relatório de Análise",
     numero: num,
     meta: fmt(dataAnalise),
@@ -264,7 +264,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     const atualizada = { ...ficha, aprovacaoDisposicao: montarAprovacaoDisposicao(user, ficha.conclusao) };
     await salvarFichaDB(atualizada);
     setSelFicha(atualizada);
-    toast_("Disposição aprovada!", "green");
+    toast_("Disposição aprovada.", "green");
   };
 
   const aplicarEnsaiosPadrao = (tipo) => {
@@ -293,7 +293,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     try {
       const result = await uploadStoredFile(file);
       setCoa(result);
-      toast_("COA anexado com sucesso!", "green");
+      toast_("COA anexado.", "green");
     } catch { toast_("Erro ao enviar COA.", "red"); }
     setCoaUploading(false);
   };
@@ -318,7 +318,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
       ficha.historicoEdicoes = [...hist, { data: tod(), dataHora: new Date().toLocaleString("pt-BR"), editor: user.name, obs: "Análise editada" }];
     }
     await salvarFichaDB(ficha);
-    toast_(`${num} salva com sucesso!`, "green");
+    toast_(`${num} salva.`, "green");
     if(conc==="Reprovado") {
       if(confirm(`Material REPROVADO! Deseja abrir uma RNC automaticamente?`)) {
         const duplicata = rncs.find(r => r.origemAnalise === num);
@@ -352,7 +352,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     tableHead: `<tr><th>Ensaio</th><th>Método</th><th>Especificação</th><th>Resultado</th><th>Unidade</th><th>Situação</th><th>Obs.</th></tr>`,
     tableRows: ficha.ensaios.map(e => {
       const c = e.tipo === "numero" ? (parseFloat(e.resultado) >= (e.min ?? -Infinity) && parseFloat(e.resultado) <= (e.max ?? Infinity)) : e.conforme;
-      const sit = c === true ? '<span class="ra-conf">✓ Conforme</span>' : c === false ? '<span class="ra-nconf">✗ Não conforme</span>' : '<span class="ra-pend">— Pendente</span>';
+      const sit = c === true ? '<span class="ra-conf">✓ Conforme</span>' : c === false ? '<span class="ra-nconf">✗ Não conforme</span>' : '<span class="ra-pend">Pendente</span>';
       return `<tr><td><strong>${e.nome}</strong></td><td>${e.metodo}</td><td>${e.espec}</td><td>${e.resultado || "—"}</td><td>${e.unidade}</td><td>${sit}</td><td>${e.obs || ""}</td></tr>`;
     }).join(""),
     conclusao: ficha.conclusao,
@@ -409,7 +409,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
             <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
             <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
             <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
-            <F lbl="Analista responsável" ch={<div style={{ fontSize:13, color:T.text2, padding:"8px 0", fontWeight:500 }}>{user?.name || "—"}{user?.cargo ? ` — ${user.cargo}` : ""}</div>} />
+            <F lbl="Analista responsável" ch={<div style={{ fontSize:13, color:T.text2, padding:"8px 0", fontWeight:500 }}>{user?.name || "—"}{user?.cargo ? ` · ${user.cargo}` : ""}</div>} />
           </div>
         </div>
 
@@ -470,7 +470,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
                               </div>
                               {e.multiplos && multiplosState[e.id]?.aberto && (
                                 <div style={{ marginTop:6, padding:"8px", background:T.card, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
-                                  <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores — média automática</div>
+                                  <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores, média automática</div>
                                   <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
                                     {(multiplosState[e.id]?.valores||["","","","",""]).map((v,vi)=>(
                                       <Inp key={vi} type="number" placeholder={`#${vi+1}`} value={v}
@@ -521,7 +521,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
           {/* Conclusão em tempo real */}
           {ensaios.length > 0 && conc && (
             <div style={{ marginTop:"1rem", padding:"12px 16px", borderRadius:10, background:conc==="Aprovado"?"#2ab84a18":conc==="Reprovado"?"#ff4f6a18":"#ffd16618", border:`1px solid ${conc==="Aprovado"?"#2ab84a33":conc==="Reprovado"?"#ff4f6a33":"#ffd16633"}`, fontSize:14, fontWeight:700, color:conc==="Aprovado"?"#2ab84a":conc==="Reprovado"?"#ff4f6a":"#8a6000", textAlign:"center" }}>
-              {conc==="Aprovado"?"✅ APROVADO — Todos os ensaios dentro da especificação":conc==="Reprovado"?"❌ REPROVADO — Um ou mais ensaios fora da especificação":"⏳ ANÁLISE PENDENTE — Preencha todos os resultados"}
+              {conc==="Aprovado"?"✅ APROVADO: todos os ensaios dentro da especificação":conc==="Reprovado"?"❌ REPROVADO: um ou mais ensaios fora da especificação":"⏳ ANÁLISE PENDENTE: preencha todos os resultados"}
             </div>
           )}
         </div>
@@ -543,7 +543,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
             <div style={{ border:`2px dashed ${T.border2}`, borderRadius:10, padding:"1.5rem", textAlign:"center", cursor:"pointer" }} onClick={()=>document.getElementById("coa-input").click()}>
               <div style={{ fontSize:28, marginBottom:6 }}>📎</div>
               <div style={{ fontSize:13, color:T.text2 }}>{coaUploading?"Enviando...":"Clique para anexar o COA do fornecedor"}</div>
-              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>PDF, imagem — até 10MB</div>
+              <div style={{ fontSize:11, color:T.text3, marginTop:4 }}>PDF ou imagem, até 10MB</div>
               <input id="coa-input" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e=>uploadCOA(e.target.files[0])} />
             </div>
           )}
@@ -1226,7 +1226,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
 
         {ensaios.some(e=>e._ia) && (
           <div style={{ marginBottom:12, padding:"10px 12px", background:T.yellow+"18", border:`1px solid ${T.yellow}66`, borderRadius:8 }}>
-            <div style={{ fontSize:12, color:T.text, fontWeight:600, marginBottom:6 }}>⚠ Limites e referências gerados por IA — rascunho não verificado</div>
+            <div style={{ fontSize:12, color:T.text, fontWeight:600, marginBottom:6 }}>⚠ Limites e referências gerados por IA. Rascunho não verificado</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:8, lineHeight:1.5 }}>
               A IA pode errar limites e citar referências inexistentes. Confira cada ensaio marcado contra a monografia oficial vigente (Farmacopeia Brasileira, USP, etc.) e corrija o campo Especificação e Referência antes de salvar.
             </div>
@@ -1249,7 +1249,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
             </div>
             {ensaios.map((e,i)=>(
               <div key={e.id} style={{ marginBottom:8, background:T.surf, borderRadius:8, border:`1px solid ${e._ia?T.yellow+"88":T.border}`, borderLeft:e._ia?`3px solid ${T.yellow}`:`1px solid ${T.border}`, padding:"8px" }}>
-                {e._ia && <div style={{ fontSize:10, color:T.yellow, fontWeight:700, marginBottom:4 }}>⚠ Rascunho IA — verificar na monografia</div>}
+                {e._ia && <div style={{ fontSize:10, color:T.yellow, fontWeight:700, marginBottom:4 }}>⚠ Rascunho da IA: confira na monografia</div>}
                 <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, alignItems:"center" }}>
                   <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev=>updEnsaio(e.id,"nome",ev.target.value)} sx={{ fontSize:12 }}/>
                   <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev=>updEnsaio(e.id,"espec",ev.target.value)} sx={{ fontSize:12 }}/>
@@ -1523,7 +1523,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
     await saveCollection("cq_analises", String(a.id), atualizada);
     await auditLog("Aprovou disposição CQ", "cq_analises", String(a.id), `${a.num} — ${a.materialNome}`, null, { conclusao: aprov.conclusao, aprovadoPor: aprov.nome });
     setSelAnalise(atualizada);
-    toast_("Disposição aprovada!", "green");
+    toast_("Disposição aprovada.", "green");
     } catch(e) {
       toast_(e.message, "red");
       console.error(e);
@@ -1627,7 +1627,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
         <SecTitle icon="📦" ch="Selecionar material" />
         {materiais.length===0 ? (
           <div style={{ color:T.text3, fontSize:13, padding:"1rem", textAlign:"center" }}>
-            Nenhum material cadastrado. Cadastre um material em <strong>CQ — Materiais</strong> primeiro.
+            Nenhum material cadastrado. Cadastre um material em <strong>CQ · Materiais</strong> primeiro.
           </div>
         ) : ((() => {
           const termo = buscaMat.trim();
@@ -1692,13 +1692,13 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
             <F lbl="Nota Fiscal" ch={<Inp placeholder="Ex: NF 12345" value={form.nf} onChange={e=>setF("nf",e.target.value)} />} />
             <F lbl="Data recebimento" ch={<Inp type="date" value={form.dataRecebimento} onChange={e=>setF("dataRecebimento",e.target.value)} />} />
             <F lbl="Data análise" ch={<Inp type="date" value={form.dataAnalise} onChange={e=>setF("dataAnalise",e.target.value)} />} />
-            <F lbl="Analista" ch={<div style={{ fontSize:13, color:T.text2, padding:"8px 0", fontWeight:500 }}>{user?.name || "—"}{user?.cargo ? ` — ${user.cargo}` : ""}</div>} />
+            <F lbl="Analista" ch={<div style={{ fontSize:13, color:T.text2, padding:"8px 0", fontWeight:500 }}>{user?.name || "—"}{user?.cargo ? ` · ${user.cargo}` : ""}</div>} />
           </div>
         </div>
 
         {/* Resultados */}
         <div style={s.card}>
-          <SecTitle icon="🔬" ch={`Resultados — ${matSel.nome}`} />
+          <SecTitle icon="🔬" ch={`Resultados: ${matSel.nome}`} />
           <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
             ⌨️ Pelo teclado: digite o valor e <strong>Enter</strong> · na conformidade, <strong>C</strong> conforme, <strong>N</strong> não conforme (já vai para o próximo ensaio) · <strong>Shift+Enter</strong> volta
           </div>
@@ -1746,7 +1746,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                           </div>
                           {r.multiplos && multiplosState[r.id]?.aberto && (
                             <div style={{ marginTop:6, padding:"8px", background:T.card, border:`1px solid ${T.accent}33`, borderRadius:8 }}>
-                              <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores — média automática</div>
+                              <div style={{ fontSize:10, color:T.accent, fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Múltiplos valores, média automática</div>
                               <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:6 }}>
                                 {(multiplosState[r.id]?.valores||["","","","",""]).map((v,vi)=>(
                                   <Inp key={vi} type="number" placeholder={`#${vi+1}`} value={v}
@@ -1803,7 +1803,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
           {/* Indicador de NCs */}
           {getNCs().length > 0 && (
             <div style={{ marginTop:"1rem", padding:"10px 14px", background:"#ff4f6a18", border:"1px solid #ff4f6a33", borderRadius:8, fontSize:12, color:"#ff4f6a", fontWeight:600 }}>
-              ⚠️ {getNCs().length} ensaio(s) marcado(s) como NÃO CONFORME — será solicitada confirmação ao salvar
+              ⚠️ {getNCs().length} ensaio(s) marcado(s) como NÃO CONFORME. O sistema vai pedir confirmação ao salvar
             </div>
           )}
         </div>
@@ -1893,7 +1893,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
           <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"2rem 2.5rem", maxWidth:1200, width:"100%", maxHeight:"94vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
               <div>
-                <div style={{ fontSize:20, fontWeight:700 }}>{selAnalise.num} — {selAnalise.materialNome}</div>
+                <div style={{ fontSize:20, fontWeight:700 }}>{selAnalise.num} · {selAnalise.materialNome}</div>
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
@@ -1971,7 +1971,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
           <div style={{ background:T.card2, border:`1px solid ${T.border2}`, borderRadius:18, padding:"2rem 2.5rem", maxWidth:1200, width:"100%", maxHeight:"94vh", overflowY:"auto", boxShadow:"0 32px 80px #000a" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"1rem" }}>
               <div>
-                <div style={{ fontSize:18, fontWeight:700, color:T.text }}>📝 Lançar Resultados — {matSel?.nome || selAnalise?.materialNome}</div>
+                <div style={{ fontSize:18, fontWeight:700, color:T.text }}>📝 Lançar resultados: {matSel?.nome || selAnalise?.materialNome}</div>
                 {selAnalise && <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.num} · Lote: {selAnalise.lote||"—"}</div>}
               </div>
               <button onClick={()=>setModalLancar(false)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>

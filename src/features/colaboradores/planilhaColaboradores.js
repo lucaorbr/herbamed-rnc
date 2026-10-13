@@ -62,7 +62,7 @@ export async function baixarModeloColaboradores({ catalogoCargos = [], catalogoA
 
   // Uma linha de exemplo, marcada como tal para não virar cadastro sem querer.
   const exemplo = ws.addRow({
-    nome: "Adriana Moreira (EXEMPLO — apague esta linha)",
+    nome: "Adriana Moreira (EXEMPLO, apague esta linha)",
     matricula: "1001",
     cargo: cargos[0] || "Operador de Encapsulamento",
     setor: setores[0] || "Encapsulamento",
@@ -102,7 +102,7 @@ export async function baixarModeloColaboradores({ catalogoCargos = [], catalogoA
   wi.addRow([]);
   [
     ["1.", "Preencha uma pessoa por linha na aba \"Colaboradores\". Apague a linha de exemplo."],
-    ["2.", "Nome completo e Cargo são obrigatórios. Linha sem nome é ignorada; cargo fora do catálogo faz a linha ser recusada — por isso use a lista suspensa."],
+    ["2.", "Nome completo e Cargo são obrigatórios. Linha sem nome é ignorada; cargo fora do catálogo faz a linha ser recusada, por isso use a lista suspensa."],
     ["3.", "Matrícula é opcional, mas é o que identifica a pessoa numa reimportação: com matrícula, importar de novo ATUALIZA o cadastro em vez de duplicar."],
     ["4.", "Setor é opcional. Sem setor, a pessoa não é alcançada por documento que exige treinamento por setor."],
     ["5.", "Data de admissão no formato dd/mm/aaaa. Ela evita que recém-contratado apareça como treinamento atrasado."],
@@ -115,7 +115,7 @@ export async function baixarModeloColaboradores({ catalogoCargos = [], catalogoA
     r.height = 30;
   });
   wi.addRow([]);
-  const obs = wi.addRow(["", "Quem NÃO tem login no sistema também deve ser cadastrado: é o caso da maioria dos operadores. Eles não confirmam leitura sozinhos — são treinados pela lista de presença assinada pelo instrutor."]);
+  const obs = wi.addRow(["", "Quem NÃO tem login no sistema também deve ser cadastrado: é o caso da maioria dos operadores. Eles não confirmam leitura sozinhos: são treinados pela lista de presença assinada pelo instrutor."]);
   obs.getCell(2).font = { italic: true, color: { argb: CINZA }, size: 10 };
   obs.getCell(2).alignment = { wrapText: true, vertical: "top" };
   obs.height = 32;

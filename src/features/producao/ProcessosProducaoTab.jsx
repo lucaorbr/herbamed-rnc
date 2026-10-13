@@ -76,7 +76,7 @@ export function ConfigRefugoModal({ config, onClose, toast_ }) {
       const cats = local[tipo].split("\n").map(x=>x.trim()).filter(Boolean);
       await saveCollection("producao_config_refugo", tipo.replace(/\s/g,"_"), {tipo, categorias:cats});
     }
-    toast_("Configuração salva!","green");
+    toast_("Configuração salva.","green");
     onClose();
   };
   return (
@@ -192,7 +192,7 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.5rem"}}>
           <div>
             <div style={{fontSize:16,fontWeight:800,color:T.text}}>{TIPO_ICONS_P[form.tipo]||"📋"} {isEdicao?"Editar":"Novo"} Registro</div>
-            <div style={{fontSize:11,color:T.text3,marginTop:2}}>Controle de Processos — SGQ Herbamed®</div>
+            <div style={{fontSize:11,color:T.text3,marginTop:2}}>Controle de Processos · SGQ Herbamed®</div>
           </div>
           <button style={s.btn} onClick={onClose}>✕</button>
         </div>
@@ -209,15 +209,15 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
           <F lbl="Data" ch={<Inp type="date" value={form.data} onChange={e=>set("data",e.target.value)}/>}/>
           <F lbl="Operador" ch={<Inp value={form.operador} onChange={e=>set("operador",e.target.value)}/>}/>
           {form.tipo==="Encapsulamento" && <>
-            <F lbl="Peso Mínimo (mg) — conforme OP" ch={<Inp type="number" value={form.pesoMinimo} onChange={e=>set("pesoMinimo",e.target.value)} placeholder="Ex: 420"/>}/>
-            <F lbl="Peso Máximo (mg) — conforme OP" ch={<Inp type="number" value={form.pesoMaximo} onChange={e=>set("pesoMaximo",e.target.value)} placeholder="Ex: 480"/>}/>
+            <F lbl="Peso mínimo (mg), conforme OP" ch={<Inp type="number" value={form.pesoMinimo} onChange={e=>set("pesoMinimo",e.target.value)} placeholder="Ex: 420"/>}/>
+            <F lbl="Peso máximo (mg), conforme OP" ch={<Inp type="number" value={form.pesoMaximo} onChange={e=>set("pesoMaximo",e.target.value)} placeholder="Ex: 480"/>}/>
           </>}
         </div>
 
         {form.op && form.tipo==="Encapsulamento" && (
           <div style={{padding:"10px 14px",borderRadius:10,marginBottom:8,background:cqStatus==="Aprovado"?"#2ab84a18":cqStatus==="Reprovado"?"#ff4f6a18":"#ffd16618",border:`1px solid ${cqStatus==="Aprovado"?"#2ab84a33":cqStatus==="Reprovado"?"#ff4f6a33":"#ffd16633"}`,fontSize:12}}>
-            {cqStatus==="Aprovado"&&<span style={{color:"#2ab84a",fontWeight:700}}>✓ Análise CQ: Aprovada — OP liberada para encapsulamento</span>}
-            {cqStatus==="Reprovado"&&<span style={{color:"#ff4f6a",fontWeight:700}}>✗ Análise CQ: Reprovada — OP bloqueada</span>}
+            {cqStatus==="Aprovado"&&<span style={{color:"#2ab84a",fontWeight:700}}>✓ Análise CQ aprovada. OP liberada para encapsulamento</span>}
+            {cqStatus==="Reprovado"&&<span style={{color:"#ff4f6a",fontWeight:700}}>✗ Análise CQ reprovada. OP bloqueada</span>}
             {!cqStatus&&<span style={{color:"#ffd166",fontWeight:700}}>⚠ Análise CQ não localizada para esta OP</span>}
           </div>
         )}
@@ -228,14 +228,14 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
           const ipc = (ipcRegistros||[]).find(r => r.op === form.op || r.lote === form.op);
           if (!ipc) return (
             <div style={{padding:"12px 14px",borderRadius:10,marginBottom:12,background:"#ffd16610",border:"1px solid #ffd16633",fontSize:12,color:"#ffd166"}}>
-              ⚠ Nenhuma análise IPC localizada para a OP <strong>{form.op}</strong>. Lance a análise no módulo IPC — Análise de Mistura antes de prosseguir.
+              ⚠ Nenhuma análise IPC localizada para a OP <strong>{form.op}</strong>. Lance a análise no módulo IPC · Análise de Mistura antes de prosseguir.
             </div>
           );
           const statusColor = ipc.status==="Liberado"?"#2ab84a":ipc.status==="Reprovado"?"#ff4f6a":"#ffd166";
           return (
             <div style={{marginBottom:16,border:`1px solid ${statusColor}44`,borderRadius:12,overflow:"hidden"}}>
               <div style={{background:`${statusColor}18`,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontWeight:700,fontSize:13,color:statusColor}}>🏭 Análise IPC Vinculada — {ipc.status}</div>
+                <div style={{fontWeight:700,fontSize:13,color:statusColor}}>🏭 Análise IPC vinculada: {ipc.status}</div>
                 <div style={{fontSize:11,color:T.text3}}>{ipc.produto} · {fmt(ipc.data)} · {ipc.resp||ipc.criadoPor}</div>
               </div>
               <div style={{padding:"12px 14px",background:T.surf}}>
@@ -316,7 +316,7 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
         </>}
 
         {temAmostragem && <>
-          <SecTitle icon="🔬" label="Amostragens — Análise de Encapsulamento"/>
+          <SecTitle icon="🔬" label="Amostragens: análise de encapsulamento"/>
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
             <button style={s.btnA} onClick={addAmostragem}>+ Registrar amostragem</button>
           </div>
@@ -361,8 +361,8 @@ export function ProcessoFormModal({ processo, user, analisesCQ, ipcRegistros, co
             ))}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 1rem"}}>
-            <F lbl="Outro — descreva" ch={<Inp value={form.refugo?.outroDesc||""} onChange={e=>set("refugo",{...form.refugo,outroDesc:e.target.value})} placeholder="Categoria não listada"/>}/>
-            <F lbl="Outro — quantidade" ch={<Inp type="number" value={form.refugo?.outroQtd||""} onChange={e=>set("refugo",{...form.refugo,outroQtd:e.target.value})} placeholder="0" min="0"/>}/>
+            <F lbl="Outro (descreva)" ch={<Inp value={form.refugo?.outroDesc||""} onChange={e=>set("refugo",{...form.refugo,outroDesc:e.target.value})} placeholder="Categoria não listada"/>}/>
+            <F lbl="Outro (quantidade)" ch={<Inp type="number" value={form.refugo?.outroQtd||""} onChange={e=>set("refugo",{...form.refugo,outroQtd:e.target.value})} placeholder="0" min="0"/>}/>
           </div>
           <div style={{background:T.surf,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
             <span style={{fontSize:13,color:T.text2}}>Total de refugo:</span>
@@ -443,7 +443,7 @@ export function ProcessosProducaoTab({ user, toast_ }) {
   };
 
   const excluir = async (p) => {
-    if (!confirm(`Excluir "${p.tipo} — ${p.op}"?`)) return;
+    if (!confirm(`Excluir "${p.tipo} · ${p.op}"?`)) return;
     await deleteFromCollection("producao_processos", String(p.id));
     toast_("Registro excluído.","red");
   };
@@ -529,7 +529,7 @@ export function ProcessosProducaoTab({ user, toast_ }) {
         <ConfigRefugoModal config={configRefugo} onClose={()=>setConfigModal(false)} toast_={toast_}/>
       )}
       {assinaturaModal&&(
-        <AssinaturaModal user={user} titulo={`Validar: ${assinaturaModal.tipo} — ${assinaturaModal.op}`}
+        <AssinaturaModal user={user} titulo={`Validar: ${assinaturaModal.tipo} · ${assinaturaModal.op}`}
           contexto={`PRODUCAO|${assinaturaModal.id||assinaturaModal.op||""}`}
           papel="Validador do processo"
           onConfirm={(assin)=>validar(assinaturaModal,assin)} onClose={()=>setAssinaturaModal(null)}/>

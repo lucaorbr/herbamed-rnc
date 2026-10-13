@@ -28,7 +28,7 @@ export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setForn
     await auditLog("Criou Fornecedor", "fornecedores", id, novo.nome, null, { nome: novo.nome, cnpj: novo.cnpj, categoria: novo.categoria, status: novo.status });
     setNovoForn({ nome:"", cnpj:"", categoria:"Matéria-prima", contato:"", email:"", telefone:"", cep:"", endereco:"", status:"Ativo", obs:"" });
     setShowNovo(false);
-    toast_("Fornecedor cadastrado!", "green");
+    toast_("Fornecedor cadastrado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -41,7 +41,7 @@ export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setForn
     await auditLog("Editou Fornecedor", "fornecedores", String(sel.id), sel.nome, sel, { ...sel, ...editData });
     setSel(p => ({ ...p, ...editData }));
     setEditMode(false);
-    toast_("Fornecedor atualizado!", "green");
+    toast_("Fornecedor atualizado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);

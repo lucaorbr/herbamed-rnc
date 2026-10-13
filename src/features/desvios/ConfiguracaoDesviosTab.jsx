@@ -45,7 +45,7 @@ export function ConfiguracaoDesviosTab({
     try {
       await saveCollection("configuracoes", "catalogo_tipos_desvio", { items: lista });
       await auditLog("Atualizou Catálogo de Tipos de Desvio", "configuracoes", "catalogo_tipos_desvio", "Catálogo", null, { total: lista.length });
-      toast_("Catálogo de tipos de desvio salvo!", "green");
+      toast_("Catálogo de tipos de desvio salvo.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
     setSavingTipos(false);
   };
@@ -79,7 +79,7 @@ export function ConfiguracaoDesviosTab({
 
         {!isAdmin && (
           <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
-            🔒 Somente leitura — apenas administradores alteram estas listas.
+            🔒 Somente leitura. Só administradores alteram estas listas.
           </div>
         )}
 

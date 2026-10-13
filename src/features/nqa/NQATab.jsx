@@ -69,7 +69,7 @@ export function NQATab({ user, toast_ }) {
       const res = { letra, n: tabela.n, ac, re, lote: n, nivel, nqa, data: tod(), resp: user.name };
       setResultado(res);
       setHistorico(p => [res, ...p.slice(0, 9)]);
-      toast_("Amostragem calculada!", "green");
+      toast_("Amostragem calculada.", "green");
     }
   };
 
@@ -88,19 +88,19 @@ export function NQATab({ user, toast_ }) {
   const MATERIAL_NQA = [
     { tipo:"Inspeção visual geral",                    nivel:"II",  nqa:"1.0",  grupo:"Nível Geral (Visual)" },
     { tipo:"Inspeção visual rigorosa",                 nivel:"III", nqa:"0.65", grupo:"Nível Geral (Visual)" },
-    { tipo:"Dimensional — embalagem primária",         nivel:"S-3", nqa:"1.5",  grupo:"Nível Especial" },
-    { tipo:"Dimensional — embalagem secundária",       nivel:"S-2", nqa:"2.5",  grupo:"Nível Especial" },
-    { tipo:"Físico-químico — MP crítica",              nivel:"S-2", nqa:"0.65", grupo:"Nível Especial" },
-    { tipo:"Físico-químico — MP geral / excipiente",   nivel:"S-2", nqa:"1.0",  grupo:"Nível Especial" },
-    { tipo:"Microbiológico — matéria-prima",           nivel:"S-1", nqa:"0.65", grupo:"Nível Especial" },
-    { tipo:"Microbiológico — produto acabado",         nivel:"S-1", nqa:"1.0",  grupo:"Nível Especial" },
+    { tipo:"Dimensional, embalagem primária",         nivel:"S-3", nqa:"1.5",  grupo:"Nível Especial" },
+    { tipo:"Dimensional, embalagem secundária",       nivel:"S-2", nqa:"2.5",  grupo:"Nível Especial" },
+    { tipo:"Físico-químico, MP crítica",              nivel:"S-2", nqa:"0.65", grupo:"Nível Especial" },
+    { tipo:"Físico-químico, MP geral / excipiente",   nivel:"S-2", nqa:"1.0",  grupo:"Nível Especial" },
+    { tipo:"Microbiológico, matéria-prima",           nivel:"S-1", nqa:"0.65", grupo:"Nível Especial" },
+    { tipo:"Microbiológico, produto acabado",         nivel:"S-1", nqa:"1.0",  grupo:"Nível Especial" },
   ];
 
   return (
     <div>
       {/* Info card */}
       <div style={{ ...s.card, background:`linear-gradient(135deg,${T.card},${T.card2})`, marginBottom:"1rem" }}>
-        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📐 NQA / AQL — Cálculo de Amostragem ISO 2859-1</div>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📐 NQA / AQL: cálculo de amostragem ISO 2859-1</div>
         <div style={{ fontSize:12, color:T.text2, lineHeight:1.7, maxWidth:700 }}>
           O <strong>Nível de Qualidade Aceitável (NQA)</strong> define quantas unidades inspecionar em um lote recebido e quantos defeitos são toleráveis antes de reprovar o lote. Baseado na norma <strong>ISO 2859-1</strong> (equivalente ANSI/ASQ Z1.4).
         </div>
@@ -117,7 +117,7 @@ export function NQATab({ user, toast_ }) {
             }/>
 
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível Geral — Inspeção Visual</div>
+              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível geral: inspeção visual</div>
               <div style={{ display:"flex", gap:6, marginBottom:10 }}>
                 {NIVEIS_GERAIS.map(n=>(
                   <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"7px 6px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>
@@ -126,7 +126,7 @@ export function NQATab({ user, toast_ }) {
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível Especial — Dimensional / Físico-químico / Microbiológico</div>
+              <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>Nível especial: dimensional, físico-químico, microbiológico</div>
               <div style={{ display:"flex", gap:6 }}>
                 {NIVEIS_ESPECIAIS.map(n=>(
                   <button key={n.id} onClick={()=>setNivel(n.id)} style={{ flex:1, padding:"7px 6px", border:`1px solid ${nivel===n.id?T.accent+"55":T.border}`, background:nivel===n.id?T.accentDim:T.surf, color:nivel===n.id?T.accent:T.text2, cursor:"pointer", fontFamily:"inherit", fontSize:11, fontWeight:nivel===n.id?600:400, borderRadius:8, textAlign:"center" }}>

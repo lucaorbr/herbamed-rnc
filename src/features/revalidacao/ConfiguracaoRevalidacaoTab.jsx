@@ -40,7 +40,7 @@ export function ConfiguracaoRevalidacaoTab({
     try {
       await saveCollection("configuracoes", "catalogo_tipos_revalidacao", { items: next });
       await auditLog("Atualizou Catálogo de Tipos de Revalidação", "configuracoes", "catalogo_tipos_revalidacao", "Catálogo", null, { total: next.length });
-      toast_("Catálogo de tipos de revalidação salvo!", "green");
+      toast_("Catálogo de tipos de revalidação salvo.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
     setSaving(false);
   };
@@ -76,7 +76,7 @@ export function ConfiguracaoRevalidacaoTab({
 
         {!isAdmin && (
           <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
-            🔒 Somente leitura — apenas administradores alteram esta lista.
+            🔒 Somente leitura. Só administradores alteram esta lista.
           </div>
         )}
 

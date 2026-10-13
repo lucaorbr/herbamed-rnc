@@ -130,7 +130,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
           <div onClick={e => e.stopPropagation()} style={{ background:C.card, border:`1px solid ${C.border2}`, borderRadius:18, width:"min(580px,92vw)", maxHeight:"80vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 64px rgba(0,0,0,0.4)" }}>
             <div style={{ padding:"18px 22px 14px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div>
-                <div style={{ fontSize:15, fontWeight:700, color:C.text }}>RNCs — {mesSel.label}</div>
+                <div style={{ fontSize:15, fontWeight:700, color:C.text }}>RNCs de {mesSel.label}</div>
                 <div style={{ fontSize:11, color:C.text3, marginTop:2 }}>{rncsMesSel.length} registro(s)</div>
               </div>
               <button onClick={() => setMesSel(null)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.text2, cursor:"pointer", fontSize:13, padding:"4px 12px", fontFamily:"inherit" }}>✕</button>
@@ -202,7 +202,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
           {/* Tendência de RNCs */}
           <div style={{ flex: 2, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1rem 1.2rem", display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>📈 Tendência de Não Conformidades</div>
-            <div style={{ fontSize: 10, color: C.text3, marginBottom: 10 }}>Últimos 6 meses — clique no mês para detalhes</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 10 }}>Últimos 6 meses. Clique no mês para ver os detalhes</div>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={tendencia} style={{ cursor: "pointer" }}>

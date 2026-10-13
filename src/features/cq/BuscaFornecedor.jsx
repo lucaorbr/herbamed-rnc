@@ -74,7 +74,7 @@ export function BuscaFornecedor({ value, onChange, fornecedores = [], sugestoes 
         ref={inputRef}
         style={{ ...s.inp, width: "100%", paddingRight: value ? 30 : 12, ...(rascunho && !aberto ? { borderColor: "#ff4f6a" } : {}) }}
         value={aberto ? termo : (rascunho || rotuloExtra || value || "")}
-        placeholder={aberto && value ? `${rotuloExtra || value} — digite para trocar` : placeholder}
+        placeholder={aberto && value ? `${rotuloExtra || value} (digite para trocar)` : placeholder}
         onFocus={abrir}
         onClick={() => { if (!aberto) abrir(); }}
         onBlur={aoSair}
@@ -87,7 +87,7 @@ export function BuscaFornecedor({ value, onChange, fornecedores = [], sugestoes 
       />
       {rascunho && !aberto && (
         <div style={{ fontSize: 11, color: "#ff4f6a", marginTop: 4 }}>
-          "{rascunho}" combina com mais de um fornecedor — clique no campo e escolha um da lista.
+          "{rascunho}" combina com mais de um fornecedor. Clique no campo e escolha um da lista.
         </div>
       )}
       {value && !aberto && !rascunho && (

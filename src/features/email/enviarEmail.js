@@ -20,7 +20,7 @@ export async function enviarEmail({ para, assunto, corpo, evento, entidade, nome
   // aparecer na tela, senao repetimos o silencio que a Fase 0 veio acabar.
   if (dados.falhas?.length) {
     const detalhe = dados.falhas.map(f => `${f.destinatario}: ${f.erro}`).join("; ");
-    throw new Error(`Enviado para ${dados.enviados?.length || 0}, falhou para ${dados.falhas.length} — ${detalhe}`);
+    throw new Error(`Enviado para ${dados.enviados?.length || 0}, falhou para ${dados.falhas.length}: ${detalhe}`);
   }
   return dados;
 }

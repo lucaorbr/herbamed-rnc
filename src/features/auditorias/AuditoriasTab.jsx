@@ -37,7 +37,7 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
     const aud = { id, ...form, achados, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
     await saveCollection("auditorias", id, aud);
     await auditLog(sel ? "Editou Auditoria" : "Criou Auditoria", "auditorias", id, aud.titulo, sel || null, { titulo: aud.titulo, tipo: aud.tipo, status: aud.status, area: aud.area });
-    toast_(sel?"Auditoria atualizada!":"Auditoria criada!", "green");
+    toast_(sel?"Auditoria atualizada.":"Auditoria criada.", "green");
     setView("lista"); setSel(null);
     setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" });
     setAchados([]);
@@ -83,7 +83,7 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
       <div style={s.card}>
         <SecTitle icon="🔍" ch="Planejamento da auditoria" />
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <F lbl="Título *" ch={<Inp placeholder="Ex: Auditoria CQ — Processo de Encapsulação" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
+          <F lbl="Título *" ch={<Inp placeholder="Ex: Auditoria CQ, processo de encapsulação" value={form.titulo} onChange={e=>setF("titulo",e.target.value)} />} />
           <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}><option>Interna</option><option>Externa</option><option>Fornecedor</option></Sel>} />
           <F lbl="Área / Setor auditado" ch={<Inp placeholder="Ex: Controle de Qualidade, Produção" value={form.area} onChange={e=>setF("area",e.target.value)} />} />
           <F lbl="Auditor(es)" ch={<Inp placeholder="Ex: Lucas Ribeiro, Maria Silva" value={form.auditores} onChange={e=>setF("auditores",e.target.value)} />} />

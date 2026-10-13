@@ -839,7 +839,7 @@ async function createNotification(userId, tipo, titulo, mensagem, docId, docCodi
 async function notifyDocumentSignatureRoute(docId, oldData, newData) {
   const codigo = newData?.codigo || oldData?.codigo || docId;
   const titulo = newData?.titulo || oldData?.titulo || "";
-  const refDoc = `${codigo} — ${titulo}`;
+  const refDoc = `${codigo} · ${titulo}`;
   const link = "/documentos";
 
   const novaRota = !oldData?.rota?.revisorId && newData?.rota?.revisorId;

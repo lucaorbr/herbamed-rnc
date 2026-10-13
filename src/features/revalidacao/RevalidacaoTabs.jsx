@@ -257,8 +257,8 @@ function NovaRevalidacaoForm({ user, toast_, setTab, doSaveRevalidacao, tipos })
       <div style={{ ...s.card, marginTop: 16 }}>
         <SecTitle icon="🔍" ch={grafico ? "Comparação visual" : "Evidências (opcional)"} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FotoUpload foto={f.fotoAtual} setFoto={v => set("fotoAtual", v)} label={grafico ? "MATERIAL ATUAL (vigente)" : "EVIDÊNCIA — ESTADO / REFERÊNCIA"} cor={T.text2} inputId="rev-foto-atual" />
-          <FotoUpload foto={f.fotoNova} setFoto={v => set("fotoNova", v)} label={grafico ? "MATERIAL REVALIDADO (proposto)" : "EVIDÊNCIA — RESULTADO / VERIFICADO"} cor={T.accent} inputId="rev-foto-nova" />
+          <FotoUpload foto={f.fotoAtual} setFoto={v => set("fotoAtual", v)} label={grafico ? "MATERIAL ATUAL (vigente)" : "EVIDÊNCIA: ESTADO / REFERÊNCIA"} cor={T.text2} inputId="rev-foto-atual" />
+          <FotoUpload foto={f.fotoNova} setFoto={v => set("fotoNova", v)} label={grafico ? "MATERIAL REVALIDADO (proposto)" : "EVIDÊNCIA: RESULTADO / VERIFICADO"} cor={T.accent} inputId="rev-foto-nova" />
         </div>
       </div>
 
@@ -480,7 +480,7 @@ function RevalidacaoLista({ user, toast_, setTab, revalidacoes, doSaveRevalidaca
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "12px 0" }}>
                   {["fotoAtual", "fotoNova"].map((k, i) => (
                     <div key={k}>
-                      <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>{isGrafico(sel) ? (i === 0 ? "Material atual" : "Material revalidado") : (i === 0 ? "Evidência — estado / referência" : "Evidência — resultado")}</div>
+                      <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>{isGrafico(sel) ? (i === 0 ? "Material atual" : "Material revalidado") : (i === 0 ? "Evidência: estado / referência" : "Evidência: resultado")}</div>
                       {sel[k]?.url
                         ? <a href={sel[k].url} target="_blank" rel="noopener noreferrer"><img src={sel[k].url} alt="" style={{ maxWidth: "100%", borderRadius: 8, border: `1px solid ${T.border}` }} /></a>
                         : <div style={{ fontSize: 12, color: T.text3 }}>—</div>}
@@ -544,7 +544,7 @@ function buildRevalidacaoHTML(r) {
   const itens = (r.itens || []).filter(it => it.conforme || it.obs);
   const confLabel = c => c === "sim" ? "Conforme" : c === "nao" ? "Não conforme" : c === "na" ? "N/A" : "—";
   return buildPDFShell({
-    titulo: `Revalidação — ${esc(tipoRevalLabel(r))}`,
+    titulo: `Revalidação: ${esc(tipoRevalLabel(r))}`,
     numero: esc(r.num),
     meta: fmt(r.dataRegistro),
     rodapeEsq: "Herbamed® · SGQ · Revalidação",

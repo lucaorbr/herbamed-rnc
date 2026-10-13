@@ -149,7 +149,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
         </h1>
         <div style={{ fontSize:12, color:T.text2 }}>
           {resumo.total === 0
-            ? "Nada pendente — tudo em dia."
+            ? "Nada pendente. Tudo em dia."
             : <>{resumo.total} item(ns){resumo.criticas > 0 && <>, <strong style={{ color:T.red }}>{resumo.criticas} em atraso</strong></>}
               {resumo.minhas > 0 && <> · {resumo.minhas} atribuído(s) a você</>}</>}
         </div>

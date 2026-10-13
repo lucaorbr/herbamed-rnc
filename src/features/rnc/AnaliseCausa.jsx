@@ -93,7 +93,7 @@ Responda APENAS em JSON sem markdown:
 
   const usarFornecedor = () => {
     const res = partirDaRespostaFornecedor(whys, root, r.respostaFornecedor);
-    if (!res.aproveitou) { toast_("Os campos já estão preenchidos — nada foi alterado.", "yellow"); return; }
+    if (!res.aproveitou) { toast_("Os campos já estavam preenchidos. Nada foi alterado.", "yellow"); return; }
     setWhys(res.whys); setRoot(res.root); setUsouFornecedor(true);
     toast_("Resposta do fornecedor copiada para os campos vazios. Revise antes de salvar.", "green");
   };
@@ -116,7 +116,7 @@ Responda APENAS em JSON sem markdown:
     try {
       await gravar(patch);
       setUsouFornecedor(false);
-      toast_(completa ? "Análise de causa salva — plano CAPA liberado." : "Análise salva como rascunho.", "green", ofertaNotificar({ ...r, ...patch }, "ishikawa", openEmail));
+      toast_(completa ? "Análise de causa salva. O plano CAPA está liberado." : "Análise salva como rascunho.", "green", ofertaNotificar({ ...r, ...patch }, "ishikawa", openEmail));
     } catch { /* doUpdateRNC já avisou */ }
     setSalvando(false);
   };
@@ -130,13 +130,13 @@ Responda APENAS em JSON sem markdown:
 
   return (
     <div>
-      <F lbl="Efeito / problema analisado" tip="O problema que está sendo analisado — normalmente a própria não conformidade, em uma frase." ch={<Inp value={efeito} onChange={e => setEfeito(e.target.value)} />} />
+      <F lbl="Efeito / problema analisado" tip="O problema em análise, em uma frase. Normalmente é a própria não conformidade." ch={<Inp value={efeito} onChange={e => setEfeito(e.target.value)} />} />
 
       {/* Ishikawa — opcional */}
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <button onClick={() => setIshiAberto(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
-            <SecTitle icon="🐟" ch={`Ishikawa — 6M ${ishiAberto ? "▾" : "▸"}`} />
+            <SecTitle icon="🐟" ch={`Ishikawa (6M) ${ishiAberto ? "▾" : "▸"}`} />
           </button>
           <span style={{ fontSize: 11, color: T.text3 }}>Opcional · levanta as causas possíveis; clique numa causa para aprofundar nos 5 Porquês</span>
         </div>
@@ -169,25 +169,25 @@ Responda APENAS em JSON sem markdown:
       {/* 5 Porquês — obrigatório */}
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <SecTitle icon="🔍" ch={`5 Porquês — ${nPorques} de 5`} />
+          <SecTitle icon="🔍" ch={`5 Porquês (${nPorques} de 5)`} />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {temForn && <button style={{ ...s.btn, fontSize: 11, padding: "5px 10px" }} onClick={usarFornecedor} title="Copia a análise enviada pelo fornecedor só para os campos ainda vazios">Usar resposta do fornecedor</button>}
             {btnIA("porques", "Gerar com IA", gerarPorquesIA)}
           </div>
         </div>
-        <F lbl="Causa a aprofundar" tip="A causa mais provável — clique numa causa do Ishikawa ou escreva aqui." ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} />} />
+        <F lbl="Causa a aprofundar" tip="A causa mais provável. Clique numa causa do Ishikawa ou escreva aqui." ch={<Inp value={wCausa} onChange={e => setWCausa(e.target.value)} />} />
         {PERGUNTAS.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ minWidth: 26, height: 26, borderRadius: "50%", background: whys[i]?.trim() ? T.accent : T.border, color: whys[i]?.trim() ? "#fff" : T.text3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600 }}>{i + 1}</div>
             <Inp placeholder={q} value={whys[i]} onChange={e => { const n = [...whys]; n[i] = e.target.value; setWhys(n); }} sx={{ flex: 1 }} />
           </div>
         ))}
-        <F lbl="🎯 Causa raiz identificada" tip="A causa fundamental que, se eliminada, evita que o problema se repita. Específica e acionável — é sobre ela que o plano CAPA será montado." ch={<TA rows={2} value={root} onChange={e => setRoot(e.target.value)} placeholder="A causa raiz é…" sx={{ borderColor: T.accent }} />} />
+        <F lbl="🎯 Causa raiz identificada" tip="A causa fundamental que, se eliminada, evita que o problema se repita. Deve ser específica e acionável, porque o plano CAPA é montado sobre ela." ch={<TA rows={2} value={root} onChange={e => setRoot(e.target.value)} placeholder="A causa raiz é…" sx={{ borderColor: T.accent }} />} />
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 12, color: completa ? T.accent : T.text2 }}>
-          {completa ? "✓ Análise completa — o plano CAPA fica liberado ao salvar." : `Para liberar o plano CAPA: ${nPorques < MIN_PORQUES ? `faltam ${MIN_PORQUES - nPorques} porquê(s)` : ""}${nPorques < MIN_PORQUES && !root.trim() ? " e " : ""}${!root.trim() ? "a causa raiz" : ""}. Dá para salvar como rascunho.`}
+          {completa ? "✓ Análise completa. O plano CAPA fica liberado ao salvar." : `Para liberar o plano CAPA: ${nPorques < MIN_PORQUES ? `faltam ${MIN_PORQUES - nPorques} porquê(s)` : ""}${nPorques < MIN_PORQUES && !root.trim() ? " e " : ""}${!root.trim() ? "a causa raiz" : ""}. Dá para salvar como rascunho.`}
         </div>
         <button style={{ ...s.btnA, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={salvar}>{salvando ? "Salvando…" : "Salvar análise de causa"}</button>
       </div>

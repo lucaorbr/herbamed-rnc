@@ -45,7 +45,7 @@ function notificacoesDeRecusa(oldData, newData) {
   const quem = recusa.autor || papel;
   const motivo = resumoDosApontamentos(recusa.apontamentos);
   const motivoFinal = motivo && !/[.!?]$/.test(motivo) ? `${motivo}.` : motivo;
-  const base = `${codigo} — ${titulo} foi recusado por ${quem} (${papel}).${motivoFinal ? ` Motivo: ${motivoFinal}` : ""}`;
+  const base = `${codigo} · ${titulo} foi recusado por ${quem} (${papel}).${motivoFinal ? ` Motivo: ${motivoFinal}` : ""}`;
 
   const elaboradorId = oldData && oldData.assinaturaElaborador && oldData.assinaturaElaborador.uid;
   const revisorId = (newData.rota && newData.rota.revisorId) || (oldData && oldData.rota && oldData.rota.revisorId);
@@ -54,7 +54,7 @@ function notificacoesDeRecusa(oldData, newData) {
   const destinos = [];
   if (elaboradorId) destinos.push({
     userId: String(elaboradorId), tipo: "documento_recusado",
-    titulo: "Documento recusado — corrigir e reassinar",
+    titulo: "Documento recusado: corrigir e reassinar",
     mensagem: `${base} Corrija e assine novamente como Elaborador.`,
   });
   if (recusa.autorPapel === "aprovador" && revisorId) destinos.push({

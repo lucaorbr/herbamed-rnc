@@ -264,7 +264,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
         await saveCollection("homologacoes", id, final);
         await auditLog("Enviou Homologação para Análise", "homologacoes", id, num, base, final);
       }
-      toast_(enviar ? `${num} enviada para análise!` : `${num} salva como rascunho.`, "green");
+      toast_(enviar ? `${num} enviada para análise.` : `${num} salva como rascunho.`, "green");
       setSel(final); setView("detalhe");
     } catch (e) {
       toast_(e.message || "Erro ao salvar homologação.", "red");
@@ -344,7 +344,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
       await saveCollection("homologacoes", String(sel.id), atualizado);
       await auditLog("Aprovou Homologação", "homologacoes", String(sel.id), sel.num, sel, atualizado);
       setSel(atualizado); setDecisaoModal(null); setAssinaturaCtx(null);
-      toast_(`Homologação ${decisaoModal.decisao.toLowerCase()}!`, atualizado.status==="Reprovada"?"red":"green");
+      toast_(`Homologação ${decisaoModal.decisao.toLowerCase()}.`, atualizado.status==="Reprovada"?"red":"green");
     } catch (e) { toast_(e.message || "Erro ao registrar decisão.", "red"); setAssinaturaCtx(null); }
   };
 
@@ -382,7 +382,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
       <div style={s.card}><SecTitle icon="📋" ch="Essencial" />
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
           <F lbl="Fornecedor *" err={errForm("fornecedorId")}
-            tip="Empresa que vai fornecer o item. Só aparecem fornecedores já cadastrados e não bloqueados — se não estiver na lista, cadastre-o antes em Fornecedores."
+            tip="Empresa que vai fornecer o item. Só aparecem fornecedores já cadastrados e não bloqueados. Se não estiver na lista, cadastre-o antes em Fornecedores."
             ch={<Sel value={form.fornecedorId} onChange={e=>{const f=fornecedores.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,fornecedorId:e.target.value,fornecedorNome:f?.nome||""}));}}><option value="">Selecione...</option>{fornecedores.filter(f=>f.status!=="Bloqueado").map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}</Sel>} />
           <F lbl="Item / produto / serviço *" err={errForm("itemNome")}
             tip="Nome do que está sendo homologado, do jeito que a fábrica chama. Ex.: Vitamina C (Ácido Ascórbico), Cartucho Calcivitam 60un, Serviço de calibração."
@@ -401,11 +401,11 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
           tip="Onde este item vai ser usado e em qual produto/processo. É o que permite avaliar o risco: o mesmo insumo pode ser aceitável num produto e não em outro."
           ch={<TA rows={3} value={form.finalidade} onChange={e=>setF("finalidade",e.target.value)} placeholder="Ex.: Matéria-prima para o Calcivitam D3 cápsulas, substituindo o fornecedor atual por falta de entrega." />} />
       </div>
-      <div style={s.card}><SecTitle icon="➕" ch="Complementar — preencha o que souber" />
+      <div style={s.card}><SecTitle icon="➕" ch="Complementar: preencha o que souber" />
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:12 }}>
           <F lbl="Já cadastrado no CQ?"
             tip="Se este material já existe no cadastro do Controle de Qualidade, selecione-o: o nome e o código são preenchidos sozinhos e as análises de CQ daquele material passam a aparecer nesta homologação. Item novo? Deixe como está."
-            ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Não — item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
+            ch={<Sel value={form.materialId} onChange={e=>{const m=materiais.find(x=>String(x.id)===e.target.value);setForm(p=>({...p,materialId:e.target.value,itemNome:m?.nome||p.itemNome,codigoItem:m?.ref||p.codigoItem}));}}><option value="">Não, item novo ou não cadastrado</option>{materiais.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}</Sel>} />
           <F lbl="Código / referência"
             tip="Código interno do item, se já houver. Serve para amarrar esta homologação ao que o almoxarifado e o CQ usam no dia a dia."
             ch={<Inp value={form.codigoItem} onChange={e=>setF("codigoItem",e.target.value)} />} />
@@ -416,7 +416,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
             tip="Planta/endereço onde o item é produzido. A mesma empresa pode ter unidades com licenças e desempenho diferentes."
             ch={<Inp value={form.unidadeFabricante} onChange={e=>setF("unidadeFabricante",e.target.value)} />} />
           <F lbl="Responsável pelo acompanhamento"
-            tip="Quem cobra o fornecedor pelos documentos e acompanha até a decisão. Não é quem aprova — a aprovação é feita por outra pessoa, por segregação de funções."
+            tip="Quem cobra o fornecedor pelos documentos e acompanha até a decisão. Não é quem aprova: a aprovação é feita por outra pessoa, por segregação de funções."
             ch={<Sel value={form.responsavel} onChange={e=>setF("responsavel",e.target.value)}><option value="">Selecione...</option>{users.filter(u=>u.name).map(u=><option key={u.id||u.uid}>{u.name}</option>)}</Sel>} />
           <F lbl="Prazo desejado"
             tip="Quando você precisa da decisão. É uma expectativa para a Qualidade se organizar, não um compromisso automático."
@@ -430,7 +430,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
 
     {abaForm==="avaliacao" && <>
       <div style={s.card}><SecTitle icon="📄" ch={`Documentos exigidos do fornecedor (${(form.documentos||[]).length})`} />
-        <NotaQuemPreenche ch={<>Esta lista é definida pela categoria <b>{form.categoria}</b> — você não precisa preencher nada aqui. A Qualidade marca cada item como recebido, reprovado ou não aplicável durante a análise.</>} />
+        <NotaQuemPreenche ch={<>Esta lista é definida pela categoria <b>{form.categoria}</b>, e você não precisa preencher nada aqui. A Qualidade marca cada item como recebido, reprovado ou não aplicável durante a análise.</>} />
         <ChecklistPreview itens={form.documentos} obrigatoriedade vazio="Selecione uma categoria para ver os documentos exigidos." />
       </div>
       <div style={s.card}><SecTitle icon="🔬" ch={`Critérios técnicos (${(form.checklistTecnico||[]).length})`} />
@@ -440,7 +440,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
     </>}
 
     {abaForm==="evidencias" && <div style={s.card}><SecTitle icon="📎" ch="Evidências iniciais (opcional)" />
-      <NotaQuemPreenche ch="Se você já tem algo do fornecedor em mãos — ficha técnica, certificado, proposta — anexe aqui para adiantar a análise. Nada aqui é obrigatório para enviar." />
+      <NotaQuemPreenche ch="Se você já tem algo do fornecedor em mãos (ficha técnica, certificado, proposta), anexe aqui para adiantar a análise. Nada aqui é obrigatório para enviar." />
       <AnexosUpload anexos={form.anexos||[]} setAnexos={v=>setForm(p=>({...p,anexos:typeof v==="function"?v(p.anexos||[]):v}))} inputId="homologacao-anexos-form" />
     </div>}
     <div style={{ display:"flex", gap:8, justifyContent:"flex-end", alignItems:"center", paddingBottom:20 }}>
@@ -455,7 +455,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
     const analisesLigadas = analises.filter(a => String(a.materialId||"") === String(sel.materialId||""));
     const podeEditar = sel.status==="Rascunho" && (user.role==="admin" || String(sel.criadoPorId)===String(user.id||user.uid));
     return <div>
-      <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}><button style={s.btn} onClick={()=>{setView("lista");setSel(null);}}>← Voltar</button><div style={{fontSize:18,fontWeight:700}}>{sel.num} — {sel.itemNome}</div><BadgeStatus status={efetivo}/><div style={{marginLeft:"auto",display:"flex",gap:8}}>
+      <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}><button style={s.btn} onClick={()=>{setView("lista");setSel(null);}}>← Voltar</button><div style={{fontSize:18,fontWeight:700}}>{sel.num} · {sel.itemNome}</div><BadgeStatus status={efetivo}/><div style={{marginLeft:"auto",display:"flex",gap:8}}>
         {podeEditar&&<button style={s.btn} onClick={()=>editar(sel)}>Editar rascunho</button>}
         {sel.status==="Em análise"&&perm("avaliarHomologacao")&&<button style={s.btnA} onClick={()=>prepararParecer(sel)}>Emitir parecer técnico</button>}
         {sel.status==="Aguardando aprovação"&&perm("aprovarHomologacao")&&<button style={s.btnA} onClick={()=>prepararDecisao(sel)}>Registrar decisão final</button>}
@@ -477,7 +477,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
       {user.role==="admin"&&sel.status==="Rascunho"&&<button style={s.btnD} onClick={()=>excluirRascunho(sel)}>Excluir rascunho</button>}
 
       {parecerModal&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{background:T.card2,border:`1px solid ${T.border2}`,borderRadius:16,padding:22,width:"min(1000px,96vw)",maxHeight:"92vh",overflowY:"auto"}}>
-        <h3 style={{marginTop:0}}>Parecer técnico — {sel.num}</h3>
+        <h3 style={{marginTop:0}}>Parecer técnico {sel.num}</h3>
         {mostrarErrosParecer && errosParecer.length>0 && (
           <div style={{ background:"#ff4f6a14", border:"1px solid #ff4f6a55", borderRadius:10, padding:"11px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
             <b style={{ color:"#ff4f6a" }}>Faltam {errosParecer.length} {errosParecer.length===1?"item":"itens"} na avaliação.</b> As linhas pendentes estão destacadas. Para reprovar sem concluir tudo, escolha a recomendação <b>Desfavorável</b>.
@@ -497,7 +497,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
         </div>;})}
         <SecTitle icon="📎" ch="Evidências adicionais" /><AnexosUpload anexos={parecerModal.anexos} setAnexos={v=>setParecerModal(p=>({...p,anexos:typeof v==="function"?v(p.anexos):v}))} inputId="homologacao-anexos-parecer" />
         <F lbl="Recomendação técnica *" err={mostrarErrosParecer&&!parecerModal.decisao?"Selecione a recomendação técnica.":""}
-          tip="Favorável: pode ser homologado. Favorável com ressalvas: pode ser usado, mas com condições que o aprovador vai registrar. Desfavorável: não deve ser homologado — esta opção dispensa concluir o checklist."
+          tip="Favorável: pode ser homologado. Favorável com ressalvas: pode ser usado, mas com condições que o aprovador vai registrar. Desfavorável: não deve ser homologado, e esta opção dispensa concluir o checklist."
           ch={<Sel value={parecerModal.decisao} onChange={e=>setParecerModal(p=>({...p,decisao:e.target.value}))}><option value="">Selecione...</option><option>Favorável</option><option>Favorável com ressalvas</option><option>Desfavorável</option></Sel>}/>
         <F lbl="Conclusão técnica *" err={mostrarErrosParecer&&!String(parecerModal.conclusao||"").trim()?"Registre a conclusão do parecer.":""}
           tip="Resuma o que sustenta a recomendação. É este texto que sai no relatório em PDF e que a inspeção lê."
@@ -505,7 +505,7 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>{mostrarErrosParecer&&faltaNoParecer&&<span style={{fontSize:11,color:"#ff4f6a"}}>Revise os itens destacados</span>}<button style={s.btn} onClick={()=>setParecerModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaParecer}>Assinar parecer →</button></div>
       </div></div>}
 
-      {decisaoModal&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{background:T.card2,border:`1px solid ${T.border2}`,borderRadius:16,padding:22,width:"min(620px,96vw)"}}><h3 style={{marginTop:0}}>Decisão final — {sel.num}</h3>
+      {decisaoModal&&<div style={{position:"fixed",inset:0,zIndex:1200,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}><div style={{background:T.card2,border:`1px solid ${T.border2}`,borderRadius:16,padding:22,width:"min(620px,96vw)"}}><h3 style={{marginTop:0}}>Decisão final {sel.num}</h3>
         <F lbl="Decisão *"
           tip="Homologada: aprovado sem restrição. Condicional: aprovado só enquanto o fornecedor cumprir as condições que você escrever abaixo. Reprovada: não pode ser usado."
           ch={<Sel value={decisaoModal.decisao} onChange={e=>setDecisaoModal(p=>({...p,decisao:e.target.value}))}><option>Homologada</option><option>Condicional</option><option>Reprovada</option></Sel>}/>
@@ -516,11 +516,11 @@ export function HomologacoesTab({ user, users = [], fornecedores = [], homologac
           tip="O que o fornecedor precisa cumprir para continuar homologado. Ex.: enviar certificado de análise a cada lote; reavaliar após 3 entregas conformes."
           ch={<TA rows={3} value={decisaoModal.condicoes} onChange={e=>setDecisaoModal(p=>({...p,condicoes:e.target.value}))}/>}/>
         <F lbl="Conclusão final *" err={errDecisao("conclusao")}
-          tip="A justificativa da decisão. Sai assinada no relatório em PDF — é o registro que comprova que a aprovação foi analisada, não automática."
+          tip="A justificativa da decisão. Sai assinada no relatório em PDF e comprova que a aprovação foi analisada, e não automática."
           ch={<TA rows={4} value={decisaoModal.conclusao} onChange={e=>setDecisaoModal(p=>({...p,conclusao:e.target.value}))}/>}/>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>{mostrarErrosDecisao&&errosDecisao.length>0&&<span style={{fontSize:11,color:"#ff4f6a"}}>Faltam {errosDecisao.length} {errosDecisao.length===1?"item":"itens"}</span>}<button style={s.btn} onClick={()=>setDecisaoModal(null)}>Cancelar</button><button style={s.btnA} onClick={solicitarAssinaturaFinal}>Assinar decisão →</button></div>
       </div></div>}
-      {assinaturaCtx&&<AssinaturaModal user={user} titulo={assinaturaCtx.tipo==="parecer"?`Parecer técnico — ${sel.num}`:`Decisão final — ${sel.num}`} contexto={`HOMOLOGACAO|${sel.num}|${assinaturaCtx.tipo}`} papel={assinaturaCtx.tipo==="parecer"?"Parecerista técnico":"Aprovador da homologação"} docId={sel.id} onClose={()=>setAssinaturaCtx(null)} onConfirm={assinaturaCtx.tipo==="parecer"?confirmarParecer:confirmarDecisao}/>}
+      {assinaturaCtx&&<AssinaturaModal user={user} titulo={assinaturaCtx.tipo==="parecer"?`Parecer técnico ${sel.num}`:`Decisão final ${sel.num}`} contexto={`HOMOLOGACAO|${sel.num}|${assinaturaCtx.tipo}`} papel={assinaturaCtx.tipo==="parecer"?"Parecerista técnico":"Aprovador da homologação"} docId={sel.id} onClose={()=>setAssinaturaCtx(null)} onConfirm={assinaturaCtx.tipo==="parecer"?confirmarParecer:confirmarDecisao}/>}
     </div>;
   }
 

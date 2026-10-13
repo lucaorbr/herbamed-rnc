@@ -244,7 +244,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
                   </div>
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: c.userId ? "#2ab84a18" : "#4fc3f718", color: c.userId ? "#2ab84a" : "#4fc3f7" }}
-                  title={c.userId ? "Tem login — pode confirmar leitura no sistema" : "Sem login — treina presencialmente, com lista de presença assinada"}>
+                  title={c.userId ? "Tem login, então confirma a leitura no sistema" : "Sem login, treina presencialmente com lista de presença assinada"}>
                   {c.userId ? "com login" : "sem login"}
                 </span>
                 {c.ativo === false && <span style={{ fontSize: 10, fontWeight: 700, color: T.text3 }}>DESLIGADO</span>}
@@ -280,7 +280,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
                 </Sel>
               } />
               <F lbl="Setor de trabalho"
-                tip="Onde a pessoa efetivamente trabalha. Junto com o cargo, define quais documentos ela precisa treinar — hoje é o setor que separa encapsulamento de compressão, já que ambos são Auxiliar de Produção."
+                tip="Onde a pessoa efetivamente trabalha. Junto com o cargo, define quais documentos ela precisa treinar. Hoje é o setor que separa encapsulamento de compressão, já que ambos são Auxiliar de Produção."
                 ch={
                   <Sel value={edit.setorId || ""} onChange={e => {
                     const alvo = locais.find(l => l.id === e.target.value);
@@ -312,7 +312,7 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
       {previa && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", backdropFilter: "blur(6px)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
           <div style={{ background: T.card2, border: `1px solid ${T.border2}`, borderRadius: 16, padding: "1.5rem", maxWidth: 680, width: "100%", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Importar — {previa.arquivo}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>Importar {previa.arquivo}</div>
             <div style={{ fontSize: 11, color: T.text3, marginBottom: 14 }}>Confira antes de aplicar. Nada foi gravado ainda.</div>
 
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -325,17 +325,17 @@ export function ColaboradoresTab({ colaboradores = [], users = [], catalogoCargo
             {previa.cargosDesconhecidos.length > 0 && (
               <div style={{ background: "#ffd16618", border: "1px solid #ffd16644", borderRadius: 10, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: T.text2 }}>
                 <strong style={{ color: T.text }}>Cargos que não existem no catálogo:</strong> {previa.cargosDesconhecidos.join(", ")}.
-                Cadastre-os em Admin → Catálogos → Cargos e importe de novo — não cadastramos cargo automaticamente para não criar grafia duplicada.
+                Cadastre-os em Admin → Catálogos → Cargos e importe de novo. O cargo não é cadastrado automaticamente para não criar grafia duplicada.
               </div>
             )}
 
-            {[["Conflitos — precisam de decisão", previa.conflitos, "#ff4f6a"], ["Ignorados", previa.ignorados, "#e8a33d"]].map(([titulo, lista, cor]) => lista.length > 0 && (
+            {[["Conflitos que precisam de decisão", previa.conflitos, "#ff4f6a"], ["Ignorados", previa.ignorados, "#e8a33d"]].map(([titulo, lista, cor]) => lista.length > 0 && (
               <div key={titulo} style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: cor, marginBottom: 5 }}>{titulo} ({lista.length})</div>
                 <div style={{ maxHeight: 130, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
                   {lista.map((x, i) => (
                     <div key={i} style={{ fontSize: 11, color: T.text2, padding: "4px 8px", background: T.surf, borderRadius: 6 }}>
-                      Linha {x.linha}{x.nome ? ` · ${x.nome}` : ""} — {x.motivo}
+                      Linha {x.linha}{x.nome ? ` · ${x.nome}` : ""}: {x.motivo}
                     </div>
                   ))}
                 </div>

@@ -51,7 +51,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   if (!r) {
     return (
       <div style={s.card}>
-        <div style={{ fontSize: 14, color: T.text2, marginBottom: 12 }}>{rncs.length ? "RNC não encontrada — pode ter sido excluída ou o link está incorreto." : "Carregando RNC…"}</div>
+        <div style={{ fontSize: 14, color: T.text2, marginBottom: 12 }}>{rncs.length ? "RNC não encontrada. Pode ter sido excluída, ou o link está errado." : "Carregando RNC…"}</div>
         <button style={s.btn} onClick={() => setTab("lista")}>← Voltar aos registros</button>
       </div>
     );
@@ -84,7 +84,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     catch { alert("Senha incorreta. Assinatura cancelada."); return; }
     const h = { data: tod(), hora: agoraHora(), acao: "RNC aprovada pelo RT", resp: user.name, tipo: "rt" };
     await gravar({ assinaturaRT: ass, historico: [...(r.historico || []), h] });
-    toast_("RNC aprovada pelo RT!", "green");
+    toast_("RNC aprovada pelo RT.", "green");
   };
 
   const gravarDisposicao = async (decisao, justificativa, assinaturaRT) => {
@@ -104,7 +104,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const encerrarPorDisposicao = async () => {
     if (!r.disposicao?.decisao) { alert("Registre a disposição do material antes de encerrar."); return; }
     const pend = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
-    const aviso = pend.length > 0 ? `\n\nAtenção: há ${pend.length} ação(ões) de CAPA pendente(s) — o encerramento por disposição dispensa o ciclo de eficácia.` : "";
+    const aviso = pend.length > 0 ? `\n\nAtenção: há ${pend.length} ação(ões) de CAPA pendente(s). O encerramento por disposição dispensa o ciclo de eficácia.` : "";
     if (!window.confirm(`Encerrar a RNC ${r.num} como resolvida por disposição do material (${dispMeta(r.disposicao.decisao)?.label})?\n\nA RNC vai para o status "Encerrada", sem passar pela verificação de eficácia.${aviso}`)) return;
     const h = { data: tod(), hora: agoraHora(), acao: `RNC encerrada por disposição do material (${dispMeta(r.disposicao.decisao)?.label})`, resp: user.name, tipo: "status" };
     await gravar({ status: "Encerrada", historico: [...(r.historico || []), h] });
@@ -160,7 +160,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     patch.historico = historico;
     await gravar(patch);
     setEditing(false); setAddDesc(""); setAddCont("");
-    toast_(ap ? "RNC atualizada — status movido para Em andamento." : "RNC atualizada com sucesso!", "green");
+    toast_(ap ? "RNC atualizada. O status passou para Em andamento." : "RNC atualizada.", "green");
   };
 
   const excluir = async () => {
@@ -175,7 +175,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       await exportFormularioFornecedor(r);
       const ap = andamentoPatch(r, "encaminhado ao fornecedor", user.name);
       if (ap) await gravar({ status: ap.status, historico: [...(r.historico || []), ap.hEntry] });
-      toast_(ap ? "Formulário gerado — status movido para Em andamento." : "Formulário do fornecedor gerado!", "green");
+      toast_(ap ? "Formulário gerado. O status passou para Em andamento." : "Formulário do fornecedor gerado.", "green");
     } catch (e) { toast_("Erro ao gerar formulário: " + e.message, "red"); }
   };
 
@@ -238,7 +238,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           </div>
         ) : rncTemMaterial(r) && (
           <div style={{ fontSize: 12, color: T.yellow, background: `${T.yellow}14`, border: `1px solid ${T.yellow}44`, borderRadius: 8, padding: "8px 12px", marginBottom: 10 }}>
-            ⚠️ RNC envolve material/lote — registre a disposição antes de encerrar como Eficaz.
+            ⚠️ A RNC envolve material/lote. Registre a disposição antes de encerrar como Eficaz.
           </div>
         )}
         {interativa && canDispor && (dispForm || !r.disposicao?.decisao) && (
@@ -283,7 +283,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         )}
         {whys.length > 0 && (
           <div style={{ marginBottom: 12 }}>
-            <div style={rot}>5 Porquês{ishi.whyCausa ? ` — causa aprofundada: ${ishi.whyCausa}` : ""}</div>
+            <div style={rot}>5 Porquês{ishi.whyCausa ? ` (causa aprofundada: ${ishi.whyCausa})` : ""}</div>
             {whys.map(([i, w]) => <div key={i} style={{ fontSize: 13, marginBottom: 4 }}><b style={{ color: T.accent }}>{i + 1}.</b> {w}</div>)}
           </div>
         )}
@@ -376,7 +376,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
 
   const avisoEdicaoBloco = () => (
     <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", fontSize: 12, color: T.accent }}>
-      Modo edição — as alterações do Registro e da Contenção são salvas juntas e ficam no histórico.
+      Modo edição. As alterações do Registro e da Contenção são salvas juntas e ficam no histórico.
     </div>
   );
 
@@ -388,7 +388,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {dadosBloco()}
         {r.contencao && <div style={{ ...caixa, borderColor: `${T.orange}40` }}><div style={{ ...rot, color: T.orange }}>⚡ Contenção</div><CampoHistoricoLeitura valor={r.contencao} compacto /></div>}
         {disposicaoBloco(false)}
-        {(r.investigacao || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={rot}>Investigação</div>{r.investigacao.map((reg, i) => <div key={reg.id || i} style={{ fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 6 }}><span style={{ fontSize: 11, color: T.text3 }}>#{i + 1} · {reg.por}{reg.anexos?.length ? ` · ${reg.anexos.length} anexo(s)` : ""} — </span>{reg.texto}</div>)}</div>}
+        {(r.investigacao || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={rot}>Investigação</div>{r.investigacao.map((reg, i) => <div key={reg.id || i} style={{ fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 6 }}><span style={{ fontSize: 11, color: T.text3 }}>#{i + 1} · {reg.por}{reg.anexos?.length ? ` · ${reg.anexos.length} anexo(s)` : ""}: </span>{reg.texto}</div>)}</div>}
         <div style={{ marginBottom: 14 }}><div style={rot}>Análise de causa</div>{causaBloco()}</div>
         <div style={{ marginBottom: 14 }}><div style={rot}>Plano CAPA</div>{capaBloco()}</div>
         <div style={{ marginBottom: 14 }}><div style={rot}>Verificação de eficácia</div>{eficaciaBloco()}</div>
@@ -530,7 +530,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         <div style={{ minWidth: 0 }}>
           {bloqueio && <div style={{ fontSize: 12, color: T.text2, background: T.surf, border: `1px dashed ${T.border2}`, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>🔒 {bloqueio}</div>}
           {!emTratamento && ["causa", "capa", "eficacia"].includes(abaAtual.id) && (
-            <div style={{ fontSize: 12, color: T.text2, marginBottom: 12 }}>RNC encerrada — registro fechado, somente leitura.</div>
+            <div style={{ fontSize: 12, color: T.text2, marginBottom: 12 }}>RNC encerrada. O registro está fechado, somente leitura.</div>
           )}
           {conteudo[abaAtual.id]}
         </div>
@@ -584,7 +584,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       {assinaturaModal && (
         <AssinaturaModal
           user={user}
-          titulo={`RNC ${r.num} — assinatura do elaborador`}
+          titulo={`RNC ${r.num}: assinatura do elaborador`}
           contexto={`RNC|${r.num || r.id || ""}`}
           papel="Elaborador"
           onClose={() => setAssinaturaModal(false)}
@@ -599,7 +599,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       {dispSign && (
         <AssinaturaModal
           user={user}
-          titulo={`RNC ${r.num} — disposição: ${dispMeta(dispSign.decisao)?.label}`}
+          titulo={`RNC ${r.num}, disposição: ${dispMeta(dispSign.decisao)?.label}`}
           contexto={`RNC-DISP|${r.num || r.id || ""}`}
           papel="Responsavel Tecnico"
           onClose={() => setDispSign(null)}

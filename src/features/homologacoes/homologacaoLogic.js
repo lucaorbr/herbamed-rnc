@@ -150,7 +150,7 @@ export function etapaAtual(status) {
 export function proximoPasso(status) {
   switch (status) {
     case "Rascunho": return "Enquanto for rascunho, só você enxerga. Ao enviar, a Qualidade recebe para análise.";
-    case "Em análise": return "Aguardando o parecer técnico da Qualidade — quem avalia não pode ser quem solicitou.";
+    case "Em análise": return "Aguardando o parecer técnico da Qualidade. Quem avalia não pode ser quem solicitou.";
     case "Aguardando aprovação": return "Aguardando a decisão final, que é assinada por outra pessoa (nem o solicitante, nem quem deu o parecer).";
     case "Homologada": return "Homologada. Vale até a data de validade registrada na decisão.";
     case "Condicional": return "Homologada com condições. Vale enquanto o fornecedor cumprir o que foi registrado.";

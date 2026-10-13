@@ -177,7 +177,7 @@ export function SessoesTreinamentoTab({
         `${encerrada.num} — ${doc.codigo} Rev.${doc.versao}`, null,
         { presentes: presentesDaSessao(encerrada).length, evidencias: evs.length });
       setSel(encerrada);
-      toast_?.(`Lista assinada — ${evs.length} treinamento(s) registrado(s).`, "green");
+      toast_?.(`Lista assinada. ${evs.length} treinamento(s) registrado(s).`, "green");
     } catch (e) { toast_?.("Erro ao encerrar a sessão.", "red"); console.error(e); }
     setSalvando(false);
   };
@@ -187,7 +187,7 @@ export function SessoesTreinamentoTab({
       <button style={s.btn} onClick={sel ? () => setSel(null) : onVoltar}>← Voltar</button>
       <div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, margin: 0 }}>📋 Sessões de Treinamento</h2>
-        <div style={{ fontSize: 11, color: T.text3 }}>{doc?.codigo} — {doc?.titulo} · Rev.{doc?.versao}</div>
+        <div style={{ fontSize: 11, color: T.text3 }}>{doc?.codigo} · {doc?.titulo} · Rev.{doc?.versao}</div>
       </div>
       <div style={{ flex: 1 }} />
       {!sel && podeRegistrar && vigente && <button style={s.btnA} onClick={criar}>+ Nova sessão</button>}
@@ -201,7 +201,7 @@ export function SessoesTreinamentoTab({
         <Cabecalho />
         {!vigente && (
           <div style={{ ...s.card, border: `1px solid ${T.border}`, fontSize: 12, color: T.text3 }}>
-            A exigência de treinamento só vale com o documento <strong>Vigente</strong> — não se treina em versão não aprovada.
+            A exigência de treinamento só vale com o documento <strong>Vigente</strong>, porque não se treina em versão não aprovada.
           </div>
         )}
         <div style={s.card}>
@@ -266,7 +266,7 @@ export function SessoesTreinamentoTab({
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{sel.num}</div>
             <div style={{ fontSize: 11, color: T.text3 }}>
-              {realizada ? `Assinada em ${fmt((sel.encerradaEm || "").split("T")[0])}` : "Rascunho — nenhuma evidência gravada ainda"}
+              {realizada ? `Assinada em ${fmt((sel.encerradaEm || "").split("T")[0])}` : "Rascunho, nenhuma evidência gravada ainda"}
               {" · "}Rev.{sel.versao}
             </div>
           </div>
@@ -286,7 +286,7 @@ export function SessoesTreinamentoTab({
 
         {realizada && (
           <div style={{ background: "#2ab84a12", border: "1px solid #2ab84a33", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: T.text2 }}>
-            🔒 Lista assinada por <strong style={{ color: T.text }}>{sel.instrutor?.nome}</strong> — {(sel.evidenciasGeradas || []).length} treinamento(s) gravado(s).
+            🔒 Lista assinada por <strong style={{ color: T.text }}>{sel.instrutor?.nome}</strong>. {(sel.evidenciasGeradas || []).length} treinamento(s) gravado(s).
             Registro imutável: para corrigir, registre uma nova sessão.
           </div>
         )}
@@ -307,7 +307,7 @@ export function SessoesTreinamentoTab({
           } />
         </>} />
         <F lbl="Conteúdo ministrado"
-          tip="O que foi efetivamente treinado. Sai na lista de presença — é o que a inspeção lê para saber o escopo do treinamento."
+          tip="O que foi efetivamente treinado. Sai na lista de presença, e é o que a inspeção lê para saber o escopo do treinamento."
           ch={
             <TA value={sel.conteudo || ""} disabled={!editavel}
               onChange={e => setSel(p => ({ ...p, conteudo: e.target.value }))} />
@@ -323,7 +323,7 @@ export function SessoesTreinamentoTab({
             <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(SITUACAO.PRESENTE)}>Marcar todos presentes</button>
             <button style={{ ...s.btn, fontSize: 11 }} onClick={() => marcarTodos(SITUACAO.AUSENTE)}>Limpar</button>
             <button style={{ ...s.btn, fontSize: 11 }} onClick={dispensarQuemEstaEmDia}
-              title="Quem já tem treinamento válido não foi convocado — sai como Não aplicável, não como ausente.">
+              title="Quem já tem treinamento válido não foi convocado. Sai como Não aplicável, e não como ausente.">
               Dispensar quem está em dia
             </button>
             <span style={{ fontSize: 11, color: T.text3, alignSelf: "center" }}>
@@ -334,7 +334,7 @@ export function SessoesTreinamentoTab({
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {sel.participantes.length === 0 && (
             <div style={{ textAlign: "center", padding: "1.5rem", color: T.text3, fontSize: 12 }}>
-              Ninguém exigido neste documento — vincule cargos à exigência de treinamento.
+              Ninguém exigido neste documento. Vincule cargos à exigência de treinamento.
             </div>
           )}
           {sel.participantes.map(p => {
@@ -347,7 +347,7 @@ export function SessoesTreinamentoTab({
                   <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
                     {p.userName}
                     {p.temLogin === false && (
-                      <span style={{ fontSize: 10, fontWeight: 400, color: T.text3 }} title="Sem login no sistema — assina a folha impressa de próprio punho."> · sem login</span>
+                      <span style={{ fontSize: 10, fontWeight: 400, color: T.text3 }} title="Sem login no sistema. Assina a folha impressa de próprio punho."> · sem login</span>
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: T.text2 }}>{p.cargoNome || "—"}{p.setor ? ` · ${p.setor}` : ""}</div>
@@ -368,7 +368,7 @@ export function SessoesTreinamentoTab({
                   )}
                 </div>
                 {p.jaTreinado && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: "#2ab84a" }} title="Já tem treinamento válido nesta revisão — pode assistir de novo (reforço/reciclagem).">
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#2ab84a" }} title="Já tem treinamento válido nesta revisão. Pode assistir de novo (reforço/reciclagem).">
                     ✓ já treinado
                   </span>
                 )}
@@ -376,7 +376,7 @@ export function SessoesTreinamentoTab({
                   <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                     {[SITUACAO.PRESENTE, SITUACAO.AUSENTE, SITUACAO.DISPENSADO].map(op => (
                       <button key={op} onClick={() => mudarSituacao(p.userId, op)}
-                        title={op === SITUACAO.DISPENSADO ? "Não convocado para esta sessão — não conta como falta" : ""}
+                        title={op === SITUACAO.DISPENSADO ? "Não convocado para esta sessão. Não conta como falta" : ""}
                         style={{
                           fontSize: 10, fontWeight: 700, padding: "5px 9px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                           background: sit === op ? SIT_COR[op] + "22" : "transparent",

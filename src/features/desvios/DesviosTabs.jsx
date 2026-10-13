@@ -292,7 +292,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const encerrarSelecionados = async () => {
     const alvos = filtrados.filter(d => selecionados.has(d.id) && d.status === "Registrado");
     if (alvos.length === 0) {
-      toast_("Nenhum dos selecionados está 'Registrado' — só esses podem ser encerrados em lote.", "red");
+      toast_("Nenhum dos selecionados está como Registrado, e só esses podem ser encerrados em lote.", "red");
       return;
     }
     const motivo = window.prompt(`Justificativa do encerramento em lote (${alvos.length} desvio(s) selecionado(s)):`);
@@ -440,7 +440,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               {editando ? (
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: T.accent }}>
-                    ✏️ Modo edição — as alterações ficam registradas no histórico do desvio.
+                    ✏️ Modo edição. As alterações ficam registradas no histórico do desvio.
                   </div>
                   <G2 ch={<>
                     <F lbl="Data da ocorrência" ch={<Inp type="date" value={editData.dataOcorrencia} onChange={e => setEditData(p => ({ ...p, dataOcorrencia: e.target.value }))} />} />
@@ -458,8 +458,8 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                       {editData.tipo === "Outros" && <Inp placeholder="Especifique o tipo..." value={editData.tipoOutro} onChange={e => setEditData(p => ({ ...p, tipoOutro: e.target.value }))} sx={{ marginTop: 8 }} />}
                     </div>
                   } />
-                  <F lbl="Produto / Lote" ch={<Inp placeholder="Ex: Calcivitam D3 — Lote 2025-001" value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
-                  <F lbl="Descrição do desvio *" tip="O texto já registrado é evidência e não se altera. Para corrigir ou complementar, escreva o acréscimo — ele entra no fim, com seu login, data e hora." ch={
+                  <F lbl="Produto / Lote" ch={<Inp placeholder="Ex: Calcivitam D3, Lote 2025-001" value={editData.produto} onChange={e => setEditData(p => ({ ...p, produto: e.target.value }))} />} />
+                  <F lbl="Descrição do desvio *" tip="O texto já registrado é evidência e não se altera. Para corrigir ou complementar, escreva o acréscimo. Ele entra no fim, com seu login, data e hora." ch={
                     <CampoHistoricoEdicao valorSalvo={sel.desc} adicao={addDesc} setAdicao={setAddDesc} rows={4} placeholder="Ex.: na verdade a parada foi na encapsuladora 03, não na 02." />
                   } />
                   {/* Com ação imediata já registrada o campo trava em "Sim": não se pode
@@ -467,7 +467,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                   <F lbl="Houve ação imediata?" ch={
                     campoVazio(sel.acaoDesc)
                       ? <Sel value={editData.acaoImediata} onChange={e => setEditData(p => ({ ...p, acaoImediata: e.target.value }))}><option>Não</option><option>Sim</option></Sel>
-                      : <div style={{ fontSize: 13, color: T.text2 }}>Sim — já há ação imediata registrada</div>
+                      : <div style={{ fontSize: 13, color: T.text2 }}>Sim, já há ação imediata registrada</div>
                   } />
                   {editData.acaoImediata === "Sim" && (
                     <F lbl="Ação imediata adotada *" ch={
@@ -482,8 +482,8 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               ) : (
               <>
               <Campo T={T} l="Data da ocorrência" v={fmt(sel.dataOcorrencia)} />
-              <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros — ${sel.setorOutro || ""}` : sel.setor} />
-              <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros — ${sel.tipoOutro || ""}` : sel.tipo} />
+              <Campo T={T} l="Setor" v={sel.setor === "Outros" ? `Outros: ${sel.setorOutro || ""}` : sel.setor} />
+              <Campo T={T} l="Tipo" v={sel.tipo === "Outros" ? `Outros: ${sel.tipoOutro || ""}` : sel.tipo} />
               <CampoBloco T={T} l="Descrição do desvio" v={sel.desc} />
               {sel.produto && <Campo T={T} l="Produto / Lote" v={sel.produto} />}
               <Campo T={T} l="Houve ação imediata?" v={sel.acaoImediata || "—"} />
@@ -503,7 +503,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               )}
               <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.border}`, fontSize: 11, color: T.text3 }}>
                 Registrado por <strong style={{ color: T.text2 }}>{sel.registradoPor}</strong> em {fmt(sel.dataRegistro)}
-                {(() => { const st = triagemStatus(sel); return st && <div style={{ marginTop: 4, color: st.atrasado ? T.yellow : T.text3, fontWeight: st.atrasado ? 700 : 400 }}>{st.atrasado ? "⚠️ " : ""}Aguardando triagem há {st.dias} dia(s) — meta: {META_TRIAGEM_DIAS} dias{st.atrasado ? " (atrasado)" : ""}</div>; })()}
+                {(() => { const st = triagemStatus(sel); return st && <div style={{ marginTop: 4, color: st.atrasado ? T.yellow : T.text3, fontWeight: st.atrasado ? 700 : 400 }}>{st.atrasado ? "⚠️ " : ""}Aguardando triagem há {st.dias} dia(s) (meta: {META_TRIAGEM_DIAS} dias){st.atrasado ? " (atrasado)" : ""}</div>; })()}
                 {sel.status === "Encerrado" && <div style={{ marginTop: 4 }}>Encerrado por {sel.encerradoPor} em {fmt(sel.encerradoEm)}</div>}
                 {sel.status === "Convertido em RNC" && <div style={{ marginTop: 4 }}>Convertido por {sel.convertidoPor} em {fmt(sel.convertidoEm)}{sel.rncNum ? ` → ${sel.rncNum}` : ""}</div>}
               </div>
@@ -579,7 +579,7 @@ function TriagemChip({ d, T }) {
   if (!st) return <span style={{ color: T.text3 }}>—</span>;
   const cor = st.dias > 15 ? T.red : st.dias > META_TRIAGEM_DIAS ? T.yellow : T.text2;
   return (
-    <span title={`Aberto há ${st.dias} dia(s) — meta de triagem: ${META_TRIAGEM_DIAS} dias`}
+    <span title={`Aberto há ${st.dias} dia(s). Meta de triagem: ${META_TRIAGEM_DIAS} dias`}
       style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: cor, whiteSpace: "nowrap" }}>
       {st.atrasado && "⚠️"}{st.dias}d{st.atrasado ? " · atrasado" : ""}
     </span>
@@ -661,7 +661,7 @@ function ReclassificarModal({ dim, desvios, canonicos, doSaveDesvio, user, toast
         </div>
         <div style={{ padding: "1.5rem" }}>
           <p style={{ fontSize: 12.5, color: T.text2, lineHeight: 1.5, marginTop: 0, marginBottom: 18 }}>
-            Estes desvios foram registrados como <strong>“Outros”</strong> com texto livre. Escolha um {D.rotulo.toLowerCase()} do catálogo para cada grupo — os desvios daquele grupo passam a usar o valor canônico e param de aparecer soltos no Pareto e na matriz Setor×Tipo. Grupos sem destino escolhido ficam como estão.
+            Estes desvios foram registrados como <strong>“Outros”</strong> com texto livre. Escolha um {D.rotulo.toLowerCase()} do catálogo para cada grupo. Os desvios daquele grupo passam a usar o valor canônico e param de aparecer soltos no Pareto e na matriz Setor×Tipo. Grupos sem destino escolhido ficam como estão.
           </p>
 
           {canonicos.length === 0 ? (
@@ -670,7 +670,7 @@ function ReclassificarModal({ dim, desvios, canonicos, doSaveDesvio, user, toast
             </div>
           ) : grupos.length === 0 ? (
             <div style={{ padding: "1.5rem", textAlign: "center", color: T.text3, fontSize: 13, background: T.surf, borderRadius: 10 }}>
-              Nenhum desvio pendente — todos os {D.plural} já estão no catálogo. ✓
+              Nenhum desvio pendente. Todos os {D.plural} já estão no catálogo. ✓
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -811,7 +811,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPO
         historico: [{ data: tod(), acao: "Desvio registrado", resp: user.name }],
       };
       await doSaveDesvio(desvio);
-      toast_(`${desvio.num} registrado!`, "green");
+      toast_(`${desvio.num} registrado.`, "green");
       setTab("desvios");
     } catch (e) {
       toast_("Erro ao registrar o desvio. Tente novamente.", "red");
@@ -846,7 +846,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPO
           </div>
         } />
         <F lbl="Descrição do desvio *" tip="O que foi observado fora do padrão: o quê, onde, evidência." ch={<TA rows={4} placeholder="Descreva o desvio observado..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
-        <F lbl="Produto / Lote" tip="Produto e lote envolvidos, se aplicável (nem todo desvio tem lote)." ch={<Inp placeholder="Ex: Calcivitam D3 — Lote 2025-001" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
+        <F lbl="Produto / Lote" tip="Produto e lote envolvidos, se aplicável (nem todo desvio tem lote)." ch={<Inp placeholder="Ex: Calcivitam D3, Lote 2025-001" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
         <G2 ch={<>
           <F lbl="Houve ação imediata?" tip="Se uma ação no momento já conteve/sanou o desvio." ch={<Sel value={f.acaoImediata} onChange={e => set("acaoImediata", e.target.value)}><option>Não</option><option>Sim</option></Sel>} />
           {f.acaoImediata === "Sim" && <F lbl="Descrição da ação imediata *" ch={<Inp placeholder="O que foi feito na hora..." value={f.acaoDesc} onChange={e => set("acaoDesc", e.target.value)} />} />}
