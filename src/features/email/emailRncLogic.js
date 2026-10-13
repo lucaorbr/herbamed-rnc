@@ -22,7 +22,7 @@ const EVENTOS = {
   manual: { titulo: "Notificação de não conformidade", etapa: "resumo" },
 };
 
-const RODAPE = "Herbamed — Sistema de Gestão da Qualidade\nMensagem enviada pelo SGQ.";
+const RODAPE = "Herbamed · Sistema de Gestão da Qualidade\nMensagem enviada pelo SGQ.";
 
 /** Acrescenta um bloco ao corpo antes do rodapé (ou no fim, se o rodapé foi apagado na edição). */
 export function comBlocoAntesDoRodape(body, bloco) {
@@ -120,7 +120,7 @@ function destaqueDoEvento(r, evento, hoje) {
         ? `A verificação de eficácia foi agendada${r.eficacia.data ? ` para ${fmt(r.eficacia.data)}` : ""}.`
         : `A verificação de eficácia foi registrada como ${String(r?.eficacia?.resultado || "").toUpperCase()}. A RNC está encerrada.`;
     default:
-      return "Segue a situação atual da não conformidade abaixo.";
+      return "Segue a situação atual da não conformidade.";
   }
 }
 
@@ -132,7 +132,7 @@ export function buildEmail(rnc, evento, { origem = "", hoje = hojeIso() } = {}) 
   const r = rnc || {};
   const ev = EVENTOS[evento] || EVENTOS.manual;
   const pfx = r.sev === "Crítica" ? "[CRÍTICA] " : r.sev === "Maior" ? "[MAIOR] " : "";
-  const subject = pfx + [r.num || "RNC", ev.titulo, r.produto || r.tipo].filter(Boolean).join(" — ");
+  const subject = pfx + [r.num || "RNC", ev.titulo, r.produto || r.tipo].filter(Boolean).join(" | ");
   const link = linkDaFicha(origem, r, ev.etapa);
   const vencido = d => d && d < hoje && rncAtiva(r.status) ? " (VENCIDO)" : "";
 

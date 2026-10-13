@@ -9,8 +9,8 @@ const HOJE = "2026-10-13";
 
 describe("buildEmail", () => {
   it("assunto leva severidade, número, evento e produto, sem emoji", () => {
-    expect(buildEmail(base, "5w2h", { hoje: HOJE }).subject).toBe("[MAIOR] NC-2026-007 — Plano CAPA atualizado — Cápsula de Ômega 3");
-    expect(buildEmail({ ...base, sev: "Menor" }, "abertura", { hoje: HOJE }).subject).toBe("NC-2026-007 — Nova não conformidade registrada — Cápsula de Ômega 3");
+    expect(buildEmail(base, "5w2h", { hoje: HOJE }).subject).toBe("[MAIOR] NC-2026-007 | Plano CAPA atualizado | Cápsula de Ômega 3");
+    expect(buildEmail({ ...base, sev: "Menor" }, "abertura", { hoje: HOJE }).subject).toBe("NC-2026-007 | Nova não conformidade registrada | Cápsula de Ômega 3");
   });
 
   it("traz o link da ficha na etapa do evento", () => {
@@ -65,7 +65,7 @@ describe("comBlocoAntesDoRodape", () => {
   it("insere antes do rodapé; sem rodapé, no fim", () => {
     const { body } = buildEmail(base, "manual", { hoje: HOJE });
     const novo = comBlocoAntesDoRodape(body, "LINK X");
-    expect(novo.indexOf("LINK X")).toBeLessThan(novo.indexOf("Herbamed — Sistema"));
+    expect(novo.indexOf("LINK X")).toBeLessThan(novo.indexOf("Herbamed · Sistema"));
     expect(comBlocoAntesDoRodape("texto", "LINK X")).toBe("texto\n\nLINK X");
   });
 });
