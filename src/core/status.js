@@ -26,6 +26,19 @@ export function taxaEficaciaRNC(rncs = []) {
   return { eficazes, encerradas, taxa: encerradas > 0 ? Math.round(eficazes / encerradas * 100) : null };
 }
 
+// Disposição do material/lote (padrão farma / SE Suite). `libera` marca as decisões que
+// liberam material NÃO CONFORME para uso — por isso exigem assinatura do RT (segregação:
+// quem libera NC ≠ quem detectou). As demais gravam só justificativa + autor.
+export const DISPOSICOES = [
+  { key: "liberar",    label: "Liberar (uso normal)",    libera: true,  cor: "#2ab84a" },
+  { key: "concessao",  label: "Liberar sob concessão",   libera: true,  cor: "#ffd166" },
+  { key: "segregar",   label: "Segregar / Quarentena",   libera: false, cor: "#4fc3f7" },
+  { key: "retrabalho", label: "Retrabalho / Reprocesso", libera: false, cor: "#a78bfa" },
+  { key: "reprovar",   label: "Reprovar / Descartar",    libera: false, cor: "#ff4f6a" },
+  { key: "devolver",   label: "Devolver ao fornecedor",  libera: false, cor: "#ff8c42" },
+];
+export const dispMeta = (key) => DISPOSICOES.find(d => d.key === key) || null;
+
 export const SEVMETA = {
   "Crítica": { c: "#ff4f6a", bg: "#ff4f6a18" },
   "Maior":   { c: "#ff8c42", bg: "#ff8c4218" },
