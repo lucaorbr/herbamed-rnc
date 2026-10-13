@@ -65,7 +65,7 @@ export function ConfiguracaoDocumentosTab({
     try {
       await saveCollection("configuracoes", "catalogo_departamentos", { items: lista });
       await auditLog("Atualizou Catálogo de Departamentos", "configuracoes", "catalogo_departamentos", "Catálogo", null, { total: lista.length });
-      toast_("Catálogo de departamentos salvo!", "green");
+      toast_("Catálogo de departamentos salvo.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
     setSavingDeptos(false);
   };
@@ -88,7 +88,7 @@ export function ConfiguracaoDocumentosTab({
         await saveCollection("configuracoes", "tipos_revisao", payload);
         await auditLog("Alterou Prazo de Revisão por Tipo", "configuracoes", "tipos_revisao", "Prazos de revisão por tipo de documento", tiposRevisao || {}, payload);
       }
-      toast_("Tipos de documento salvos!", "green");
+      toast_("Tipos de documento salvos.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); console.error(e); }
     setSavingTipos(false);
   };
@@ -124,7 +124,7 @@ export function ConfiguracaoDocumentosTab({
 
         {!isAdmin && (
           <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:12, color:T.text2 }}>
-            🔒 Somente leitura — apenas administradores alteram estas listas.
+            🔒 Somente leitura. Só administradores alteram estas listas.
           </div>
         )}
 
@@ -224,7 +224,7 @@ export function ConfiguracaoDocumentosTab({
                     </button>
                     <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                       title="Excluir tipo do catálogo"
-                      onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} — ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) { const next=listaTipos.filter((_,j)=>j!==i); setListaTipos(next); persistTipos(next); } }}>🗑️</button>
+                      onClick={()=>{ if(confirm(`Excluir o tipo "${t.id} · ${t.label}" do catálogo?\n\nDocumentos já criados com este tipo não são afetados, mas perdem o rótulo amigável. Prefira desativar se o tipo já foi usado.`)) { const next=listaTipos.filter((_,j)=>j!==i); setListaTipos(next); persistTipos(next); } }}>🗑️</button>
                   </>)}
                 </>)}
               </div>
@@ -243,7 +243,7 @@ export function ConfiguracaoDocumentosTab({
             Código (máx 5 letras maiúsculas) + nome completo. A sigla entra no código do documento
             (ex: <code>PO-SGQ-001</code>), então mudá-la depois não renomeia o que já foi emitido.
             <br/>É o <strong>departamento responsável</strong> pelo documento, uma posição no
-            organograma — não o local físico. Para local de trabalho e destino de cópia impressa,
+            organograma, e não o local físico. Para local de trabalho e destino de cópia impressa,
             use <strong>Admin → Estrutura da empresa → Áreas e Setores</strong>.
           </div>
 
@@ -295,7 +295,7 @@ export function ConfiguracaoDocumentosTab({
                     </button>
                     <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                       title="Excluir departamento do catálogo"
-                      onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} — ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) { const next=listaDeptos.filter((_,j)=>j!==i); setListaDeptos(next); persistDeptos(next); } }}>🗑️</button>
+                      onClick={()=>{ if(confirm(`Excluir o departamento "${d.id} · ${d.label}" do catálogo?\n\nDocumentos já criados com este departamento não são afetados, mas perdem o rótulo amigável. Prefira desativar se já foi usado.`)) { const next=listaDeptos.filter((_,j)=>j!==i); setListaDeptos(next); persistDeptos(next); } }}>🗑️</button>
                   </>)}
                 </>)}
               </div>

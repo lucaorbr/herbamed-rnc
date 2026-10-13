@@ -35,14 +35,14 @@ export function pendenciasDeRNC({ rncs = [], userName = "", hoje }) {
     if (vencida) {
       out.push(item({
         id: `rnc-venc-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, minha,
-        titulo: `${r.num} — prazo da ação corretiva vencido`,
+        titulo: `${r.num}: prazo da ação corretiva vencido`,
         detalhe: r.desc || "", dias: diasEntre(r.prazoAC, hoje), urgencia: URGENCIA.CRITICO,
       }));
     } else if (minha && r.status === "Aberta") {
       // Atribuída a mim e ainda sem nenhum ato de tratamento.
       out.push(item({
         id: `rnc-minha-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, minha: true,
-        titulo: `${r.num} — aguardando seu tratamento`,
+        titulo: `${r.num}: aguardando seu tratamento`,
         detalhe: r.desc || "", dias: r.data ? diasEntre(r.data, hoje) : 0,
       }));
     }
@@ -63,7 +63,7 @@ export function pendenciasDeDesvio({ desvios = [], hoje, meta = META_TRIAGEM_PAD
       const dias = diasEntre(d.dataRegistro || d.dataOcorrencia, hoje);
       return item({
         id: `desvio-${d.id}`, fonte: "desvio", tab: "desvios",
-        titulo: `${d.num || "Desvio"} — aguardando triagem`,
+        titulo: `${d.num || "Desvio"}: aguardando triagem`,
         detalhe: d.desc || d.descricao || "",
         dias, urgencia: dias > meta ? URGENCIA.CRITICO : URGENCIA.ATENCAO,
       });
@@ -107,7 +107,7 @@ export function pendenciasDeIPC({ ipc = [] }) {
 export function pendenciasDeTreinamento({ pendentesTreino = [] }) {
   return (pendentesTreino || []).map(p => item({
     id: `treino-${p.doc?.id}`, fonte: "treinamento", tab: "gestao-docs", minha: true,
-    titulo: `${p.doc?.codigo || "Documento"} — ${p.status === "vencido" ? "reciclagem vencida" : "treinamento pendente"}`,
+    titulo: `${p.doc?.codigo || "Documento"}: ${p.status === "vencido" ? "reciclagem vencida" : "treinamento pendente"}`,
     detalhe: p.doc?.titulo || "",
     dias: p.dias || 0,
     urgencia: (p.status === "vencido" || p.status === "atrasado") ? URGENCIA.CRITICO : URGENCIA.ATENCAO,
@@ -121,7 +121,7 @@ export function pendenciasDeTreinamento({ pendentesTreino = [] }) {
 export function pendenciasDeLeitura({ leiturasPendentes = [] }) {
   return (leiturasPendentes || []).map(p => item({
     id: `leitura-${p.doc?.id}`, fonte: "documento", tab: "gestao-docs", docId: p.doc?.id, minha: true,
-    titulo: `${p.doc?.codigo || "Documento"} — leitura pendente (Rev.${p.doc?.versao || ""})`,
+    titulo: `${p.doc?.codigo || "Documento"}: leitura pendente (Rev.${p.doc?.versao || ""})`,
     detalhe: p.doc?.titulo || "",
     dias: p.dias || 0,
   }));

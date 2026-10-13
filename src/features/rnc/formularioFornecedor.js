@@ -28,7 +28,7 @@ export async function exportFormularioFornecedor(rnc) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "SGQ Herbamed";
   wb.created = new Date();
-  wb.title = `Formulário de Resposta — RNC ${rnc?.num || ""}`;
+  wb.title = `Formulário de Resposta, RNC ${rnc?.num || ""}`;
 
   const ws = wb.addWorksheet("Resposta RNC", {
     properties: { defaultRowHeight: 16, tabColor: { argb: VERDE } },
@@ -44,7 +44,7 @@ export async function exportFormularioFornecedor(rnc) {
   });
 
   ws.headerFooter.oddFooter =
-    "&L&8Herbamed Laboratório Nutracêutico — SGQ&C&8Formulário de Resposta de RNC&R&8Pág. &P de &N";
+    "&L&8Herbamed Laboratório Nutracêutico · SGQ&C&8Formulário de Resposta de RNC&R&8Pág. &P de &N";
 
   ws.getColumn("A").width = 2.2;
   ws.getColumn("B").width = 22;
@@ -177,7 +177,7 @@ export async function exportFormularioFornecedor(rnc) {
   r++;
 
   // ============ ① DADOS DA NÃO-CONFORMIDADE (pré-preenchido) ============
-  secao("①", "DADOS DA NÃO-CONFORMIDADE", "Preenchido pela Herbamed — confira os dados antes de responder.");
+  secao("①", "DADOS DA NÃO-CONFORMIDADE", "Preenchido pela Herbamed. Confira os dados antes de responder.");
   campo("Nº da RNC", { fixo: true, valor: rnc?.num || "" });
   campo("Data de abertura", { fixo: true, valor: fmt(rnc?.data) || "" });
   campo("Produto / Material", { fixo: true, valor: rnc?.produto || "" });
@@ -190,7 +190,7 @@ export async function exportFormularioFornecedor(rnc) {
   r++;
 
   // ============ ② ANÁLISE DE CAUSA — 5 PORQUÊS ============
-  secao("②", "ANÁLISE DE CAUSA — 5 PORQUÊS", 'Pergunte "Por quê?" repetidamente até chegar à causa raiz. Aprofunde cada resposta na anterior.');
+  secao("②", "ANÁLISE DE CAUSA: 5 PORQUÊS", 'Pergunte "Por quê?" repetidamente até chegar à causa raiz. Aprofunde cada resposta na anterior.');
   campo("1º Por quê?  (Por que o problema ocorreu?)", { altura: 30 });
   campo("2º Por quê?", { altura: 30 });
   campo("3º Por quê?", { altura: 30 });
@@ -206,7 +206,7 @@ export async function exportFormularioFornecedor(rnc) {
   r++;
 
   // ============ ③ PLANO DE AÇÃO — 5W2H ============
-  secao("③", "PLANO DE AÇÃO — 5W2H", "Descreva as ações corretivas para eliminar a causa raiz. Use uma linha por ação.");
+  secao("③", "PLANO DE AÇÃO (5W2H)", "Descreva as ações corretivas para eliminar a causa raiz. Use uma linha por ação.");
   ws.getRow(r).height = 30;
   const cols5w2h = [
     ["B", "O QUÊ? *\n(What)"],

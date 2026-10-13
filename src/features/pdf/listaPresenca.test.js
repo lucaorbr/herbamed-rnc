@@ -82,7 +82,7 @@ describe("lista definitiva (modo definitiva)", () => {
   });
 
   it("explica que Não aplicável não é falta — é o que a inspeção lê", () => {
-    expect(buildListaPresencaHTML(encerrada(), doc)).toContain("não caracteriza ausência");
+    expect(buildListaPresencaHTML(encerrada(), doc)).toContain("Não caracteriza ausência");
   });
 
   it("não pede assinatura manual de novo — ela vive no anexo digitalizado", () => {

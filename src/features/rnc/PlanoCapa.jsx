@@ -67,7 +67,7 @@ Responda APENAS em JSON sem markdown:
   const salvar = async () => {
     const e = errosDasAcoesCapa(acts);
     setErros(e);
-    if (e.length) { toast_("Nada foi salvo — corrija as ações indicadas.", "red"); return; }
+    if (e.length) { toast_("Nada foi salvo. Corrija as ações indicadas.", "red"); return; }
     if (JSON.stringify(acts) === JSON.stringify(r.w2h || [])) { toast_("Nada mudou no plano.", "yellow"); return; }
     const patch = patchSalvarCapa(r, acts, autor, tod());
     setSalvando(true);
@@ -87,7 +87,7 @@ Responda APENAS em JSON sem markdown:
     <div>
       <div style={{ ...s.card, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-          <SecTitle icon="📋" ch="Plano CAPA — ações corretivas e preventivas" />
+          <SecTitle icon="📋" ch="Plano CAPA: ações corretivas e preventivas" />
           {acts.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontSize: 12, color: T.text2 }}>{fechadas}/{acts.length} encerradas</div>
@@ -121,14 +121,14 @@ Responda APENAS em JSON sem markdown:
                   <select aria-label="Situação da ação" value={a.status} onChange={e => upd(i, "status", e.target.value)} style={{ ...s.inp, width: "auto", minWidth: 130, fontSize: 11, padding: "4px 8px", color: cor[a.status] || T.text }}>{STATUS.map(x => <option key={x}>{x}</option>)}</select>
                   {removivel
                     ? <button style={s.btnD} onClick={() => del(i)}>✕ Remover</button>
-                    : <span title="Ação já registrada não se apaga — mude a situação para Cancelada." style={{ fontSize: 10, color: T.text3, alignSelf: "center" }}>registrada</span>}
+                    : <span title="Ação já registrada não se apaga. Mude a situação para Cancelada." style={{ fontSize: 10, color: T.text3, alignSelf: "center" }}>registrada</span>}
                 </div>
               </div>
               {erro && <div style={{ fontSize: 12, color: T.red, marginBottom: 8 }}>{erro.replace(/^Ação #\d+: /, "")}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
                 <F lbl="O quê?" tip="Descreva a ação a executar. Use verbos de ação. Ex: Revisar e atualizar o PO-CQ-003." ch={<Inp placeholder="Ação a executar" value={a.what} onChange={e => upd(i, "what", e.target.value)} />} />
                 <F lbl="Por quê?" tip="Justifique conectando com a causa raiz identificada." ch={<Inp placeholder="Justificativa" value={a.why} onChange={e => upd(i, "why", e.target.value)} />} />
-                <F lbl="Quem?" tip="Responsável pela execução — nome específico, não setor." ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
+                <F lbl="Quem?" tip="Quem executa: o nome de uma pessoa, não o setor." ch={<Inp value={a.who} onChange={e => upd(i, "who", e.target.value)} />} />
                 <F lbl="Onde?" tip="Local de execução. Ex: Linha de produção 2, Lab. CQ." ch={<Inp value={a.where} onChange={e => upd(i, "where", e.target.value)} />} />
                 <F lbl="Quando?" tip="Data limite. O prazo da ação corretiva da RNC passa a ser o mais tardio entre as ações em aberto." ch={<Inp type="date" value={a.when} onChange={e => upd(i, "when", e.target.value)} />} />
                 <F lbl="Custo/Esforço" tip="Estimativa de recursos. Ex: 4h de trabalho, R$ 500." ch={<Inp value={a.howMuch} onChange={e => upd(i, "howMuch", e.target.value)} />} />
@@ -141,7 +141,7 @@ Responda APENAS em JSON sem markdown:
                   )}
                   <AnexosUpload inputId={`capa-ev-${a.id ?? `legado-${i}`}`} anexos={a.evidencias} setAnexos={novos => upd(i, "evidencias", typeof novos === "function" ? novos(a.evidencias) : novos)} />
                   {a.status === "Concluída" && !a.evidencias.length && !a.evidencia && (
-                    <div style={{ fontSize: 11, color: T.orange, marginTop: 4 }}>Ação concluída sem evidência anexada — recomendável anexar o comprovante.</div>
+                    <div style={{ fontSize: 11, color: T.orange, marginTop: 4 }}>Ação concluída sem evidência anexada. Convém anexar o comprovante.</div>
                   )}
                 </div>
               } />

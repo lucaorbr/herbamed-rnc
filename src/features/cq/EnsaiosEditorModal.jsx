@@ -41,7 +41,7 @@ export function EnsaiosEditorModal({ material, user, toast_, onClose, onSaved })
     setTipo(tpl.tipo || tipo);
     setEnsaios((tpl.ensaios || []).map((e, i) => ({ tipo:"numero", casas:2, multiplos:false, ...e, id: Date.now() + i })));
     setTemplateSel(tplId);
-    toast_(`Template "${tpl.nome}" carregado!`, "green");
+    toast_(`Template "${tpl.nome}" carregado.`, "green");
   };
 
   const addEnsaio = () => setEnsaios(p => [...p, { id: Date.now(), nome:"", espec:"", unidade:"", ref:"", tipo:"numero", casas:2, multiplos:false }]);
@@ -111,7 +111,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
         atualizadoPor: user?.name || "",
       };
       await saveCollection("cq_materiais", id, atualizado);
-      toast_("Ensaios do material parametrizados!", "green");
+      toast_("Ensaios do material parametrizados.", "green");
       onSaved && onSaved(atualizado);
       onClose && onClose();
     } catch (e) {
@@ -165,7 +165,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
 
           {ensaios.some(e => e._ia) && (
             <div style={{ marginBottom:12, padding:"10px 12px", background:T.yellow + "18", border:`1px solid ${T.yellow}66`, borderRadius:8 }}>
-              <div style={{ fontSize:12, color:T.text, fontWeight:600, marginBottom:6 }}>⚠ Limites e referências gerados por IA — rascunho não verificado</div>
+              <div style={{ fontSize:12, color:T.text, fontWeight:600, marginBottom:6 }}>⚠ Limites e referências gerados por IA. Rascunho não verificado</div>
               <div style={{ fontSize:11, color:T.text2, marginBottom:8, lineHeight:1.5 }}>
                 A IA pode errar limites e citar referências inexistentes. Confira cada ensaio marcado contra a monografia oficial vigente (Farmacopeia Brasileira, USP, etc.) e corrija a Especificação e a Referência antes de salvar.
               </div>
@@ -187,7 +187,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
               </div>
               {ensaios.map(e => (
                 <div key={e.id} style={{ marginBottom:8, background:T.surf, borderRadius:8, border:`1px solid ${e._ia ? T.yellow + "88" : T.border}`, borderLeft:e._ia ? `3px solid ${T.yellow}` : `1px solid ${T.border}`, padding:"8px" }}>
-                  {e._ia && <div style={{ fontSize:10, color:T.yellow, fontWeight:700, marginBottom:4 }}>⚠ Rascunho IA — verificar na monografia</div>}
+                  {e._ia && <div style={{ fontSize:10, color:T.yellow, fontWeight:700, marginBottom:4 }}>⚠ Rascunho da IA: confira na monografia</div>}
                   <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1fr 120px 60px 36px", gap:6, alignItems:"center" }}>
                     <Inp placeholder="Ex: pH, Umidade, Aspecto..." value={e.nome} onChange={ev => updEnsaio(e.id, "nome", ev.target.value)} sx={{ fontSize:12 }} />
                     <Inp placeholder="Ex: 5,0–7,0 ou Conforme padrão" value={e.espec} onChange={ev => updEnsaio(e.id, "espec", ev.target.value)} sx={{ fontSize:12 }} />

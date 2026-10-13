@@ -36,7 +36,7 @@ export function Investigacao({ r, user, toast_, gravar, podeRegistrar }) {
   return (
     <div style={{ ...s.card, marginBottom: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <SecTitle icon="🔬" ch={`Investigação${registros.length ? ` — ${registros.length} registro(s)` : ""}`} />
+        <SecTitle icon="🔬" ch={`Investigação${registros.length ? ` (${registros.length} registro(s))` : ""}`} />
         <span style={{ fontSize: 11, color: T.text3 }}>Ensaios, medições e comparações que sustentam a causa raiz</span>
       </div>
 
@@ -57,13 +57,13 @@ export function Investigacao({ r, user, toast_, gravar, podeRegistrar }) {
       {podeRegistrar && (
         <div style={{ borderTop: registros.length ? `1px dashed ${T.border2}` : "none", paddingTop: registros.length ? 10 : 0 }}>
           <TA rows={4} value={texto} onChange={e => { setTexto(e.target.value); if (erro) setErro(""); }}
-            placeholder={"O que foi feito e o resultado. Ex.:\nUmidade da mistura — fórmula antiga: 3,1% · fórmula nova: 1,2%\nUmidade das cápsulas após 30 dias: 13,5% → 9,8%"} />
+            placeholder={"O que foi feito e o resultado. Ex.:\nUmidade da mistura: fórmula antiga 3,1% · fórmula nova 1,2%\nUmidade das cápsulas após 30 dias: 13,5% → 9,8%"} />
           {erro && <div style={{ fontSize: 12, color: T.red, marginTop: 4 }} aria-live="polite">{erro}</div>}
           <div style={{ marginTop: 8 }}>
             <AnexosUpload inputId={`inv-anexos-${r.id}`} anexos={anexos} setAnexos={novos => setAnexos(prev => typeof novos === "function" ? novos(prev) : novos)} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
-            <span style={{ fontSize: 11, color: T.text3 }}>Registro não se edita nem se apaga — para corrigir, registre de novo.</span>
+            <span style={{ fontSize: 11, color: T.text3 }}>Registro não se edita nem se apaga. Para corrigir, registre de novo.</span>
             <button style={{ ...s.btnA, opacity: salvando ? .6 : 1 }} disabled={salvando} onClick={registrar}>{salvando ? "Registrando…" : "Registrar investigação"}</button>
           </div>
         </div>

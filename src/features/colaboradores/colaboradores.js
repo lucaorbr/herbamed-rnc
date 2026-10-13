@@ -201,7 +201,7 @@ export function planoImportacaoColaboradores({ linhas = [], colaboradores = [], 
       atualizar.push({ id: alvo.id, antes: alvo, campos });
     } else if (!mat) {
       const candidatos = porNome.get(nomeNorm) || [];
-      if (candidatos.length > 1) { conflitos.push({ linha: num, nome, motivo: "mais de um cadastro com este nome — informe a matrícula" }); continue; }
+      if (candidatos.length > 1) { conflitos.push({ linha: num, nome, motivo: "mais de um cadastro com este nome; informe a matrícula" }); continue; }
       if (candidatos.length === 1) atualizar.push({ id: candidatos[0].id, antes: candidatos[0], campos });
       else criar.push(novoColaborador({ ...campos, origem: "importacao" }));
     } else {

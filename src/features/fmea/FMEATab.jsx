@@ -98,7 +98,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
       const novos = parsed.map(p => ({ id: Date.now() + Math.round(Math.random()*1000), resp: user.name, prazo: "", status: "Pendente", criadoPor: user.name, ...p, S: Number(p.S)||5, O: Number(p.O)||3, D: Number(p.D)||3 }));
       for (const item of novos) await saveCollection("fmea", String(item.id), item);
       await auditLog("Gerou FMEA por IA", "fmea", "lote", processo, null, { quantidade: novos.length, processo });
-      toast_("FMEA gerado pela IA!", "green");
+      toast_("FMEA gerado pela IA.", "green");
     } catch { toast_("Erro ao gerar. Tente novamente.", "red"); }
     setAiLoading(false);
   };
@@ -111,7 +111,7 @@ S=Severidade(1-10), O=Ocorrência(1-10), D=Detecção(1-10)`);
       <div style={{ ...s.card, background:`linear-gradient(135deg,${T.card},${T.card2})`, marginBottom:"1rem" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
           <div>
-            <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>⚠️ FMEA — Análise de Modo e Efeito de Falha</div>
+            <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>⚠️ FMEA: Análise de Modo e Efeito de Falha</div>
             <div style={{ fontSize:12, color:T.text2, lineHeight:1.6, maxWidth:560 }}>
               Identifica e prioriza riscos <strong>antes</strong> que os problemas ocorram. O RPN (Risk Priority Number) = Severidade × Ocorrência × Detecção.
             </div>

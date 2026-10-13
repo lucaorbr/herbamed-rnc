@@ -70,7 +70,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     try {
       await saveCollection("configuracoes", "catalogo_cargos", { items: lista });
       await auditLog("Atualizou Catálogo de Cargos", "configuracoes", "catalogo_cargos", "Catálogo", null, { total: lista.length });
-      toast_("Catálogo de cargos salvo!", "green");
+      toast_("Catálogo de cargos salvo.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingCargos(false);
   };
@@ -115,7 +115,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       await auditLog("Importou Cargos do Cadastro", "configuracoes", "catalogo_cargos", "Catálogo de Cargos", null, { cargosCriados: aImportar.length, usuariosVinculados: vinculados, naoVinculados: Math.max(0, restantes) });
       toast_(
         `${aImportar.length} cargo(s) criado(s), ${vinculados} usuário(s) vinculado(s).` +
-        (restantes > 0 ? ` ${restantes} sem correspondência — verifique o cadastro.` : ""),
+        (restantes > 0 ? ` ${restantes} sem correspondência. Verifique o cadastro.` : ""),
         restantes > 0 ? "orange" : "green"
       );
     } catch(e) { toast_("Erro ao importar cargos.", "red"); console.error(e); }
@@ -133,7 +133,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     try {
       await saveCollection("configuracoes", "catalogo_areas_setores_distribuicao", { items: lista });
       await auditLog("Atualizou Catálogo de Áreas e Setores de Distribuição", "configuracoes", "catalogo_areas_setores_distribuicao", "Catálogo", null, { totalAreas:lista.length, totalSetores:lista.reduce((n,a)=>n+a.setores.length,0) });
-      toast_("Catálogo de áreas e setores salvo!", "green");
+      toast_("Catálogo de áreas e setores salvo.", "green");
     } catch(e) { toast_("Erro ao salvar catálogo.", "red"); }
     setSavingAreasDistrib(false);
   };
@@ -161,7 +161,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
       setShowNovo(false);
-      toast_("Usuário criado com sucesso!", "green");
+      toast_("Usuário criado.", "green");
     } catch(e) { toast_("Erro: "+e.message, "red"); }
   };
 
@@ -180,7 +180,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
     await auditLog("Editou Usuário", "usuarios", uid, `${data.name || antesU?.name} (${antesU?.email || uid})`, antesU ? { name: antesU.name, role: antesU.role, setor: antesU.setor } : null, { name: data.name, role: data.role, setor: data.setor });
     setUsers(users.map(u=>u.id===uid?{...u,...data}:u));
     setEditing(null);
-    toast_("Usuário atualizado!", "green");
+    toast_("Usuário atualizado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -262,7 +262,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                         const c = cargoDoUsuario(u, listaCargos);
                         if (!c) return null;
                         // Cargo em texto livre ainda não herda treinamento — sinaliza a pendência.
-                        return <> · {c.nome}{c.origem!=="catalogo" && <span title="Cargo fora do catálogo — não herda treinamento por cargo" style={{ color:"#e8a33d" }}> ⚠</span>}</>;
+                        return <> · {c.nome}{c.origem!=="catalogo" && <span title="Cargo fora do catálogo. Não herda treinamento por cargo" style={{ color:"#e8a33d" }}> ⚠</span>}</>;
                       })()}
                     </div>
                   </div>
@@ -306,13 +306,13 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               {cargosAtivos(listaCargos).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
             </Sel>
           } />
-          <F lbl="Perfil de acesso" tip="Selecione o perfil base — as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
-            <option value="user">Usuário — cria e edita suas RNCs</option>
-            <option value="admin">Admin — acesso total</option>
-            <option value="viewer">Visualizador — apenas leitura</option>
-            <option value="keyuser">Key User — edita qualquer RNC</option>
-            <option value="rt">RT — Responsável Técnico</option>
-            <option value="exec">Executivo — Dashboard gerencial</option>
+          <F lbl="Perfil de acesso" tip="Selecione o perfil base e as permissões abaixo serão preenchidas automaticamente. Você pode ajustar individualmente." ch={<Sel value={nu.role} onChange={e=>setRole(e.target.value)}>
+            <option value="user">Usuário: cria e edita suas RNCs</option>
+            <option value="admin">Admin: acesso total</option>
+            <option value="viewer">Visualizador: só leitura</option>
+            <option value="keyuser">Key User: edita qualquer RNC</option>
+            <option value="rt">RT (Responsável Técnico)</option>
+            <option value="exec">Executivo: dashboard gerencial</option>
           </Sel>} />
         </>} />
 
@@ -374,12 +374,12 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
               </Sel>
             } />
             <F lbl="Perfil" ch={<Sel value={editData.role} onChange={e=>setEditData(p=>({...p,role:e.target.value}))}>
-              <option value="admin">Admin — acesso total</option>
-              <option value="user">Usuário — cria e edita suas RNCs</option>
-              <option value="viewer">Visualizador — apenas leitura</option>
-              <option value="keyuser">Key User — edita qualquer RNC</option>
-              <option value="rt">RT — Responsável Técnico</option>
-              <option value="exec">Executivo — Dashboard gerencial</option>
+              <option value="admin">Admin: acesso total</option>
+              <option value="user">Usuário: cria e edita suas RNCs</option>
+              <option value="viewer">Visualizador: só leitura</option>
+              <option value="keyuser">Key User: edita qualquer RNC</option>
+              <option value="rt">RT (Responsável Técnico)</option>
+              <option value="exec">Executivo: dashboard gerencial</option>
             </Sel>} />
           </>} />
 
@@ -437,7 +437,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
         </div>
 
         <div style={{ marginTop:18, padding:"12px 14px", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, fontSize:12, color:T.text2 }}>
-          📄 O <strong>prazo de revisão por tipo de documento</strong> saiu daqui — agora é um campo
+          📄 O <strong>prazo de revisão por tipo de documento</strong> saiu daqui e agora é um campo
           só, junto do tipo, em <strong>Gestão de Documentos → ⚙️ Configuração</strong>. Antes havia
           dois campos para a mesma coisa e o do catálogo não tinha efeito nenhum.
         </div>
@@ -449,7 +449,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
       <div style={s.card}>
         <SecTitle icon="🏢" ch="Estrutura da empresa" />
         <div style={{ fontSize:11, color:T.text3, marginBottom:14 }}>
-          <strong>Quem</strong> (cargos) e <strong>onde</strong> (áreas e setores) — as duas listas que
+          <strong>Quem</strong> (cargos) e <strong>onde</strong> (áreas e setores): as duas listas que
           atravessam vários módulos: é delas que saem a exigência de treinamento e o destino das
           cópias controladas impressas.
           <br/>Listas de um módulo só ficam dentro do próprio módulo, em <strong>⚙️ Configuração</strong>:
@@ -478,7 +478,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>
             Cargos/funções dos colaboradores. É por <strong>cargo</strong> que a exigência de treinamento
             será herdada: ao vincular um documento a um cargo, todo mundo que o ocupa passa a ser exigido
-            automaticamente — inclusive quem for contratado depois. Manter lista fechada evita que o mesmo
+            automaticamente, inclusive quem for contratado depois. Manter lista fechada evita que o mesmo
             cargo apareça com grafias diferentes e quebre a matriz. Apenas cargos ativos aparecem no
             cadastro de usuários. As alterações são salvas automaticamente.
           </div>
@@ -493,7 +493,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   {[
                     aImportar.length ? `${aImportar.length} cargo(s) a criar` : "",
                     aVincular.length ? `${aVincular.length} vínculo(s) a fazer` : "",
-                  ].filter(Boolean).join(" · ") || "Nenhuma correspondência automática — ajuste o cadastro de cada usuário."}
+                  ].filter(Boolean).join(" · ") || "Nenhuma correspondência automática. Ajuste o cadastro de cada usuário."}
                 </div>
               </div>
               {(aImportar.length > 0 || aVincular.length > 0) && (
@@ -560,7 +560,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                   <button style={{ ...s.btn, fontSize:11, padding:"4px 10px", color:"#ff4f6a" }}
                     title="Excluir cargo do catálogo"
                     onClick={()=>{
-                      if (n > 0) { toast_(`"${c.nome}" tem ${n} ocupante(s) — desative em vez de excluir.`, "red"); return; }
+                      if (n > 0) { toast_(`"${c.nome}" tem ${n} ocupante(s). Desative em vez de excluir.`, "red"); return; }
                       if(window.confirm(`Excluir o cargo "${c.nome}" do catálogo?\n\nPrefira desativar se o cargo já foi usado.`)) { const next=listaCargos.filter((_,j)=>j!==i); setListaCargos(next); persistCargos(next); }
                     }}>🗑️</button>
                 </>)}
@@ -584,7 +584,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
             <br/>Não confundir com <strong>Departamentos</strong> (em Gestão de Documentos → ⚙️
             Configuração): aquele é posição no organograma e entra no código do documento; este é
             lugar físico.
-            <br/>⚠️ Um setor usado por desvios não deve ser excluído — desative. A conferência do que
+            <br/>⚠️ Um setor usado por desvios não deve ser excluído. Desative. A conferência do que
             os Desvios ainda usam fica em <strong>Desvios → ⚙️ Configuração → 🏭 Setores</strong>.
           </div>
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>

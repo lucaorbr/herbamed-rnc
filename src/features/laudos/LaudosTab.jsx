@@ -160,7 +160,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
       modeloVersao:modelo.versao||1,
     }));
     setModeloSel(String(modelo.id));
-    if (!silencioso) toast_(`Modelo "${modelo.nome}" carregado!`, "green");
+    if (!silencioso) toast_(`Modelo "${modelo.nome}" carregado.`, "green");
   };
 
   const tentarModeloDoProduto = () => {
@@ -209,7 +209,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
       await auditLog(atual ? "Atualizou Modelo de Laudo" : "Criou Modelo de Laudo", "laudo_modelos", id, modelo.nome, atual||null, { produto:modelo.produto, versao:modelo.versao, ensaios:modelo.ensaios.length });
       setModeloSel(id);
       setForm(f=>({...f,modeloId:id,modeloVersao:modelo.versao}));
-      toast_(atual ? "Modelo atualizado!" : "Modelo salvo!", "green");
+      toast_(atual ? "Modelo atualizado." : "Modelo salvo.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
     }
@@ -252,13 +252,13 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
       const reg = ipcRegs.find(r => r.op === form.op || r.produto === form.produto);
       if (reg?.resultados?.length) {
         setF("ensaios", reg.resultados.map(r=>({ label:r.label, categoria: inferirCategoria(r.label), unidade:r.unidade||"", especificacao:"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
-        toast_("Ensaios importados do IPC!", "green");
+        toast_("Ensaios importados do IPC.", "green");
       } else toast_("Nenhum registro IPC encontrado para essa OP/produto.", "red");
     } else {
       const analise = analises.find(a => a.lote === form.lote || a.op === form.op);
       if (analise?.resultados?.length) {
         setF("ensaios", analise.resultados.map(r=>({ label:r.ensaio||r.label||"", categoria: inferirCategoria(r.ensaio||r.label||""), unidade:r.unidade||"", especificacao:r.especificacao||"", resultado:r.resultado||"", conforme:r.conforme, obs:r.obs||"" })));
-        toast_("Ensaios importados do CQ!", "green");
+        toast_("Ensaios importados do CQ.", "green");
       } else toast_("Nenhuma análise CQ encontrada para esse lote/OP.", "red");
     }
   };
@@ -286,7 +286,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
     const laudo = { id, numLaudo, ...form, modeloId:form.modeloId||sel?.modeloId||"", modeloVersao:form.modeloVersao||sel?.modeloVersao||null, status, assinaturaAnalista:sel?.assinaturaAnalista||null, assinaturaRT:sel?.assinaturaRT||null, criadoPor:sel?.criadoPor||user.name, criadoEm:sel?.criadoEm||tod(), criadoTs:sel?sel.criadoTs:Date.now(), atualizadoEm:tod() };
     await saveCollection("laudos", String(id), laudo);
     await auditLog(sel ? "Editou Laudo" : "Criou Laudo", "laudos", String(id), `${numLaudo} — ${laudo.produto}`, sel || null, { numLaudo, produto: laudo.produto, status: laudo.status, cliente: laudo.clienteId });
-    toast_(sel?"Laudo atualizado!":"Laudo criado!", "green");
+    toast_(sel?"Laudo atualizado.":"Laudo criado.", "green");
     setView("lista"); setSel(null);
     setForm(novoFormLaudo());
     setModeloSel("");
@@ -303,7 +303,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
     const assSig = await createElectronicSignature({ password, contexto:`LAUDO|${laudo.numLaudo||laudo.id||""}`, papel:user.role==="rt"?"Responsavel Tecnico":"Analista de CQ" });
     await saveCollection("laudos", String(laudo.id), { ...laudo, assinaturaAnalista: assSig });
     await auditLog("Assinou Laudo (Analista)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, null, { assinante: user.name, cargo: assSig.cargo });
-    toast_("Laudo assinado!", "green");
+    toast_("Laudo assinado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -318,7 +318,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
     const assRT = await createElectronicSignature({ password, contexto:`LAUDO|${laudo.numLaudo||laudo.id||""}`, papel:"Responsavel Tecnico" });
     await saveCollection("laudos", String(laudo.id), { ...laudo, status: novoStatus, assinaturaRT: assRT });
     await auditLog("Assinou Laudo (RT)", "laudos", String(laudo.id), `${laudo.numLaudo} — ${laudo.produto}`, { status: laudo.status }, { status: novoStatus, assinante: user.name });
-    toast_("Laudo assinado como RT!", "green");
+    toast_("Laudo assinado como RT.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -344,7 +344,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
     const tipo = TIPOS.find(t=>t.id===laudo.tipo)?.label||laudo.tipo;
     const statusColor = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "#3b6d11" : laudo.status==="Reprovado" ? "#b71c1c" : "#666";
     const statusBg = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "#eaf3de" : laudo.status==="Reprovado" ? "#ffebee" : "#f5f5f5";
-    const statusTxt = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "APROVADO — Produto em conformidade com as especificações" : laudo.status==="Reprovado" ? "REPROVADO — Um ou mais ensaios fora das especificações" : "RASCUNHO — Laudo em elaboração";
+    const statusTxt = laudo.status==="Aprovado"||laudo.status==="Finalizado" ? "APROVADO: produto em conformidade com as especificações" : laudo.status==="Reprovado" ? "REPROVADO: um ou mais ensaios fora das especificações" : "RASCUNHO: laudo em elaboração";
 
     // Agrupar ensaios por categoria
     const grupos = {};
@@ -625,7 +625,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
           <G3 ch={<>
             <F lbl="Cliente" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{cliente?.nome||"—"}</div>} />
             <F lbl="Tipo" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{tipo}</div>} />
-            <F lbl="Produto" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{lSel.produto}{lSel.linha?` — ${lSel.linha}`:""}</div>} />
+            <F lbl="Produto" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{lSel.produto}{lSel.linha?` · ${lSel.linha}`:""}</div>} />
             <F lbl="Lote" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{lSel.lote||"—"}</div>} />
             <F lbl="OP" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{lSel.op||"—"}</div>} />
             <F lbl="Data" ch={<div style={{ padding:"8px 10px", background:T.surf, borderRadius:8, fontSize:13 }}>{fmt(lSel.data)}</div>} />
@@ -671,7 +671,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
             </table>
           </div>
           <div style={{ padding:"12px 16px", borderRadius:10, textAlign:"center", fontWeight:700, fontSize:14, background:statusBg[lSel.status], color:statusColor[lSel.status], border:`1px solid ${statusColor[lSel.status]}33`, marginTop:12 }}>
-            {statusIcon[lSel.status]} {lSel.status==="Aprovado"||lSel.status==="Finalizado"?"APROVADO — Produto em conformidade":lSel.status==="Reprovado"?"REPROVADO — Ensaios fora das especificações":"RASCUNHO — Em elaboração"}
+            {statusIcon[lSel.status]} {lSel.status==="Aprovado"||lSel.status==="Finalizado"?"APROVADO: produto em conformidade":lSel.status==="Reprovado"?"REPROVADO: ensaios fora das especificações":"RASCUNHO: em elaboração"}
           </div>
         </div>
         <div style={s.card}>
@@ -744,7 +744,7 @@ export function LaudosTab({ user, toast_, users, auditLog, perm = () => true }) 
             style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:8, cursor:"pointer", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", borderLeft:`3px solid ${statusColor[l.status]||T.border}` }}>
             <div style={{ fontSize:22 }}>📋</div>
             <div style={{ flex:1, minWidth:150 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{l.numLaudo} — {l.produto}</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{l.numLaudo} · {l.produto}</div>
               <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{cliente?.nome||"—"} · {tipo} · {fmt(l.data)}</div>
             </div>
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>

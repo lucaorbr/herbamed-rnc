@@ -46,7 +46,7 @@ export function CEPTab({ rncs }) {
   return (
     <div>
       <div style={{ ...s.card, marginBottom:"1rem" }}>
-        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📉 CEP — Controle Estatístico de Processo</div>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:4 }}>📉 CEP: Controle Estatístico de Processo</div>
         <div style={{ fontSize:12, color:T.text2, lineHeight:1.6 }}>
           Monitora a variação do processo ao longo do tempo. Pontos fora dos limites UCL/LCL indicam causas especiais que requerem investigação.
         </div>
@@ -63,7 +63,7 @@ export function CEPTab({ rncs }) {
       {metric !== "custom" && (
         <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
           <span style={{ fontSize:12, color: meses.length < 6 ? "#ff8c42" : T.text3 }}>
-            {meses.length} ponto(s){meses.length < 6 ? " — poucos pontos deixam os limites UCL/LCL pouco confiáveis" : ""}
+            {meses.length} ponto(s){meses.length < 6 ? ". Com poucos pontos, os limites UCL/LCL são pouco confiáveis" : ""}
           </span>
         </FiltroPeriodo>
       )}
@@ -106,10 +106,10 @@ export function CEPTab({ rncs }) {
       {/* Gráfico de controle */}
       <div style={{ ...s.card }}>
         <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>
-          Carta de Controle — {metric==="rncs_mes"?"RNCs por Mês":metric==="eficacia"?"Eficazes por Mês":"Dados Customizados"}
+          Carta de controle: {metric==="rncs_mes"?"RNCs por Mês":metric==="eficacia"?"Eficazes por Mês":"Dados Customizados"}
         </div>
         <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
-          {outOfControl>0?<span style={{ color:"#ff4f6a", fontWeight:600 }}>⚠ {outOfControl} ponto(s) fora dos limites de controle — investigar causas especiais.</span>:<span style={{ color:T.accent }}>✓ Processo sob controle estatístico.</span>}
+          {outOfControl>0?<span style={{ color:"#ff4f6a", fontWeight:600 }}>⚠ {outOfControl} ponto(s) fora dos limites de controle. Investigue as causas especiais.</span>:<span style={{ color:T.accent }}>✓ Processo sob controle estatístico.</span>}
         </div>
 
         <div style={{ overflowX:"auto" }}>
@@ -156,7 +156,7 @@ export function CEPTab({ rncs }) {
 
         {/* Legenda */}
         <div style={{ display:"flex", gap:16, marginTop:"1rem", flexWrap:"wrap" }}>
-          {[["─","#ff8c42","UCL — Limite Superior de Controle"],["─",T.accent,"X̄ — Média"],["─","#a78bfa","LCL — Limite Inferior de Controle"],["●","#ff4f6a","Fora de controle"]].map(([sym,c,l])=>(
+          {[["─","#ff8c42","UCL (limite superior de controle)"],["─",T.accent,"X̄ (média)"],["─","#a78bfa","LCL (limite inferior de controle)"],["●","#ff4f6a","Fora de controle"]].map(([sym,c,l])=>(
             <div key={l} style={{ display:"flex", alignItems:"center", gap:6, fontSize:11, color:T.text2 }}>
               <span style={{ color:c, fontWeight:700 }}>{sym}</span>{l}
             </div>

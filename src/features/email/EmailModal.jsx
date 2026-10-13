@@ -126,7 +126,7 @@ export function EmailModal({ rnc, users, evento, onClose, onSent }) {
               <div style={{ ...s.card, padding: "1rem", marginBottom: "1rem", border: `1px solid ${T.border2}` }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 6 }}>🔗 Link de resposta para fornecedor (opcional)</div>
                 <div style={{ fontSize: 11, color: T.text3, marginBottom: 10 }}>
-                  Gere um link seguro para o fornecedor preencher análise de causa, 5 Porquês e plano de ação diretamente no navegador — sem login.
+                  Gere um link seguro para o fornecedor preencher análise de causa, 5 Porquês e plano de ação direto no navegador, sem login.
                 </div>
                 {!linkForn ? (
                   <button style={{ ...s.btn, fontSize: 11, color: T.accent, borderColor: T.accent + "44" }}

@@ -354,8 +354,8 @@ export default function App() {
           // insucesso em `email_log` antes de a promessa rejeitar aqui.
           enviarEmail({
             para: [user.email],
-            assunto: `⚠️ SGQ Herbamed — ${vencendoHoje.length} prazo(s) vencendo HOJE`,
-            corpo: `Olá ${user.name},\n\nAs seguintes RNCs têm prazo de ação corretiva vencendo HOJE:\n\n${vencendoHoje.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...\n  Prazo: ${fmt(r.prazoAC)}`).join("\n\n")}\n\n${vencendoAmanha.length > 0 ? `\nVencendo AMANHÃ:\n${vencendoAmanha.map(r => `• ${r.num} — ${r.desc?.substring(0, 60)}...`).join("\n")}\n\n` : ""}Acesse o sistema para tomar as ações necessárias.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
+            assunto: `SGQ Herbamed | ${vencendoHoje.length} prazo(s) vencendo hoje`,
+            corpo: `Olá ${user.name},\n\nAs seguintes RNCs têm prazo de ação corretiva vencendo HOJE:\n\n${vencendoHoje.map(r => `• ${r.num}: ${r.desc?.substring(0, 60)}...\n  Prazo: ${fmt(r.prazoAC)}`).join("\n\n")}\n\n${vencendoAmanha.length > 0 ? `\nVencendo AMANHÃ:\n${vencendoAmanha.map(r => `• ${r.num}: ${r.desc?.substring(0, 60)}...`).join("\n")}\n\n` : ""}Os detalhes estão no SGQ.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
             evento: "alerta_prazo_rnc",
             nomes: { [user.email]: user.name },
           }).catch(e => console.warn("Alerta de prazo de RNC nao enviado:", e.message));
@@ -391,10 +391,10 @@ export default function App() {
         const criticos = meus.filter(m => m.status === "atrasado" || m.status === "vencido");
         if (!criticos.length) return;
         localStorage.setItem("hm_last_alert_treino", hoje);
-        const linha = (m) => `• ${m.doc.codigo} — ${m.doc.titulo} (Rev.${m.doc.versao})\n  ${m.status === "vencido" ? `Reciclagem vencida há ${m.dias} dia(s)` : `Sem treinamento há ${m.dias} dia(s)`}`;
+        const linha = (m) => `• ${m.doc.codigo}: ${m.doc.titulo} (Rev.${m.doc.versao})\n  ${m.status === "vencido" ? `Reciclagem vencida há ${m.dias} dia(s)` : `Sem treinamento há ${m.dias} dia(s)`}`;
         enviarEmail({
           para: [user.email],
-          assunto: `📚 SGQ Herbamed — ${criticos.length} treinamento(s) em atraso`,
+          assunto: `SGQ Herbamed | ${criticos.length} treinamento(s) em atraso`,
           corpo: `Olá ${user.name},\n\nVocê tem treinamento obrigatório pendente nos documentos abaixo:\n\n${criticos.map(linha).join("\n\n")}\n\nAcesse Gestão de Documentos → Matriz de Treinamento para regularizar.\n\nHerbamed® · Sistema de Gestão da Qualidade`,
           evento: "alerta_treinamento",
           nomes: { [user.email]: user.name },
@@ -590,44 +590,44 @@ export default function App() {
     { id: "fornecedores",icon: "🏭", label: "Fornecedores" },
     { id: "homologacoes",icon: "✅", label: "Homologações" },
     { id: "nqa",         icon: "📐", label: "NQA / AQL" },
-    { id: "cq-materiais",icon: "🧪", label: "CQ — Materiais" },
-    { id: "cq-analises", icon: "📋", label: "CQ — Análises" },
+    { id: "cq-materiais",icon: "🧪", label: "CQ · Materiais" },
+    { id: "cq-analises", icon: "📋", label: "CQ · Análises" },
     { id: "auditorias",  icon: "🔍", label: "Auditorias" },
-    { id: "ipc",          icon: "🏭", label: "IPC — Análise de Mistura" },
-    { id: "ipc-produtos",   icon: "📦", label: "IPC — Produtos" },
+    { id: "ipc",          icon: "🏭", label: "IPC · Análise de Mistura" },
+    { id: "ipc-produtos",   icon: "📦", label: "IPC · Produtos" },
     ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Administração" }] : []),
   ];
 
   const PAGE_TITLES = {
     home: "Home", lista: "Registros de Não Conformidades",
-    nova: "Nova Não Conformidade", ishikawa: "Análise de causa — RNCs aguardando",
-    "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
+    nova: "Nova Não Conformidade", ishikawa: "Análise de causa: RNCs aguardando",
+    "5w2h": "CAPA: ações corretivas e preventivas", eficacia: "Verificação de Eficácia",
     reunioes: "Reuniões de Análise Crítica de NCs",
-    fmea: "FMEA — Análise de Modo e Efeito de Falha",
+    fmea: "FMEA: Análise de Modo e Efeito de Falha",
     dashboard: "Dashboard", relatorios: "Relatórios",
-    cep: "CEP — Controle Estatístico de Processo",
+    cep: "CEP: Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
     homologacoes: "Homologação de Fornecedores e Itens",
-    nqa: "NQA / AQL — Cálculo de Amostragem ISO 2859-1",
+    nqa: "NQA / AQL: cálculo de amostragem ISO 2859-1",
     "recebimentos-areco": "Recebimentos Areco",
-    "cq-materiais": "CQ — Cadastro de Materiais",
-    "cq-analises": "CQ — Fichas de Análise",
-    "cq-dashboard": "CQ — Dashboard de Qualidade",
+    "cq-materiais": "CQ · Cadastro de Materiais",
+    "cq-analises": "CQ · Fichas de Análise",
+    "cq-dashboard": "CQ · Dashboard de Qualidade",
     desvios: "Registros de Desvios",
     "novo-desvio": "Novo Desvio",
-    "config-desvios": "Desvios — Configuração",
-    "indicadores-desvios": "Desvios — Indicadores",
-    "config-revalidacao": "Revalidações — Configuração",
+    "config-desvios": "Desvios · Configuração",
+    "indicadores-desvios": "Desvios · Indicadores",
+    "config-revalidacao": "Revalidações · Configuração",
     cq: "Controle de Qualidade",
     revalidacao: "Revalidações",
     "nova-revalidacao": "Nova Revalidação",
     auditorias: "Auditorias Internas",
     laudos: "Laudos Analíticos",
-    "gestao-docs": "Gestão de Documentos — Lista Mestra",
-    "audit-log": "Trilha de Auditoria — RNCs e Documentos",
+    "gestao-docs": "Gestão de Documentos · Lista Mestra",
+    "audit-log": "Trilha de Auditoria: RNCs e Documentos",
     clientes: "Clientes Terceiros",
-    ipc: "IPC — Análise de Mistura",
-    "ipc-produtos": "IPC — Produtos Cadastrados",
+    ipc: "IPC · Análise de Mistura",
+    "ipc-produtos": "IPC · Produtos Cadastrados",
     "producao-processos": "Controle de Processos de Produção",
     admin: "Administração",
   };
@@ -764,7 +764,7 @@ export default function App() {
                     <>
                       {notifs.map(r=>(
                         <div key={`rnc-${r.id}`} onClick={()=>{abrirRnc(r.id);setNotifOpen(false);}} style={{ padding:"10px 16px", borderBottom:`1px solid ${T.border}`, cursor:"pointer", transition:"background .15s" }}>
-                          <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num} — Prazo vencido</div>
+                          <div style={{ fontSize:12, fontWeight:600, color:T.red }}>{r.num}: prazo vencido</div>
                           <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{r.desc?.substring(0,50)}...</div>
                           <div style={{ fontSize:10, color:T.text3, marginTop:2 }}>Prazo AC: {fmt(r.prazoAC)}</div>
                         </div>
@@ -951,7 +951,7 @@ export default function App() {
         {pwModalOpen && !user?.senhaTemporaria && (
           <TrocarSenhaModal
             forced={false}
-            onSuccess={() => { setPwModalOpen(false); toast_("Senha atualizada com sucesso!", "green"); }}
+            onSuccess={() => { setPwModalOpen(false); toast_("Senha atualizada.", "green"); }}
             onClose={() => setPwModalOpen(false)}
           />
         )}

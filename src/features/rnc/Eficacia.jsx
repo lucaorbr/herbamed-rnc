@@ -14,8 +14,8 @@ import { filaEficacia, patchEficacia, travaEficacia } from "./ferramentasLogic";
 // ações pode verificar.
 
 const RESULTADOS = [
-  ["Eficaz", "accent", "Causa raiz eliminada — encerra a RNC"],
-  ["Ineficaz", "red", "NC recorreu — encerra e pede nova RNC"],
+  ["Eficaz", "accent", "Causa raiz eliminada; encerra a RNC"],
+  ["Ineficaz", "red", "A NC voltou; encerra e pede nova RNC"],
   ["Pendente verificação", "yellow", "Agenda a verificação, RNC segue aberta"],
 ];
 
@@ -100,7 +100,7 @@ Responda APENAS em JSON sem markdown:
           </div>
         )}
 
-        <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações bastaram. Ineficaz: o problema persistiu — abra nova RNC com análise complementar. Pendente: agenda a verificação sem encerrar." ch={
+        <F lbl="Resultado da verificação" tip="Eficaz: o problema não se repetiu e as ações bastaram. Ineficaz: o problema persistiu, então abra nova RNC com análise complementar. Pendente: agenda a verificação sem encerrar." ch={
           <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
             {RESULTADOS.map(([v, corKey, desc]) => {
               const cor = T[corKey];
@@ -134,7 +134,7 @@ export function FilaEficacia({ rncs, abrirRnc }) {
     { key: "desc", label: "Descrição", maxWidth: 280, nowrap: true, render: r => r.desc },
     { key: "sev", label: "Sev.", render: r => <SevB s={r.sev} /> },
     { key: "resp", label: "Responsável", render: r => r.resp || "—" },
-    { key: "situacao", label: "Situação", sortable: false, render: r => r.status === "Pendente verificação" ? `Agendada${r.eficacia?.data ? ` p/ ${fmt(r.eficacia.data)}` : ""}` : "CAPA concluída — verificar" },
+    { key: "situacao", label: "Situação", sortable: false, render: r => r.status === "Pendente verificação" ? `Agendada${r.eficacia?.data ? ` p/ ${fmt(r.eficacia.data)}` : ""}` : "CAPA concluída, falta verificar" },
     { key: "prazoEfic", label: "Prazo eficácia", render: r => {
       const v = past(r.prazoEfic);
       return <span style={{ color: v ? T.red : T.text2, fontWeight: v ? 600 : 400 }}>{v ? "⚠ " : ""}{r.prazoEfic ? fmt(r.prazoEfic) : "—"}</span>;

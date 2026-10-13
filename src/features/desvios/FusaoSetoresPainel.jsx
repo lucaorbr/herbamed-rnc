@@ -45,7 +45,7 @@ export function FusaoSetoresPainel({
   const aplicar = async () => {
     if (!decididos.length) { toast_("Escolha um destino para ao menos um setor.", "red"); return; }
     const msg = aReescrever > 0
-      ? `Aplicar ${decididos.length} decisão(ões)?\n\n${aReescrever} desvio(s) terão o setor reescrito para o nome do catálogo — a alteração fica registrada no histórico de cada um.`
+      ? `Aplicar ${decididos.length} decisão(ões)?\n\n${aReescrever} desvio(s) terão o setor reescrito para o nome do catálogo. A alteração fica registrada no histórico de cada um.`
       : `Aplicar ${decididos.length} decisão(ões)?\n\nNenhum desvio será alterado: os setores serão apenas acrescentados às Áreas e Setores.`;
     if (!window.confirm(msg)) return;
 
@@ -111,7 +111,7 @@ export function FusaoSetoresPainel({
 
     {resumo.pendentes === 0 && (
       <div style={{ background:T.accent+"15", border:`1px solid ${T.accent}44`, borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:12, color:T.text2 }}>
-        ✅ Fusão concluída — todo setor usado pelos desvios já existe nas Áreas e Setores. A lista
+        ✅ Fusão concluída. Todo setor usado pelos desvios já existe nas Áreas e Setores. A lista
         antiga não é mais lida; um setor novo do chão de fábrica agora se cadastra num lugar só.
       </div>
     )}
@@ -119,7 +119,7 @@ export function FusaoSetoresPainel({
     {areasAtivas.length === 0 && (
       <div style={{ background:"#ff4f6a18", border:"1px solid #ff4f6a44", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:12, color:T.text2 }}>
         ⚠️ Não há nenhuma <strong>área</strong> cadastrada em Admin → 🏢 Estrutura da empresa → Áreas e
-        Setores. Cadastre as áreas primeiro — sem elas não há para onde levar os setores.
+        Setores. Cadastre as áreas primeiro, senão não há para onde levar os setores.
       </div>
     )}
 
@@ -140,7 +140,7 @@ export function FusaoSetoresPainel({
                 chip("#e8a33d22", "#e8a33d", "fora do catálogo", "Não está na lista antiga, mas segue carimbado em desvios")}
 
               {vinculado
-                ? chip(T.accent+"22", T.accent, `✓ ${item.destino.areaLabel} › ${item.destino.nome}`, "Já existe na hierarquia — nada a fazer")
+                ? chip(T.accent+"22", T.accent, `✓ ${item.destino.areaLabel} › ${item.destino.nome}`, "Já existe na hierarquia, nada a fazer")
                 : (
                   <select
                     value={dec ? `${dec.acao}:${dec.acao === "criar" ? dec.areaId : dec.setorId}` : ""}
@@ -165,7 +165,7 @@ export function FusaoSetoresPainel({
 
             {dec?.acao === "mapear" && item.usos > 0 && (
               <div style={{ fontSize:10, color:"#e8a33d", marginTop:6 }}>
-                ⚠️ {item.usos} desvio{item.usos!==1?"s":""} ter{item.usos!==1?"ão":"á"} o setor reescrito — fica registrado no histórico de cada um.
+                ⚠️ {item.usos} desvio{item.usos!==1?"s":""} ter{item.usos!==1?"ão":"á"} o setor reescrito, com registro no histórico de cada um.
               </div>
             )}
           </div>

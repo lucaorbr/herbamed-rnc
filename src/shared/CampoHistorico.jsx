@@ -47,7 +47,7 @@ export function CampoHistoricoEdicao({
       {temSalvo && (
         <div style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
           <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
-            🔒 Já registrado — não pode ser alterado
+            🔒 Já registrado, não pode ser alterado
           </div>
           <CampoHistoricoLeitura valor={valorSalvo} compacto />
         </div>

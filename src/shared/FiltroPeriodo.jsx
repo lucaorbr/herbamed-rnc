@@ -96,7 +96,7 @@ export function FiltroPeriodo({ sel, onChange, periodo, presets = PRESETS_PAINEL
 }
 
 /** Aviso padrão para bloco que mostra a situação de HOJE e não obedece ao filtro. */
-export function SituacaoAtual({ children = "Situação atual — independe do período" }) {
+export function SituacaoAtual({ children = "Situação atual, sem depender do período" }) {
   const T = useTheme();
   return <span style={{ fontSize: 10, color: T.text3, fontStyle: "italic" }}>{children}</span>;
 }

@@ -119,7 +119,7 @@ export function HomeTab({ rncs, user, setTab }) {
               {abertas > 0
                 ? <>Você tem <span style={{ color:"#ff4f6a", fontWeight:700 }}>{abertas} RNC{abertas > 1 ? "s" : ""} aberta{abertas > 1 ? "s" : ""}</span> aguardando ação.</>
                 : vencidas > 0
-                ? <>⚠️ <span style={{ color:T.yellow, fontWeight:700 }}>{vencidas} prazo{vencidas > 1 ? "s" : ""} vencido{vencidas > 1 ? "s" : ""}</span> — ação urgente necessária.</>
+                ? <>⚠️ <span style={{ color:T.yellow, fontWeight:700 }}>{vencidas} prazo{vencidas > 1 ? "s" : ""} vencido{vencidas > 1 ? "s" : ""}</span>. Precisa de ação urgente.</>
                 : <span style={{ color:T.accent, fontWeight:500 }}>✓ Tudo em dia! Nenhuma pendência crítica.</span>
               }
             </div>
@@ -229,9 +229,9 @@ export function HomeTab({ rncs, user, setTab }) {
             {[
               { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
               { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
-              { l:"Taxa de eficácia",ok:taxaEf===null||taxaEf>=70, val:taxaEf===null?"— sem RNC encerrada":`${taxaEf}%${taxaEf>=70?" ✓":""}`},
+              { l:"Taxa de eficácia",ok:taxaEf===null||taxaEf>=70, val:taxaEf===null?"sem RNC encerrada":`${taxaEf}%${taxaEf>=70?" ✓":""}`},
               { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0, val:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length} sem responsável` },
-              { l:"IPC — Liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
+              { l:"IPC: liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
               { l:"Laudos aguardando RT", ok:laudosPendentes===0, val:laudosPendentes===0?"✓ Todos assinados":`${laudosPendentes} aguardando assinatura`, link:"laudos" },
             ].map(({ l, ok, val, link }) => (
               <div key={l} onClick={link&&!ok?()=>setTab(link):undefined} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${T.border}`, cursor:link&&!ok?"pointer":"default" }}>
@@ -426,16 +426,16 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const handleAIApply = (result) => {
     if (result.type === "ishikawa") {
       setIshikawa(p => ({ ...p, efeito: result.data.efeito || p.efeito, causes: { mao: result.data.mao || [], maquina: result.data.maquina || [], metodo: result.data.metodo || [], material: result.data.material || [], medicao: result.data.medicao || [], meioamb: result.data.meioamb || [] } }));
-      toast_("Causas do Ishikawa aplicadas!", "green");
+      toast_("Causas do Ishikawa aplicadas.", "green");
     } else if (result.type === "5porques") {
       setIshikawa(p => ({ ...p, whys: result.data.porques || [], root: result.data.raiz || "", whyCausa: result.data.causa || "" }));
-      toast_("5 Porquês aplicados!", "green");
+      toast_("5 Porquês aplicados.", "green");
     } else if (result.type === "5w2h") {
       setW2h(result.data.acoes || []);
-      toast_("Plano 5W2H aplicado!", "green");
+      toast_("Plano CAPA aplicado.", "green");
     } else if (result.type === "eficacia") {
       set("prazoEfic", "");
-      toast_("Critério de eficácia sugerido — copie para o campo!", "green");
+      toast_("Critério de eficácia sugerido. Copie para o campo.", "green");
     }
   };
 
@@ -520,7 +520,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
           <F lbl="Setor" tip="Setor onde a não conformidade foi identificada. Ex: Controle de Qualidade, Produção, Logística." ch={<Inp value={f.setor} onChange={e => set("setor", e.target.value)} />} />
           <F lbl="Detectado por" tip="Nome completo do colaborador que identificou a não conformidade." ch={<Inp value={f.detector} onChange={e => set("detector", e.target.value)} />} />
         </>} />
-        <G2 ch={<><F lbl="Produto / Material" tip="Nome do produto ou matéria-prima envolvida. Ex: Calcivitam D3 Cápsula 60un ou Celulose Microcristalina." ch={<Inp placeholder="Ex: Nome do produto — Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
+        <G2 ch={<><F lbl="Produto / Material" tip="Nome do produto ou matéria-prima envolvida. Ex: Calcivitam D3 Cápsula 60un ou Celulose Microcristalina." ch={<Inp placeholder="Ex: Nome do produto, Lote XXXX" value={f.produto} onChange={e => set("produto", e.target.value)} />} />
           <F lbl="Fornecedor" tip="Fornecedor relacionado à NC. Preencha se a origem for matéria-prima ou material de embalagem de terceiros." ch={
             <div style={{ position:"relative" }}>
               <div style={{ display:"flex", gap:6 }}>
@@ -581,8 +581,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
           <F lbl="Planejamento do prazo" ch={<select value={modoPrazo} onChange={e=>set("modoPrazo",e.target.value)} style={{...s.inp,width:"100%"}}><option value="definicao">Prazo em definicao</option><option value="definido">Prazo definido</option></select>} />
           {modoPrazo==="definicao" && <><F lbl="Justificativa" ch={<TA rows={2} value={f.justificativaPrazo||""} onChange={e=>set("justificativaPrazo",e.target.value)} />} /><F lbl="Proxima reavaliacao" ch={<Inp type="date" value={f.proximaReavaliacao||""} onChange={e=>set("proximaReavaliacao",e.target.value)} />} /></>}
         </div>
-        <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
-        <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
+        <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo da análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo da ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
+        <F lbl="Prazo da verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
       )}
 
@@ -594,7 +594,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       {assinaturaModal && (
         <AssinaturaModal
           user={user}
-          titulo="Nova RNC — assinatura do elaborador"
+          titulo="Nova RNC: assinatura do elaborador"
           contexto={`RNC|${draftId}`}
           papel="Elaborador"
           onClose={() => setAssinaturaModal(false)}
@@ -690,7 +690,7 @@ export function DashTab({ rncs }) {
         ? <FiltroPeriodo sel={selPeriodo} onChange={setSelPeriodo} periodo={periodo}>
             <span style={{ fontSize:12, color:T.text3 }}>{tot} RNC(s) abertas no período</span>
           </FiltroPeriodo>
-        : <div style={{ marginBottom:12 }}><SituacaoAtual>Situação atual de todas as RNCs — esta visão independe do período</SituacaoAtual></div>}
+        : <div style={{ marginBottom:12 }}><SituacaoAtual>Situação atual de todas as RNCs. Esta visão não depende do período</SituacaoAtual></div>}
 
       {/* ── KPIs ── */}
       {dashTab==="kpis"&&(
@@ -699,7 +699,7 @@ export function DashTab({ rncs }) {
           <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:"1rem" }}>
             {[
               {l:"Taxa de Eficácia",n:taxaEf===null?"—":`${taxaEf}%`,c:taxaEf===null?T.text3:taxaEf>=70?T.accent:"#ff8c42",sub:`${ef} eficaz(es) de ${encerradas} encerrada(s)`,icon:"✅",trend:taxaEf===null?"Sem encerradas":taxaEf>=70?"↑ Bom":"↓ Atenção"},
-              {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Hoje — independe do período",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
+              {l:"RNCs Abertas",n:ab,c:ab>0?"#ff4f6a":T.accent,sub:"Hoje, sem depender do período",icon:"📋",trend:ab===0?"✓ Limpo":"⚠ Pendente"},
               {l:"Tempo Médio Resolução",n:tempoMedio?`${tempoMedio}d`:"N/D",c:T.blue,sub:"Da abertura à eficácia",icon:"⏱️",trend:tempoMedio&&tempoMedio<=30?"↑ Eficiente":tempoMedio?"↓ Avaliar":"—"},
               {l:"Causa Raiz Reincidente",n:reincidentes,c:reincidentes>0?"#ff8c42":T.accent,sub:"Mesma causa em +1 RNC",icon:"🔄",trend:reincidentes===0?"✓ Sem reincidência":"⚠ Atenção"},
             ].map(({l,n,c,sub,icon,trend})=>(
@@ -770,7 +770,7 @@ export function DashTab({ rncs }) {
       {dashTab==="pareto"&&(
         <div>
           <div style={{ ...s.card, marginBottom:14 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Gráfico de Pareto — Tipos de Não Conformidade</div>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Gráfico de Pareto: tipos de não conformidade</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
               Identifica quais tipos de NC representam 80% dos problemas. Foque nos primeiros itens da lista.
             </div>
@@ -802,7 +802,7 @@ export function DashTab({ rncs }) {
 
           {/* Pareto por Fornecedor */}
           <div style={s.card}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Pareto — Fornecedores com maior incidência</div>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Pareto: fornecedores com maior incidência</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
               Fornecedores que mais geram não conformidades.
             </div>
@@ -828,7 +828,7 @@ export function DashTab({ rncs }) {
       {dashTab==="gut"&&(
         <div>
           <div style={{ ...s.card, marginBottom:14 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Matriz GUT — Priorização de RNCs</div>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Matriz GUT: priorização de RNCs</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
               Classifica automaticamente as RNCs abertas por Gravidade × Urgência × Tendência. Maior pontuação = maior prioridade.
             </div>
@@ -885,7 +885,7 @@ export function DashTab({ rncs }) {
       {dashTab==="pdca"&&(
         <div>
           <div style={{ ...s.card, marginBottom:14 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Ciclo PDCA — Visão do Ciclo de Melhoria</div>
+            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Ciclo PDCA: visão do ciclo de melhoria</div>
             <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
               Mostra em qual fase do ciclo PDCA cada RNC se encontra atualmente.
             </div>
@@ -893,16 +893,16 @@ export function DashTab({ rncs }) {
             {/* PDCA wheel visual */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:"1.5rem" }}>
               {[
-                {l:"P — Plan",sub:"Planejar",desc:"Abertas sem análise de causa",color:"#4fc3f7",rncs_:pdcaFases.P,icon:"📋"},
-                {l:"D — Do",sub:"Executar",desc:"Causa identificada, aguardando 5W2H",color:"#ffd166",rncs_:pdcaFases.D,icon:"⚙️"},
-                {l:"C — Check",sub:"Verificar",desc:"Plano executado, em verificação",color:"#ff8c42",rncs_:pdcaFases.C,icon:"🔍"},
-                {l:"A — Act",sub:"Agir",desc:"Ação eficaz — padronizar",color:"#2ab84a",rncs_:pdcaFases.A,icon:"✅"},
+                {l:"P (Plan)",sub:"Planejar",desc:"Abertas sem análise de causa",color:"#4fc3f7",rncs_:pdcaFases.P,icon:"📋"},
+                {l:"D (Do)",sub:"Executar",desc:"Causa identificada, aguardando o plano CAPA",color:"#ffd166",rncs_:pdcaFases.D,icon:"⚙️"},
+                {l:"C (Check)",sub:"Verificar",desc:"Plano executado, em verificação",color:"#ff8c42",rncs_:pdcaFases.C,icon:"🔍"},
+                {l:"A (Act)",sub:"Agir",desc:"Ação eficaz, falta padronizar",color:"#2ab84a",rncs_:pdcaFases.A,icon:"✅"},
               ].map(({l,sub,desc,color,rncs_,icon})=>(
                 <div key={l} style={{ background:T.surf, border:`1px solid ${color}33`, borderRadius:12, padding:"1rem", position:"relative", overflow:"hidden" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                     <div>
                       <div style={{ fontSize:16, fontWeight:800, color, lineHeight:1 }}>{l}</div>
-                      <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{sub} — {desc}</div>
+                      <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{sub}: {desc}</div>
                     </div>
                     <div style={{ textAlign:"right" }}>
                       <div style={{ fontSize:28, fontWeight:800, color }}>{rncs_.length}</div>
@@ -940,7 +940,7 @@ export function DashTab({ rncs }) {
             </div>
 
             <div style={{ marginTop:"1rem", padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
-              💡 <b style={{ color:T.accent }}>Ciclo PDCA:</b> RNCs sem análise de causa estão em P. Após Ishikawa/5 Porquês vão para D. Após 5W2H executado vão para C. Quando eficaz, chegam em A — padronize a solução.
+              💡 <b style={{ color:T.accent }}>Ciclo PDCA:</b> RNCs sem análise de causa estão em P. Após Ishikawa/5 Porquês vão para D. Com o plano CAPA executado vão para C. Quando eficazes, chegam em A, e aí é hora de padronizar a solução.
             </div>
           </div>
         </div>
@@ -1022,7 +1022,7 @@ Gere 2 parágrafos: 1) análise dos números, 2) recomendações práticas. Seja
   const enviarEmail = async () => {
     if(!emailDest){alert("Informe o e-mail.");return;}
     setEnviando(true);
-    const corpo = `SGQ HERBAMED® — RELATÓRIO DE NÃO CONFORMIDADES
+    const corpo = `SGQ HERBAMED® · RELATÓRIO DE NÃO CONFORMIDADES
 ${"═".repeat(50)}
 Período: ${fmt(dataInicio)} a ${fmt(dataFim)}
 Filtro: ${respFiltro||"Todos os responsáveis"}
@@ -1055,7 +1055,7 @@ TIPOS MAIS FREQUENTES
 ${"─".repeat(50)}
 ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`${t}: ${n}`).join("\n")}
 
-${aiResumo?`${"─".repeat(50)}\nANÁLISE EXECUTIVA — IA\n${"─".repeat(50)}\n${aiResumo}\n`:""}
+${aiResumo?`${"─".repeat(50)}\nANÁLISE EXECUTIVA (IA)\n${"─".repeat(50)}\n${aiResumo}\n`:""}
 ${"─".repeat(50)}
 DETALHAMENTO DAS RNCs
 ${"─".repeat(50)}
@@ -1069,10 +1069,10 @@ Herbamed® · Sistema de Gestão da Qualidade`;
     try {
       await enviarEmail({
         para:[emailDest],
-        assunto:`📊 Relatório SGQ — ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
+        assunto:`Relatório SGQ | ${fmt(dataInicio)} a ${fmt(dataFim)}${respFiltro?` · ${respFiltro}`:""}`,
         corpo, evento:"relatorio_rnc",
       });
-      toast_("Relatório enviado!","green");
+      toast_("Relatório enviado.","green");
     } catch(e) { toast_("Erro ao enviar: "+e.message,"red"); }
     setEnviando(false);
   };
@@ -1158,7 +1158,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ width:32, height:32, borderRadius:8, background:`linear-gradient(135deg,${T.accent},${T.accent2})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🤖</div>
             <div>
-              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Análise Executiva — Claude IA</div>
+              <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Análise executiva (Claude IA)</div>
               <div style={{ fontSize:11, color:T.text2 }}>Resumo inteligente baseado nos dados do período</div>
             </div>
           </div>
@@ -1225,7 +1225,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       {/* SEÇÃO: POR RESPONSÁVEL */}
       {activeSection==="responsavel"&&(
         <div style={s.card}>
-          <SecTitle icon="👤" ch={`Desempenho por responsável — ${Object.keys(porResp).length} pessoa(s)`} />
+          <SecTitle icon="👤" ch={`Desempenho por responsável (${Object.keys(porResp).length} pessoa(s))`} />
           {Object.keys(porResp).length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC no período.</div>:
           Object.entries(porResp).sort((a,b)=>b[1].length-a[1].length).map(([resp,list])=>{
             const ab=list.filter(x=>x.status==="Aberta").length;
@@ -1317,7 +1317,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       {/* SEÇÃO: DETALHAMENTO */}
       {activeSection==="detalhe"&&(
         <div style={s.card}>
-          <SecTitle icon="📋" ch={`Detalhamento completo — ${filtered.length} RNC(s)`} />
+          <SecTitle icon="📋" ch={`Detalhamento completo (${filtered.length} RNC(s))`} />
           {filtered.length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhuma RNC no período.</div>:
           filtered.map(r=>(
             <div key={r.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderLeft:`3px solid ${SMETA[r.status]?.dot||T.accent}`, borderRadius:10, padding:"12px 16px", marginBottom:8 }}>

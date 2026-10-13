@@ -16,7 +16,7 @@ export function IPCTab({ user, toast_ }) {
   const AREAS = [
     {
       id: "po-encapsulamento",
-      label: "Mistura Pó — Encapsulamento",
+      label: "Mistura Pó · Encapsulamento",
       icon: "🟤",
       salas: ["Mistura 1", "Mistura 2"],
       ensaios: [
@@ -26,7 +26,7 @@ export function IPCTab({ user, toast_ }) {
     },
     {
       id: "po-solavel",
-      label: "Mistura Pó — Solúvel",
+      label: "Mistura Pó · Solúvel",
       icon: "🟡",
       salas: ["Mistura 1", "Mistura 2"],
       ensaios: [
@@ -87,7 +87,7 @@ export function IPCTab({ user, toast_ }) {
     const id = Date.now();
     await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
     setFormProd({ nome: "", linha: "", forma: "" });
-    toast_("Produto cadastrado!", "green");
+    toast_("Produto cadastrado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);
@@ -140,7 +140,7 @@ export function IPCTab({ user, toast_ }) {
       atualizadoEm: tod(),
     };
     await saveCollection("ipc_registros", String(reg.id), reg);
-    toast_(sel ? "Registro atualizado!" : "Registro salvo!", "green");
+    toast_(sel ? "Registro atualizado." : "Registro salvo.", "green");
     setSel(null);
     setForm({ ...FORM_VAZIO, data: tod() });
     setResultados([]);
@@ -229,7 +229,7 @@ export function IPCTab({ user, toast_ }) {
             }}>
               <option value="">Selecione o produto...</option>
               {[...new Set(produtos.map(p=>p.linha))].map(linha => (
-                <optgroup key={linha} label={`— ${linha} —`}>
+                <optgroup key={linha} label={linha}>
                   {produtos.filter(p=>p.linha===linha).map(p => (
                     <option key={p.id} value={String(p.id)}>{p.nome}{p.forma?` (${p.forma})`:""}</option>
                   ))}
@@ -299,7 +299,7 @@ export function IPCTab({ user, toast_ }) {
           {resultados.some(r => r.resultado !== "") && (
             <div style={{ padding:"12px 16px", borderRadius:10, textAlign:"center", fontWeight:700, fontSize:15,
               background: statusBg[calcStatus()], color: statusColor[calcStatus()], border:`1px solid ${statusColor[calcStatus()]}33`, marginTop:8 }}>
-              {statusIcon[calcStatus()]} {calcStatus() === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : calcStatus() === "Reprovado" ? "REPROVADO — NÃO LIBERAR" : "ANÁLISE PENDENTE"}
+              {statusIcon[calcStatus()]} {calcStatus() === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : calcStatus() === "Reprovado" ? "REPROVADO: NÃO LIBERAR" : "ANÁLISE PENDENTE"}
             </div>
           )}
         </div>
@@ -364,7 +364,7 @@ export function IPCTab({ user, toast_ }) {
           </table>
           <div style={{ padding:"12px 16px", borderRadius:10, textAlign:"center", fontWeight:700, fontSize:15,
             background:statusBg[sel.status], color:statusColor[sel.status], border:`1px solid ${statusColor[sel.status]}33`, marginTop:12 }}>
-            {statusIcon[sel.status]} {sel.status === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : sel.status === "Reprovado" ? "REPROVADO — NÃO LIBERAR" : "ANÁLISE PENDENTE"}
+            {statusIcon[sel.status]} {sel.status === "Liberado" ? "LIBERADO PARA PRÓXIMA ETAPA" : sel.status === "Reprovado" ? "REPROVADO: NÃO LIBERAR" : "ANÁLISE PENDENTE"}
           </div>
         </div>
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
@@ -503,7 +503,7 @@ export function IPCProdutosTab({ user, toast_ }) {
     const id = Date.now();
     await saveCollection("ipc_produtos", String(id), { id, ...formProd, criadoEm: tod() });
     setFormProd({ nome: "", linha: "", forma: "" });
-    toast_("Produto cadastrado!", "green");
+    toast_("Produto cadastrado.", "green");
     } catch(e) {
       toast_(fbErr(e), "red");
       console.error(e);

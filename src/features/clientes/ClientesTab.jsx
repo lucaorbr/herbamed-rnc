@@ -27,7 +27,7 @@ export function ClientesTab({ user, toast_ }) {
     if (!form.nome) { alert("Informe o nome do cliente."); return; }
     const id = sel ? sel.id : Date.now();
     await saveCollection("clientes_terceiros", String(id), { id, ...form, atualizadoEm: tod() });
-    toast_(sel ? "Cliente atualizado!" : "Cliente cadastrado!", "green");
+    toast_(sel ? "Cliente atualizado." : "Cliente cadastrado.", "green");
     setForm({ nome:"", cnpj:"", contato:"", email:"", tel:"", cep:"", endereco:"", obs:"" });
     setSel(null);
     } catch(e) {

@@ -257,7 +257,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div style="font-size:13px;font-weight:bold;">${DL[rnc.disposicao.decisao]||rnc.disposicao.decisao}</div>
       ${rnc.disposicao.justificativa?`<div style="margin-top:4px;">${rnc.disposicao.justificativa}</div>`:""}
       <div style="margin-top:6px;font-size:11px;color:#666;">Por: <strong>${rnc.disposicao.por||"—"}</strong> &nbsp;|&nbsp; Data: <strong>${fmt(rnc.disposicao.data)}</strong></div>
-      ${rnc.disposicao.assinaturaRT?`<div style="margin-top:4px;font-size:11px;color:#2ab84a;">✔ Liberação assinada pelo RT: ${rnc.disposicao.assinaturaRT.nome} — ${rnc.disposicao.assinaturaRT.timestamp?new Date(rnc.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.disposicao.assinaturaRT.dataHora}</div>`:""}
+      ${rnc.disposicao.assinaturaRT?`<div style="margin-top:4px;font-size:11px;color:#2ab84a;">✔ Liberação assinada pelo RT: ${rnc.disposicao.assinaturaRT.nome}, ${rnc.disposicao.assinaturaRT.timestamp?new Date(rnc.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.disposicao.assinaturaRT.dataHora}</div>`:""}
     </div>
   </div>`;})():""}
 
@@ -285,7 +285,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <!-- ISHIKAWA / 5 PORQUÊS -->
   ${rnc.ishikawa?.root?`
   <div class="section">
-    <div class="section-title">🐟 Análise de Causa — Ishikawa / 5 Porquês</div>
+    <div class="section-title">🐟 Análise de causa: Ishikawa / 5 Porquês</div>
     ${rnc.ishikawa.whys?.filter(w=>w).length>0?`
     <div style="margin-bottom:10px;">
       ${rnc.ishikawa.whys.filter(w=>w).map((w,i)=>`
@@ -373,10 +373,10 @@ export function exportRNCPDF(rnc, assinatura = null) {
     </div>
   </div>` : rnc.sev === "Crítica" ? `
   <div style="margin-top:12px;padding:10px 14px;border:1px solid #ffd16633;border-radius:8px;background:#fffbf0;font-size:11px;color:#b8860b;">
-    ⏳ RNC Crítica — Aprovação do Responsável Técnico pendente
+    ⏳ RNC crítica: aprovação do Responsável Técnico pendente
   </div>` : ""}
 `;
-  openPDFWindow(`RNC ${rnc.num} — Herbamed®`, buildPDFShell({
+  openPDFWindow(`RNC ${rnc.num} · Herbamed®`, buildPDFShell({
     titulo: "Registro de Não Conformidade",
     numero: rnc.num,
     meta: `Aberta em ${fmt(rnc.data)} por ${rnc.detector||"—"} · ${rnc.sev}`,
@@ -389,13 +389,13 @@ export function exportFMEAPDF(items) {
   const rpnColor = (r) => r>=100?"#cc2244":r>=50?"#8a4000":r>=25?"#8a6000":"#1a7a3c";
   const rpnLabel = (r) => r>=100?"CRÍTICO":r>=50?"ALTO":r>=25?"MÉDIO":"BAIXO";
   const sorted = [...items].sort((a,b)=>(b.S*b.O*b.D)-(a.S*a.O*a.D));
-  openPDFWindow("FMEA — Herbamed®", buildPDFShell({
-    titulo: "FMEA — Análise de Modo e Efeito de Falha",
+  openPDFWindow("FMEA · Herbamed®", buildPDFShell({
+    titulo: "FMEA: Análise de Modo e Efeito de Falha",
     meta: `Gerado em ${new Date().toLocaleDateString("pt-BR")}`,
     rodapeEsq: "Herbamed® · SGQ · FMEA",
     corpo: `
   <div class="section">
-    <div class="stitle">Análise de Riscos — ${sorted.length} item(s)</div>
+    <div class="stitle">Análise de riscos (${sorted.length} item(s))</div>
     <table>
       <thead><tr><th>Processo</th><th>Modo de Falha</th><th>Efeito</th><th>Causa</th><th>S</th><th>O</th><th>D</th><th>RPN</th><th>Prioridade</th><th>Ação</th><th>Resp.</th><th>Status</th></tr></thead>
       <tbody>
@@ -427,7 +427,7 @@ export function exportFMEAPDF(items) {
 
 export function exportAuditoriaPDF(a) {
   const statusColor = { "Não conformidade":"#cc2244", "Observação":"#8a6000", "Oportunidade de melhoria":"#1a7a3c", "Ponto positivo":"#1a7a3c" };
-  openPDFWindow(`${a.titulo} — Herbamed®`, buildPDFShell({
+  openPDFWindow(`${a.titulo} · Herbamed®`, buildPDFShell({
     titulo: a.titulo,
     meta: `Auditoria ${a.tipo} · Planejado em ${fmt(a.dataPlano)}${a.dataPrev?` · Execução ${fmt(a.dataPrev)}`:""}`,
     rodapeEsq: "Herbamed® · SGQ · Auditoria",
@@ -479,7 +479,7 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
   const ausentes = (reuniao.participantes || []).filter(p => !p.presente);
   const pauta = reuniao.pauta || [];
 
-  openPDFWindow(`Ata ${reuniao.num} — Herbamed®`, buildPDFShell({
+  openPDFWindow(`Ata ${reuniao.num} · Herbamed®`, buildPDFShell({
     titulo: "Ata de Reunião de Análise Crítica",
     numero: reuniao.num,
     meta: `Realizada em ${fmt(reuniao.realizadaEm || reuniao.data)} · ${pauta.length} item(ns) de pauta`,
@@ -518,7 +518,7 @@ export function exportAtaReuniaoPDF(reuniao, { motivoLabel = (m) => m, deliberac
     ${pauta.length === 0 ? `<div class="box-orange">Nenhum item levado à pauta.</div>` : pauta.map((it, i) => `
       <div class="w2h-item" style="border:1px solid #e8e8e8;border-radius:7px;padding:10px 12px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div style="font-size:12px;font-weight:700;color:#1a4a2e;">Item ${i + 1} — RNC ${it.rncNum || "—"}${it.sev ? ` · ${it.sev}` : ""}</div>
+          <div style="font-size:12px;font-weight:700;color:#1a4a2e;">Item ${i + 1}: RNC ${it.rncNum || "—"}${it.sev ? ` · ${it.sev}` : ""}</div>
           <div style="font-size:10px;font-weight:700;color:${it.itemStatus === "deliberado" ? "#1a7a3c" : "#8a6000"};">${it.itemStatus === "deliberado" ? "Deliberado" : "Sem deliberação"}</div>
         </div>
         <div style="font-size:10px;color:#777;margin-bottom:6px;">
@@ -620,7 +620,7 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
     ${dispensados.length ? `
     <div style="margin-top:12px;">
       <div style="font-size:9.5px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
-        Não convocados (${dispensados.length}) — não assinam esta lista
+        Não convocados (${dispensados.length}), não assinam esta lista
       </div>
       <div style="font-size:10.5px;color:#555;">
         ${dispensados.map(p => `${p.userName || "—"}${p.motivoDispensa ? ` (${p.motivoDispensa})` : ""}`).join(" · ")}
@@ -631,7 +631,7 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
     <div class="stitle">Participantes (${conta.presente} presente(s) · ${conta.ausente} ausente(s) · ${conta.dispensado} não aplicável)</div>
     ${tabela}
     <div style="font-size:9.5px;color:#777;margin-top:6px;">
-      <strong>Não aplicável</strong>: colaborador não convocado para esta sessão, pelo motivo indicado — não caracteriza ausência.
+      <strong>Não aplicável</strong>: colaborador não convocado para esta sessão, pelo motivo indicado. Não caracteriza ausência.
     </div>
   </div>`;
 
@@ -642,7 +642,7 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
       Declaro que ministrei o treinamento descrito nesta lista aos participantes que nela assinaram.
     </div>
     <div class="sign-row">
-      <div class="sign-box"><div class="sign-line">${sessao.instrutor?.nome || ""}<div style="font-size:9.5px;color:#777;">Instrutor — ${sessao.instrutor?.cargo || "cargo não informado"}</div></div></div>
+      <div class="sign-box"><div class="sign-line">${sessao.instrutor?.nome || ""}<div style="font-size:9.5px;color:#777;">Instrutor · ${sessao.instrutor?.cargo || "cargo não informado"}</div></div></div>
       <div class="sign-box"><div class="sign-line">Data</div></div>
     </div>
     <div class="box-orange" style="margin-top:14px;font-size:10.5px;">
@@ -670,7 +670,7 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
     </div>
   </div>`;
 
-  const tituloPDF = coleta ? "Lista de Presença — Coleta de Assinaturas" : "Lista de Presença — Treinamento";
+  const tituloPDF = coleta ? "Lista de Presença: coleta de assinaturas" : "Lista de Presença do Treinamento";
   const metaPDF = coleta
     ? `${fmt(sessao.data)} · ${paraAssinar.length} convocado(s)`
     : `${fmt(sessao.data)} · ${conta.presente} presente(s) de ${conta.total}`;
@@ -708,5 +708,5 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
 }
 
 export function exportListaPresencaPDF(sessao, doc = null, opcoes = {}) {
-  openPDFWindow(`Lista de Presença ${sessao.num} — Herbamed®`, buildListaPresencaHTML(sessao, doc, opcoes));
+  openPDFWindow(`Lista de Presença ${sessao.num} · Herbamed®`, buildListaPresencaHTML(sessao, doc, opcoes));
 }

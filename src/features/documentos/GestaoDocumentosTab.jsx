@@ -1623,7 +1623,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
       <div onClick={fechar} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
         <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,maxWidth:560,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
           <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>❌ Recusar documento ({papelLabel})</div>
-          <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{rejeicaoModal.doc?.codigo} Rev.{rejeicaoModal.doc?.versao} — {rejeicaoModal.doc?.titulo}</div>
+          <div style={{fontSize:12,color:T.text2,marginBottom:4}}>{rejeicaoModal.doc?.codigo} Rev.{rejeicaoModal.doc?.versao} · {rejeicaoModal.doc?.titulo}</div>
           <div style={{fontSize:11,color:T.text3,marginBottom:16}}>Aponte os erros/mudanças por seção. O documento volta para <strong>Rascunho</strong>, as assinaturas desta revisão são invalidadas e o elaborador corrige antes de reiniciar a rota.</div>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
             {apontamentosForm.map((a,i)=>(
@@ -1749,7 +1749,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               ))}
             </div>
           );
-          const avisoRecusas = recusas.length ? ` Já foi recusado ${recusas.length===1?"1 vez":`${recusas.length} vezes`} nesta revisão — confira os apontamentos abaixo.` : "";
+          const avisoRecusas = recusas.length ? ` Já foi recusado ${recusas.length===1?"1 vez":`${recusas.length} vezes`} nesta revisão. Confira os apontamentos abaixo.` : "";
           const conteudo = (it) => {
             switch (it.id) {
               case "assinar_aprovador": return { icone:"✅", titulo:"É a sua vez: aprovar este documento",
@@ -1760,7 +1760,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 sub:(semPdf?"Anexe o PDF antes de assinar.":"Leia o PDF e assine como Revisor ou recuse com apontamentos.")+avisoRecusas,
                 botoes:<>{bt("🔎 Assinar como Revisor",()=>setAssinarGD({doc:d,papel:"revisor"}),{cor:T.blue||"#4fc3f7",desab:semPdf,dica:semPdf?"Anexe o PDF antes de assinar":undefined})}
                   {bt("❌ Recusar",()=>{ setApontamentosForm([{secao:"Geral",descricao:""}]); setRejeicaoModal({doc:d,papel:"revisor",show:true}); },{perigo:true})}</> };
-              case "corrigir_recusa": return { icone:"❌", titulo:`Documento recusado — ${d.apontamentos.length} apontamento(s) a corrigir`,
+              case "corrigir_recusa": return { icone:"❌", titulo:`Documento recusado: ${d.apontamentos.length} apontamento(s) a corrigir`,
                 sub:"Corrija o conteúdo, anexe o PDF revisado e reassine como Elaborador para reiniciar a rota.",
                 detalhe: listaApontamentos(d.apontamentos, "#ff4f6a"),
                 botoes: !isViewer ? bt("✏️ Editar",()=>abrirEdicao(d)) : null };
@@ -1771,9 +1771,9 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               }
               case "definir_rota": return { icone:"🔀", titulo:"Documento sem Revisor e Aprovador designados", sub:"Um administrador precisa definir antes da assinatura.",
                 botoes: bt("Definir designados",()=>setAbaDoc("assinaturas")) };
-              case "ler": return { icone:"📨", titulo:`Este documento foi distribuído para você — Rev.${d.versao}`,
+              case "ler": return { icone:"📨", titulo:`Este documento foi distribuído para você (Rev.${d.versao})`,
                 sub:(aberto ? `Documento aberto em ${new Date(aberto).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}. Depois de ler, confirme.` : "Passo 1: abra o documento e leia. Passo 2: confirme a leitura.")+(leitura.dias>0?` Pendente há ${leitura.dias} dia(s).`:""),
-                botoes: semPdf ? <span style={{fontSize:11,color:T.text3}}>Documento sem arquivo anexado — avise a Qualidade.</span> : <>
+                botoes: semPdf ? <span style={{fontSize:11,color:T.text3}}>Documento sem arquivo anexado. Avise a Qualidade.</span> : <>
                   <button style={{...(aberto ? s.btn : s.btnA),fontSize:11}} onClick={()=>abrirParaLeitura(d)}>📄 {aberto ? "Abrir de novo" : "Abrir documento"}</button>
                   {bt("✅ Li e entendi",()=>confirmarLeituraDistribuicao(d),{desab:!aberto,dica:aberto?undefined:"Abra o documento primeiro"})}</> };
               case "distribuir": return { icone:"📨", titulo:"Documento aprovado e ainda sem distribuição", sub:"Defina quem deve ler.",
@@ -1785,10 +1785,10 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 sub:"Se o documento continua válido, registre a revisão sem alterações; senão, abra uma nova revisão.",
                 botoes:<>{bt("✓ Revisar (sem alterações)",()=>revisarSemAlteracoes(d))}<button style={{...s.btn,fontSize:11}} onClick={()=>solicitarRevisao(d)}>🔄 Nova Revisão</button></> };
               case "recusas_anteriores": return { icone:"↩️",
-                titulo:`Esta revisão já foi recusada ${recusas.length===1?"1 vez":`${recusas.length} vezes`} — confira se os apontamentos foram atendidos antes de assinar`,
+                titulo:`Esta revisão já foi recusada ${recusas.length===1?"1 vez":`${recusas.length} vezes`}. Confira se os apontamentos foram atendidos antes de assinar`,
                 detalhe: listaApontamentos(recusas.slice().reverse().flatMap(r => (r.apontamentos||[]).map(a => ({ ...a, autor:r.autor, autorPapel:r.autorPapel, data:r.data }))), "#e8a33d"),
                 detalheSempre:true };
-              case "vigencia_agendada": return { icone:"📅", titulo:`Documento aprovado — vigência agendada para ${fmt(d.dataVigencia)}`, sub:"Ficará Vigente automaticamente nesta data." };
+              case "vigencia_agendada": return { icone:"📅", titulo:`Documento aprovado, com vigência agendada para ${fmt(d.dataVigencia)}`, sub:"Ficará Vigente automaticamente nesta data." };
               case "revisao_proxima": return { icone: diasRev<=0 ? "⚠️" : "⏰",
                 titulo: diasRev<=0 ? `Revisão periódica vencida há ${Math.abs(diasRev)} dia(s)` : `Revisão periódica em ${diasRev} dia(s) (${fmt(d.proximaRevisao)})` };
               case "revisao_registrada": return { icone:"✓",
@@ -1819,7 +1819,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                       <div key={it.id}>
                         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:12}}>
                           <span style={{width:8,height:8,borderRadius:"50%",background:COR[it.tom],flexShrink:0}} />
-                          <span style={{flex:1,minWidth:200,color:T.text}}>{c.icone} {c.titulo}{c.sub ? <span style={{color:T.text3}}> — {c.sub}</span> : null}</span>
+                          <span style={{flex:1,minWidth:200,color:T.text}}>{c.icone} {c.titulo}{c.sub ? <span style={{color:T.text3}}>. {c.sub}</span> : null}</span>
                           {c.botoes && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c.botoes}</div>}
                         </div>
                         {c.detalheSempre && c.detalhe}
@@ -1902,7 +1902,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <span style={{ fontSize:10, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>ARQUIVO DE TRABALHO</span>
                 </div>
                 <div style={{ fontSize:11, color:T.text3, marginTop:2, marginBottom:8 }}>
-                  Arquivo editável (Word/Excel/PPT) usado apenas para gerar futuras revisões. Não é o documento oficial — não é distribuído, assinado nem carimbado.
+                  Arquivo editável (Word/Excel/PPT) usado apenas para gerar futuras revisões. Não é o documento oficial: não é distribuído, assinado nem carimbado.
                 </div>
                 {d.arquivoFonte ? (
                   <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
@@ -1944,7 +1944,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4}}>
                     <SecTitle icon="🗄️" ch="Controle de registro" />
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      {!regra.definida && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:emElaboracao?"#ff4f6a18":"#e8a33d22",color:emElaboracao?"#ff4f6a":"#c27c0e"}}>{emElaboracao ? "Obrigatório antes de assinar" : "Padrão — conferir"}</span>}
+                      {!regra.definida && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:emElaboracao?"#ff4f6a18":"#e8a33d22",color:emElaboracao?"#ff4f6a":"#c27c0e"}}>{emElaboracao ? "Obrigatório antes de assinar" : "Padrão, falta conferir"}</span>}
                       {podeConferir && !editando && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setCrErros([]); setCrEdit({ docId:d.id, armazenamento:regra.armazenamento, recuperacao:regra.recuperacao, retencaoAnos:regra.retencaoAnos ?? "", indeterminado:!!regra.indeterminado, descarte:regra.descarte, obs:regra.obs||"" }); }}>
                         {regra.definida ? "✏️ Alterar" : "✓ Conferir e definir"}
                       </button>}
@@ -1967,7 +1967,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         : emElaboracao
                           ? "O elaborador define em ✏️ Editar → Controle de registro. Sem isso o formulário não pode ser assinado."
                           : "Ainda não conferida: valendo a regra padrão do sistema (físico, 5 anos, destruição, setor responsável = departamento do documento)."}
-                      {emRota && regra.definida && " Definição do elaborador — confira antes de assinar."}
+                      {emRota && regra.definida && " Definição do elaborador. Confira antes de assinar."}
                     </div>
                   </>) : (
                     <div>
@@ -2053,7 +2053,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               {(d.rota || semRota) && (
                 <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:T.surf,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",marginBottom:12}}>
                   <span style={{fontSize:11,fontWeight:700,color:T.text3,textTransform:"uppercase"}}>🧭 Rota</span>
-                  {semRota && <span style={{fontSize:12,color:T.orange}}>Sem Revisor/Aprovador designados — um administrador precisa definir antes da assinatura.</span>}
+                  {semRota && <span style={{fontSize:12,color:T.orange}}>Sem Revisor/Aprovador designados. Um administrador precisa defini-los antes da assinatura.</span>}
                   {!semRota && <span style={{fontSize:12,color:T.text2}}>Revisor: <strong style={{color:T.text}}>{d.rota.revisorNome||nomeUsuario(d.rota.revisorId)||"—"}</strong></span>}
                   {!semRota && <span style={{fontSize:12,color:T.text2}}>Aprovador: <strong style={{color:T.text}}>{d.rota.aprovadorNome||nomeUsuario(d.rota.aprovadorId)||"—"}</strong></span>}
                   {d.rota?.definidaPor && <span style={{fontSize:10,color:T.text3}}>definida por {d.rota.definidaPor}</span>}
@@ -2069,7 +2069,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                     {campo?(<>
                       <div style={{fontSize:13,fontWeight:700,color:T.text}}>{campo.nome}</div>
                       {(campo.cargo||cargoCadastroAtual(campo))&&(
-                        <div style={{fontSize:11,color:T.text2}} title={campo.cargo?"Cargo gravado na assinatura":"Cargo atual do cadastro — esta assinatura foi feita antes de o cargo existir no perfil"}>
+                        <div style={{fontSize:11,color:T.text2}} title={campo.cargo?"Cargo gravado na assinatura":"Cargo atual do cadastro. Esta assinatura foi feita antes de o cargo existir no perfil"}>
                           {campo.cargo||cargoCadastroAtual(campo)}
                           {!campo.cargo&&<span style={{fontSize:9,color:T.text3}}> · cadastro atual</span>}
                         </div>
@@ -2151,7 +2151,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <SecTitle icon="🗂️" ch="Distribuição de cópias físicas" />
                   {podeDistribuir && <button style={{...s.btnA,fontSize:11}} onClick={()=>{ setDistribForm({ areaId:"", tipoDestino:"setor", setorId:"", entreguePor:user?.name||"", recebidoPorId:"", recebidoPor:"", dataEntrega:tod() }); setModalDistribuir({ doc:d }); }}>+ Registrar cópia</button>}
                 </div>
-                <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Cópias controladas impressas da Rev.{d.versao}. Cada uma tem número próprio — o papel oficial sai pelo "🖨️ Emitir".</div>
+                <div style={{fontSize:11,color:T.text3,marginBottom:10}}>Cópias controladas impressas da Rev.{d.versao}. Cada uma tem número próprio, e o papel oficial sai pelo "🖨️ Emitir".</div>
                 {(d.distribuicaoFisica||[]).length===0 ? (
                   <div style={{fontSize:12,color:T.text3,padding:"0.5rem 0"}}>Nenhuma cópia física registrada.</div>
                 ) : (
@@ -2164,7 +2164,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                             <div style={{fontSize:13,fontWeight:600,color:T.text,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                               {c.numero
                                 ? <span style={{fontSize:11,fontWeight:800,padding:"1px 8px",borderRadius:10,background:`${T.accent}18`,color:T.accent}}>{rotuloNumero(c)}</span>
-                                : <span title="Registrada antes da numeração — ganha número na primeira emissão" style={{fontSize:10,padding:"1px 8px",borderRadius:10,background:T.border,color:T.text3}}>sem número</span>}
+                                : <span title="Registrada antes da numeração. Ganha número na primeira emissão" style={{fontSize:10,padding:"1px 8px",borderRadius:10,background:T.border,color:T.text3}}>sem número</span>}
                               {destinoDistribLabel(c)}
                             </div>
                             <div style={{fontSize:11,color:T.text2}}>
@@ -2314,7 +2314,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 {/* Revisões anteriores */}
                 {(!d.historicoRevisoes||d.historicoRevisoes.length===0) ? (
                   <div style={{fontSize:12,color:T.text3,padding:"10px 16px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,textAlign:"center"}}>
-                    Versão {d.versao} — atual. Sem revisões anteriores ainda.
+                    Versão {d.versao} (atual). Ainda não há revisões anteriores.
                   </div>
                 ) : (
                   [...d.historicoRevisoes].reverse().map((h,i)=>{
@@ -2406,7 +2406,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
           <div onClick={()=>setVerSnapshot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"40px 16px",overflowY:"auto"}}>
             <div onClick={e=>e.stopPropagation()} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,maxWidth:760,width:"100%",padding:"1.5rem",boxShadow:"0 20px 60px rgba(0,0,0,.4)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                <div style={{fontSize:15,fontWeight:700,color:T.text}}>📄 Conteúdo arquivado — Rev.{verSnapshot.versao}</div>
+                <div style={{fontSize:15,fontWeight:700,color:T.text}}>📄 Conteúdo arquivado da Rev.{verSnapshot.versao}</div>
                 <button style={{...s.btn,fontSize:11}} onClick={()=>setVerSnapshot(null)}>✕ Fechar</button>
               </div>
               <div style={{fontSize:11,color:T.text3,marginBottom:16}}>{fmt(verSnapshot.data)} · {verSnapshot.responsavel||"—"}{verSnapshot.conteudo?.titulo?` · ${verSnapshot.conteudo.titulo}`:""}</div>
@@ -2483,7 +2483,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
         {assinarGD && (
           <AssinaturaModal
             user={user}
-            titulo={`${assinarGD.doc.codigo} · Rev.${assinarGD.doc.versao} — assinatura como ${assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}`}
+            titulo={`${assinarGD.doc.codigo} · Rev.${assinarGD.doc.versao}: assinatura como ${assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}`}
             contexto={`${assinarGD.doc.codigo}|R${assinarGD.doc.versao}`}
             docId={assinarGD.doc.id}
             papel={assinarGD.papel==="elaborador"?"Elaborador":assinarGD.papel==="revisor"?"Revisor":"Aprovador"}
@@ -2508,7 +2508,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <div style={{fontSize:16,fontWeight:700,color:T.text}}>📨 Destinatários da distribuição</div>
                   <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDestinatarios(null)}>✕ Fechar</button>
                 </div>
-                <div style={{fontSize:12,color:T.text2,marginBottom:12}}>{md.doc.codigo} · Rev.{md.doc.versao} — marque quem deve ler o documento. Só aparecem pessoas com login no sistema.</div>
+                <div style={{fontSize:12,color:T.text2,marginBottom:12}}>{md.doc.codigo} · Rev.{md.doc.versao}. Marque quem deve ler o documento. Só aparecem pessoas com login no sistema.</div>
                 <input autoFocus placeholder="Buscar por nome, e-mail ou setor…" value={md.busca}
                   onChange={e=>setModalDestinatarios(p=>({...p,busca:e.target.value}))}
                   style={{...s.inp,fontSize:13,width:"100%",marginBottom:10}} />
@@ -2555,12 +2555,12 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{fontSize:16,fontWeight:700,color:T.text}}>🗂️ Registrar cópia física</div>
                 <button style={{...s.btn,fontSize:11}} onClick={()=>setModalDistribuir(null)}>✕ Fechar</button>
               </div>
-              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalDistribuir.doc.codigo} · Rev.{modalDistribuir.doc.versao} — registre o setor que recebeu a cópia controlada impressa.</div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalDistribuir.doc.codigo} · Rev.{modalDistribuir.doc.versao}. Registre o setor que recebeu a cópia controlada impressa.</div>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>Área</label>
                 <select value={distribForm.areaId} onChange={e=>setDistribForm(p=>({...p,areaId:e.target.value,setorId:""}))} style={{...s.inp,fontSize:13,width:"100%"}}>
                   <option value="">Selecione a área…</option>
-                  {areasDistribAtivas.map(area=><option key={area.id} value={area.id}>{area.id} — {area.label}</option>)}
+                  {areasDistribAtivas.map(area=><option key={area.id} value={area.id}>{area.id} · {area.label}</option>)}
                 </select>
               </div>
               {distribForm.areaId && <div style={{marginBottom:12}}>
@@ -2603,7 +2603,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                     )}
                     <div style={{fontSize:11,color:T.text3,marginTop:4}}>
                       Colaboradores cadastrados, com ou sem login no sistema.
-                      {distribForm.areaId && doDestino.length===0 && " Nenhum colaborador lotado neste destino — escolha em “Outros” ou digite."}
+                      {distribForm.areaId && doDestino.length===0 && " Nenhum colaborador lotado neste destino. Escolha em “Outros” ou digite."}
                     </div>
                   </div>
                 );
@@ -2640,7 +2640,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
               <div style={{fontSize:11,color:T.text3,marginBottom:14}}>
                 {modalRecolher.destino?.dataEntrega
                   ? <>Entregue em {fmt(modalRecolher.destino.dataEntrega)}{modalRecolher.destino.recebidoPor ? <> · recebida por <strong style={{color:T.text2}}>{modalRecolher.destino.recebidoPor}</strong></> : ""}.</>
-                  : "Registro antigo — sem data de entrega e sem recebedor."}
+                  : "Registro antigo, sem data de entrega e sem recebedor."}
                 {" "}A recolha fica arquivada no histórico do documento.
               </div>
               <div style={{marginBottom:12}}>
@@ -2674,7 +2674,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{fontSize:16,fontWeight:700,color:T.text}}>🧭 Rota de assinatura</div>
                 <button style={{...s.btn,fontSize:11}} onClick={()=>setModalRota(null)}>✕ Fechar</button>
               </div>
-              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalRota.doc.codigo} — {modalRota.doc.titulo}. Defina quem revisa e quem aprova. Só as pessoas escolhidas poderão assinar essas etapas.</div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalRota.doc.codigo} · {modalRota.doc.titulo}. Defina quem revisa e quem aprova. Só as pessoas escolhidas poderão assinar essas etapas.</div>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>🔎 Revisor</label>
                 <select value={rotaForm.revisorId} onChange={e=>setRotaForm(p=>({...p,revisorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
@@ -2709,7 +2709,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{fontSize:16,fontWeight:700,color:T.text}}>🔧 Trocar designados (admin)</div>
                 <button style={{...s.btn,fontSize:11}} onClick={()=>setModalTrocarRota(null)}>✕ Fechar</button>
               </div>
-              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalTrocarRota.doc.codigo} — {modalTrocarRota.doc.titulo}. Trocar um designado que já assinou invalida a assinatura.</div>
+              <div style={{fontSize:12,color:T.text2,marginBottom:14}}>{modalTrocarRota.doc.codigo} · {modalTrocarRota.doc.titulo}. Trocar um designado que já assinou invalida a assinatura.</div>
               <div style={{marginBottom:12}}>
                 <label style={{fontSize:12,fontWeight:600,color:T.text,display:"block",marginBottom:4}}>🔎 Revisor {modalTrocarRota.doc.assinaturaRevisor && <span style={{color:"#ff9800",fontWeight:400}}>(já assinado)</span>}</label>
                 <select value={rotaForm.revisorId} onChange={e=>setRotaForm(p=>({...p,revisorId:e.target.value}))} style={{...s.inp,fontSize:13,width:"100%"}}>
@@ -2806,7 +2806,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   </div>
                   {!vigente && (
                     <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 12px", marginBottom:10, fontSize:11, color:T.text3 }}>
-                      A exigência só passa a contar quando o documento estiver <strong>Vigente</strong> — não se treina em versão não aprovada.
+                      A exigência só passa a contar quando o documento estiver <strong>Vigente</strong>, porque não se treina em versão não aprovada.
                     </div>
                   )}
                   {/* Pendência impossível: modo leitura exige confirmar no sistema, e
@@ -2815,7 +2815,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   {(()=>{ const semLogin = exigidosSemLogin(d, colaboradores, catalogoCargos, catalogoAreasSetoresDistribuicao); return semLogin.length > 0 && (
                     <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:10, fontSize:12, color:T.text2 }}>
                       <strong style={{ color:T.text }}>{semLogin.length} pessoa(s) exigida(s) não têm login</strong> e este documento está no modo
-                      <strong> Leitura e entendimento</strong>, que depende de a própria pessoa confirmar no sistema — elas nunca conseguiriam.
+                      <strong> Leitura e entendimento</strong>, que depende de a própria pessoa confirmar no sistema. Sem login, elas nunca conseguiriam.
                       <div style={{ fontSize:11, color:T.text3, marginTop:5 }}>
                         {semLogin.slice(0,6).map(p=>p.userName).join(", ")}{semLogin.length>6?` e mais ${semLogin.length-6}`:""}.
                         {" "}Troque o modo para <strong>Treinamento presencial</strong> e registre pela lista de presença.
@@ -2834,7 +2834,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                       </span>
                     )}
                     {!(tr.cargos||[]).length && !(tr.pessoasExtra||[]).length && (
-                      <span style={{ fontSize:11, color:"#e8a33d" }}>⚠ Nenhum cargo vinculado — ninguém é exigido ainda.</span>
+                      <span style={{ fontSize:11, color:"#e8a33d" }}>⚠ Nenhum cargo vinculado. Ninguém é exigido ainda.</span>
                     )}
                   </div>
 
@@ -2842,7 +2842,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                     <div style={{ background:"#ffd16618", border:"1px solid #ffd16644", borderRadius:10, padding:"12px 16px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                       <span style={{ fontSize:22 }}>📖</span>
                       <div style={{ flex:1, minWidth:180 }}>
-                        <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Treinamento pendente — {d.codigo} Rev.{d.versao}</div>
+                        <div style={{ fontSize:13, fontWeight:700, color:T.text }}>Treinamento pendente: {d.codigo} Rev.{d.versao}</div>
                         <div style={{ fontSize:11, color:T.text2 }}>Você é exigido neste documento pelo cargo {eu.cargoNome}. Confirme após a leitura.</div>
                       </div>
                       <button style={{ ...s.btnA, fontSize:12 }} onClick={()=>registrarEvidencia(d, meuId, { modo:"leitura", dataRealizacao:tod(), obs:"Confirmado pelo próprio colaborador" })}>
@@ -2876,13 +2876,13 @@ Herbamed® · Sistema de Gestão da Qualidade`,
 
                   {podeRegistrar && tr.modo === "presencial" && vigente && (
                     <div style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"1rem", marginBottom:12 }}>
-                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4 }}>Registrar treinamento avulso — Rev.{d.versao}</div>
+                      <div style={{ fontSize:12, fontWeight:700, color:T.text, marginBottom:4 }}>Registrar treinamento avulso (Rev.{d.versao})</div>
                       <div style={{ fontSize:11, color:T.text3, marginBottom:10 }}>Para uma pessoa só. Turma inteira: use a lista de presença acima.</div>
                       <G2 ch={<>
                         <F lbl="Colaborador" ch={
                           <Sel value={novaEvid.userId} onChange={e=>setNovaEvid(p=>({...p,userId:e.target.value}))}>
                             <option value="">Selecione...</option>
-                            {linhas.filter(l=>l.cel.status!=="treinado").map(l=><option key={l.userId} value={l.userId}>{l.userName} — {l.cargoNome}</option>)}
+                            {linhas.filter(l=>l.cel.status!=="treinado").map(l=><option key={l.userId} value={l.userId}>{l.userName} · {l.cargoNome}</option>)}
                           </Sel>
                         } />
                         <F lbl="Data do treinamento" ch={<Inp type="date" value={novaEvid.dataRealizacao} onChange={e=>setNovaEvid(p=>({...p,dataRealizacao:e.target.value}))} />} />
@@ -2897,7 +2897,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                   <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                     {linhas.length === 0 && (
                       <div style={{ textAlign:"center", padding:"1.5rem", color:T.text3, fontSize:12 }}>
-                        Ninguém exigido ainda — vincule cargos à exigência.
+                        Ninguém exigido ainda. Vincule cargos à exigência.
                       </div>
                     )}
                     {linhas.map(l => {
@@ -2921,7 +2921,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                               </span>
                             : <span style={{ fontSize:11, color:cor, fontWeight:700 }}>
                                 {l.cel.status === "atrasado" ? `Atrasado há ${l.cel.dias}d`
-                                  : l.cel.status === "vencido" ? `Reciclar — venceu há ${l.cel.dias}d`
+                                  : l.cel.status === "vencido" ? `Reciclar: venceu há ${l.cel.dias}d`
                                   : "Pendente"}
                               </span>
                           }
@@ -2958,13 +2958,13 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         <Inp type="number" min="1" value={editTreino.prazoDias} onChange={e=>setEditTreino(p=>({...p,prazoDias:e.target.value}))} />
                       } />
                     </>} />
-                    <F lbl="Reciclagem periódica (meses) — deixe em branco para não vencer"
+                    <F lbl="Reciclagem periódica em meses (em branco, não vence)"
                       tip="Competência não é permanente: em POP crítico, o treinamento se refaz de tempos em tempos mesmo sem revisão do documento. Vencida a validade, a pessoa volta à matriz como 'a reciclar'." ch={
                       <Inp type="number" min="1" placeholder="Ex: 12" value={editTreino.reciclagemMeses ?? ""} onChange={e=>setEditTreino(p=>({...p,reciclagemMeses:e.target.value}))} />
                     } />
                     <div style={{ fontSize:12, fontWeight:600, color:T.text, margin:"10px 0 6px" }}>Cargos exigidos</div>
                     <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>
-                      Quem ocupa estes cargos passa a ser exigido automaticamente — inclusive quem for contratado depois.
+                      Quem ocupa estes cargos passa a ser exigido automaticamente, inclusive quem for contratado depois.
                     </div>
                     {cargosDisp.length === 0 ? (
                       <div style={{ fontSize:12, color:"#e8a33d", marginBottom:10 }}>
@@ -3028,7 +3028,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                           {vazio ? (
                             <div style={{ fontSize:11, color:T.text2, marginTop:4 }}>
                               A combinação escolhida não alcança ninguém no cadastro atual. Se você acabou de mudar cargos ou setores,
-                              revise — documento que exige treinamento de zero pessoas some da conformidade sem avisar.
+                              revise: documento que exige treinamento de zero pessoas some da conformidade sem avisar.
                             </div>
                           ) : (
                             <div style={{ fontSize:11, color:T.text2, marginTop:4, maxHeight:70, overflowY:"auto" }}>
@@ -3086,7 +3086,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
       <div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
           <button style={s.btn} onClick={()=>{ if(sel)setView("detalhe"); else{setView("lista");resetForm();} }}>← Voltar</button>
-          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>{sel?`Editar — ${sel.codigo}`:"Novo Documento"}</h2>
+          <h2 style={{fontSize:18,fontWeight:700,color:T.text,margin:0}}>{sel?`Editar ${sel.codigo}`:"Novo Documento"}</h2>
         </div>
         {/* ── UPLOAD DO DOCUMENTO OFICIAL ── */}
         <div style={{ border:`2px solid ${docArquivo ? T.accent+"44" : "#ff8c4244"}`, borderRadius:14, padding:"1.25rem", marginBottom:"1rem", background: docArquivo ? `${T.accent}0a` : "#ff8c420a" }}>
@@ -3133,7 +3133,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
               <span style={{ fontSize:22 }}>🛠️</span>
               <div>
-                <div style={{ fontSize:13, fontWeight:700, color:T.text2 }}>Arquivo fonte (editável) — NÃO CONTROLADO</div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text2 }}>Arquivo fonte (editável), NÃO CONTROLADO</div>
                 <div style={{ fontSize:11, color:T.text3 }}>Word, Excel ou PowerPoint. Usado apenas para gerar futuras revisões. Não é distribuído, assinado nem carimbado.</div>
               </div>
               {docArquivoFonte && <span style={{ marginLeft:"auto", fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:20, background:T.text3+"22", color:T.text3 }}>🛠️ Fonte anexado</span>}
@@ -3168,7 +3168,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:36,height:36,borderRadius:8,background:`linear-gradient(135deg,${T.accent},${T.accent2})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🤖</div>
             <div>
-              <div style={{fontSize:13,fontWeight:700,color:T.text}}>Assistente IA — Gerador de Documentos</div>
+              <div style={{fontSize:13,fontWeight:700,color:T.text}}>Assistente IA: gerador de documentos</div>
               <div style={{fontSize:11,color:T.text2}}>Gere conteúdo com IA ou importe um arquivo Word existente</div>
             </div>
           </div>
@@ -3246,7 +3246,7 @@ ${docHtml.slice(0,9000)}`}]})
           <SecTitle icon="🗂️" ch="Identificação" />
           <G3 ch={<>
             <F lbl="Tipo" ch={<Sel value={form.tipo} onChange={e=>setF("tipo",e.target.value)}>{tiposAtivos.map(t=><option key={t.id} value={t.id}>{t.icon ? `${t.icon} ` : ""}{t.label} ({t.id})</option>)}</Sel>} />
-            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} — {d.label}</option>)}</Sel>} />
+            <F lbl="Departamento" ch={<Sel value={form.depto} onChange={e=>setF("depto",e.target.value)}>{deptosAtivos.map(d=><option key={d.id} value={d.id}>{d.id} · {d.label}</option>)}</Sel>} />
             <F lbl="Versão" ch={<Inp placeholder="01" value={form.versao} onChange={e=>setF("versao",e.target.value)} />} />
           </>} />
           {form.tipo && (()=>{
@@ -3283,7 +3283,7 @@ ${docHtml.slice(0,9000)}`}]})
               <SecTitle icon="🗄️" ch="Controle de registro (obrigatório)" />
               <div style={{fontSize:12,color:T.text2,marginBottom:10}}>
                 Onde o formulário preenchido vai ser guardado, quem o recupera, por quanto tempo e como é descartado.
-                Já vem com o padrão do sistema — confira e ajuste. Revisor e Aprovador assinam sobre esta definição.
+                Já vem com o padrão do sistema. Confira e ajuste. Revisor e Aprovador assinam sobre esta definição.
               </div>
               {camposControleRegistro(f, (k, v) => setF("cr", { ...f, [k]: v }))}
             </div>
@@ -3312,7 +3312,7 @@ ${docHtml.slice(0,9000)}`}]})
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <span style={{ fontSize:16 }}>📝</span>
               <div style={{ textAlign:"left" }}>
-                <div style={{ fontSize:13, fontWeight:700, color:T.text2 }}>Rascunho / anotações (opcional — não é o documento oficial)</div>
+                <div style={{ fontSize:13, fontWeight:700, color:T.text2 }}>Rascunho / anotações (opcional, não é o documento oficial)</div>
                 <div style={{ fontSize:11, color:T.text3 }}>Editor de capítulos para notas internas. O arquivo anexado acima é o documento controlado.</div>
               </div>
             </div>
@@ -3430,7 +3430,7 @@ ${txt}`}]})});
                         const data=await res.json();
                         const html=data.content?.[0]?.text||"";
                         if(html)setF(cap.id,html.replace(/\`\`\`html|\`\`\`/g,"").trim());
-                        toast_("Formatação melhorada!","green");
+                        toast_("Formatação melhorada.","green");
                       }catch(e){toast_("Erro ao formatar.","red");}
                       setAiLoading(false);
                     }}>
@@ -3451,7 +3451,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                         const data=await res.json();
                         const html=data.content?.[0]?.text||"";
                         if(html)setF(cap.id,html.replace(/\`\`\`html|\`\`\`/g,"").trim());
-                        toast_("Capítulo expandido!","green");
+                        toast_("Capítulo expandido.","green");
                       }catch(e){toast_("Erro ao expandir.","red");}
                       setAiLoading(false);
                     }}>
@@ -3546,7 +3546,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
           Gerada a partir dos formulários cadastrados: formulário novo entra sozinho, obsoleto sai sozinho. A regra de cada um é definida dentro do próprio formulário.
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:12}}>
-          {[["Formulários", res.total, T.text], ["Regra conferida", res.definidas, T.accent], ["No padrão — conferir", res.noPadrao, res.noPadrao ? "#c27c0e" : T.text3]].map(([rot, n, cor]) => (
+          {[["Formulários", res.total, T.text], ["Regra conferida", res.definidas, T.accent], ["No padrão, falta conferir", res.noPadrao, res.noPadrao ? "#c27c0e" : T.text3]].map(([rot, n, cor]) => (
             <div key={rot} style={{...s.card,marginBottom:0,padding:"12px 16px"}}>
               <div style={{fontSize:22,fontWeight:800,color:cor}}>{n}</div>
               <div style={{fontSize:11,color:T.text3,fontWeight:700,textTransform:"uppercase"}}>{rot}</div>
@@ -3562,7 +3562,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
             </select>
             <select value={crSituacao} onChange={e=>setCrSituacao(e.target.value)} style={{...s.inp,fontSize:12}}>
               <option value="todos">Todas as regras</option>
-              <option value="padrao">No padrão — conferir</option>
+              <option value="padrao">No padrão, falta conferir</option>
               <option value="definida">Conferidas</option>
             </select>
             <label style={{fontSize:12,color:T.text2,display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
@@ -3593,7 +3593,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
                     <td style={{padding:"8px 10px"}}>
                       {regra.definida
                         ? <span style={{color:T.accent,fontWeight:700}} title={`Definida por ${regra.atualizadoPor||"—"} em ${fmt(regra.atualizadoEm)}`}>✓ Conferida</span>
-                        : <span style={{color:"#c27c0e",fontWeight:700}}>Padrão — conferir</span>}
+                        : <span style={{color:"#c27c0e",fontWeight:700}}>Padrão, falta conferir</span>}
                     </td>
                   </tr>
                 ))}
@@ -3717,7 +3717,7 @@ Retorne APENAS o HTML expandido com <p>, <strong>, <ul>, <li>, <ol>. Sem markdow
             <div key={dep.id} style={s.card}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                 <div style={{width:10,height:10,borderRadius:"50%",background:cor,flexShrink:0}}/>
-                <div style={{fontSize:14,fontWeight:700,color:T.text}}>{dep.id} — {dep.label}</div>
+                <div style={{fontSize:14,fontWeight:700,color:T.text}}>{dep.id} · {dep.label}</div>
                 <span style={{fontSize:11,color:T.text3,background:T.surf,padding:"2px 8px",borderRadius:20,border:`1px solid ${T.border}`}}>{dd.length} doc{dd.length!==1?"s":""}</span>
               </div>
               <div style={{paddingLeft:20,borderLeft:`2px solid ${cor}30`}}>

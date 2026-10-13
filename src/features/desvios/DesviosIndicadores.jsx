@@ -329,7 +329,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
       <div className="grid-2" style={{ marginBottom: 16 }}>
         {/* Pareto */}
         <div style={{ ...card, minWidth: 0 }}>
-          {cardTitle("📊", "Pareto de Tipos", "Barras: % do total (nº de desvios no topo) · Linha: % acumulado — onde concentrar ação")}
+          {cardTitle("📊", "Pareto de Tipos", "Barras: % do total (nº de desvios no topo) · Linha: % acumulado, mostra onde concentrar a ação")}
           {pareto.length === 0 ? semDados : (
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -352,7 +352,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
 
         {/* Por setor */}
         <div style={{ ...card, minWidth: 0 }}>
-          {cardTitle("🏭", "Desvios por Setor", "Top 8 setores no período — clique para ver na lista")}
+          {cardTitle("🏭", "Desvios por Setor", "Top 8 setores no período. Clique para ver na lista")}
           {porSetor.length === 0 ? semDados : (
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -373,7 +373,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
 
       {/* ── Matriz Setor × Tipo ── */}
       <div style={{ ...card, marginBottom: 16 }}>
-        {cardTitle("🧭", "Recorrência: Setor × Tipo", "Onde e de que natureza os desvios se repetem — clique numa célula para ver os casos")}
+        {cardTitle("🧭", "Recorrência: Setor × Tipo", "Onde e de que tipo os desvios se repetem. Clique numa célula para ver os casos")}
         {matriz.linhas.length === 0 ? semDados : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "separate", borderSpacing: 2, fontSize: 11, minWidth: 480, width: "100%" }}>
@@ -425,7 +425,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
       <div className="grid-2" style={{ marginBottom: 16, gridTemplateColumns: "3fr 2fr" }}>
         {/* SLA */}
         <div style={{ ...card, minWidth: 0 }}>
-          {cardTitle("⏱️", "Desempenho de Triagem", `Tempo do registro até encerrar/converter — meta: ${META_TRIAGEM_DIAS} dias`)}
+          {cardTitle("⏱️", "Desempenho de Triagem", `Tempo do registro até encerrar ou converter (meta: ${META_TRIAGEM_DIAS} dias)`)}
           {a.triados.length === 0 ? semDados : (
             <>
               <div style={{ display: "flex", gap: 18, marginBottom: 8, flexWrap: "wrap" }}>
@@ -459,7 +459,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
 
         {/* Aging */}
         <div style={{ ...card, minWidth: 0 }}>
-          {cardTitle("⏳", "Desvios em Aberto há Mais Tempo", "Aguardando triagem da Qualidade — independe do filtro de período")}
+          {cardTitle("⏳", "Desvios em Aberto há Mais Tempo", "Aguardando triagem da Qualidade, sem depender do filtro de período")}
           {abertosTotal > 0 && (
             <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
               {[
@@ -494,7 +494,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
 
       {/* ── Produtos recorrentes ── */}
       <div style={card}>
-          {cardTitle("📦", "Produtos / Lotes Recorrentes", "Produto que repete desvio é sinal de revisão de processo — clique para ver os casos")}
+          {cardTitle("📦", "Produtos / Lotes Recorrentes", "Produto que repete desvio pede revisão de processo. Clique para ver os casos")}
           {topProdutos.length === 0 ? (
             <div style={{ padding: "1.2rem", textAlign: "center", color: T.text3, fontSize: 12 }}>Nenhum desvio com produto/lote informado no período</div>
           ) : (

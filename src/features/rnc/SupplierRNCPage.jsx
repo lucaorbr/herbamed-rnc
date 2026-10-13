@@ -90,7 +90,7 @@ export function SupplierRNCPage({ token }) {
           Sua análise foi registrada no Sistema de Gestão da Qualidade da Herbamed.<br />
           A equipe de qualidade irá analisar e retornar em breve.
         </div>
-        <div style={{ marginTop: 20, fontSize: 11, color: "#999" }}>RNC {data?.rncNum} — {new Date().toLocaleDateString("pt-BR")}</div>
+        <div style={{ marginTop: 20, fontSize: 11, color: "#999" }}>RNC {data?.rncNum} · {new Date().toLocaleDateString("pt-BR")}</div>
       </div>
     </div>
   );
@@ -115,7 +115,7 @@ export function SupplierRNCPage({ token }) {
         <div style={{ width: 44, height: 44, borderRadius: 10, background: "#1a7a3c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: "#fff", fontWeight: 800 }}>H</div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#1a2e1e" }}>Herbamed Laboratório Nutracêutico</div>
-          <div style={{ fontSize: 11, color: "#8aaa8e" }}>Sistema de Gestão da Qualidade — Resposta de Fornecedor</div>
+          <div style={{ fontSize: 11, color: "#8aaa8e" }}>Sistema de Gestão da Qualidade · Resposta de Fornecedor</div>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ export function SupplierRNCPage({ token }) {
       {/* Dados da RNC */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: s.verde, marginBottom: 14, paddingBottom: 10, borderBottom: "2px solid #e8f5e9" }}>
-          Registro de Não-Conformidade — {data?.rncNum}
+          Registro de Não Conformidade {data?.rncNum}
         </div>
         {[
           ["Produto/Material", rnc.produto || rnc.item || "—"],
@@ -151,11 +151,11 @@ export function SupplierRNCPage({ token }) {
 
       {/* 5 Porquês */}
       <div style={s.card}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2e1e", marginBottom: 4 }}>Análise de Causa — 5 Porquês</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2e1e", marginBottom: 4 }}>Análise de causa: 5 Porquês</div>
         <div style={{ fontSize: 12, color: "#8aaa8e", marginBottom: 14 }}>Pergunte "Por quê?" repetidamente até chegar à causa raiz do problema.</div>
         {porques.map((v, i) => (
           <div key={i} style={{ marginBottom: 10 }}>
-            <div style={s.label}>Por que {i + 1}{i === 0 ? " — Por que o problema ocorreu?" : ""}</div>
+            <div style={s.label}>Por que {i + 1}{i === 0 ? ": por que o problema ocorreu?" : ""}</div>
             <textarea style={s.textarea} rows={2} value={v} onChange={e => setPQ(i, e.target.value)} placeholder={i === 0 ? "Ex: O lote foi liberado com umidade fora do limite..." : `Porque... (aprofunde a resposta anterior)`} />
           </div>
         ))}
@@ -167,7 +167,7 @@ export function SupplierRNCPage({ token }) {
 
       {/* Plano de Ação 5W2H */}
       <div style={s.card}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2e1e", marginBottom: 4 }}>Plano de Ação — 5W2H</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2e1e", marginBottom: 4 }}>Plano de ação (5W2H)</div>
         <div style={{ fontSize: 12, color: "#8aaa8e", marginBottom: 14 }}>Descreva as ações corretivas para eliminar a causa raiz.</div>
         {[
           ["oQue", "O quê? *", "Qual ação será executada?"],
