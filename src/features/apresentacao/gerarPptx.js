@@ -1,4 +1,4 @@
-// Desenha a apresentação semanal em PowerPoint (.pptx editável) a partir de
+// Desenha a apresentação da Qualidade em PowerPoint (.pptx editável) a partir de
 // montarApresentacao(). Mesmo "rosto" dos PDFs: faixa verde no topo, folha branca,
 // rodapé fino. O pptxgenjs só é carregado no clique (não pesa no bundle das telas).
 import { MARCA } from "../../shared/marca";
@@ -57,7 +57,7 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   pptx.title = "Qualidade: RNCs e desvios";
 
   const icone = await iconeDataUrl();
-  const periodoTxt = `${fmt(a.semana.de)} a ${fmt(a.semana.ate)}`;
+  const periodoTxt = `${fmt(a.periodo.de)} a ${fmt(a.periodo.ate)}`;
 
   pptx.defineSlideMaster({
     title: "SGQ",
@@ -66,7 +66,7 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
       { rect: { x: 0, y: 0, w: LARG, h: 0.95, fill: { color: VERDE } } },
       ...(icone ? [{ image: { x: X0, y: 0.17, w: 0.6, h: 0.6, data: icone } }] : []),
       { rect: { x: 0, y: 7.1, w: LARG, h: 0.4, fill: { color: RODAPE } } },
-      { text: { text: `Herbamed · SGQ · Qualidade · semana de ${periodoTxt}`, options: { x: X0, y: 7.1, w: 9, h: 0.4, fontFace: FONTE, fontSize: 10, color: TEXTO2 } } },
+      { text: { text: `Herbamed · SGQ · Qualidade · período de ${periodoTxt}`, options: { x: X0, y: 7.1, w: 9, h: 0.4, fontFace: FONTE, fontSize: 10, color: TEXTO2 } } },
     ],
     slideNumber: { x: 12.3, y: 7.15, w: 0.6, h: 0.3, fontFace: FONTE, fontSize: 10, color: TEXTO2 },
   });
@@ -83,13 +83,14 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   capa.background = { color: VERDE };
   if (icone) capa.addImage({ data: icone, x: X0 + 0.3, y: 1.6, w: 1.6, h: 1.6 });
   capa.addText("Qualidade", { x: X0 + 0.3, y: 3.5, w: 11, h: 0.9, fontFace: FONTE, fontSize: 44, bold: true, color: CLARO });
-  capa.addText("RNCs e desvios em aberto", { x: X0 + 0.3, y: 4.35, w: 11, h: 0.7, fontFace: FONTE, fontSize: 26, color: CLARO });
-  capa.addText(`Reunião semanal · semana de ${periodoTxt}`, { x: X0 + 0.3, y: 5.1, w: 11, h: 0.5, fontFace: FONTE, fontSize: 16, color: TEXTO_FAIXA });
+  capa.addText("RNCs e desvios", { x: X0 + 0.3, y: 4.35, w: 11, h: 0.7, fontFace: FONTE, fontSize: 26, color: CLARO });
+  capa.addText(`Registros de ${periodoTxt}`, { x: X0 + 0.3, y: 5.1, w: 11, h: 0.5, fontFace: FONTE, fontSize: 16, color: TEXTO_FAIXA });
   const agora = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   capa.addText(`Gerado do SGQ em ${agora}${usuario ? ` por ${usuario}` : ""}`, { x: X0 + 0.3, y: 6.6, w: 11, h: 0.4, fontFace: FONTE, fontSize: 11, color: TEXTO_FAIXA });
 
-  // 2. Resumo da semana
-  const resumo = novoSlide("Resumo da semana", periodoTxt);
+  // 2. Resumo do período
+  const resumo = novoSlide("Resumo do período", periodoTxt);
+  const ant = (o, k) => (o.anterior ? `Período anterior: ${o.anterior[k]}` : undefined);
   const { rnc, desvio } = a.resumo;
   const cartoes = (y, rotulo, itens) => {
     resumo.addText(rotulo, { x: X0, y, w: W, h: 0.45, fontFace: FONTE, fontSize: 16, bold: true, color: VERDE });
@@ -103,14 +104,14 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
     });
   };
   cartoes(1.15, "RNCs", [
-    { n: rnc.abertas, l: "Abertas na semana", sub: `Semana anterior: ${rnc.anterior.abertas}` },
-    { n: rnc.encerradas, l: "Encerradas na semana", sub: `Semana anterior: ${rnc.anterior.encerradas}` },
-    { n: rnc.emAberto, l: "Em aberto hoje" },
+    { n: rnc.abertas, l: "Abertas no período", sub: ant(rnc, "abertas") },
+    { n: rnc.encerradas, l: "Encerradas no período", sub: ant(rnc, "encerradas") },
+    { n: rnc.emAberto, l: "Ainda em aberto", sub: "das abertas no período" },
     { n: rnc.vencidas, l: "Com prazo vencido", cor: rnc.vencidas ? VERMELHO : TEXTO },
   ]);
   cartoes(4.0, "Desvios", [
-    { n: desvio.registrados, l: "Registrados na semana", sub: `Semana anterior: ${desvio.anterior.registrados}` },
-    { n: desvio.triados, l: "Triados na semana", sub: `Semana anterior: ${desvio.anterior.triados}` },
+    { n: desvio.registrados, l: "Registrados no período", sub: ant(desvio, "registrados") },
+    { n: desvio.triados, l: "Triados no período", sub: ant(desvio, "triados") },
     { n: desvio.emAberto, l: "Aguardando triagem" },
     { n: desvio.atrasados, l: `Triagem acima de ${a.metaTriagem} dias`, cor: desvio.atrasados ? AMARELO : TEXTO },
   ]);
@@ -119,7 +120,7 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   const pagsVenc = paginar(a.rncsVencidas);
   pagsVenc.forEach((pag, i) => {
     const s = novoSlide(titulo("RNCs com prazo vencido", i, pagsVenc.length), `${a.rncsVencidas.length} RNC(s)`);
-    if (!pag.length) return vazio(s, "Nenhuma RNC com prazo vencido.");
+    if (!pag.length) return vazio(s, "Nenhuma RNC registrada no período está com prazo vencido.");
     tabela(s, ["Nº", "Assunto", "Responsável", "Setor", "Prazo", "Atraso", "Etapa atual"],
       pag.map(r => [r.num, r.assunto || "—", r.resp, r.setor, prazoTxt(r.prazo),
         { text: dias(r.diasAtraso), options: { bold: true, color: VERMELHO } }, r.etapa]),
@@ -142,7 +143,7 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   pagsResp.forEach((pag, i) => {
     const total = a.rncsPorResponsavel.reduce((n, g) => n + g.itens.length, 0);
     const s = novoSlide(titulo("RNCs em andamento no prazo", i, pagsResp.length), `${total} RNC(s), por responsável`);
-    if (!pag.length) return vazio(s, "Nenhuma outra RNC em aberto.");
+    if (!pag.length) return vazio(s, "Nenhuma outra RNC do período em aberto.");
     tabela(s, ["Nº", "Assunto", "Severidade", "Prazo", "Etapa atual", "Ações CAPA"],
       pag.map(l => l.grupo
         ? [{ text: l.grupo, options: { colspan: 6, bold: true, color: VERDE, fill: { color: "E3ECE5" } } }]
@@ -155,7 +156,7 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   const pagsDev = paginar(a.desviosAtrasados);
   pagsDev.forEach((pag, i) => {
     const s = novoSlide(titulo(`Desvios aguardando triagem há mais de ${a.metaTriagem} dias`, i, pagsDev.length), `${a.desviosAtrasados.length} desvio(s)`);
-    if (!pag.length) return vazio(s, "Nenhum desvio com triagem atrasada.");
+    if (!pag.length) return vazio(s, "Nenhum desvio registrado no período está com triagem atrasada.");
     tabela(s, ["Nº", "Assunto", "Setor", "Tipo", "Impacto", "Aberto há"],
       pag.map(d => [d.num, d.assunto || "—", d.setor, d.tipo, d.impacto,
         { text: dias(d.dias), options: { bold: true, color: d.dias > 15 ? VERMELHO : AMARELO } }]),
@@ -163,13 +164,13 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   });
 
   // 6. Desvios por setor (gráfico nativo, editável no PowerPoint)
-  const sSet = novoSlide("Desvios por setor", "Em aberto e registrados nos últimos 30 dias");
-  if (!a.desviosPorSetor.length) vazio(sSet, "Nenhum desvio em aberto ou registrado nos últimos 30 dias.");
+  const sSet = novoSlide("Desvios por setor", "Registrados no período");
+  if (!a.desviosPorSetor.length) vazio(sSet, "Nenhum desvio registrado no período.");
   else {
     const labels = a.desviosPorSetor.map(x => x.setor).reverse();
     sSet.addChart(pptx.ChartType.bar, [
-      { name: "Registrados nos últimos 30 dias", labels, values: a.desviosPorSetor.map(x => x.ultimos30).reverse() },
-      { name: "Aguardando triagem", labels, values: a.desviosPorSetor.map(x => x.abertos).reverse() },
+      { name: "Registrados no período", labels, values: a.desviosPorSetor.map(x => x.registrados).reverse() },
+      { name: "Ainda aguardando triagem", labels, values: a.desviosPorSetor.map(x => x.abertos).reverse() },
     ], {
       x: X0, y: 1.2, w: W, h: 5.7, barDir: "bar", barGrouping: "clustered", chartColors: ["8FB59A", VERDE],
       showLegend: true, legendPos: "b", legendFontFace: FONTE, legendFontSize: 12,
@@ -183,10 +184,10 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   const pagsAc = paginar(a.acoesCapa);
   pagsAc.forEach((pag, i) => {
     const s = novoSlide(titulo("Ações CAPA vencidas ou vencendo em 7 dias", i, pagsAc.length), `${a.acoesCapa.length} ação(ões)`);
-    if (!pag.length) return vazio(s, "Nenhuma ação CAPA vencida ou vencendo nos próximos 7 dias.");
+    if (!pag.length) return vazio(s, "Nenhuma ação CAPA das RNCs do período vencida ou vencendo nos próximos 7 dias.");
     tabela(s, ["RNC", "Ação", "Responsável", "Prazo", "Situação"],
       pag.map(x => [x.rnc, x.acao, x.resp, prazoTxt(x.prazo),
-        x.vencida ? { text: `Vencida há ${dias(x.diasAtraso)}`, options: { bold: true, color: VERMELHO } } : "Vence nesta semana"]),
+        x.vencida ? { text: `Vencida há ${dias(x.diasAtraso)}`, options: { bold: true, color: VERMELHO } } : "Vence em até 7 dias"]),
       [1.5, 5.4, 2.3, 1.2, 2.03]);
   });
 
@@ -194,5 +195,5 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   const enc = novoSlide("Encaminhamentos", "Preencher na reunião");
   tabela(enc, ["Encaminhamento", "Responsável", "Prazo"], Array.from({ length: 6 }, () => [" ", " ", " "]), [7.4, 3.0, 2.03]);
 
-  await pptx.writeFile({ fileName: `Qualidade_semana_${a.semana.ate}.pptx` });
+  await pptx.writeFile({ fileName: `Qualidade_${a.periodo.de}_a_${a.periodo.ate}.pptx` });
 }

@@ -1,12 +1,13 @@
 // Apresentação semanal da Qualidade: o que vai em cada slide, calculado direto das RNCs
 // e dos desvios. Puro e testável; quem desenha o PowerPoint é gerarPptx.js.
 //
-// A semana é a janela de 7 dias terminando hoje (a reunião é semanal, mas não cai sempre
-// no mesmo dia). As listas de pendência são situação atual e não dependem da janela.
+// Tudo se refere ao período escolhido na tela (o mesmo filtro de datas do Relatórios):
+// entram só as RNCs e os desvios REGISTRADOS dentro dele, e as listas mostram a situação
+// de hoje desses registros. Sem período, vale a janela de 7 dias terminando hoje.
 import { rncAtiva, rncEncerrada } from "../../core/status";
 import { contagemCapa, etapaParaContinuar } from "../rnc/ferramentasLogic";
 import { META_TRIAGEM_DIAS, triagemStatus } from "../desvios/triagem";
-import { dataIso, diasEntre, somarDias } from "../../shared/periodoLogic";
+import { dataIso, diasEntre, periodoAnterior, somarDias } from "../../shared/periodoLogic";
 
 export const LINHAS_POR_SLIDE = 8;
 export const DIAS_ACAO_VENCENDO = 7;
@@ -43,19 +44,25 @@ export function paginar(lista, n = LINHAS_POR_SLIDE) {
   return pags;
 }
 
-export function montarApresentacao({ rncs = [], desvios = [], hoje }) {
-  const semana = { de: somarDias(hoje, -6), ate: hoje };
-  const anterior = { de: somarDias(hoje, -13), ate: somarDias(hoje, -7) };
+const dataRegistroDesvio = d => dataIso(d.dataRegistro || d.dataOcorrencia);
+
+export function montarApresentacao({ rncs: todasRncs = [], desvios: todosDesvios = [], hoje, periodo }) {
+  const per = periodo ? { de: periodo.de, ate: periodo.ate } : { de: somarDias(hoje, -6), ate: hoje };
+  const anterior = periodoAnterior(periodo || per);
+  const rncs = todasRncs.filter(r => dentro(dataIso(r.data), per));
+  const desvios = todosDesvios.filter(d => dentro(dataRegistroDesvio(d), per));
   const ativas = rncs.filter(r => rncAtiva(r.status));
   const vencida = r => !!r.prazoAC && r.prazoAC < hoje;
 
-  const contaRnc = per => ({
-    abertas: rncs.filter(r => dentro(dataIso(r.data), per)).length,
-    encerradas: rncs.filter(r => dentro(dataEncerramentoRnc(r), per)).length,
+  // Abertas/registrados contam pela data de registro; encerradas/triados pela data em que
+  // o fato aconteceu, valendo também para registro mais antigo fechado dentro do período.
+  const contaRnc = p => ({
+    abertas: todasRncs.filter(r => dentro(dataIso(r.data), p)).length,
+    encerradas: todasRncs.filter(r => dentro(dataEncerramentoRnc(r), p)).length,
   });
-  const contaDesvio = per => ({
-    registrados: desvios.filter(d => dentro(dataIso(d.dataRegistro || d.dataOcorrencia), per)).length,
-    triados: desvios.filter(d => dentro(dataTriagem(d), per)).length,
+  const contaDesvio = p => ({
+    registrados: todosDesvios.filter(d => dentro(dataRegistroDesvio(d), p)).length,
+    triados: todosDesvios.filter(d => dentro(dataTriagem(d), p)).length,
   });
 
   const desviosAbertos = desvios.filter(d => d.status === "Registrado");
@@ -93,26 +100,22 @@ export function montarApresentacao({ rncs = [], desvios = [], hoje }) {
       })))
     .sort((a, b) => (a.prazo < b.prazo ? -1 : a.prazo > b.prazo ? 1 : a.resp.localeCompare(b.resp)));
 
-  const ini30 = somarDias(hoje, -29);
   const setores = {};
   desvios.forEach(d => {
     const s = setorDoDesvio(d);
-    const recente = dentro(dataIso(d.dataRegistro || d.dataOcorrencia), { de: ini30, ate: hoje });
-    const aberto = d.status === "Registrado";
-    if (!recente && !aberto) return;
-    setores[s] = setores[s] || { setor: s, abertos: 0, ultimos30: 0 };
-    if (aberto) setores[s].abertos++;
-    if (recente) setores[s].ultimos30++;
+    setores[s] = setores[s] || { setor: s, abertos: 0, registrados: 0 };
+    setores[s].registrados++;
+    if (d.status === "Registrado") setores[s].abertos++;
   });
   const desviosPorSetor = Object.values(setores)
-    .sort((a, b) => (b.abertos + b.ultimos30) - (a.abertos + a.ultimos30) || a.setor.localeCompare(b.setor))
+    .sort((a, b) => b.registrados - a.registrados || b.abertos - a.abertos || a.setor.localeCompare(b.setor))
     .slice(0, 10);
 
   return {
-    hoje, semana, anterior,
+    hoje, periodo: per, anterior,
     resumo: {
-      rnc: { ...contaRnc(semana), anterior: contaRnc(anterior), emAberto: ativas.length, vencidas: rncsVencidas.length },
-      desvio: { ...contaDesvio(semana), anterior: contaDesvio(anterior), emAberto: desviosAbertos.length, atrasados: desviosAtrasados.length },
+      rnc: { ...contaRnc(per), anterior: anterior && contaRnc(anterior), emAberto: ativas.length, vencidas: rncsVencidas.length },
+      desvio: { ...contaDesvio(per), anterior: anterior && contaDesvio(anterior), emAberto: desviosAbertos.length, atrasados: desviosAtrasados.length },
     },
     rncsVencidas, rncsPorResponsavel, desviosAtrasados, desviosPorSetor, acoesCapa,
     metaTriagem: META_TRIAGEM_DIAS,
