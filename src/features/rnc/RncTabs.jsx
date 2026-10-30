@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
 import { DISPOSICOES, SEVMETA, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
 import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
-import { filtrarPorPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
+import { filtrarPorPeriodo, isoLocal, resolverPeriodo } from "../../shared/periodoLogic";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -23,6 +23,8 @@ import { AssinaturaModal } from "../pdf/pdfExports";
 import { rncTemMaterial } from "./ferramentasLogic";
 import { EspiadaRnc } from "./EspiadaRnc";
 import { ofertaNotificar } from "../email/ofertaNotificar";
+import { montarApresentacao } from "../apresentacao/apresentacaoLogic";
+import { gerarApresentacaoPptx } from "../apresentacao/gerarPptx";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -949,7 +951,7 @@ export function DashTab({ rncs }) {
   );
 }
 
-export function RelatoriosTab({ rncs, users, user, toast_ }) {
+export function RelatoriosTab({ rncs, desvios = [], users, user, toast_ }) {
   const T = useTheme(); const s = useS();
   const [selPeriodo, setSelPeriodo] = usePeriodo("rnc-relatorios", "mes");
   const [respFiltro, setRespFiltro] = useState("");
@@ -958,6 +960,21 @@ export function RelatoriosTab({ rncs, users, user, toast_ }) {
   const [aiResumo, setAiResumo] = useState("");
   const [loadingAI, setLoadingAI] = useState(false);
   const [activeSection, setActiveSection] = useState("resumo");
+  const [gerandoPptx, setGerandoPptx] = useState(false);
+
+  // Apresentação semanal: sempre os 7 dias até hoje e as pendências de agora, sem os
+  // filtros desta tela (a reunião olha a Qualidade inteira).
+  const gerarApresentacao = async () => {
+    setGerandoPptx(true);
+    try {
+      await gerarApresentacaoPptx(montarApresentacao({ rncs, desvios, hoje: isoLocal() }), { usuario: user?.name });
+      toast_("Apresentação gerada. Confira o arquivo baixado.", "green");
+    } catch (e) {
+      console.error(e);
+      toast_("Não foi possível gerar a apresentação.", "red");
+    }
+    setGerandoPptx(false);
+  };
 
   // Mesmo filtro de período dos painéis (periodoLogic). As datas eram calculadas com
   // toISOString(), que é UTC: depois das 21h o "hoje" do relatório já era amanhã.
@@ -1095,6 +1112,9 @@ Herbamed® · Sistema de Gestão da Qualidade`;
             <div style={{ fontSize:12, color:T.text2 }}>Herbamed® · Sistema de Gestão da Qualidade</div>
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <button onClick={gerarApresentacao} disabled={gerandoPptx} title="PowerPoint com as RNCs e os desvios da semana e o que está pendente, para a reunião semanal" style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:gerandoPptx?.6:1 }}>
+              {gerandoPptx?"Gerando...":"📊 Apresentação semanal"}
+            </button>
             <button onClick={()=>window.print()} style={{ ...s.btn, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>🖨️ Imprimir / PDF</button>
             <button onClick={enviarEmail} disabled={enviando} style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:enviando?.6:1 }}>
               {enviando?"Enviando...":"✉️ Enviar por e-mail"}

@@ -918,7 +918,7 @@ export default function App() {
               {tab==="reunioes"   && <ReunioesTab rncs={rncs} user={user} users={users} toast_={toast_} doUpdateRNC={doUpdateRNC} openEmail={openEmail} perm={perm} isAdmin={isAdmin} />}
               {tab==="fmea"       && !isViewer && <FMEATab user={user} toast_={toast_} doSaveRNC={doSaveRNC} auditLog={auditLog} />}
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
-              {tab==="relatorios" && <RelatoriosTab rncs={rncs} users={users} user={user} toast_={toast_} />}
+              {tab==="relatorios" && <RelatoriosTab rncs={rncs} desvios={desvios} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
               {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} homologacoes={homologacoes} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
               {tab==="homologacoes" && perm("verHomologacoes") && <HomologacoesTab user={user} users={users} fornecedores={fornecedores} homologacoes={homologacoes} toast_={toast_} auditLog={auditLog} perm={perm} />}
