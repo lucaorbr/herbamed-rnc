@@ -962,12 +962,12 @@ export function RelatoriosTab({ rncs, desvios = [], users, user, toast_ }) {
   const [activeSection, setActiveSection] = useState("resumo");
   const [gerandoPptx, setGerandoPptx] = useState(false);
 
-  // Apresentação semanal: sempre os 7 dias até hoje e as pendências de agora, sem os
-  // filtros desta tela (a reunião olha a Qualidade inteira).
+  // Apresentação: RNCs e desvios registrados no período escolhido nesta tela. O filtro
+  // de responsável não entra (a reunião olha a Qualidade inteira, e desvio não tem responsável).
   const gerarApresentacao = async () => {
     setGerandoPptx(true);
     try {
-      await gerarApresentacaoPptx(montarApresentacao({ rncs, desvios, hoje: isoLocal() }), { usuario: user?.name });
+      await gerarApresentacaoPptx(montarApresentacao({ rncs, desvios, hoje: isoLocal(), periodo }), { usuario: user?.name });
       toast_("Apresentação gerada. Confira o arquivo baixado.", "green");
     } catch (e) {
       console.error(e);
@@ -1112,8 +1112,8 @@ Herbamed® · Sistema de Gestão da Qualidade`;
             <div style={{ fontSize:12, color:T.text2 }}>Herbamed® · Sistema de Gestão da Qualidade</div>
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <button onClick={gerarApresentacao} disabled={gerandoPptx} title="PowerPoint com as RNCs e os desvios da semana e o que está pendente, para a reunião semanal" style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:gerandoPptx?.6:1 }}>
-              {gerandoPptx?"Gerando...":"📊 Apresentação semanal"}
+            <button onClick={gerarApresentacao} disabled={gerandoPptx} title="PowerPoint com as RNCs e os desvios registrados no período escolhido abaixo" style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:gerandoPptx?.6:1 }}>
+              {gerandoPptx?"Gerando...":"📊 Apresentação (PowerPoint)"}
             </button>
             <button onClick={()=>window.print()} style={{ ...s.btn, display:"flex", alignItems:"center", gap:6, fontSize:11 }}>🖨️ Imprimir / PDF</button>
             <button onClick={enviarEmail} disabled={enviando} style={{ ...s.btnA, display:"flex", alignItems:"center", gap:6, fontSize:11, opacity:enviando?.6:1 }}>
