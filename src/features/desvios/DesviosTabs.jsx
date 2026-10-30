@@ -94,24 +94,9 @@ export function tiposDesvioAtivos(catalogo) {
 // Mesma escala de severidade da RNC, para converter sem reclassificar.
 export const IMPACTOS_DESVIO = ["Crítica", "Maior", "Menor"];
 
-// Meta de triagem da Qualidade (dias corridos do registro até encerrar/converter).
-// Fonte única compartilhada com a aba de Indicadores e com o sinal de atraso na lista.
-export const META_TRIAGEM_DIAS = 7;
-
-// Dias entre uma data YYYY-MM-DD e hoje (0 se a data faltar/for futura).
-const diasCorridos = (iso) => {
-  if (!iso) return 0;
-  const ms = new Date(tod() + "T12:00:00") - new Date(iso + "T12:00:00");
-  return Math.max(0, Math.round(ms / 86400000));
-};
-
-// Situação de triagem de um desvio ainda "Registrado": há quantos dias está aberto
-// e se já passou da meta. Retorna null para desvios já triados (encerrados/convertidos).
-export function triagemStatus(d) {
-  if (d.status !== "Registrado") return null;
-  const dias = diasCorridos(d.dataRegistro || d.dataOcorrencia);
-  return { dias, atrasado: dias > META_TRIAGEM_DIAS };
-}
+// Meta e situação de triagem moram em triagem.js (fonte única); reexportadas aqui.
+import { META_TRIAGEM_DIAS, triagemStatus } from "./triagem";
+export { META_TRIAGEM_DIAS, triagemStatus };
 
 export const DESVIO_SMETA = {
   "Registrado":        { c: "#4fc3f7", bg: "#4fc3f718", dot: "#4fc3f7" },
