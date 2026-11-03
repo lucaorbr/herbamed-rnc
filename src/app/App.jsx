@@ -604,7 +604,7 @@ export default function App() {
     "5w2h": "CAPA — Ações Corretivas e Preventivas", eficacia: "Verificação de Eficácia",
     reunioes: "Reuniões de Análise Crítica de NCs",
     fmea: "FMEA — Análise de Modo e Efeito de Falha",
-    dashboard: "Dashboard", relatorios: "Relatórios",
+    dashboard: "Indicadores de RNC", relatorios: "Relatórios",
     cep: "CEP — Controle Estatístico de Processo",
     fornecedores: "Cadastro de Fornecedores",
     homologacoes: "Homologação de Fornecedores e Itens",

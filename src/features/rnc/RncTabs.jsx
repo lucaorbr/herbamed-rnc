@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
 import { DISPOSICOES, SEVMETA, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
 import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
-import { filtrarPorPeriodo, isoLocal, resolverPeriodo } from "../../shared/periodoLogic";
+import { filtrarPorPeriodo, isoLocal, mesesDoPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
+import { contagem, pareto, tendenciaMensal } from "./indicadoresRncLogic";
 import { useFormal, useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { exportRNCPDF } from "../pdf/pdfExports";
@@ -612,6 +613,19 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 // onda 4 pelo mesmo caminho: PlanoCapa.jsx (editor na ficha) + FilaCapa (menu), e
 // EficaciaTab na onda 5: Eficacia.jsx (editor na ficha) + FilaEficacia (menu).
 
+// Os gráficos vêm com o recharts num pedaço à parte: o RncTabs vai na carga inicial.
+const graficosRnc = () => import("./GraficosRnc");
+const lazyGrafico = nome => lazy(() => graficosRnc().then(m => ({ default: m[nome] })));
+const TendenciaRnc = lazyGrafico("TendenciaRnc");
+const StatusRosca = lazyGrafico("StatusRosca");
+const BarrasPorTipo = lazyGrafico("BarrasPorTipo");
+const ParetoRnc = lazyGrafico("ParetoRnc");
+
+function GraficoCarregando() {
+  const T = useTheme();
+  return <div style={{ height:260, display:"flex", alignItems:"center", justifyContent:"center", color:T.text3, fontSize:12 }}>Carregando gráficos…</div>;
+}
+
 export function DashTab({ rncs }) {
   const T = useTheme(); const s = useS();
   const [dashTab, setDashTab] = useState("kpis");
@@ -644,13 +658,12 @@ export function DashTab({ rncs }) {
   doPer.filter(x=>x.ishikawa?.root).forEach(r=>{ causas[r.ishikawa.root]=(causas[r.ishikawa.root]||0)+1; });
   const reincidentes = Object.values(causas).filter(v=>v>1).length;
 
-  // Por tipo (Pareto)
-  const bT={},bS={},bF={};
-  doPer.forEach(r=>{
-    bT[r.tipo]=(bT[r.tipo]||0)+1;
-    bS[r.status]=(bS[r.status]||0)+1;
-    if(r.fornecedor)bF[r.fornecedor]=(bF[r.fornecedor]||0)+1;
-  });
+  // Séries dos gráficos (cálculo em indicadoresRncLogic, testado)
+  const tendencia = tendenciaMensal(doPer, todas, mesesDoPeriodo(periodo, 24));
+  const porStatus = contagem(doPer, r => r.status);
+  const porTipo = contagem(doPer, r => r.tipo);
+  const paretoTipo = pareto(porTipo);
+  const paretoForn = pareto(contagem(doPer, r => (r.fornecedor && r.fornecedor !== "—" && r.fornecedor !== "-") ? r.fornecedor : null)).slice(0, 10);
 
   // PDCA — agrupar RNCs por fase
   const pdcaFases = {
@@ -659,12 +672,6 @@ export function DashTab({ rncs }) {
     C: todas.filter(x=>x.w2h?.length>0&&x.status==="Pendente verificação"),
     A: todas.filter(x=>x.status==="Eficaz"),
   };
-
-  // Pareto acumulado
-  const paretoData = Object.entries(bT).sort((a,b)=>b[1]-a[1]);
-  const paretoTotal = paretoData.reduce((s,[,n])=>s+n,0);
-  let acum=0;
-  const paretoAcum = paretoData.map(([k,n])=>{ acum+=n; return [k,n,Math.round(acum/paretoTotal*100)]; });
 
   // Matriz GUT das RNCs abertas
   const gutRncs = gutRank(todas);
@@ -734,25 +741,14 @@ export function DashTab({ rncs }) {
             ))}
           </div>
 
-          {/* Barras por status e tipo */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-            {[["Por Status",bS,Object.fromEntries(Object.keys(SMETA).map(k=>[k,SMETA[k].dot]))],["Por Tipo",bT,Object.fromEntries(Object.keys(TIPOC).map(k=>[k,tipoCor(k,T)]))]].map(([title,data,cm])=>(
-              <div key={title} style={{ ...s.card }}>
-                <SecTitle ch={title}/>
-                {Object.keys(data).length===0&&<div style={{ color:T.text3, fontSize:12, textAlign:"center", padding:"1rem" }}>Nenhuma RNC no período.</div>}
-                {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,n])=>{
-                  const max=Math.max(...Object.values(data),1);
-                  return <div key={k} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
-                    <div style={{ minWidth:130, fontSize:12, color:T.text2 }}>{k}</div>
-                    <div style={{ flex:1, height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
-                      <div style={{ height:"100%", width:`${Math.round(n/max*100)}%`, background:cm[k]||T.accent, borderRadius:4, transition:"width .6s" }}/>
-                    </div>
-                    <div style={{ minWidth:20, fontSize:12, fontWeight:700, color:T.text2, textAlign:"right" }}>{n}</div>
-                  </div>;
-                })}
-              </div>
-            ))}
-          </div>
+          {/* Gráficos (carregados à parte, com o recharts) */}
+          <Suspense fallback={<GraficoCarregando />}>
+            <div style={{ marginBottom:14 }}><TendenciaRnc dados={tendencia} /></div>
+            <div className="grid-2">
+              <StatusRosca dados={porStatus} />
+              <BarrasPorTipo dados={porTipo} />
+            </div>
+          </Suspense>
 
           {/* Vencidas */}
           {venc.length>0&&<div style={{ ...s.card, marginTop:14 }}>
@@ -770,60 +766,19 @@ export function DashTab({ rncs }) {
 
       {/* ── PARETO ── */}
       {dashTab==="pareto"&&(
-        <div>
-          <div style={{ ...s.card, marginBottom:14 }}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Gráfico de Pareto — Tipos de Não Conformidade</div>
-            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
-              Identifica quais tipos de NC representam 80% dos problemas. Foque nos primeiros itens da lista.
-            </div>
-            {paretoAcum.length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Sem dados.</div>:
-            paretoAcum.map(([k,n,acPct],i)=>{
-              const maxN=paretoAcum[0][1];
-              const is80=acPct<=80;
-              return <div key={k} style={{ marginBottom:10 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ width:20, height:20, borderRadius:"50%", background:is80?T.accent:T.border, color:is80?"#fff":T.text3, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i+1}</span>
-                    <span style={{ fontSize:13, color:T.text, fontWeight:is80?600:400 }}>{k}</span>
-                    {is80&&<span style={{ fontSize:9, background:T.accentDim, color:T.accent, padding:"1px 6px", borderRadius:20, fontWeight:700 }}>80%</span>}
-                  </div>
-                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                    <span style={{ fontSize:11, color:T.text3 }}>Acum: {acPct}%</span>
-                    <span style={{ fontSize:14, fontWeight:700, color:is80?T.accent:T.text2 }}>{n}</span>
-                  </div>
-                </div>
-                <div style={{ height:10, background:T.surf, borderRadius:5, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${Math.round(n/maxN*100)}%`, background:is80?`linear-gradient(to right,${T.accent},${T.accent2})`:T.border, borderRadius:5, transition:"width .6s", boxShadow:is80?`0 0 8px ${T.accentGlow}`:""  }}/>
-                </div>
-              </div>;
-            })}
-            <div style={{ marginTop:"1rem", padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
-              💡 <b style={{ color:T.accent }}>Regra 80/20:</b> Os tipos destacados em verde representam ~80% das não conformidades. Priorize ações preventivas nessas categorias para o maior impacto.
-            </div>
+        <Suspense fallback={<GraficoCarregando />}>
+          <div style={{ marginBottom:14 }}>
+            <ParetoRnc icon="📊" titulo="Pareto — Tipos de Não Conformidade"
+              sub="Barras: RNCs por tipo · Linha: % acumulado — os tipos em destaque somam ~80% das NCs"
+              dados={paretoTipo} vazio="Nenhuma RNC no período." />
           </div>
-
-          {/* Pareto por Fornecedor */}
-          <div style={s.card}>
-            <div style={{ fontSize:13, fontWeight:600, color:T.text, marginBottom:4 }}>Pareto — Fornecedores com maior incidência</div>
-            <div style={{ fontSize:11, color:T.text2, marginBottom:"1rem", paddingBottom:".75rem", borderBottom:`1px solid ${T.border}` }}>
-              Fornecedores que mais geram não conformidades.
-            </div>
-            {Object.keys(bF).length===0?<div style={{ color:T.text3, fontSize:13, textAlign:"center", padding:"2rem" }}>Nenhum fornecedor identificado nas RNCs.</div>:
-            Object.entries(bF).sort((a,b)=>b[1]-a[1]).map(([f,n],i)=>{
-              const maxN=Math.max(...Object.values(bF));
-              return <div key={f} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
-                <span style={{ width:22, height:22, borderRadius:"50%", background:i===0?"#ff4f6a22":T.border, color:i===0?"#ff4f6a":T.text3, display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0 }}>{i+1}</span>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, color:T.text, fontWeight:500, marginBottom:4 }}>{f}{i===0&&<span style={{ marginLeft:6, fontSize:9, color:"#ff4f6a", background:"#ff4f6a18", padding:"1px 6px", borderRadius:20, fontWeight:700 }}>MAIOR INCIDÊNCIA</span>}</div>
-                  <div style={{ height:7, background:T.surf, borderRadius:4, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${Math.round(n/maxN*100)}%`, background:i===0?"#ff4f6a":T.accent, borderRadius:4 }}/>
-                  </div>
-                </div>
-                <span style={{ fontSize:15, fontWeight:700, color:i===0?"#ff4f6a":T.accent, minWidth:24 }}>{n}</span>
-              </div>;
-            })}
+          <div style={{ marginBottom:14, padding:"10px 14px", background:`${T.accent}12`, border:`1px solid ${T.accent}22`, borderRadius:8, fontSize:12, color:T.text2 }}>
+            💡 <b style={{ color:T.accent }}>Regra 80/20:</b> Os tipos destacados em verde representam ~80% das não conformidades. Priorize ações preventivas nessas categorias para o maior impacto.
           </div>
-        </div>
+          <ParetoRnc icon="🏭" titulo="Pareto — Fornecedores com maior incidência"
+            sub={paretoForn.length===10?"Os 10 fornecedores que mais geram não conformidades no período":"Fornecedores que mais geram não conformidades no período"}
+            dados={paretoForn} vazio="Nenhum fornecedor identificado nas RNCs do período." />
+        </Suspense>
       )}
 
       {/* ── MATRIZ GUT ── */}

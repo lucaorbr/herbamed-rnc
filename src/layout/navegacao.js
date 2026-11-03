@@ -17,6 +17,8 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       { id:"lista", icon:"📋", label:"Registros", badge: rncs.filter(x=>x.status==="Aberta").length },
       ...(!isViewer?[{ id:"nova", icon:"➕", label:"Nova RNC" }]:[]),
       { id:"reunioes", icon:"🗓️", label:"Reuniões" },
+      { id:"dashboard", icon:"📊", label:"Indicadores" },
+      { id:"cep",       icon:"📉", label:"CEP" },
     ]},
     { id:"desvios-grupo", icon:"⚠️", label:"Desvios", items:[
       { id:"desvios", icon:"📋", label:"Registros de Desvio", badge: desvios.filter(x=>x.status==="Registrado").length },
@@ -45,9 +47,9 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       { id:"ipc",                icon:"🏭", label:"IPC — Análise de Mistura" },
       { id:"ipc-produtos",       icon:"📦", label:"IPC — Produtos" },
     ]},
+    // Os indicadores de RNC moram no grupo RNCs, como os de Desvios e do CQ moram
+    // nos deles. Aqui fica só o que cruza módulos.
     { id:"analise", icon:"📊", label:"Indicadores", items:[
-      { id:"dashboard",  icon:"📊", label:"Dashboard" },
-      { id:"cep",        icon:"📉", label:"CEP" },
       { id:"relatorios", icon:"📑", label:"Relatórios" },
     ]},
     { id:"cadastros", icon:"🏢", label:"Cadastros", items:[
