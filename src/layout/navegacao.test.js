@@ -139,8 +139,10 @@ describe("busca de telas", () => {
 
   it("cada tela carrega o caminho, para desambiguar nomes repetidos", () => {
     const indicadores = telas.filter(t => t.label === "Indicadores");
-    expect(indicadores.map(t => t.caminho)).toEqual(["Desvios"]);
-    expect(telas.find(t => t.id === "dashboard").caminho).toBe("Indicadores");
+    expect(indicadores.map(t => t.caminho)).toEqual(["RNCs", "Desvios"]);
+    expect(telas.find(t => t.id === "dashboard").caminho).toBe("RNCs");
+    expect(telas.find(t => t.id === "cep").caminho).toBe("RNCs");
+    expect(telas.find(t => t.id === "relatorios").caminho).toBe("Indicadores");
   });
 
   it("busca ignorando acento e caixa", () => {

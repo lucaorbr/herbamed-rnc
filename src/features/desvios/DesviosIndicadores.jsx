@@ -8,6 +8,7 @@ import { fmt, tod } from "../../core/utils";
 import { DESVIO_SMETA, META_TRIAGEM_DIAS, SETORES_DESVIO, TIPOS_DESVIO, pedirFiltroDesvios } from "./DesviosTabs";
 
 import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
+import { LegendaSeries, SeletorFormato, seriesNoFormato, useFormatoGrafico } from "../../shared/FormatoGrafico";
 import { filtrarPorPeriodo, mesesDoPeriodo, periodoAnterior, resolverPeriodo } from "../../shared/periodoLogic";
 
 const VERDE_OK = "#2ab84a";
@@ -42,6 +43,7 @@ const mediana = arr => {
 export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const T = useTheme();
   const [selPeriodo, setSelPeriodo] = usePeriodo("desvios-indicadores", "12m");
+  const [formatoTend, setFormatoTend] = useFormatoGrafico("desvios-tendencia", "empilhado");
 
   // Cores de impacto vindas do tema (acompanham claro/escuro)
   const IMPACTO_CORES = { "Crítica": T.red, "Maior": T.yellow, "Menor": T.blue };
@@ -299,7 +301,10 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
 
       {/* ── Tendência mensal por impacto ── */}
       <div style={{ ...card, marginBottom: 16 }}>
-        {cardTitle("📈", "Tendência de Desvios por Impacto", "Barras: registrados por mês de ocorrência, empilhados por severidade · Linhas: triagem no mês")}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+          {cardTitle("📈", "Tendência de Desvios por Impacto", `${formatoTend === "linhas" ? "Linhas cheias" : "Barras"}: registrados por mês de ocorrência, ${formatoTend === "empilhado" ? "empilhados" : "separados"} por severidade · Linhas tracejadas: triagem no mês`)}
+          <SeletorFormato formato={formatoTend} onChange={setFormatoTend} />
+        </div>
         <div style={{ height: 260 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={tendencia}>
@@ -307,22 +312,17 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
               <XAxis dataKey="mes" tick={{ fill: T.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: T.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <RcTooltip content={<CustomTooltip />} cursor={{ fill: T.accentDim }} />
-              <Bar dataKey="Menor" stackId="imp" fill={IMPACTO_CORES["Menor"]} stroke={T.card} strokeWidth={1} maxBarSize={30} />
-              <Bar dataKey="Maior" stackId="imp" fill={IMPACTO_CORES["Maior"]} stroke={T.card} strokeWidth={1} maxBarSize={30} />
-              <Bar dataKey="Crítica" stackId="imp" fill={IMPACTO_CORES["Crítica"]} stroke={T.card} strokeWidth={1} maxBarSize={30} radius={[3, 3, 0, 0]} />
-              <Line type="monotone" dataKey="Encerrados" stroke={DESVIO_SMETA["Encerrado"].c} strokeWidth={2} dot={{ r: 3, fill: DESVIO_SMETA["Encerrado"].c }} activeDot={{ r: 5 }} />
-              <Line type="monotone" dataKey="Viraram RNC" stroke={DESVIO_SMETA["Convertido em RNC"].c} strokeWidth={2} dot={{ r: 3, fill: DESVIO_SMETA["Convertido em RNC"].c }} activeDot={{ r: 5 }} />
+              {seriesNoFormato(formatoTend, ["Menor", "Maior", "Crítica"].map(k => ({ chave: k, cor: IMPACTO_CORES[k] })), { corBorda: T.card })}
+              <Line type="monotone" dataKey="Encerrados" stroke={DESVIO_SMETA["Encerrado"].c} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: DESVIO_SMETA["Encerrado"].c }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="Viraram RNC" stroke={DESVIO_SMETA["Convertido em RNC"].c} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: DESVIO_SMETA["Convertido em RNC"].c }} activeDot={{ r: 5 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <div style={{ display: "flex", gap: 16, marginTop: 6, flexWrap: "wrap" }}>
-          {[["Menor", IMPACTO_CORES["Menor"], "quad"], ["Maior", IMPACTO_CORES["Maior"], "quad"], ["Crítica", IMPACTO_CORES["Crítica"], "quad"],
-            ["Encerrados", DESVIO_SMETA["Encerrado"].c, "line"], ["Viraram RNC", DESVIO_SMETA["Convertido em RNC"].c, "line"]].map(([l, c, tipo]) => (
-            <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.text2 }}>
-              <div style={{ width: 10, height: tipo === "quad" ? 10 : 3, borderRadius: 2, background: c }} />{l}
-            </div>
-          ))}
-        </div>
+        <LegendaSeries itens={[
+          ...["Menor", "Maior", "Crítica"].map(k => ({ label: k, cor: IMPACTO_CORES[k], tipo: formatoTend === "linhas" ? "linha" : "quad" })),
+          { label: "Encerrados", cor: DESVIO_SMETA["Encerrado"].c, tipo: "tracejada" },
+          { label: "Viraram RNC", cor: DESVIO_SMETA["Convertido em RNC"].c, tipo: "tracejada" },
+        ]} />
       </div>
 
       {/* ── Pareto de tipos + Setores ── */}
