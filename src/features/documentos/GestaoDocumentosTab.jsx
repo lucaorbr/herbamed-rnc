@@ -1053,11 +1053,16 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     // Confirmação de leitura é sempre da versão lida: as confirmações da versão que
     // está sendo arquivada ficam no histórico (evidência BPF de quem leu a Rev. anterior).
     const leituraAnterior = doc.leituraObrigatoria || null;
+    // Vigência da versão que sai: é a data dela no histórico da capa. dataVigencia
+    // passa adiante no documento, então só vale se a versão chegou a ser aprovada.
+    const versaoAprovada = ["Vigente","Aguardando Vigência","Obsoleto"].includes(doc.status);
     const historico   = [...(doc.historicoRevisoes||[]), {
       versao: versaoAtual,
       versaoAlvo: novaVersao,
       status: doc.status,
       data:   doc.atualizadoEm||doc.criadoEm,
+      vigenciaVersao: versaoAprovada ? (String(doc.dataVigencia || doc.assinaturaAprovador?.timestamp || "").slice(0,10) || null) : null,
+      dataRevisao: tod(),
       responsavel: doc.atualizadoPor||doc.criadoPor,
       motivo,
       itemModificado,
@@ -2326,13 +2331,14 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versaoAlvo||h.versao}</span>
+                            <span style={{fontSize:12,fontWeight:700,color:T.text}}>Rev.{h.versao}</span>
                             {h.status&&<BadgeStatusGD status={h.status}/>}
                           </div>
                           <div style={{fontSize:11,color:T.text2,marginTop:2}}>
-                            {fmt(h.data)} · {h.responsavel||"—"}{h.aprovador?` · Aprov.: ${h.aprovador}`:""}
+                            {fmt(h.vigenciaVersao||h.data)} · {h.responsavel||"—"}{h.aprovador?` · Aprov.: ${h.aprovador}`:""}
                           </div>
-                          {h.itemModificado&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Item modificado: {h.itemModificado}</div>}
+                          {h.versaoAlvo&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Substituída pela Rev.{h.versaoAlvo}{h.dataRevisao?` (revisão aberta em ${fmt(h.dataRevisao)})`:""}</div>}
+                          {h.itemModificado&&<div style={{fontSize:11,color:T.text2,marginTop:2}}>Item modificado na Rev.{h.versaoAlvo||"—"}: {h.itemModificado}</div>}
                           {h.motivo&&<div style={{fontSize:11,color:T.text3,marginTop:2,fontStyle:"italic"}}>{h.motivo}</div>}
                         </div>
                         <div style={{display:"flex",gap:6,flexShrink:0}}>
