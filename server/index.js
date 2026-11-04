@@ -29,6 +29,7 @@ const {
   identificacaoDaCopia, rodapeDaPagina, registraNoLog,
   copiaParaEmitir, marcaDaCopia, identificacaoDaCopiaFisica, numeroDaCopia, destinoDaCopia,
 } = require("./acessoDocumento");
+const { linhasHistoricoCapa } = require("./historicoCapa");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const {
@@ -1213,39 +1214,6 @@ function fmtDataBR(value) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(value);
 }
 
-function normalizarHistoricoCapa(doc) {
-  const historico = Array.isArray(doc?.historicoRevisoes) ? doc.historicoRevisoes : [];
-  const rows = [{
-    versao: "00",
-    data: doc?.criadoEm || doc?.atualizadoEm || "",
-    item: "Documento completo",
-    descricao: "Emissão inicial",
-  }];
-
-  historico.forEach((h) => {
-    const baseVersao = String(h.versao || "").match(/^\d+$/)
-      ? String(parseInt(h.versao, 10) + 1).padStart(2, "0")
-      : (h.versao || "");
-    const versao = h.versaoAlvo || h.revisao || baseVersao;
-    const item = h.itemModificado || h.item || h.secao || h.motivo || "";
-    const descricao = h.descricao || h.alteracao || h.motivo || "";
-    if (!versao && !item && !descricao) return;
-    rows.push({
-      versao,
-      data: h.data || h.atualizadoEm || "",
-      item: item || "Não informado",
-      descricao: descricao || "Não informado",
-    });
-  });
-
-  const vistos = new Set();
-  return rows.filter((row) => {
-    const key = `${row.versao}|${row.data}|${row.item}|${row.descricao}`;
-    if (vistos.has(key)) return false;
-    vistos.add(key);
-    return true;
-  });
-}
 
 async function handleDistributionLog(req, res, pathname, url) {
   if (pathname !== "/api/distribution-log" || req.method !== "GET") return false;
@@ -1566,7 +1534,7 @@ async function handleDocumentRender(req, res, pathname, url) {
     capa.drawLine({ start: { x: 40, y: y - 5 }, end: { x: W - 40, y: y - 5 }, thickness: 1, color: verde });
     y -= 20;
 
-    const historicoCapa = normalizarHistoricoCapa(doc);
+    const historicoCapa = linhasHistoricoCapa(doc);
     const rowH = 22;
     const colRev = 40, colData = 88, colItem = 162, colDesc = 330;
     const tableW = W - 80;
