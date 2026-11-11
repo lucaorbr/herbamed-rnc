@@ -444,16 +444,17 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   // (em finalizarSalvar), evitando "queimar" número se o elaborador desistir de assinar.
   const salvar = () => {
     const errosTipo = errosAberturaPorTipo(f);
-    if (errosTipo.length) { if (!f.tipoRnc) setNovaAba("ident"); alert(errosTipo.join(" ")); return; }
+    if (errosTipo.length) { setNovaAba(!f.tipoRnc || !f.fornecedor ? "ident" : "desc"); alert(errosTipo.join(" ")); return; }
     if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
-    if (modoPrazo === "definicao") {
+    const ehExterna = f.tipoRnc === "externa";
+    if (!ehExterna && modoPrazo === "definicao") {
       if (!f.justificativaPrazo?.trim()) { alert("Informe a justificativa para o prazo em definicao."); return; }
       if (!f.proximaReavaliacao) { alert("Defina a proxima data de reavaliacao."); return; }
       f.prazoAC = "2099-12-31";
     }
     if (!f.sev)                 { alert("Selecione a severidade (Maior / Menor)."); return; }
-    if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
-    if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
+    if (!f.resp.trim())         { alert(ehExterna ? "Informe o responsável na Herbamed (aba Prazos)." : "Informe o responsável pela ação corretiva."); return; }
+    if (!ehExterna && !f.prazoAC) { alert("Defina o prazo para ação corretiva."); return; }
     setAssinaturaModal(true);
   };
 
@@ -461,8 +462,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
     try {
       const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
       // Externa: o fornecedor tem prazo para responder (padrão de 15 dias, editável na ficha).
-      if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
-      if (modoPrazo === "definicao") {
+      if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
+      if (f.tipoRnc !== "externa" && modoPrazo === "definicao") {
         draft.prazoAC = "";
         draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
       }
@@ -597,7 +598,17 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       </div>
       )}
 
-      {novaAba==="prazos" && (
+      {novaAba==="prazos" && f.tipoRnc === "externa" && (
+      <div style={s.card}>
+        <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
+        <div style={{ fontSize: 12, color: T.text3, marginBottom: 12 }}>RNC externa: o fornecedor faz a análise de causa e o plano de ação. Aqui vale só o prazo para ele responder.</div>
+        <G2 ch={<>
+          <F lbl="Responsável na Herbamed" tip="Quem acompanha a RNC: cobra o fornecedor, avalia a resposta e verifica o recebimento seguinte." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} placeholder="Ex.: Ana (Qualidade)" />} />
+          <F lbl="Prazo de resposta do fornecedor" tip={`Padrão de ${PRAZO_RESPOSTA_FORNECEDOR_DIAS} dias a partir da abertura.`} ch={<Inp type="date" value={f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS)} onChange={e => set("prazoRespostaFornecedor", e.target.value)} />} />
+        </>} />
+      </div>
+      )}
+      {novaAba==="prazos" && f.tipoRnc !== "externa" && (
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
         <div style={{marginBottom:12,padding:10,border:`1px solid ${T.border}`,borderRadius:8}}>

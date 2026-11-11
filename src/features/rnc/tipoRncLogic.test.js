@@ -53,6 +53,8 @@ describe("resposta do fornecedor", () => {
     expect(patchPedirComplemento(ext(), " ", "Ana").erro).toBeTruthy();
     const { patch } = patchPedirComplemento(ext({ avaliacaoFornecedor: { resultado: "aceita" } }), "falta laudo", "Ana", "2026-11-06T10:00:00Z", "d", "h");
     expect(patch.avaliacaoFornecedor).toBeNull();
+    expect(patch.status).toBeUndefined(); // já estava Em andamento
+    expect(patchPedirComplemento(ext({ status: "Aberta" }), "x", "Ana", "t", "d", "h").patch.status).toBe("Em andamento");
     expect(patch.complementoFornecedor.motivo).toBe("falta laudo");
     expect(patch.complementosFornecedor).toHaveLength(1);
   });
@@ -81,6 +83,7 @@ describe("encerramento da externa", () => {
     expect(patch.status).toBe("Eficaz");
     expect(patch.eficacia.resultado).toBe("Eficaz");
     expect(patch.verificacaoRecebimento.lote).toBe("L2");
+    expect(patch.historico.at(-1).detalhes).toContain("Data: 01/12/2026");
     expect(patchEncerrarExterna(pronta, { ...verif, resultado: "Não conforme" }, "Ana", "t", "d", "h").patch.status).toBe("Ineficaz");
   });
   test("a RAC (travaEficacia) usa a trava da externa", () => {

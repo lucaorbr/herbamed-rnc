@@ -29,6 +29,15 @@ test("resposta nova arquiva a anterior", () => {
   assert.equal(out.respostasFornecedorAnteriores.length, 1);
   assert.equal(out.respostasFornecedorAnteriores[0].causaRaiz, "x");
   assert.equal(out.num, "1");
+  assert.equal(out.historico.at(-1).acao, "Resposta do fornecedor recebida (link público)");
+});
+
+test("resposta a um complemento entra no histórico como complemento", () => {
+  const rnc = { ...respondida, complementoFornecedor: { pedidoEm: "2026-11-06T10:00:00Z" }, historico: [{ acao: "x" }] };
+  const out = rncComResposta(rnc, { causaRaiz: "y" }, new Date("2026-11-08T13:00:00Z"));
+  assert.equal(out.historico.length, 2);
+  assert.match(out.historico[1].acao, /Complemento recebido/);
+  assert.equal(out.historico[1].data, "2026-11-08");
 });
 
 test("primeira resposta não cria arquivo vazio de lixo", () => {

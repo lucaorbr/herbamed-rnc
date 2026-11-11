@@ -76,12 +76,17 @@ export function respostaAtrasada(r, hoje) {
   return !!r?.prazoRespostaFornecedor && r.prazoRespostaFornecedor < hoje;
 }
 
+// Primeiro ato da Qualidade na externa tira a RNC de "Aberta" (mesma regra do andamentoPatch da interna).
+const emAndamento = r => (r?.status === "Aberta" ? { status: "Em andamento" } : {});
+const dataBr = iso => (/^\d{4}-\d{2}-\d{2}/.test(iso || "") ? iso.slice(0, 10).split("-").reverse().join("/") : iso || "");
+
 /** Patch para anexar a planilha respondida (acrescenta, nunca substitui). */
 export function patchPlanilhaRespondida(r, anexos, autor, agoraIso, data, hora) {
   if (!(anexos || []).length) return { erro: "Anexe a planilha respondida pelo fornecedor." };
   const reg = { id: `pl-${agoraIso}-${Math.random().toString(36).slice(2, 7)}`, anexos, por: autor, em: agoraIso };
   return {
     patch: {
+      ...emAndamento(r),
       respostasPlanilha: [...(r?.respostasPlanilha || []), reg],
       historico: [...(r?.historico || []), {
         data, hora, acao: "Resposta do fornecedor anexada (planilha)", resp: autor, tipo: "fornecedor",
@@ -97,6 +102,7 @@ export function patchPedirComplemento(r, motivo, autor, agoraIso, data, hora) {
   if (!m) return { erro: "Diga ao fornecedor o que falta na resposta." };
   return {
     patch: {
+      ...emAndamento(r),
       complementoFornecedor: { motivo: m, pedidoPor: autor, pedidoEm: agoraIso },
       complementosFornecedor: [...(r?.complementosFornecedor || []), { motivo: m, pedidoPor: autor, pedidoEm: agoraIso }],
       avaliacaoFornecedor: null,
@@ -111,6 +117,7 @@ export function patchAceitarResposta(r, obs, autor, agoraIso, data, hora) {
   const o = (obs || "").trim();
   return {
     patch: {
+      ...emAndamento(r),
       avaliacaoFornecedor: { resultado: "aceita", obs: o, por: autor, em: agoraIso },
       historico: [...(r?.historico || []), { data, hora, acao: "Resposta do fornecedor aceita", resp: autor, tipo: "fornecedor", detalhes: o ? [o] : [] }],
     },
@@ -170,7 +177,7 @@ export function patchEncerrarExterna(r, verificacao, autor, agoraIso, data, hora
       },
       historico: [...(r?.historico || []), {
         data, hora, acao: `RNC encerrada — recebimento seguinte ${v.resultado.toLowerCase()} (${status})`, resp: autor, tipo: "eficacia",
-        detalhes: [v.lote && `Lote verificado: ${v.lote}`, `Data: ${v.data}`, v.obs].filter(Boolean),
+        detalhes: [v.lote && `Lote verificado: ${v.lote}`, `Data: ${dataBr(v.data)}`, v.obs].filter(Boolean),
       }],
     },
   };

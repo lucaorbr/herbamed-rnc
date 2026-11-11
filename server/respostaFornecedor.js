@@ -26,12 +26,23 @@ function podeResponder(token, rnc) {
   return complementoAberto(rnc);
 }
 
-/** Dados da RNC com a resposta nova; a anterior vai para o arquivo. */
-function rncComResposta(rnc, resposta) {
+/**
+ * Dados da RNC com a resposta nova; a anterior vai para o arquivo. A chegada entra no
+ * histórico da RNC (data/hora de Brasília), como os demais atos.
+ */
+function rncComResposta(rnc, resposta, agora = new Date()) {
   const anteriores = rnc?.respostaFornecedor
     ? [...(rnc.respostasFornecedorAnteriores || []), rnc.respostaFornecedor]
     : (rnc?.respostasFornecedorAnteriores || []);
-  return { ...rnc, respostaFornecedor: resposta, respostasFornecedorAnteriores: anteriores };
+  const tz = { timeZone: "America/Sao_Paulo" };
+  const data = agora.toLocaleDateString("sv-SE", tz);
+  const hora = agora.toLocaleTimeString("pt-BR", tz);
+  const entrada = {
+    data, hora, resp: "Fornecedor (link público)", tipo: "fornecedor",
+    acao: complementoAberto(rnc) ? "Complemento recebido do fornecedor (link público)" : "Resposta do fornecedor recebida (link público)",
+    detalhes: resposta?.causaRaiz ? [`Causa raiz: ${resposta.causaRaiz}`] : [],
+  };
+  return { ...rnc, respostaFornecedor: resposta, respostasFornecedorAnteriores: anteriores, historico: [...(rnc?.historico || []), entrada] };
 }
 
 module.exports = { podeResponder, complementoAberto, rncComResposta };

@@ -23,7 +23,7 @@ function linkAnexo(a, j, T) {
 export function RespostaLink({ rf, titulo, compacta }) {
   const T = useTheme();
   const plano = rf?.planoAcao || {};
-  const linhas = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando], ["Quanto?", plano.quanto]].filter(([, v]) => v);
+  const linhas = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando ? fmt(plano.quando) : ""], ["Quanto?", plano.quanto]].filter(([, v]) => v);
   const rot = { fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 };
   return (
     <div style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", marginBottom: 8, opacity: compacta ? .8 : 1 }}>

@@ -329,7 +329,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     const rf = r.respostaFornecedor;
     if (!rf) return null;
     const plano = rf.planoAcao || {};
-    const linhasPlano = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando], ["Quanto?", plano.quanto]].filter(([, v]) => v);
+    const linhasPlano = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando ? fmt(plano.quando) : ""], ["Quanto?", plano.quanto]].filter(([, v]) => v);
     return (
       <div style={{ ...caixa, borderColor: `${T.accent}33` }}>
         <div style={{ ...rot, color: T.accent }}>🔗 Resposta do fornecedor · {rf.respondidoEm ? new Date(rf.respondidoEm).toLocaleString("pt-BR") : ""}</div>
@@ -477,7 +477,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       ? <EficaciaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
       : eficaciaBloco(),
     resposta: <RespostaFornecedorEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} openEmail={openEmail} formularioFornecedor={formularioFornecedor} />,
-    avaliacao: <AvaliacaoExternaEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} ativa={podeAgir && etapas.find(e => e.id === "avaliacao")?.estado !== "bloqueada"} />,
+    avaliacao: <AvaliacaoExternaEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} ativa={podeAgir} />,
     reunioes: <ReunioesInternas r={r} user={user} toast_={toast_} gravar={gravar} podeRegistrar={podeAgir} />,
     evidencias: <EvidenciasRnc r={r} />,
     historico: historicoBloco(),
