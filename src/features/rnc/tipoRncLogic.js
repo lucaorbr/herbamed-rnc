@@ -14,7 +14,9 @@ const cheio = v => typeof v === "string" ? v.trim().length > 0 : !!v;
 
 export const TIPOS_RNC = ["externa", "interna"];
 export const ROTULO_TIPO_RNC = { externa: "Externa", interna: "Interna" };
-export const PRAZO_RESPOSTA_FORNECEDOR_DIAS = 15;
+// Dias corridos (do calendário) a partir da abertura. Era 15; a Qualidade decidiu 7 (v3.31.2).
+// Só vale para RNC nova: a data já gravada em prazoRespostaFornecedor não muda.
+export const PRAZO_RESPOSTA_FORNECEDOR_DIAS = 7;
 
 export const tipoRnc = r => (r?.tipoRnc === "externa" ? "externa" : "interna");
 export const rncExterna = r => tipoRnc(r) === "externa";
