@@ -306,6 +306,9 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
 
   // Barra de progresso = as etapas da própria ficha (externa 4, interna 5; reuniões internas são opcionais e não contam).
   const etapasDaBarra = r => etapasDaRnc(r).filter(e => e.id !== "reunioes");
+  // RNC encerrada: barra cheia na cor do status — um traço cinza numa Eficaz parecia
+  // "ficou faltando", quando o registro está fechado. Em aberto, etapa por etapa.
+  const corDoTraco = (r, e) => rncEncerrada(r.status) ? (SMETA[r.status]?.c || T.accent) : (e.estado === "concluida" || e.estado === "dispensada" ? T.accent : T.border);
 
   const colunasRNC = [
     { key: "num", label: "Nº", render: r => <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>{r.num}</span> },
@@ -314,7 +317,7 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
         <Badge s={r.status} />
         <div style={{ display: "flex", gap: 2, marginTop: 5 }}>
           {etapasDaBarra(r).map(e => (
-            <div key={e.id} title={e.label} style={{ flex: 1, height: 3, borderRadius: 2, background: e.estado === "concluida" || e.estado === "dispensada" ? T.accent : T.border, transition: "background .3s" }} />
+            <div key={e.id} title={rncEncerrada(r.status) ? `RNC encerrada (${r.status})` : `${e.label}: ${ROTULO_ESTADO_BARRA[e.estado] || e.estado}`} style={{ flex: 1, height: 3, borderRadius: 2, background: corDoTraco(r, e), transition: "background .3s" }} />
           ))}
         </div>
       </div>
@@ -385,6 +388,8 @@ export function openCOA(coa) {
   const url = coa.url;
   window.open(url, "_blank", "noopener,noreferrer");
 }
+
+const ROTULO_ESTADO_BARRA = { concluida: "concluída", dispensada: "dispensada", atual: "próxima a fazer", bloqueada: "bloqueada", pendente: "pendente" };
 
 export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
