@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
-import { DISPOSICOES, SEVMETA, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
+import { DISPOSICOES, SEVERIDADES_RNC, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
 import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
 import { filtrarPorPeriodo, isoLocal, mesesDoPeriodo, resolverPeriodo } from "../../shared/periodoLogic";
 import { contagem, pareto, tendenciaMensal } from "./indicadoresRncLogic";
@@ -91,7 +91,6 @@ export function HomeTab({ rncs, user, setTab }) {
   // Stats
   const abertas   = rncs.filter(x => x.status === "Aberta").length;
   const vencidas  = rncs.filter(x => x.prazoAC && x.prazoAC < tod() && rncAtiva(x.status)).length;
-  const criticas  = rncs.filter(x => x.sev === "Crítica" && rncAtiva(x.status)).length;
   const taxaEf    = taxaEficaciaRNC(rncs).taxa;
   const minhas    = rncs.filter(x => x.resp === user.name && rncAtiva(x.status));
   const recentes  = [...rncs].sort((a, b) => (b.createdAt||0) - (a.createdAt||0)).slice(0, 5);
@@ -134,7 +133,6 @@ export function HomeTab({ rncs, user, setTab }) {
           {[
             { l:"Total RNCs",    n:rncs.length,  c:T.accent,  icon:"📋", action:()=>setTab("lista") },
             { l:"Abertas",       n:abertas,       c:"#ff4f6a", icon:"🔴", action:()=>setTab("lista") },
-            { l:"Críticas",      n:criticas,      c:"#ff8c42", icon:"⚡", action:()=>setTab("lista") },
             { l:"Taxa Eficácia", n:taxaEf===null?"—":`${taxaEf}%`,  c:taxaEf===null?T.text3:taxaEf>=70?T.accent:"#ff8c42", icon:"✅", action:()=>setTab("dashboard") },
             { l:"Prazos Vencidos",n:vencidas,     c:vencidas>0?"#ffd166":T.text3, icon:"⏰", action:()=>setTab("lista") },
           ].map(({ l, n, c, icon, action }) => (
@@ -231,7 +229,6 @@ export function HomeTab({ rncs, user, setTab }) {
             <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:"1rem" }}>{formal ? "" : "🩺 "}Saúde do sistema</div>
             {[
               { l:"RNCs em dia",     ok:vencidas===0,  val:vencidas===0?"✓ Nenhuma vencida":`${vencidas} vencida(s)` },
-              { l:"Situações críticas", ok:criticas===0, val:criticas===0?"✓ Nenhuma crítica":`${criticas} crítica(s)` },
               { l:"Taxa de eficácia",ok:taxaEf===null||taxaEf>=70, val:taxaEf===null?"— sem RNC encerrada":`${taxaEf}%${taxaEf>=70?" ✓":""}`},
               { l:"Sem responsável", ok:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0, val:rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length===0?"✓ Todas atribuídas":`${rncs.filter(x=>!x.resp&&rncAtiva(x.status)).length} sem responsável` },
               { l:"IPC — Liberações pendentes", ok:ipcPendentes===0, val:ipcPendentes===0?"✓ Nenhuma pendente":`${ipcPendentes} pendente(s)`, link:"ipc" },
@@ -412,7 +409,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       lote: rncPrefill.lote || "",
       detector: rncPrefill.detector || "",
       setor: rncPrefill.setor || p.setor,
-      sev: rncPrefill.sev || p.sev,
+      // Na conversão de desvio a severidade vem vazia de propósito: quem tria escolhe.
+      sev: rncPrefill.sev !== undefined ? rncPrefill.sev : p.sev,
       desc: rncPrefill.desc || p.desc,
       tipo: rncPrefill.tipo || p.tipo,
       origemAnalise: rncPrefill.origemAnalise || "",
@@ -453,7 +451,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       if (!f.proximaReavaliacao) { alert("Defina a proxima data de reavaliacao."); return; }
       f.prazoAC = "2099-12-31";
     }
-    if (!f.sev)                 { alert("Selecione a severidade (Crítica / Maior / Menor)."); return; }
+    if (!f.sev)                 { alert("Selecione a severidade (Maior / Menor)."); return; }
     if (!f.resp.trim())         { alert("Informe o responsável pela ação corretiva."); return; }
     if (!f.prazoAC)             { alert("Defina o prazo para ação corretiva."); return; }
     setAssinaturaModal(true);
@@ -510,7 +508,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
             Nº atribuído ao salvar
           </span>
         </div>
-        <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
+        <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}><option value="">— Selecione —</option>{SEVERIDADES_RNC.map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>
           <F lbl="Tipo de não conformidade" tip="Classifique a origem da NC. Ex: Matéria-prima (insumo fora do padrão), Processo (falha na fabricação), Produto acabado (produto final com desvio)." ch={
             <div>
@@ -651,7 +649,6 @@ export function DashTab({ rncs }) {
   const { eficazes: ef, encerradas, taxa: taxaEf } = taxaEficaciaRNC(doPer);
   const ab = todas.filter(x=>x.status==="Aberta").length;
   const venc = todas.filter(r=>r.prazoAC&&r.prazoAC<tod()&&rncAtiva(r.status));
-  const critica = doPer.filter(x=>x.sev==="Crítica").length;
 
   // Tempo médio resolução
   const resolvidas = doPer.filter(x=>x.status==="Eficaz"&&x.data&&x.eficacia?.data);
@@ -736,7 +733,7 @@ export function DashTab({ rncs }) {
           <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:"1rem" }}>
             {[
               ["Total no período",tot,T.accent],
-              ["Críticas",critica,"#ff4f6a"],
+              ["Maiores",doPer.filter(x=>x.sev==="Maior").length,"#ff8c42"],
               ["Vencidas hoje",venc.length,"#ffd166"],
               ["Eficazes",ef,T.accent],
               ["Ineficazes",doPer.filter(x=>x.status==="Ineficaz").length,"#ff8c42"],
@@ -986,7 +983,7 @@ export function RelatoriosTab({ rncs, desvios = [], users, user, toast_ }) {
 
 PERÍODO: ${fmt(dataInicio)} a ${fmt(dataFim)}
 FILTRO: ${respFiltro||"Todos os responsáveis"}
-TOTAL: ${total} | ABERTAS: ${abertas} | EFICAZES: ${eficaz} | CRÍTICAS: ${critica} | VENCIDAS: ${vencidas}
+TOTAL: ${total} | ABERTAS: ${abertas} | EFICAZES: ${eficaz} | MAIORES: ${maior} | MENORES: ${menor} | VENCIDAS: ${vencidas}
 TAXA DE EFICÁCIA (eficazes ÷ encerradas): ${txtEficacia}
 TEMPO MÉDIO RESOLUÇÃO: ${tempoMedio?`${tempoMedio} dias`:"N/D"}
 TIPOS MAIS FREQUENTES: ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(", ")}
@@ -1015,7 +1012,8 @@ Abertas:              ${abertas}
 Em andamento:         ${emAndamento}
 Eficazes:             ${eficaz} (${txtEficacia} das ${encerradas} encerradas)
 Ineficazes:           ${ineficaz}
-Críticas:             ${critica}
+Maiores:              ${maior}
+Menores:              ${menor}
 Prazos vencidos:      ${vencidas}
 Tempo médio resolução:${tempoMedio?`${tempoMedio} dias`:"N/D"}
 
@@ -1120,9 +1118,8 @@ Herbamed® · Sistema de Gestão da Qualidade`;
       </div>
 
       {/* BARRA EXTRA — tempo médio + severidade */}
-      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12, marginBottom:"1rem" }}>
+      <div className="kpi-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:"1rem" }}>
         {[
-          { l:"Críticas", n:critica, c:"#ff4f6a" },
           { l:"Maiores", n:maior, c:"#ff8c42" },
           { l:"Menores", n:menor, c:"#a78bfa" },
           { l:"Tempo médio resolução", n:tempoMedio?`${tempoMedio}d`:"N/D", c:T.blue },
@@ -1184,7 +1181,7 @@ Herbamed® · Sistema de Gestão da Qualidade`;
           {/* Severidade */}
           <div style={{ ...s.card }}>
             <SecTitle icon="⚡" ch="Distribuição por severidade" />
-            {[["Crítica","#ff4f6a",critica],["Maior","#ff8c42",maior],["Menor","#a78bfa",menor]].map(([l,c,n])=>{
+            {[["Crítica","#ff4f6a",critica],["Maior","#ff8c42",maior],["Menor","#a78bfa",menor]].filter(([l,,n])=>l!=="Crítica"||n>0).map(([l,c,n])=>{
               const pct=total>0?Math.round(n/total*100):0;
               return <div key={l} style={{ marginBottom:12 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>

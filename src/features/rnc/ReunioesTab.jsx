@@ -58,7 +58,6 @@ function motivosDaRnc(r) {
   // discutir, independente de severidade — entra na pauta por direito próprio.
   if (r.status === "Ineficaz") m.push("ineficaz");
   if (past(r.prazoAC) && rncAtiva(r.status)) m.push("vencida");
-  if (r.sev === "Crítica" && !r.assinaturaRT && rncAtiva(r.status)) m.push("critica");
   if (r.status === "Pendente verificação") m.push("pendente_verif");
   if (r.status === "Aberta" || r.status === "Em andamento") m.push("aberta");
   return m;

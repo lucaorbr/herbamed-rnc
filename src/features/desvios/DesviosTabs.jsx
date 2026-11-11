@@ -3,7 +3,7 @@ import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
 import { useS } from "../../shared/styles";
-import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { F, G2, Inp, SecTitle, Sel, TA } from "../../shared/ui";
 import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoHistorico";
 import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
 import { Table } from "../../shared/Table";
@@ -91,8 +91,9 @@ export function tiposDesvioAtivos(catalogo) {
   return [...semOutros, "Outros"];
 }
 
-// Mesma escala de severidade da RNC, para converter sem reclassificar.
-export const IMPACTOS_DESVIO = ["Crítica", "Maior", "Menor"];
+// Desde a v3.28.0 o desvio NÃO tem impacto/criticidade: quem define a severidade é a
+// triagem, ao converter em RNC (só Maior ou Menor). Desvios antigos guardam o campo
+// `impacto` como foi gravado; ele só deixou de ser pedido e exibido.
 
 // Meta e situação de triagem moram em triagem.js (fonte única); reexportadas aqui.
 import { META_TRIAGEM_DIAS, triagemStatus } from "./triagem";
@@ -185,7 +186,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
   const abrirEdicao = (d) => {
     setEditData({
       dataOcorrencia: d.dataOcorrencia || "", setor: d.setor || "", setorOutro: d.setorOutro || "",
-      tipo: d.tipo || "", tipoOutro: d.tipoOutro || "", impacto: d.impacto || "Maior",
+      tipo: d.tipo || "", tipoOutro: d.tipoOutro || "",
       produto: d.produto || "", acaoImediata: d.acaoImediata || "Não",
     });
     setAddDesc(""); setAddAcao("");
@@ -199,7 +200,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     if (editData.tipo === "Outros" && !editData.tipoOutro.trim()) { alert("Especifique o tipo do desvio (Outros)."); return; }
     if (editData.acaoImediata === "Sim" && campoVazio(d.acaoDesc) && campoVazio(addAcao)) { alert("Descreva a ação imediata adotada."); return; }
 
-    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", impacto: "Impacto", produto: "Produto / Lote", acaoImediata: "Houve ação imediata" };
+    const campos = { dataOcorrencia: "Data da ocorrência", setor: "Setor", setorOutro: "Setor (Outros)", tipo: "Tipo", tipoOutro: "Tipo (Outros)", produto: "Produto / Lote", acaoImediata: "Houve ação imediata" };
     const alterados = Object.entries(campos)
       .filter(([k]) => (d[k] || "") !== (editData[k] || ""))
       .map(([k, label]) => `${label}: "${d[k] || "—"}" → "${editData[k] || "—"}"`);
@@ -248,7 +249,6 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
     { key: "dataOcorrencia", label: "Data", render: d => fmt(d.dataOcorrencia) },
     { key: "setor", label: "Setor", accessor: d => d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || "—") },
     { key: "tipo", label: "Tipo", accessor: d => d.tipo === "Outros" ? (d.tipoOutro || "Outros") : d.tipo },
-    { key: "impacto", label: "Impacto", render: d => d.impacto ? <SevB s={d.impacto} /> : "—" },
     { key: "desc", label: "Descrição", maxWidth: 280, render: d => d.desc },
     { key: "status", label: "Status", render: d => <DesvioBadge status={d.status} /> },
     { key: "triagem", label: "Triagem", sortable: false, render: d => <TriagemChip d={d} T={T} /> },
@@ -302,7 +302,8 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       lote: d.lote || "",
       detector: d.registradoPor || "",
       setor: d.setor === "Outros" ? (d.setorOutro || "Outros") : (d.setor || ""),
-      sev: d.impacto || "Maior",
+      // A severidade é decidida por quem tria, na conversão: o formulário nasce sem ela.
+      sev: "",
       desc: descParaRNC(d),
       origemDesvio: d.id,
       origemDesvioNum: d.num,
@@ -415,7 +416,6 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 18, fontWeight: 800, color: T.accent }}>{sel.num}</span>
                 <DesvioBadge status={sel.status} />
-                {sel.impacto && <SevB s={sel.impacto} />}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {podeEditar(sel) && !editando && (
@@ -432,7 +432,6 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                   </div>
                   <G2 ch={<>
                     <F lbl="Data da ocorrência" ch={<Inp type="date" value={editData.dataOcorrencia} onChange={e => setEditData(p => ({ ...p, dataOcorrencia: e.target.value }))} />} />
-                    <F lbl="Impacto" ch={<Sel value={editData.impacto} onChange={e => setEditData(p => ({ ...p, impacto: e.target.value }))}>{IMPACTOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
                   </>} />
                   <F lbl="Setor *" ch={
                     <div>
@@ -771,7 +770,7 @@ function CampoBloco({ T, l, v }) {
 function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPOS_DESVIO, setoresDesvio = SETORES_DESVIO }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({
-    dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: tiposDesvio[0] || "Outros", tipoOutro: "", impacto: "Maior",
+    dataOcorrencia: tod(), setor: "", setorOutro: "", tipo: tiposDesvio[0] || "Outros", tipoOutro: "",
     desc: "", produto: "", acaoImediata: "Não", acaoDesc: "",
   });
   const [anexos, setAnexos] = useState([]);
@@ -817,7 +816,7 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPO
           Registre o desvio observado em chão de fábrica. Quem registra e a data são preenchidos automaticamente.
           Após o registro, a Qualidade tria: encerra (se a ação imediata já sanou) ou converte em RNC.
         </div>
-        <G3 ch={<>
+        <G2 ch={<>
           <F lbl="Data da ocorrência" tip="Quando o desvio aconteceu. Por padrão é hoje, mas pode ajustar se viu hoje algo de ontem." ch={<Inp type="date" value={f.dataOcorrencia} onChange={e => set("dataOcorrencia", e.target.value)} />} />
           <F lbl="Setor *" ch={
             <div>
@@ -825,7 +824,6 @@ function NovoDesvioForm({ user, toast_, setTab, doSaveDesvio, tiposDesvio = TIPO
               {f.setor === "Outros" && <Inp placeholder="Especifique o setor..." value={f.setorOutro} onChange={e => set("setorOutro", e.target.value)} sx={{ marginTop: 8 }} />}
             </div>
           } />
-          <F lbl="Impacto" tip="Mesma escala da RNC. Crítica: risco ao produto/paciente. Maior: impacto relevante. Menor: desvio leve." ch={<Sel value={f.impacto} onChange={e => set("impacto", e.target.value)}>{IMPACTOS_DESVIO.map(x => <option key={x}>{x}</option>)}</Sel>} />
         </>} />
         <F lbl="Tipo do desvio" ch={
           <div>

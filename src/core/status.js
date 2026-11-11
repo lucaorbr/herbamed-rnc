@@ -65,6 +65,11 @@ export const errosDisposicao = ({ decisao, justificativa, outro }) => {
   return erros;
 };
 
+// Severidades oferecidas numa RNC. Desde a v3.28.0 só Maior e Menor: "Crítica" saiu
+// (e com ela a aprovação do RT e a entrada na pauta da RAC que dependiam dela).
+// SEVMETA mantém "Crítica" só para as RNCs antigas que a registraram seguirem exibindo.
+export const SEVERIDADES_RNC = ["Maior", "Menor"];
+
 export const SEVMETA = {
   "Crítica": { c: "#ff4f6a", bg: "#ff4f6a18" },
   "Maior":   { c: "#ff8c42", bg: "#ff8c4218" },

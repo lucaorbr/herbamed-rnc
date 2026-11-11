@@ -30,7 +30,9 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
 
   // ── KPIs principais ──
   const rncsAbertas    = rncs.filter(r => r.status === "Aberta").length;
-  const rncsCriticas   = rncs.filter(r => r.sev === "Crítica" && rncAtiva(r.status)).length;
+  // Desde a v3.28.0 a severidade mais alta é "Maior" (as "Crítica" antigas contam junto).
+  const ehMaior        = r => r.sev === "Maior" || r.sev === "Crítica";
+  const rncsMaiores    = rncs.filter(r => ehMaior(r) && rncAtiva(r.status)).length;
   const rncsVencidas   = rncs.filter(r => r.prazoAC && r.prazoAC < hoje && rncAtiva(r.status)).length;
   const eficaz         = rncs.filter(r => r.status === "Eficaz").length;
   const ineficaz       = rncs.filter(r => r.status === "Ineficaz").length;
@@ -44,7 +46,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   const taxaDesvioRNC     = desvios.length > 0 ? Math.round(desviosConvertidos / desvios.length * 100) : null;
 
   // Semáforo geral
-  const situacao = rncsCriticas > 0 || rncsVencidas > 3
+  const situacao = rncsVencidas > 3
     ? { cor: "#ff4f6a", label: "Atenção Requerida", icon: "🔴" }
     : rncsVencidas > 0 || rncsAbertas > 5 || desviosAbertos > 5
     ? { cor: "#ffd166", label: "Monitoramento", icon: "🟡" }
@@ -92,7 +94,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
   };
 
   // RNCs críticas abertas
-  const rncsCriticasLista = rncs.filter(r => r.sev === "Crítica" && rncAtiva(r.status)).slice(0, 4);
+  const rncsMaioresLista = rncs.filter(r => ehMaior(r) && rncAtiva(r.status)).slice(0, 4);
 
   // RNCs do mês selecionado
   const rncsMesSel = mesSel ? rncs.filter(r => r.data && r.data.startsWith(mesSel.key)) : [];
@@ -189,7 +191,7 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
         {/* ── ROW 1: KPI CARDS ── */}
         <div style={{ display: "flex", gap: ".8rem", flexShrink: 0 }}>
           <KpiCard icon="📋" label="RNCs Abertas"    value={rncsAbertas}   color={rncsAbertas > 0 ? C.yellow : C.accent}   sub={`${rncs.length} total no sistema`} alert={rncsAbertas > 5} />
-          <KpiCard icon="🔴" label="NC Críticas Ativas" value={rncsCriticas}  color={rncsCriticas > 0 ? "#ff4f6a" : C.accent} sub="Severidade crítica em aberto"  alert={rncsCriticas > 0} />
+          <KpiCard icon="🟠" label="RNCs Maior Ativas" value={rncsMaiores}  color={rncsMaiores > 0 ? C.orange : C.accent} sub="Severidade maior em aberto" />
           <KpiCard icon="⏰" label="Prazos Vencidos"  value={rncsVencidas}  color={rncsVencidas > 0 ? C.orange : C.accent}  sub="Ações corretivas em atraso"    alert={rncsVencidas > 0} />
           <KpiCard icon="✅" label="Taxa de Eficácia" value={taxaEficacia !== null ? `${taxaEficacia}%` : "—"} color={taxaEficacia >= 80 ? C.accent : taxaEficacia !== null ? C.yellow : C.text3} sub={`${eficaz} eficaz de ${encerradas} encerrada(s) · ${ineficaz} ineficaz`} />
           <KpiCard icon="⚠️" label="Desvios em Aberto" value={desviosAbertos} color={desviosAbertos > 0 ? "#4fc3f7" : C.accent} sub={`${desvios.length} total${taxaDesvioRNC !== null ? ` · ${taxaDesvioRNC}% viraram RNC` : ""}`} alert={desviosAbertos > 5} />
@@ -304,20 +306,20 @@ export function ExecutivoDashboard({ user, rncs, fornecedores, desvios = [], onC
             }
           </div>
 
-          {/* RNCs Críticas em Aberto */}
-          <div style={{ flex: 1, background: rncsCriticas > 0 ? "#ff4f6a08" : C.card, border: `1px solid ${rncsCriticas > 0 ? "#ff4f6a33" : C.border}`, borderRadius: 16, padding: "1rem 1.2rem", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: rncsCriticas > 0 ? "#ff4f6a" : C.text, marginBottom: 2 }}>🔴 NCs Críticas em Aberto</div>
-            <div style={{ fontSize: 10, color: C.text3, marginBottom: 10 }}>Requerem ação imediata</div>
-            {rncsCriticasLista.length === 0
+          {/* RNCs de severidade Maior em aberto */}
+          <div style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "1rem 1.2rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 2 }}>🟠 RNCs Maior em Aberto</div>
+            <div style={{ fontSize: 10, color: C.text3, marginBottom: 10 }}>Severidade mais alta</div>
+            {rncsMaioresLista.length === 0
               ? <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:C.accent, fontSize:13, gap:6 }}>
                   <div style={{ fontSize:28 }}>✅</div>
-                  <div style={{ fontWeight:600 }}>Nenhuma NC crítica ativa</div>
+                  <div style={{ fontWeight:600 }}>Nenhuma RNC Maior ativa</div>
                 </div>
               : <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-                  {rncsCriticasLista.map(r => (
-                    <div key={r.id} style={{ background:C.surf, border:"1px solid #ff4f6a33", borderLeft:"3px solid #ff4f6a", borderRadius:8, padding:"8px 10px" }}>
+                  {rncsMaioresLista.map(r => (
+                    <div key={r.id} style={{ background:C.surf, border:`1px solid ${C.border}`, borderLeft:`3px solid ${C.orange}`, borderRadius:8, padding:"8px 10px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:3 }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:"#ff4f6a" }}>{r.num}</span>
+                        <span style={{ fontSize:11, fontWeight:700, color:C.orange }}>{r.num}</span>
                         <span style={{ fontSize:10, color:C.text3 }}>{r.status}</span>
                       </div>
                       <div style={{ fontSize:11, color:C.text2, lineHeight:1.4 }}>{r.desc?.slice(0, 55)}{r.desc?.length > 55 ? "…" : ""}</div>
