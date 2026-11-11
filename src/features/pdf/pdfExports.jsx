@@ -229,6 +229,8 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="field"><div class="field-label">Detectado por</div><div class="field-value">${rnc.detector||"—"}</div></div>
     </div>
     ${rnc.origemDesvioNum?`<div class="field" style="margin-top:8px;"><div class="field-label">Origem</div><div class="field-value">Convertida do desvio ${rnc.origemDesvioNum}</div></div>`:""}
+    ${rnc.origemRncNum?`<div class="field" style="margin-top:8px;"><div class="field-label">Reincidência</div><div class="field-value">Aberta a partir da RNC ${rnc.origemRncNum}, encerrada como Ineficaz</div></div>`:""}
+    ${rnc.rncSucessora?.num?`<div class="field" style="margin-top:8px;"><div class="field-label">Tratamento seguiu em</div><div class="field-value">RNC ${rnc.rncSucessora.num} (aberta em ${fmt(rnc.rncSucessora.em)} por ${rnc.rncSucessora.por})</div></div>`:""}
     <div class="grid3" style="margin-top:8px;">
       <div class="field"><div class="field-label">Produto / Material</div><div class="field-value">${rnc.produto||"—"}</div></div>
       <div class="field"><div class="field-label">Fornecedor</div><div class="field-value">${rnc.fornecedor||"—"}</div></div>
