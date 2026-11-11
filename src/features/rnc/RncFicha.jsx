@@ -228,7 +228,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
               </div>
             )}
           </div>
-        ) : rncTemMaterial(r) && (
+        ) : rncTemMaterial(r) && rncAtiva(r.status) && (
           <div style={{ fontSize: 12, color: T.yellow, background: `${T.yellow}14`, border: `1px solid ${T.yellow}44`, borderRadius: 8, padding: "8px 12px", marginBottom: 10 }}>
             ⚠️ RNC envolve material/lote — registre a disposição antes de encerrar como Eficaz.
           </div>
