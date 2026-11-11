@@ -20,7 +20,7 @@ function idsDoMenu() {
 
 export const ABAS_VALIDAS = new Set([...idsDoMenu(), ...FORA_DO_MENU]);
 
-const ETAPAS_FICHA = new Set(["resumo", "registro", "contencao", "causa", "capa", "eficacia", "historico"]);
+const ETAPAS_FICHA = new Set(["resumo", "registro", "contencao", "causa", "capa", "eficacia", "historico", "reunioes", "evidencias", "resposta", "avaliacao"]);
 
 /** Tela pedida no endereço; qualquer coisa desconhecida vira Home. A ficha exige a RNC. */
 export function abaDaUrl(search, validas = ABAS_VALIDAS) {

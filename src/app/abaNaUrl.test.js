@@ -32,6 +32,8 @@ describe("ficha da RNC no endereço", () => {
   });
   test("fichaDaUrl lê a RNC e a etapa; etapa inválida vira resumo", () => {
     expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=causa")).toEqual({ rnc: "abc", etapa: "causa", doc: null });
+    // Etapas da RNC externa e as abas novas da v3.29.0 também sobrevivem ao F5.
+    for (const e of ["resposta", "avaliacao", "reunioes", "evidencias"]) expect(fichaDaUrl(`?aba=rnc&rnc=abc&etapa=${e}`).etapa).toBe(e);
     expect(fichaDaUrl("?aba=rnc&rnc=abc&etapa=xyz")).toEqual({ rnc: "abc", etapa: "resumo", doc: null });
   });
   test("urlComAba monta a ficha e limpa rnc/etapa fora dela", () => {

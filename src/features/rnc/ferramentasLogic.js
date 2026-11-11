@@ -1,6 +1,11 @@
 // Regras das ferramentas de tratamento da RNC (Ishikawa/5 Porquês, CAPA, Eficácia).
 // Puras e testáveis: a tela só chama e mostra o resultado.
 import { rncAtiva } from "../../core/status";
+import { complementoAberto, rncExterna, rncTemMaterial, temRespostaValida, travaEncerramentoExterna } from "./tipoRncLogic";
+
+// rncTemMaterial mudou para tipoRncLogic (a externa também precisa); reexportada aqui.
+export { rncTemMaterial };
+const interna = r => !rncExterna(r);
 
 export const MIN_PORQUES = 3;
 
@@ -109,7 +114,7 @@ export function filaCapa(rncs) {
   const causaOk = r => porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root);
   const chave = r => !(r.w2h || []).length ? "0000" : (proximoPrazoCapa(r) || "9999");
   return (rncs || [])
-    .filter(r => rncAtiva(r.status) && causaOk(r) && (!(r.w2h || []).length || r.w2h.some(a => !fechada(a))))
+    .filter(r => interna(r) && rncAtiva(r.status) && causaOk(r) && (!(r.w2h || []).length || r.w2h.some(a => !fechada(a))))
     .sort((a, b) => chave(a) < chave(b) ? -1 : chave(a) > chave(b) ? 1 : 0);
 }
 
@@ -152,6 +157,8 @@ export function podeRegistrarEficacia(r, resultado) {
  * estava escrita à parte em cada uma.
  */
 export function travaEficacia(r, resultado) {
+  // Externa encerra pela verificação no recebimento seguinte, não pelo ciclo CAPA.
+  if (rncExterna(r)) return travaEncerramentoExterna(r);
   const { motivos } = podeRegistrarEficacia(r, resultado);
   const m = [...motivos];
   if (resultado === "Eficaz" && rncTemMaterial(r) && !r?.disposicao?.decisao) {
@@ -188,16 +195,10 @@ export function patchEficacia(r, f, autor, agoraIso, data, hora) {
 export function filaEficacia(rncs) {
   const chave = r => r.prazoEfic || r.eficacia?.data || "9999";
   return (rncs || [])
-    .filter(r => rncAtiva(r.status) && (r.status === "Pendente verificação" || podeRegistrarEficacia(r, "Eficaz").ok))
+    .filter(r => interna(r) && rncAtiva(r.status) && (r.status === "Pendente verificação" || podeRegistrarEficacia(r, "Eficaz").ok))
     .sort((a, b) => chave(a) < chave(b) ? -1 : chave(a) > chave(b) ? 1 : 0);
 }
 
-// A RNC "toca material/lote" quando o tipo é de material OU quando há produto/lote
-// preenchido. Só nesses casos a disposição é obrigatória antes de encerrar como Eficaz.
-const TIPOS_MATERIAL = ["Matéria-prima", "Material de embalagem", "Insumo", "Produto acabado"];
-export function rncTemMaterial(r) {
-  return !!(r && (TIPOS_MATERIAL.includes(r.tipo) || (r.lote || "").trim() || (r.produto || "").trim()));
-}
 
 /**
  * As etapas da ficha da RNC, em ordem, com o estado de cada uma — o que a barra de abas
@@ -205,15 +206,48 @@ export function rncTemMaterial(r) {
  * (com `motivo`) e "dispensada" (RNC encerrada por disposição, sem ciclo de eficácia).
  * As travas são as mesmas das ferramentas: aqui elas só ficam visíveis.
  */
+// Etapas da RNC interna (e de toda RNC anterior à v3.29.0). "reunioes" é opcional:
+// não trava nada e nunca é a "próxima a fazer".
 export const ETAPAS = [
   { id: "registro", label: "Registro" },
   { id: "contencao", label: "Contenção e disposição" },
-  { id: "causa", label: "Análise de causa" },
+  { id: "causa", label: "Investigação e causa" },
+  { id: "reunioes", label: "Reuniões internas", opcional: true },
   { id: "capa", label: "Plano CAPA" },
   { id: "eficacia", label: "Eficácia" },
 ];
 
+// Etapas da RNC externa: o fornecedor investiga; a Qualidade avalia e verifica.
+export const ETAPAS_EXTERNA = [
+  { id: "registro", label: "Registro" },
+  { id: "contencao", label: "Contenção e disposição" },
+  { id: "resposta", label: "Resposta do fornecedor" },
+  { id: "avaliacao", label: "Avaliação e encerramento" },
+];
+
+export const etapasDoTipo = r => (rncExterna(r) ? ETAPAS_EXTERNA : ETAPAS);
+
+function etapasDaExterna(r) {
+  const precisaDisposicao = rncTemMaterial(r) && !r?.disposicao?.decisao;
+  const feito = {
+    registro: cheio(r?.desc),
+    contencao: cheio(r?.contencao) && !precisaDisposicao,
+    resposta: temRespostaValida(r),
+    avaliacao: r?.status === "Eficaz" || r?.status === "Ineficaz",
+  };
+  const bloqueio = { avaliacao: temRespostaValida(r) ? null : (complementoAberto(r) ? "Aguardando o complemento pedido ao fornecedor." : "Aguardando a resposta do fornecedor.") };
+  let atualMarcada = false;
+  return ETAPAS_EXTERNA.map(e => {
+    if (feito[e.id]) return { ...e, estado: "concluida" };
+    if (r?.status === "Encerrada" && (e.id === "resposta" || e.id === "avaliacao")) return { ...e, estado: "dispensada", motivo: "RNC encerrada por disposição do material." };
+    if (bloqueio[e.id]) return { ...e, estado: "bloqueada", motivo: bloqueio[e.id] };
+    if (!atualMarcada && rncAtiva(r?.status)) { atualMarcada = true; return { ...e, estado: "atual" }; }
+    return { ...e, estado: "pendente" };
+  });
+}
+
 export function etapasDaRnc(r) {
+  if (rncExterna(r)) return etapasDaExterna(r);
   const acts = r?.w2h || [];
   const causaOk = porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root);
   const precisaDisposicao = rncTemMaterial(r) && !r?.disposicao?.decisao;
@@ -221,6 +255,7 @@ export function etapasDaRnc(r) {
     registro: cheio(r?.desc),
     contencao: cheio(r?.contencao) && !precisaDisposicao,
     causa: causaOk,
+    reunioes: (r?.reunioesInternas || []).length > 0,
     capa: acts.some(concluida) && !acts.some(a => !fechada(a)),
     eficacia: r?.status === "Eficaz" || r?.status === "Ineficaz",
   };
@@ -232,6 +267,7 @@ export function etapasDaRnc(r) {
   let atualMarcada = false;
   return ETAPAS.map(e => {
     if (feito[e.id]) return { ...e, estado: "concluida" };
+    if (e.opcional) return { ...e, estado: "opcional" };
     if (encerradaPorDisposicao && (e.id === "capa" || e.id === "eficacia")) {
       return { ...e, estado: "dispensada", motivo: "RNC encerrada por disposição do material." };
     }
@@ -277,7 +313,7 @@ export function resumoAnaliseCausa(antes, depois) {
 /** RNCs ativas que ainda não têm análise de causa completa — a fila da etapa 3. */
 export function filaAnaliseCausa(rncs) {
   return (rncs || [])
-    .filter(r => rncAtiva(r.status) && !(porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root)))
+    .filter(r => interna(r) && rncAtiva(r.status) && !(porquesPreenchidos(r) >= MIN_PORQUES && cheio(r?.ishikawa?.root)))
     .sort((a, b) => (a.prazoCausa || "9999") < (b.prazoCausa || "9999") ? -1 : (a.prazoCausa || "9999") > (b.prazoCausa || "9999") ? 1 : 0);
 }
 

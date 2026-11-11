@@ -46,7 +46,18 @@ export function SupplierRNCPage({ token }) {
 
   useEffect(() => {
     api(`/api/rnc-supplier/${token}`)
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => {
+        setData(d); setLoading(false);
+        // Complemento: o formulário volta com a resposta anterior, para o fornecedor só
+        // acrescentar o que foi pedido em vez de redigitar tudo.
+        const ant = d?.complemento && d?.rnc?.respostaFornecedor;
+        if (ant) {
+          if (Array.isArray(ant.porques)) setPorques(p => p.map((x, i) => ant.porques[i] || x));
+          setCausaRaiz(ant.causaRaiz || "");
+          setPlanoAcao(p => ({ ...p, ...(ant.planoAcao || {}) }));
+          setObservacoes(ant.observacoes || "");
+        }
+      })
       .catch(e => { setError(e.message); setLoading(false); });
   }, [token]);
 
@@ -106,7 +117,11 @@ export function SupplierRNCPage({ token }) {
   );
 
   const rnc = data?.rnc || {};
-  const diasRestantes = data?.expiresAt ? Math.ceil((new Date(data.expiresAt) - new Date()) / 86400000) : 0;
+  // Validade do link (ISO com hora) × prazo pedido ao fornecedor (RNC externa, v3.29.0): o prazo
+  // que se mostra é o pedido; sem ele, vale a validade do link.
+  const validade = data?.expiresAt ? String(data.expiresAt).slice(0, 10) : "";
+  const prazoResposta = rnc.prazoRespostaFornecedor || validade;
+  const diasRestantes = prazoResposta ? Math.ceil((new Date(`${prazoResposta}T23:59:59`) - new Date()) / 86400000) : 0;
 
   return (
     <div style={s.page}>
@@ -122,9 +137,18 @@ export function SupplierRNCPage({ token }) {
       {/* Alerta prazo */}
       <div style={{ ...s.card, background: diasRestantes <= 7 ? "#fff3f3" : "#f0fbf3", border: `1px solid ${diasRestantes <= 7 ? "#ffcdd2" : "#c8e6c9"}`, padding: "12px 20px" }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: diasRestantes <= 7 ? "#c62828" : "#2e7d32" }}>
-          {diasRestantes <= 7 ? "⚠️" : "📅"} Prazo de resposta: {diasRestantes > 0 ? `${diasRestantes} dias restantes` : "Expirado"} · Válido até {fmt(data?.expiresAt)}
+          {diasRestantes <= 7 ? "⚠️" : "📅"} Prazo de resposta: {diasRestantes > 0 ? `${diasRestantes} dias restantes` : "prazo vencido"} · Responder até {fmt(prazoResposta)}{validade && validade !== prazoResposta ? ` · link válido até ${fmt(validade)}` : ""}
         </div>
       </div>
+
+      {/* Complemento pedido pela Qualidade: o mesmo link volta a aceitar resposta */}
+      {data?.complemento && (
+        <div style={{ ...s.card, background: "#fff8e6", border: "1px solid #f3d38a", padding: "12px 20px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#8a5a00", marginBottom: 4 }}>A Herbamed pediu um complemento à sua resposta</div>
+          <div style={{ fontSize: 13, color: "#5c4300", whiteSpace: "pre-wrap" }}>{data.complemento.motivo}</div>
+          <div style={{ fontSize: 12, color: "#8a6d2a", marginTop: 6 }}>Sua resposta anterior já está no formulário: complete com o que foi pedido e envie de novo. A anterior fica arquivada.</div>
+        </div>
+      )}
 
       {/* Dados da RNC */}
       <div style={s.card}>
@@ -138,7 +162,7 @@ export function SupplierRNCPage({ token }) {
           ["Qtd. afetada", rnc.qtd || "—"],
           ["Descrição", rnc.desc || rnc.descricao || "—"],
           ["Ação de contenção", rnc.contencao || "—"],
-          ["Prazo para resposta", fmt(data?.expiresAt)],
+          ["Prazo para resposta", fmt(prazoResposta)],
         ].map(([k, v]) => (
           <div key={k} style={s.row}>
             <div style={s.kv_k}>{k}</div>

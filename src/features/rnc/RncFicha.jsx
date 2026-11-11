@@ -15,7 +15,10 @@ import { Investigacao } from "./Investigacao";
 import { PlanoCapaEditor } from "./PlanoCapa";
 import { EficaciaEditor } from "./Eficacia";
 import { ofertaNotificar } from "../email/ofertaNotificar";
-import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
+import { etapasDaRnc, etapasDoTipo, porquesPreenchidos, rncEditavelNasFerramentas, rncTemMaterial } from "./ferramentasLogic";
+import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "./tipoRncLogic";
+import { AvaliacaoExternaEtapa, RespostaFornecedorEtapa } from "./EtapasExterna";
+import { EvidenciasRnc, ReunioesInternas } from "./ReunioesInternas";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
@@ -25,6 +28,7 @@ import { ETAPAS, etapasDaRnc, porquesPreenchidos, rncEditavelNasFerramentas, rnc
 
 const CATS_ISHIKAWA = [["mao", "Mão de obra"], ["maquina", "Máquina"], ["metodo", "Método"], ["material", "Material"], ["medicao", "Medição"], ["meioamb", "Meio ambiente"]];
 const ICONE_ESTADO = { concluida: "✓", bloqueada: "🔒", dispensada: "—" };
+const ESTADOS_SOMENTE_LEITURA = ["causa", "reunioes", "capa", "eficacia", "resposta", "avaliacao"];
 
 export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
   const T = useTheme(); const s = useS();
@@ -65,6 +69,8 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const canDispor = !isViewer && (isAdmin || (perm && perm("analisarRNC")));
   const emTratamento = rncEditavelNasFerramentas(r);
   const etapas = etapasDaRnc(r);
+  const externa = rncExterna(r);
+  const podeAgir = !isViewer && emTratamento;
 
   const updStatus = async (status) => {
     const h = { data: tod(), hora: agoraHora(), acao: `Status alterado -> ${status}`, resp: user.name, tipo: "status" };
@@ -111,6 +117,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
       resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
       prazoEfic: r.prazoEfic || "", respCont: r.respCont || "",
+      prazoRespostaFornecedor: r.prazoRespostaFornecedor || "",
     });
     setAddDesc(""); setAddCont("");
     setEditing(true);
@@ -122,7 +129,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     // ⚠️ `campos` TEM DE COBRIR TUDO QUE O FORMULÁRIO EDITA: com o retorno de "nada
     // mudou" logo abaixo, um campo esquecido aqui descarta a edição em silêncio.
     const alterados = [];
-    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia" };
+    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", prazoRespostaFornecedor: "Prazo de resposta do fornecedor" };
     Object.entries(campos).forEach(([k, label]) => {
       if ((r[k] || "") !== (editData[k] || "")) alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
     });
@@ -322,7 +329,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     const rf = r.respostaFornecedor;
     if (!rf) return null;
     const plano = rf.planoAcao || {};
-    const linhasPlano = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando], ["Quanto?", plano.quanto]].filter(([, v]) => v);
+    const linhasPlano = [["O quê?", plano.oQue], ["Por quê?", plano.porQue], ["Como?", plano.como], ["Quem?", plano.quem], ["Onde?", plano.onde], ["Quando?", plano.quando ? fmt(plano.quando) : ""], ["Quanto?", plano.quanto]].filter(([, v]) => v);
     return (
       <div style={{ ...caixa, borderColor: `${T.accent}33` }}>
         <div style={{ ...rot, color: T.accent }}>🔗 Resposta do fornecedor · {rf.respondidoEm ? new Date(rf.respondidoEm).toLocaleString("pt-BR") : ""}</div>
@@ -330,7 +337,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {rf.causaRaiz && <div style={{ fontSize: 12, marginBottom: 8 }}><b>Causa raiz:</b> {rf.causaRaiz}</div>}
         {linhasPlano.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 4, fontSize: 12, marginBottom: 8 }}>{linhasPlano.map(([k, v]) => <React.Fragment key={k}><div style={{ fontWeight: 600 }}>{k}</div><div>{v}</div></React.Fragment>)}</div>}
         {rf.observacoes && <div style={{ fontSize: 12 }}><b>Observações:</b> {rf.observacoes}</div>}
-        {emTratamento && !isViewer && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>O botão "Usar resposta do fornecedor", nos 5 Porquês acima, copia esta análise para os campos ainda vazios.</div>}
+        {emTratamento && !isViewer && !externa && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>O botão "Usar resposta do fornecedor", nos 5 Porquês acima, copia esta análise para os campos ainda vazios.</div>}
       </div>
     );
   };
@@ -373,9 +380,15 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {r.contencao && <div style={{ ...caixa, borderColor: `${T.orange}40` }}><div style={{ ...rot, color: T.orange }}>⚡ Contenção</div><CampoHistoricoLeitura valor={r.contencao} compacto /></div>}
         {disposicaoBloco(false)}
         {(r.investigacao || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={rot}>Investigação</div>{r.investigacao.map((reg, i) => <div key={reg.id || i} style={{ fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 6 }}><span style={{ fontSize: 11, color: T.text3 }}>#{i + 1} · {reg.por}{reg.anexos?.length ? ` · ${reg.anexos.length} anexo(s)` : ""} — </span>{reg.texto}</div>)}</div>}
-        <div style={{ marginBottom: 14 }}><div style={rot}>Análise de causa</div>{causaBloco()}</div>
-        <div style={{ marginBottom: 14 }}><div style={rot}>Plano CAPA</div>{capaBloco()}</div>
-        <div style={{ marginBottom: 14 }}><div style={rot}>Verificação de eficácia</div>{eficaciaBloco()}</div>
+        {externa ? <>
+          <div style={{ marginBottom: 14 }}><div style={rot}>Resposta do fornecedor</div>{respostaFornecedorBloco() || ((r.respostasPlanilha || []).length ? <div style={{ fontSize: 13 }}>Respondida pela planilha ({r.respostasPlanilha.length} envio(s)) — ver a etapa 3.</div> : vazio("Aguardando a resposta do fornecedor."))}</div>
+          <div style={{ marginBottom: 14 }}><AvaliacaoExternaEtapa r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={false} ativa={false} /></div>
+        </> : <>
+          <div style={{ marginBottom: 14 }}><div style={rot}>Análise de causa</div>{causaBloco()}</div>
+          {(r.reunioesInternas || []).length > 0 && <div style={{ marginBottom: 14 }}><div style={rot}>Reuniões internas</div>{r.reunioesInternas.map((m, i) => <div key={m.id || i} style={{ fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 6 }}><span style={{ fontSize: 11, color: T.text3 }}>{fmt(m.data)} · {m.participantes} — </span>{m.decidido}</div>)}</div>}
+          <div style={{ marginBottom: 14 }}><div style={rot}>Plano CAPA</div>{capaBloco()}</div>
+          <div style={{ marginBottom: 14 }}><div style={rot}>Verificação de eficácia</div>{eficaciaBloco()}</div>
+        </>}
         {anexosBloco()}
       </div>
     ),
@@ -405,9 +418,13 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           <SecTitle icon="🗓️" ch="Responsável e prazos" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
             <F lbl="Responsável análise" ch={<Inp value={editData.resp} onChange={e => ed("resp", e.target.value)} />} />
-            <F lbl="Prazo análise de causa" ch={<Inp type="date" value={editData.prazoCausa} onChange={e => ed("prazoCausa", e.target.value)} />} />
-            <F lbl="Prazo ação corretiva" ch={<Inp type="date" value={editData.prazoAC} onChange={e => ed("prazoAC", e.target.value)} />} />
-            <F lbl="Prazo eficácia" ch={<Inp type="date" value={editData.prazoEfic} onChange={e => ed("prazoEfic", e.target.value)} />} />
+            {externa ? (
+              <F lbl="Prazo de resposta do fornecedor" ch={<Inp type="date" value={editData.prazoRespostaFornecedor} onChange={e => ed("prazoRespostaFornecedor", e.target.value)} />} />
+            ) : <>
+              <F lbl="Prazo análise de causa" ch={<Inp type="date" value={editData.prazoCausa} onChange={e => ed("prazoCausa", e.target.value)} />} />
+              <F lbl="Prazo ação corretiva" ch={<Inp type="date" value={editData.prazoAC} onChange={e => ed("prazoAC", e.target.value)} />} />
+              <F lbl="Prazo eficácia" ch={<Inp type="date" value={editData.prazoEfic} onChange={e => ed("prazoEfic", e.target.value)} />} />
+            </>}
           </div>
         </div>
         {botoesEdicaoBloco()}
@@ -459,13 +476,18 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     eficacia: (!isViewer && emTratamento)
       ? <EficaciaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
       : eficaciaBloco(),
+    resposta: <RespostaFornecedorEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} openEmail={openEmail} formularioFornecedor={formularioFornecedor} />,
+    avaliacao: <AvaliacaoExternaEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} ativa={podeAgir} />,
+    reunioes: <ReunioesInternas r={r} user={user} toast_={toast_} gravar={gravar} podeRegistrar={podeAgir} />,
+    evidencias: <EvidenciasRnc r={r} />,
     historico: historicoBloco(),
   };
 
   const estadoDe = id => etapas.find(e => e.id === id);
   const abas = [
     { id: "resumo", label: "Resumo" },
-    ...ETAPAS.map((e, i) => ({ ...estadoDe(e.id), id: e.id, label: `${i + 1} ${e.label}` })),
+    ...etapasDoTipo(r).map((e, i) => ({ ...estadoDe(e.id), id: e.id, label: `${i + 1} ${e.label}` })),
+    { id: "evidencias", label: "Evidências" },
     { id: "historico", label: `Histórico (${(r.historico || []).length})` },
   ];
   const abaAtual = abas.find(a => a.id === etapa) || abas[0];
@@ -492,6 +514,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.tipo} · aberta em {fmt(r.data)} por {r.detector || r.criadoPor || "—"}{r.origemDesvioNum && <> · origem: desvio <strong>{r.origemDesvioNum}</strong></>}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span title={externa ? "Causa no fornecedor: ele responde a análise de causa e o plano" : "Causa na Herbamed: investigação, análise de causa e CAPA"} style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, border: `1px solid ${externa ? T.blue : T.accent}55`, color: externa ? T.blue : T.accent, background: `${externa ? T.blue : T.accent}14` }}>{externa ? "🚚" : "🏭"} {ROTULO_TIPO_RNC[tipoRnc(r)]}</span>
           <SevB s={r.sev} /><Badge s={r.status} />
         </div>
       </div>
@@ -504,7 +527,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           return (
             <button key={a.id} role="tab" aria-selected={ativa} className="ficha-aba" title={a.motivo || ""} onClick={() => setEtapa(a.id)}
               style={{ background: "none", border: "none", borderBottom: `2px solid ${ativa ? T.accent : "transparent"}`, padding: "10px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, whiteSpace: "nowrap", color: cor, fontWeight: ativa ? 600 : 400, marginBottom: -1 }}>
-              {ICONE_ESTADO[a.estado] ? `${ICONE_ESTADO[a.estado]} ` : ""}{a.label}{a.estado === "atual" ? " •" : ""}
+              {ICONE_ESTADO[a.estado] ? `${ICONE_ESTADO[a.estado]} ` : ""}{a.label}{a.estado === "atual" ? " •" : ""}{a.estado === "opcional" ? <span style={{ fontSize: 10, color: T.text3 }}> (opcional)</span> : null}
             </button>
           );
         })}
@@ -513,7 +536,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       <div className="ficha-grid">
         <div style={{ minWidth: 0 }}>
           {bloqueio && <div style={{ fontSize: 12, color: T.text2, background: T.surf, border: `1px dashed ${T.border2}`, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>🔒 {bloqueio}</div>}
-          {!emTratamento && ["causa", "capa", "eficacia"].includes(abaAtual.id) && (
+          {!emTratamento && ESTADOS_SOMENTE_LEITURA.includes(abaAtual.id) && (
             <div style={{ fontSize: 12, color: T.text2, marginBottom: 12 }}>RNC encerrada — registro fechado, somente leitura.</div>
           )}
           {conteudo[abaAtual.id]}
@@ -525,9 +548,11 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           {r.setor && <div><div style={rot}>Setor</div><div>{r.setor}</div></div>}
           {(r.produto || r.lote) && <div><div style={rot}>Produto · lote</div><div>{[r.produto, r.lote].filter(Boolean).join(" · ")}</div></div>}
           {r.fornecedor && <div><div style={rot}>Fornecedor</div><div>{r.fornecedor}{r.nf ? ` · NF ${r.nf}` : ""}</div></div>}
-          {prazoLinha("Prazo análise de causa", r.prazoCausa, porquesPreenchidos(r) < 3)}
-          {prazoLinha("Prazo ação corretiva", r.prazoAC)}
-          {prazoLinha("Prazo eficácia", r.prazoEfic)}
+          {externa ? prazoLinha("Prazo de resposta do fornecedor", r.prazoRespostaFornecedor, !etapas.find(e => e.id === "resposta" && e.estado === "concluida")) : <>
+            {prazoLinha("Prazo análise de causa", r.prazoCausa, porquesPreenchidos(r) < 3)}
+            {prazoLinha("Prazo ação corretiva", r.prazoAC)}
+            {prazoLinha("Prazo eficácia", r.prazoEfic)}
+          </>}
 
           <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
             <div style={rot}>Assinaturas</div>
@@ -548,7 +573,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
                   <button key={st} onClick={() => st !== r.status && updStatus(st)} style={{ padding: "4px 10px", borderRadius: 20, border: `1px solid ${r.status === st ? SMETA[st].c + "55" : T.border}`, background: r.status === st ? SMETA[st].bg : T.surf, color: r.status === st ? SMETA[st].c : T.text2, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 600 }}>{st}</button>
                 ))}
               </div>
-              <div style={{ fontSize: 10, color: T.text3, marginTop: 6, lineHeight: 1.5 }}>Eficaz e Ineficaz só pela etapa 5; Encerrada, pela disposição do material.</div>
+              <div style={{ fontSize: 10, color: T.text3, marginTop: 6, lineHeight: 1.5 }}>{externa ? "Eficaz e Ineficaz só pela etapa 4 (verificação no recebimento seguinte)" : "Eficaz e Ineficaz só pela etapa de eficácia"}; Encerrada, pela disposição do material.</div>
             </div>
           )}
 

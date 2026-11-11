@@ -32,6 +32,7 @@ const {
 const { linhasHistoricoCapa } = require("./historicoCapa");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
+const { podeResponder, complementoAberto, rncComResposta } = require("./respostaFornecedor");
 const {
   buildDocumentSourceHash,
   createLocalSummary,
@@ -1833,14 +1834,17 @@ async function handleSupplierRNC(req, res, pathname) {
     // Tenta via tabela rncs
     const rncRow = await query(`SELECT data FROM rncs WHERE id = $1`, [tk.rnc_id]);
     const rnc = rncRow.rows[0]?.data || null;
+    // Complemento pedido pela Qualidade reabre o mesmo link (v3.29.0).
+    const complemento = complementoAberto(rnc) ? { motivo: rnc.complementoFornecedor.motivo || "" } : null;
 
     return sendJson(res, 200, {
       token,
       rncId: tk.rnc_id,
       rncNum: tk.rnc_num,
       expiresAt: tk.expires_at,
-      respondido: !!tk.respondido_em,
+      respondido: !podeResponder(tk, rnc),
       respondidoEm: tk.respondido_em,
+      complemento,
       rnc,
     });
   }
@@ -1856,7 +1860,8 @@ async function handleSupplierRNC(req, res, pathname) {
     if (!tkRes.rowCount) return sendJson(res, 404, { error: "Link inválido" });
     const tk = tkRes.rows[0];
     if (new Date(tk.expires_at) < new Date()) return sendJson(res, 410, { error: "Link expirado" });
-    if (tk.respondido_em) return sendJson(res, 409, { error: "Este link já foi respondido" });
+    const rncAtual = (await query(`SELECT data FROM rncs WHERE id = $1`, [tk.rnc_id])).rows[0]?.data || null;
+    if (!podeResponder(tk, rncAtual)) return sendJson(res, 409, { error: "Este link já foi respondido" });
 
     const body = await readBody(req);
     const resposta = {
@@ -1876,7 +1881,8 @@ async function handleSupplierRNC(req, res, pathname) {
     // Incorpora resposta na RNC (campo respostaFornecedor)
     const rncRow = await query(`SELECT data FROM rncs WHERE id = $1`, [tk.rnc_id]);
     if (rncRow.rowCount) {
-      const rncData = { ...rncRow.rows[0].data, respostaFornecedor: resposta };
+      // A resposta anterior (quando houve pedido de complemento) vai para o arquivo.
+      const rncData = rncComResposta(rncRow.rows[0].data, resposta);
       await query(
         `UPDATE rncs SET data = $2, updated_at = now() WHERE id = $1`,
         [tk.rnc_id, JSON.stringify(rncData)]

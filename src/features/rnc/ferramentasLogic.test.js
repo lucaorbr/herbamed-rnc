@@ -93,7 +93,7 @@ describe("etapasDaRnc", () => {
   const estados = r => Object.fromEntries(etapasDaRnc(r).map(e => [e.id, e.estado]));
   test("RNC recém-aberta: registro feito, contenção é a próxima, CAPA e eficácia bloqueadas", () => {
     expect(estados({ status: "Aberta", desc: "x", tipo: "Processo" })).toEqual({
-      registro: "concluida", contencao: "atual", causa: "pendente", capa: "bloqueada", eficacia: "bloqueada",
+      registro: "concluida", contencao: "atual", causa: "pendente", reunioes: "opcional", capa: "bloqueada", eficacia: "bloqueada",
     });
   });
   test("contenção sem disposição não conclui a etapa quando há material", () => {
@@ -108,7 +108,7 @@ describe("etapasDaRnc", () => {
     expect(e.eficacia).toBe("bloqueada");
   });
   test("ciclo completo e verificado: tudo concluído", () => {
-    const e = estados({ ...completa, status: "Eficaz", desc: "x", contencao: "c", tipo: "Processo" });
+    const e = estados({ ...completa, status: "Eficaz", desc: "x", contencao: "c", tipo: "Processo", reunioesInternas: [{ id: "r1" }] });
     expect(Object.values(e).every(v => v === "concluida")).toBe(true);
   });
   test("encerrada por disposição dispensa CAPA e eficácia", () => {

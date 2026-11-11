@@ -21,6 +21,15 @@ describe("pendenciasDeRNC", () => {
     expect(venc.titulo).toContain("NC-2026-T09");
   });
 
+  it("RNC externa: cobra a resposta do fornecedor atrasada, não o prazo de ação corretiva", () => {
+    const ext = { id: 9, num: "NC-X", status: "Em andamento", tipoRnc: "externa", fornecedor: "F", prazoAC: "2026-07-01", prazoRespostaFornecedor: "2026-08-10" };
+    const p = pendenciasDeRNC({ rncs: [ext], userName: "Lucas", hoje: HOJE });
+    expect(p).toHaveLength(1);
+    expect(p[0]).toMatchObject({ id: "rnc-forn-9", etapa: "resposta", dias: 7, urgencia: URGENCIA.CRITICO });
+    const respondida = { ...ext, respostaFornecedor: { respondidoEm: "2026-08-12T10:00:00Z" } };
+    expect(pendenciasDeRNC({ rncs: [respondida], userName: "Lucas", hoje: HOJE })).toEqual([]);
+  });
+
   it("RNC já encerrada não vira pendência, mesmo com prazo antigo", () => {
     const p = pendenciasDeRNC({ rncs, userName: "Lucas", hoje: HOJE });
     expect(p.some(x => x.id.includes("-3"))).toBe(false);
