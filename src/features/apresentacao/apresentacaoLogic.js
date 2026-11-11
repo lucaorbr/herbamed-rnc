@@ -72,7 +72,7 @@ export function montarApresentacao({ rncs: todasRncs = [], desvios: todosDesvios
     .sort((a, b) => b.st.dias - a.st.dias)
     .map(({ d, st }) => ({
       num: d.num || "—", setor: setorDoDesvio(d), tipo: d.tipo === "Outros" ? (d.tipoOutro || "Outros") : (d.tipo || "—"),
-      impacto: d.impacto || "—", dias: st.dias, assunto: assunto(d.desc),
+      dias: st.dias, assunto: assunto(d.desc),
     }));
 
   const itemRnc = r => ({

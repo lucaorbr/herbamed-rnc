@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { createElectronicSignature } from "../../firebase";
-import { DISPOSICOES_ATIVAS, SEVMETA, SMETA, TIPOC, dispMeta, errosDisposicao, rncAtiva, rncEncerrada, rotuloDisposicao } from "../../core/status";
+import { DISPOSICOES_ATIVAS, SEVERIDADES_RNC, SMETA, TIPOC, dispMeta, errosDisposicao, rncAtiva, rncEncerrada, rotuloDisposicao } from "../../core/status";
 import { useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -64,7 +63,6 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
 
   const canEdit = !isViewer && (isAdmin || r.criadoPor === user.name || r.detector === user.name);
   const canDispor = !isViewer && (isAdmin || (perm && perm("analisarRNC")));
-  const podeRT = ["rt", "admin", "keyuser"].includes(user?.role);
   const emTratamento = rncEditavelNasFerramentas(r);
   const etapas = etapasDaRnc(r);
 
@@ -73,19 +71,6 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     const historico = [...(r.historico || []), h];
     await gravar({ status, historico });
     toast_(`Status atualizado para ${status}.`, "green", ofertaNotificar({ ...r, status, historico }, "status", openEmail));
-  };
-
-  const assinarRT = async () => {
-    if (!podeRT) { alert("Apenas o Responsável Técnico pode assinar RNCs."); return; }
-    if (!window.confirm(`Confirma assinatura como RT na RNC ${r.num}?`)) return;
-    const password = window.prompt("Confirme sua senha para assinar como RT:");
-    if (!password) return;
-    let ass;
-    try { ass = await createElectronicSignature({ password, contexto: `RNC|${r.num || r.id || ""}`, papel: "Responsavel Tecnico" }); }
-    catch { alert("Senha incorreta. Assinatura cancelada."); return; }
-    const h = { data: tod(), hora: agoraHora(), acao: "RNC aprovada pelo RT", resp: user.name, tipo: "rt" };
-    await gravar({ assinaturaRT: ass, historico: [...(r.historico || []), h] });
-    toast_("RNC aprovada pelo RT!", "green");
   };
 
   const gravarDisposicao = async (decisao, justificativa, outro) => {
@@ -401,7 +386,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           <SecTitle icon="📝" ch="Identificação" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
             <F lbl="Tipo" ch={<Sel value={editData.tipo} onChange={e => ed("tipo", e.target.value)}>{Object.keys(TIPOC).map(x => <option key={x}>{x}</option>)}</Sel>} />
-            <F lbl="Severidade" tip="Crítica: risco à segurança do produto ou paciente. Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={editData.sev} onChange={e => ed("sev", e.target.value)}>{Object.keys(SEVMETA).map(x => <option key={x}>{x}</option>)}</Sel>} />
+            <F lbl="Severidade" tip="Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={editData.sev} onChange={e => ed("sev", e.target.value)}>{(SEVERIDADES_RNC.includes(editData.sev) ? SEVERIDADES_RNC : [editData.sev, ...SEVERIDADES_RNC]).map(x => <option key={x}>{x}</option>)}</Sel>} />
             <F lbl="Setor" ch={<Inp value={editData.setor} onChange={e => ed("setor", e.target.value)} />} />
             <F lbl="Produto / Material" ch={<Inp value={editData.produto} onChange={e => ed("produto", e.target.value)} />} />
             <F lbl="Fornecedor" ch={<Inp value={editData.fornecedor} onChange={e => ed("fornecedor", e.target.value)} />} />
@@ -552,9 +537,6 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
                 ✅ RT: {r.assinaturaRT.nome}{r.assinaturaRT.cargo ? ` · ${r.assinaturaRT.cargo}` : ""}
                 <div style={{ fontSize: 10, color: T.text3 }}>{r.assinaturaRT.timestamp ? new Date(r.assinaturaRT.timestamp).toLocaleString("pt-BR") : r.assinaturaRT.dataHora} · Cód. {sigCodigo(r.assinaturaRT, `RNC|${r.num || r.id || ""}`)}</div>
               </div>
-            ) : r.sev === "Crítica" ? (
-              podeRT ? <button onClick={assinarRT} style={{ ...s.btnA, fontSize: 11, padding: "5px 10px" }}>✍️ Aprovar como RT</button>
-                : <div style={{ fontSize: 12, color: T.yellow }}>⏳ Aguardando aprovação do RT</div>
             ) : null}
           </div>
 

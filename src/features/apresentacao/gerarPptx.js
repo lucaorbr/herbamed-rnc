@@ -157,10 +157,10 @@ export async function gerarApresentacaoPptx(a, { usuario } = {}) {
   pagsDev.forEach((pag, i) => {
     const s = novoSlide(titulo(`Desvios aguardando triagem há mais de ${a.metaTriagem} dias`, i, pagsDev.length), `${a.desviosAtrasados.length} desvio(s)`);
     if (!pag.length) return vazio(s, "Nenhum desvio registrado no período está com triagem atrasada.");
-    tabela(s, ["Nº", "Assunto", "Setor", "Tipo", "Impacto", "Aberto há"],
-      pag.map(d => [d.num, d.assunto || "—", d.setor, d.tipo, d.impacto,
+    tabela(s, ["Nº", "Assunto", "Setor", "Tipo", "Aberto há"],
+      pag.map(d => [d.num, d.assunto || "—", d.setor, d.tipo,
         { text: dias(d.dias), options: { bold: true, color: d.dias > 15 ? VERMELHO : AMARELO } }]),
-      [1.6, 4.4, 1.9, 2.0, 1.2, 1.33]);
+      [1.6, 5.6, 1.9, 2.0, 1.33]);
   });
 
   // 6. Desvios por setor (gráfico nativo, editável no PowerPoint)

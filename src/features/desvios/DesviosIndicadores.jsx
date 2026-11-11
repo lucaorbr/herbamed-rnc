@@ -6,6 +6,7 @@ import {
 import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { DESVIO_SMETA, META_TRIAGEM_DIAS, SETORES_DESVIO, TIPOS_DESVIO, pedirFiltroDesvios } from "./DesviosTabs";
+import { triagemStatus } from "./triagem";
 
 import { FiltroPeriodo, usePeriodo } from "../../shared/FiltroPeriodo";
 import { LegendaSeries, SeletorFormato, seriesNoFormato, useFormatoGrafico } from "../../shared/FormatoGrafico";
@@ -45,8 +46,13 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
   const [selPeriodo, setSelPeriodo] = usePeriodo("desvios-indicadores", "12m");
   const [formatoTend, setFormatoTend] = useFormatoGrafico("desvios-tendencia", "empilhado");
 
-  // Cores de impacto vindas do tema (acompanham claro/escuro)
-  const IMPACTO_CORES = { "Crítica": T.red, "Maior": T.yellow, "Menor": T.blue };
+  // Desde a v3.28.0 o desvio não tem mais impacto/criticidade (quem define a severidade
+  // é a triagem, ao converter em RNC). A tendência passa a ser pela situação do desvio.
+  const SITUACOES = [
+    { chave: "Aguardando triagem", status: "Registrado" },
+    { chave: "Encerrados", status: "Encerrado" },
+    { chave: "Viraram RNC", status: "Convertido em RNC" },
+  ].map(x => ({ ...x, cor: DESVIO_SMETA[x.status].c }));
 
   // ── Filtro de período (+ janela anterior de mesmo tamanho, p/ comparativo) ──
   // A data de referência é a da ocorrência (a do registro só quando falta a outra).
@@ -70,30 +76,26 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
       const abertos = lista.filter(d => d.status === "Registrado").length;
       const encerrados = lista.filter(d => d.status === "Encerrado").length;
       const convertidos = lista.filter(d => d.status === "Convertido em RNC").length;
-      const criticos = lista.filter(d => d.impacto === "Crítica").length;
+      const foraDaMeta = lista.filter(d => triagemStatus(d)?.atrasado).length;
       const taxaRNC = total > 0 ? Math.round(convertidos / total * 100) : 0;
       const triados = lista.map(diasTriagem).filter(x => x !== null);
       const med = mediana(triados);
       const slaOk = triados.filter(x => x <= META_TRIAGEM_DIAS).length;
       const sla = triados.length > 0 ? Math.round(slaOk / triados.length * 100) : null;
       const comAcao = total > 0 ? Math.round(lista.filter(d => d.acaoImediata === "Sim").length / total * 100) : null;
-      return { total, abertos, encerrados, convertidos, criticos, taxaRNC, triados, med, sla, comAcao };
+      return { total, abertos, encerrados, convertidos, foraDaMeta, taxaRNC, triados, med, sla, comAcao };
     };
     return { atual: calc(filtrados), prev: temAnterior ? calc(anteriores) : null };
   }, [filtrados, anteriores, temAnterior]);
 
-  // ── Tendência mensal: empilhada por impacto + linhas de triagem ──
+  // ── Tendência mensal: empilhada pela situação do desvio ──
   const tendencia = useMemo(() => meses.map(m => {
     const [ano, ms] = m.split("-").map(Number);
     const label = new Date(ano, ms - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: meses.length > 12 ? "2-digit" : undefined });
     const doMes = filtrados.filter(d => dataDe(d).startsWith(m));
     return {
       mes: label,
-      "Menor": doMes.filter(d => d.impacto === "Menor").length,
-      "Maior": doMes.filter(d => d.impacto === "Maior").length,
-      "Crítica": doMes.filter(d => d.impacto === "Crítica").length,
-      "Encerrados": doMes.filter(d => d.status === "Encerrado").length,
-      "Viraram RNC": doMes.filter(d => d.status === "Convertido em RNC").length,
+      ...Object.fromEntries(SITUACOES.map(x => [x.chave, doMes.filter(d => d.status === x.status).length])),
       total: doMes.length,
     };
   }), [filtrados, meses]);
@@ -170,9 +172,9 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
     filtrados.forEach(d => {
       const p = (d.produto || "").trim();
       if (!p) return;
-      if (!map[p]) map[p] = { nome: p, qtd: 0, criticos: 0 };
+      if (!map[p]) map[p] = { nome: p, qtd: 0, rnc: 0 };
       map[p].qtd += 1;
-      if (d.impacto === "Crítica") map[p].criticos += 1;
+      if (d.status === "Convertido em RNC") map[p].rnc += 1;
     });
     return Object.values(map).sort((a, b) => b.qtd - a.qtd).slice(0, 5);
   }, [filtrados]);
@@ -193,9 +195,9 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
   const exportCSV = () => {
     const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const linhas = [
-      ["Nº", "Data ocorrência", "Setor", "Tipo", "Impacto", "Status", "Descrição", "Registrado por", "Data registro", "Ação imediata", "Encerrado em", "Convertido em", "RNC vinculada", "Dias até triagem"].join(";"),
+      ["Nº", "Data ocorrência", "Setor", "Tipo", "Status", "Descrição", "Registrado por", "Data registro", "Ação imediata", "Encerrado em", "Convertido em", "RNC vinculada", "Dias até triagem"].join(";"),
       ...filtrados.map(d => [
-        d.num, dataDe(d), setorDe(d), tipoDe(d), d.impacto, d.status, d.desc,
+        d.num, dataDe(d), setorDe(d), tipoDe(d), d.status, d.desc,
         d.registradoPor, d.dataRegistro, d.acaoImediata || "", d.encerradoEm || "", d.convertidoEm || "", d.rncNum || "",
         diasTriagem(d) ?? "",
       ].map(esc).join(";")),
@@ -263,7 +265,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
     { l: "Em aberto", n: a.abertos, c: DESVIO_SMETA["Registrado"].c, click: { status: "Registrado" } },
     { l: "Encerrados", n: a.encerrados, c: DESVIO_SMETA["Encerrado"].c, delta: p && <Delta cur={a.encerrados} prev={p.encerrados} goodUp />, click: { status: "Encerrado" } },
     { l: "Viraram RNC", n: `${a.convertidos} (${a.taxaRNC}%)`, c: DESVIO_SMETA["Convertido em RNC"].c, delta: p && <Delta cur={a.convertidos} prev={p.convertidos} />, click: { status: "Convertido em RNC" } },
-    { l: "Impacto crítico", n: a.criticos, c: a.criticos > 0 ? T.red : T.text3, delta: p && <Delta cur={a.criticos} prev={p.criticos} /> },
+    { l: `Aguardando triagem > ${META_TRIAGEM_DIAS} dias`, n: a.foraDaMeta, c: a.foraDaMeta > 0 ? T.red : T.text3, click: { status: "Registrado" } },
     { l: `Triagem ≤ ${META_TRIAGEM_DIAS} dias`, n: a.sla !== null ? `${a.sla}%` : "—", c: slaCor, delta: p && <Delta cur={a.sla} prev={p.sla} goodUp unit="%" /> },
     { l: "Mediana de triagem", n: a.med !== null ? `${a.med}d` : "—", c: a.med !== null && a.med > META_TRIAGEM_DIAS ? T.yellow : T.accent, delta: p && <Delta cur={a.med} prev={p.med} /> },
     { l: "Com ação imediata", n: a.comAcao !== null ? `${a.comAcao}%` : "—", c: T.accent, delta: p && <Delta cur={a.comAcao} prev={p.comAcao} goodUp unit="%" /> },
@@ -299,10 +301,10 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
         </div>
       )}
 
-      {/* ── Tendência mensal por impacto ── */}
+      {/* ── Tendência mensal por situação ── */}
       <div style={{ ...card, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-          {cardTitle("📈", "Tendência de Desvios por Impacto", `${formatoTend === "linhas" ? "Linhas cheias" : "Barras"}: registrados por mês de ocorrência, ${formatoTend === "empilhado" ? "empilhados" : "separados"} por severidade · Linhas tracejadas: triagem no mês`)}
+          {cardTitle("📈", "Tendência de Desvios", `Registrados por mês de ocorrência, ${formatoTend === "empilhado" ? "empilhados" : "separados"} pela situação atual (aguardando triagem, encerrados, viraram RNC)`)}
           <SeletorFormato formato={formatoTend} onChange={setFormatoTend} />
         </div>
         <div style={{ height: 260 }}>
@@ -312,16 +314,12 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
               <XAxis dataKey="mes" tick={{ fill: T.text2, fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: T.text2, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <RcTooltip content={<CustomTooltip />} cursor={{ fill: T.accentDim }} />
-              {seriesNoFormato(formatoTend, ["Menor", "Maior", "Crítica"].map(k => ({ chave: k, cor: IMPACTO_CORES[k] })), { corBorda: T.card })}
-              <Line type="monotone" dataKey="Encerrados" stroke={DESVIO_SMETA["Encerrado"].c} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: DESVIO_SMETA["Encerrado"].c }} activeDot={{ r: 5 }} />
-              <Line type="monotone" dataKey="Viraram RNC" stroke={DESVIO_SMETA["Convertido em RNC"].c} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3, fill: DESVIO_SMETA["Convertido em RNC"].c }} activeDot={{ r: 5 }} />
+              {seriesNoFormato(formatoTend, SITUACOES.map(x => ({ chave: x.chave, cor: x.cor })), { corBorda: T.card })}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
         <LegendaSeries itens={[
-          ...["Menor", "Maior", "Crítica"].map(k => ({ label: k, cor: IMPACTO_CORES[k], tipo: formatoTend === "linhas" ? "linha" : "quad" })),
-          { label: "Encerrados", cor: DESVIO_SMETA["Encerrado"].c, tipo: "tracejada" },
-          { label: "Viraram RNC", cor: DESVIO_SMETA["Convertido em RNC"].c, tipo: "tracejada" },
+          ...SITUACOES.map(x => ({ label: x.chave, cor: x.cor, tipo: formatoTend === "linhas" ? "linha" : "quad" })),
         ]} />
       </div>
 
@@ -504,7 +502,7 @@ export function DesviosIndicadores({ desvios = [], setTab, tiposDesvio = TIPOS_D
                   style={{ position: "relative", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, cursor: setTab ? "pointer" : "default", overflow: "hidden" }}>
                   <div style={{ position: "absolute", inset: 0, width: `${pr.qtd / topProdutos[0].qtd * 100}%`, background: T.accentDim }} />
                   <span style={{ fontSize: 12, color: T.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", position: "relative" }}>{pr.nome}</span>
-                  {pr.criticos > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.red, position: "relative", whiteSpace: "nowrap" }}>{pr.criticos} crítico{pr.criticos > 1 ? "s" : ""}</span>}
+                  {pr.rnc > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: DESVIO_SMETA["Convertido em RNC"].c, position: "relative", whiteSpace: "nowrap" }}>{pr.rnc} virou RNC</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, color: T.accent, position: "relative", minWidth: 24, textAlign: "right" }}>{pr.qtd}</span>
                 </div>
               ))}

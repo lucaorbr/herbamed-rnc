@@ -51,7 +51,8 @@ export function TendenciaRnc({ dados }) {
   const T = useTheme();
   const [formato, setFormato] = useFormatoGrafico("rnc-tendencia", "linhas");
   const vazio = dados.every(d => d.total === 0 && d["Encerradas"] === 0);
-  const series = SEVERIDADES.map(k => ({ chave: k, cor: SEVMETA[k].c }));
+  // "Crítica" saiu na v3.28.0: só aparece se houver RNC antiga com ela no período.
+  const series = SEVERIDADES.filter(k => k !== "Crítica" || dados.some(d => d[k] > 0)).map(k => ({ chave: k, cor: SEVMETA[k].c }));
   return (
     <Cartao icon="📈" titulo="Tendência de RNCs por Severidade"
       sub={`RNCs abertas por mês (${formato === "empilhado" ? "empilhadas" : "separadas"} por severidade) · Tracejada: encerradas no mês`}

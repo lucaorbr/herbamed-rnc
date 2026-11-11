@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
-import { rncAtiva, taxaEficaciaRNC } from "../../core/status";
+import { taxaEficaciaRNC } from "../../core/status";
 import { tod } from "../../core/utils";
 import { getCollection, subscribeCollection } from "../../firebase";
 import { pendentesDoUsuario } from "../documentos/treinamento";
@@ -185,7 +185,6 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           <Indicador T={T} n={rncs.length} l="Total RNCs" />
           <Indicador T={T} n={rncs.filter(x => x.status === "Aberta").length} l="Abertas" />
-          <Indicador T={T} n={rncs.filter(x => x.sev === "Crítica" && rncAtiva(x.status)).length} l="Críticas" cor={T.red} />
           <Indicador T={T} n={taxaEf === null ? "—" : `${taxaEf}%`} l="Taxa de eficácia" cor={taxaEf === null ? T.text3 : taxaEf < 50 ? T.red : T.accent} />
           <Indicador T={T} n={desvios.filter(d => d.status === "Registrado").length} l="Desvios a triar" />
         </div>

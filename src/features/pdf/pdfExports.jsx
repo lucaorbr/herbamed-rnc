@@ -372,9 +372,6 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div style="font-size:11px;color:#666;">✔ Assinado eletronicamente em ${rnc.assinaturaRT.timestamp?new Date(rnc.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.assinaturaRT.dataHora}</div>
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
     </div>
-  </div>` : rnc.sev === "Crítica" ? `
-  <div style="margin-top:12px;padding:10px 14px;border:1px solid #ffd16633;border-radius:8px;background:#fffbf0;font-size:11px;color:#b8860b;">
-    ⏳ RNC Crítica — Aprovação do Responsável Técnico pendente
   </div>` : ""}
 `;
   openPDFWindow(`RNC ${rnc.num} — Herbamed®`, buildPDFShell({
