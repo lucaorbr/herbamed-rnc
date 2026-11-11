@@ -418,6 +418,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       origemAnalise: rncPrefill.origemAnalise || "",
     }));
     if (rncPrefill.origemDesvioDoc) setOrigemDesvio(rncPrefill.origemDesvioDoc);
+    if (rncPrefill.anexos?.length) setAnexos(rncPrefill.anexos);
     setIshikawa(p => ({ ...p, whys: ["", "", "", "", ""] }));
     if (setRncPrefill) setRncPrefill(null);
   }, [rncPrefill]);
@@ -484,6 +485,12 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
   return (
     <div>
+      {origemDesvio && (
+        <div style={{ fontSize:13, color:T.text, background:`${T.blue}14`, border:`1px solid ${T.blue}44`, borderRadius:8, padding:"10px 14px", marginBottom:12 }}>
+          ↗ Convertendo o desvio <strong>{origemDesvio.num}</strong> em RNC
+          {anexos.some(a => a.origemDesvio) && <> · {anexos.filter(a => a.origemDesvio).length} anexo(s) do desvio já incluído(s) na aba Descrição</>}
+        </div>
+      )}
       {/* ── Abas do formulário ── */}
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
         {[["ident","🪪 Identificação"],["desc","📝 Descrição"],["contencao","⚡ Contenção"],["prazos","🗓️ Prazos"]].map(([k,l])=>(

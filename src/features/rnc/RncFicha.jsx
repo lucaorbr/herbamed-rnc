@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createElectronicSignature } from "../../firebase";
-import { SEVMETA, SMETA, TIPOC, rncAtiva, rncEncerrada } from "../../core/status";
+import { DISPOSICOES_ATIVAS, SEVMETA, SMETA, TIPOC, dispMeta, errosDisposicao, rncAtiva, rncEncerrada, rotuloDisposicao } from "../../core/status";
 import { useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -10,7 +10,7 @@ import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoH
 import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
 import { AssinaturaModal, exportRNCPDF } from "../pdf/pdfExports";
 import { exportFormularioFornecedor } from "./formularioFornecedor";
-import { DISPOSICOES, andamentoPatch, dispMeta } from "./RncTabs";
+import { andamentoPatch } from "./RncTabs";
 import { AnaliseCausaEditor } from "./AnaliseCausa";
 import { Investigacao } from "./Investigacao";
 import { PlanoCapaEditor } from "./PlanoCapa";
@@ -45,8 +45,9 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const [dispForm, setDispForm] = useState(false);
   const [dispDec, setDispDec] = useState("");
   const [dispJust, setDispJust] = useState("");
-  const [dispSign, setDispSign] = useState(null);
-  useEffect(() => { setEditing(false); setDispForm(false); setDispDec(""); setDispJust(""); setDispSign(null); }, [rncId]);
+  const [dispOutro, setDispOutro] = useState("");
+  const limparDisp = () => { setDispForm(false); setDispDec(""); setDispJust(""); setDispOutro(""); };
+  useEffect(() => { setEditing(false); limparDisp(); }, [rncId]);
 
   if (!r) {
     return (
@@ -87,16 +88,17 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     toast_("RNC aprovada pelo RT!", "green");
   };
 
-  const gravarDisposicao = async (decisao, justificativa, assinaturaRT) => {
-    const meta = dispMeta(decisao);
-    const disposicao = { decisao, justificativa: (justificativa || "").trim(), data: tod(), por: user.name, assinaturaRT: assinaturaRT || null };
+  const gravarDisposicao = async (decisao, justificativa, outro) => {
+    const disposicao = { decisao, justificativa: (justificativa || "").trim(), data: tod(), por: user.name };
+    if (dispMeta(decisao)?.pedeTexto) disposicao.outro = (outro || "").trim();
+    const anterior = r.disposicao?.decisao ? rotuloDisposicao(r.disposicao) : null;
     const h = {
       data: tod(), hora: agoraHora(),
-      acao: `Disposição do material: ${meta?.label || decisao}${assinaturaRT ? " (assinada pelo RT)" : ""}`,
-      detalhes: [disposicao.justificativa].filter(Boolean), resp: user.name, tipo: "disposicao",
+      acao: `Disposição do material: ${rotuloDisposicao(disposicao)}`,
+      detalhes: [disposicao.justificativa, anterior && `Disposição anterior: ${anterior}`].filter(Boolean), resp: user.name, tipo: "disposicao",
     };
     await gravar({ disposicao, historico: [...(r.historico || []), h] });
-    setDispForm(false); setDispDec(""); setDispJust("");
+    limparDisp();
     toast_("Disposição do material registrada.", "green");
   };
 
@@ -105,21 +107,16 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     if (!r.disposicao?.decisao) { alert("Registre a disposição do material antes de encerrar."); return; }
     const pend = (r.w2h || []).filter(a => a.status !== "Concluída" && a.status !== "Cancelada");
     const aviso = pend.length > 0 ? `\n\nAtenção: há ${pend.length} ação(ões) de CAPA pendente(s) — o encerramento por disposição dispensa o ciclo de eficácia.` : "";
-    if (!window.confirm(`Encerrar a RNC ${r.num} como resolvida por disposição do material (${dispMeta(r.disposicao.decisao)?.label})?\n\nA RNC vai para o status "Encerrada", sem passar pela verificação de eficácia.${aviso}`)) return;
-    const h = { data: tod(), hora: agoraHora(), acao: `RNC encerrada por disposição do material (${dispMeta(r.disposicao.decisao)?.label})`, resp: user.name, tipo: "status" };
+    if (!window.confirm(`Encerrar a RNC ${r.num} como resolvida por disposição do material (${rotuloDisposicao(r.disposicao)})?\n\nA RNC vai para o status "Encerrada", sem passar pela verificação de eficácia.${aviso}`)) return;
+    const h = { data: tod(), hora: agoraHora(), acao: `RNC encerrada por disposição do material (${rotuloDisposicao(r.disposicao)})`, resp: user.name, tipo: "status" };
     await gravar({ status: "Encerrada", historico: [...(r.historico || []), h] });
     toast_("RNC encerrada por disposição.", "green");
   };
 
   const submitDisposicao = () => {
-    if (!dispDec) { alert("Selecione a decisão de disposição."); return; }
-    if (!dispJust.trim()) { alert("A justificativa técnica da disposição é obrigatória."); return; }
-    if (dispMeta(dispDec)?.libera) {
-      if (!(isAdmin || (perm && perm("aprovarRNC")))) { alert("Liberar material não conforme exige assinatura do RT (permissão \"Aprovar como RT\")."); return; }
-      setDispSign({ decisao: dispDec, justificativa: dispJust });
-    } else {
-      gravarDisposicao(dispDec, dispJust, null);
-    }
+    const erros = errosDisposicao({ decisao: dispDec, justificativa: dispJust, outro: dispOutro });
+    if (erros.length) { alert(erros.join(" ")); return; }
+    gravarDisposicao(dispDec, dispJust, dispOutro);
   };
 
   const startEdit = (etapaDestino) => {
@@ -220,7 +217,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {r.disposicao?.decisao ? (
           <div style={{ ...caixa, borderColor: `${meta?.cor || T.border}55` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: meta?.cor || T.text, padding: "3px 12px", borderRadius: 20, background: `${meta?.cor || T.text3}18` }}>{meta?.label || r.disposicao.decisao}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: meta?.cor || T.text, padding: "3px 12px", borderRadius: 20, background: `${meta?.cor || T.text3}18` }}>{rotuloDisposicao(r.disposicao)}</span>
               <span style={{ fontSize: 11, color: T.text3 }}>por {r.disposicao.por} · {fmt(r.disposicao.data)}</span>
             </div>
             {r.disposicao.justificativa && <div style={{ fontSize: 13, lineHeight: 1.5 }}>{r.disposicao.justificativa}</div>}
@@ -231,7 +228,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             )}
             {interativa && canDispor && !dispForm && (
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <button onClick={() => { setDispForm(true); setDispDec(r.disposicao.decisao); setDispJust(r.disposicao.justificativa || ""); }} style={{ ...s.btn, fontSize: 11, padding: "5px 10px" }}>Alterar disposição</button>
+                <button onClick={() => { setDispForm(true); setDispDec(dispMeta(r.disposicao.decisao)?.retirada ? "" : r.disposicao.decisao); setDispJust(r.disposicao.justificativa || ""); setDispOutro(r.disposicao.outro || ""); }} style={{ ...s.btn, fontSize: 11, padding: "5px 10px" }}>Alterar disposição</button>
                 {rncAtiva(r.status) && <button onClick={encerrarPorDisposicao} style={{ ...s.btn, fontSize: 11, padding: "5px 10px", color: T.accent, borderColor: `${T.accent}44`, background: T.accentDim }}>Encerrar RNC (resolvida por disposição)</button>}
               </div>
             )}
@@ -246,16 +243,18 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             <F lbl="Decisão de disposição" ch={
               <Sel value={dispDec} onChange={e => setDispDec(e.target.value)}>
                 <option value="">— Selecione —</option>
-                {DISPOSICOES.map(d => <option key={d.key} value={d.key}>{d.label}{d.libera ? " (exige RT)" : ""}</option>)}
+                {DISPOSICOES_ATIVAS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
               </Sel>
             } />
+            {dispMeta(dispDec)?.pedeTexto && (
+              <F lbl="Qual a decisão?" ch={<Inp value={dispOutro} onChange={e => setDispOutro(e.target.value)} placeholder="Descreva a disposição do material..." />} />
+            )}
             <F lbl="Justificativa técnica" tip="Por que esta é a decisão correta para o lote? Ex.: liberado sob concessão porque o desvio de rótulo não afeta a identificação nem a segurança." ch={
               <TA rows={3} value={dispJust} onChange={e => setDispJust(e.target.value)} placeholder="Justificativa da disposição do lote..." />
             } />
-            {dispMeta(dispDec)?.libera && <div style={{ fontSize: 11, color: T.text3, marginBottom: 8 }}>🔏 Liberar material não conforme exige assinatura eletrônica do RT ao registrar.</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              {dispForm && <button style={s.btn} onClick={() => { setDispForm(false); setDispDec(""); setDispJust(""); }}>Cancelar</button>}
-              <button style={s.btnA} onClick={submitDisposicao}>{dispMeta(dispDec)?.libera ? "🔏 Assinar e registrar" : "Registrar disposição"}</button>
+              {dispForm && <button style={s.btn} onClick={limparDisp}>Cancelar</button>}
+              <button style={s.btnA} onClick={submitDisposicao}>Registrar disposição</button>
             </div>
           </div>
         )}
@@ -505,7 +504,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{r.num}</div>
-          <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.tipo} · aberta em {fmt(r.data)} por {r.detector || r.criadoPor || "—"}</div>
+          <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.tipo} · aberta em {fmt(r.data)} por {r.detector || r.criadoPor || "—"}{r.origemDesvioNum && <> · origem: desvio <strong>{r.origemDesvioNum}</strong></>}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <SevB s={r.sev} /><Badge s={r.status} />
@@ -594,16 +593,6 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             setAssinaturaModal(false);
             toast_("Assinatura do elaborador registrada na RNC.", "green");
           }}
-        />
-      )}
-      {dispSign && (
-        <AssinaturaModal
-          user={user}
-          titulo={`RNC ${r.num} — disposição: ${dispMeta(dispSign.decisao)?.label}`}
-          contexto={`RNC-DISP|${r.num || r.id || ""}`}
-          papel="Responsavel Tecnico"
-          onClose={() => setDispSign(null)}
-          onConfirm={async (ass) => { await gravarDisposicao(dispSign.decisao, dispSign.justificativa, ass); setDispSign(null); }}
         />
       )}
     </div>

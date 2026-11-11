@@ -105,6 +105,7 @@ export function AnexosUpload({
                   {fmtSize(a.size)}
                   {a.anexadoPor ? ` · ${a.anexadoPor}` : ""}
                   {a.anexadoEm ? ` · ${new Date(a.anexadoEm).toLocaleDateString("pt-BR")}` : ""}
+                  {a.origemDesvio ? ` · do desvio ${a.origemDesvio}` : ""}
                 </div>
               </div>
               <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, textDecoration: "none", fontWeight: 600, padding: "4px 10px", background: T.accentDim, borderRadius: 6 }}>Ver</a>
