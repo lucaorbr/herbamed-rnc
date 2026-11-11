@@ -28,14 +28,14 @@ describe("comCausaCapaNaAbertura", () => {
     expect(r.ishikawa.efeito).toBe("Cápsulas úmidas no lote 12");
     expect(r.status).toBe("Em andamento");
     expect(r.historico.map(h => h.acao)).toEqual(["RNC aberta", "Análise de causa registrada na abertura", "Status alterado -> Em andamento (análise de causa na abertura)"]);
-    expect(r.historico[1].detalhes).toContain("Causa raiz definida");
+    expect(r.historico[1].detalhes).toEqual(["5 Porquês: 3 de 5 preenchido(s)", "Causa raiz: MP trocada"]);
     expect(r.w2h).toEqual([]);
   });
   test("análise + CAPA: prazo vem das ações e o prazo deixa de estar em definição", () => {
     const r = comCausaCapaNaAbertura({ ...base(), ishikawa: analise, w2h: [acao] }, "Lucas", "2026-11-11", "10:00");
     expect(r.prazoAC).toBe("2026-12-10");
     expect(r.modoPrazo).toBe("definido");
-    expect(r.historico.map(h => h.acao)).toContain("CAPA — 1 ação(ões)");
+    expect(r.historico.find(h => h.acao === "CAPA — 1 ação(ões)").detalhes).toEqual(['Ação incluída: "Trocar MP" (Corretiva, Ana)']);
     expect(r.historico.slice(1).every(h => h.hora === "10:00" && h.resp === "Lucas")).toBe(true);
     expect(r.historico.at(-1).acao).toMatch(/análise de causa e plano CAPA na abertura/);
   });
