@@ -21,7 +21,8 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
-import { etapasDaRnc, rncTemMaterial } from "./ferramentasLogic";
+import { comCausaCapaNaAbertura, errosCausaCapaNaAbertura, etapasDaRnc, rncTemMaterial } from "./ferramentasLogic";
+import { CausaCapaAbertura } from "./CausaCapaAbertura";
 import { PRAZO_RESPOSTA_FORNECEDOR_DIAS, ROTULO_TIPO_RNC, TIPOS_RNC, errosAberturaPorTipo, somarDias, tipoRnc } from "./tipoRncLogic";
 import { EspiadaRnc } from "./EspiadaRnc";
 import { ofertaNotificar } from "../email/ofertaNotificar";
@@ -392,6 +393,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
+  const [errosCausa, setErrosCausa] = useState([]);
   const [fornSearch, setFornSearch] = useState("");
   const [fornOpen, setFornOpen] = useState(false);
   const [novaAba, setNovaAba] = useState("ident");
@@ -431,7 +433,9 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       setIshikawa(p => ({ ...p, whys: result.data.porques || [], root: result.data.raiz || "", whyCausa: result.data.causa || "" }));
       toast_("5 Porquês aplicados!", "green");
     } else if (result.type === "5w2h") {
-      setW2h(result.data.acoes || []);
+      // Prazo da IA vem como texto ("15 dias"): fica em branco para a pessoa escolher a data.
+      const dataIso = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+      setW2h((result.data.acoes || []).map((x, i) => ({ tipo: "Corretiva", why: "", where: "", how: "", howMuch: "", ...x, id: String(Date.now() + i), when: dataIso.test(x.when || "") ? x.when : "", status: "Pendente", evidencias: [] })));
       toast_("Plano 5W2H aplicado!", "green");
     } else if (result.type === "eficacia") {
       set("prazoEfic", "");
@@ -447,26 +451,37 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
     if (errosTipo.length) { setNovaAba(!f.tipoRnc || !f.fornecedor ? "ident" : "desc"); alert(errosTipo.join(" ")); return; }
     if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
     const ehExterna = f.tipoRnc === "externa";
-    if (!ehExterna && modoPrazo === "definicao") {
+    // Causa e CAPA na abertura (interna, opcional): com ações, o prazo vem delas.
+    const comCapa = !ehExterna && w2h.length > 0;
+    if (!ehExterna) {
+      const e = errosCausaCapaNaAbertura(ishikawa, w2h);
+      setErrosCausa(e);
+      if (e.length) { setNovaAba("causa"); toast_("Corrija a aba Causa e CAPA.", "red"); return; }
+    }
+    if (!ehExterna && !comCapa && modoPrazo === "definicao") {
       if (!f.justificativaPrazo?.trim()) { alert("Informe a justificativa para o prazo em definicao."); return; }
       if (!f.proximaReavaliacao) { alert("Defina a proxima data de reavaliacao."); return; }
       f.prazoAC = "2099-12-31";
     }
     if (!f.sev)                 { alert("Selecione a severidade (Maior / Menor)."); return; }
     if (!f.resp.trim())         { alert(ehExterna ? "Informe o responsável na Herbamed (aba Prazos)." : "Informe o responsável pela ação corretiva."); return; }
-    if (!ehExterna && !f.prazoAC) { alert("Defina o prazo para ação corretiva."); return; }
+    if (!ehExterna && !comCapa && !f.prazoAC) { alert("Defina o prazo para ação corretiva."); return; }
     setAssinaturaModal(true);
   };
 
   const finalizarSalvar = async (assinaturaElaborador) => {
     try {
-      const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+      const externa = f.tipoRnc === "externa";
+      let draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
       // Externa: o fornecedor tem prazo para responder (padrão de 15 dias, editável na ficha).
       if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
-      if (f.tipoRnc !== "externa" && modoPrazo === "definicao") {
+      // Externa: a Herbamed não faz 5 Porquês nem CAPA (o fornecedor responde).
+      if (externa) { draft.ishikawa = { efeito: "", causes: {}, whys: [], root: "", whyCausa: "" }; draft.w2h = []; }
+      if (!externa && !w2h.length && modoPrazo === "definicao") {
         draft.prazoAC = "";
         draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
       }
+      if (!externa) draft = comCausaCapaNaAbertura(draft, user.name, tod(), new Date().toLocaleTimeString("pt-BR"));
       const rnc = await doSaveRNC(draft);
       setAssinaturaModal(false);
       // Vínculo bidirecional: marca o desvio de origem como convertido e grava o nº da RNC.
@@ -494,7 +509,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       )}
       {/* ── Abas do formulário ── */}
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-        {[["ident","🪪 Identificação"],["desc","📝 Descrição"],["contencao","⚡ Contenção"],["prazos","🗓️ Prazos"]].map(([k,l])=>(
+        {[["ident","🪪 Identificação"],["desc","📝 Descrição"],["contencao","⚡ Contenção"],...(f.tipoRnc==="interna"?[["causa","🔍 Causa e CAPA (opcional)"]]:[]),["prazos","🗓️ Prazos"]].map(([k,l])=>(
           <button key={k} onClick={()=>setNovaAba(k)}
             style={{ padding:"8px 18px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:600,
               background:novaAba===k?T.accent:T.surf, color:novaAba===k?"#fff":T.text2, transition:"all .15s" }}>
@@ -598,6 +613,10 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       </div>
       )}
 
+      {novaAba==="causa" && f.tipoRnc==="interna" && (
+        <CausaCapaAbertura ishikawa={ishikawa} setIshikawa={setIshikawa} w2h={w2h} setW2h={setW2h} autor={user.name} erros={errosCausa} />
+      )}
+
       {novaAba==="prazos" && f.tipoRnc === "externa" && (
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
@@ -611,11 +630,17 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       {novaAba==="prazos" && f.tipoRnc !== "externa" && (
       <div style={s.card}>
         <SecTitle icon="🗓️" ch="Prazos e responsabilidades" />
+        {w2h.length > 0 ? (
+        <div style={{marginBottom:12,padding:10,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text2}}>
+          O prazo da ação corretiva vem do plano CAPA preenchido na aba Causa e CAPA: a ação mais tardia.
+        </div>
+        ) : (
         <div style={{marginBottom:12,padding:10,border:`1px solid ${T.border}`,borderRadius:8}}>
           <F lbl="Planejamento do prazo" ch={<select value={modoPrazo} onChange={e=>set("modoPrazo",e.target.value)} style={{...s.inp,width:"100%"}}><option value="definicao">Prazo em definicao</option><option value="definido">Prazo definido</option></select>} />
           {modoPrazo==="definicao" && <><F lbl="Justificativa" ch={<TA rows={2} value={f.justificativaPrazo||""} onChange={e=>set("justificativaPrazo",e.target.value)} />} /><F lbl="Proxima reavaliacao" ch={<Inp type="date" value={f.proximaReavaliacao||""} onChange={e=>set("proximaReavaliacao",e.target.value)} />} /></>}
         </div>
-        <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} /><F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} /></>} />
+        )}
+        <G3 ch={<><F lbl="Responsável pela análise" tip="Nome do responsável por conduzir a análise de causa raiz (Ishikawa + 5 Porquês) e elaborar o plano de ação corretiva." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} />} /><F lbl="Prazo — análise de causa" tip="Data limite para conclusão da análise de causa raiz (Ishikawa + 5 Porquês). Recomendado: até 15 dias após a abertura." ch={<Inp type="date" value={f.prazoCausa} onChange={e => set("prazoCausa", e.target.value)} />} />{w2h.length === 0 && <F lbl="Prazo — ação corretiva" tip="Data limite para execução de todas as ações do plano 5W2H. Recomendado: até 30 dias após a análise de causa." ch={<Inp type="date" value={f.prazoAC} onChange={e => set("prazoAC", e.target.value)} />} />}</>} />
         <F lbl="Prazo — verificação de eficácia" tip="Data em que será verificado se a ação corretiva foi eficaz e o problema não voltou. Recomendado: 90 dias após a ação corretiva." ch={<Inp type="date" value={f.prazoEfic} onChange={e => set("prazoEfic", e.target.value)} sx={{ maxWidth: 300 }} />} />
       </div>
       )}

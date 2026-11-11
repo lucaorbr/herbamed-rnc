@@ -356,3 +356,43 @@ export function patchInvestigacao(r, registro, data, hora) {
     }],
   };
 }
+
+// ── Análise de causa e CAPA já na abertura da RNC interna (v3.30.0) ──────────────
+// Opcionais: quem abre a RNC e já sabe a causa registra os 5 Porquês, a causa raiz e as
+// ações ali mesmo; senão faz depois, na ficha. Mesma trava da ficha: ação CAPA só entra
+// com a análise completa (≥3 porquês + causa raiz). O Ishikawa fica só na ficha.
+
+const analiseCompleta = ishi => (ishi?.whys || []).filter(cheio).length >= MIN_PORQUES && cheio(ishi?.root);
+const temAnalise = ishi => (ishi?.whys || []).some(cheio) || cheio(ishi?.root);
+
+/** Erros da aba "Causa e CAPA" da abertura. Vazio = pode salvar. */
+export function errosCausaCapaNaAbertura(ishikawa, acts) {
+  if (!(acts || []).length) return [];
+  if (!analiseCompleta(ishikawa)) return [`Para incluir ações CAPA na abertura, preencha ao menos ${MIN_PORQUES} porquês e a causa raiz.`];
+  return errosDasAcoesCapa(acts);
+}
+
+/**
+ * A RNC que vai ser gravada, com a análise e o plano preenchidos na abertura: entradas
+ * de histórico como as da ficha, prazo da ação corretiva calculado pelas ações e status
+ * "Em andamento" (é o 1º ato de tratamento). Sem nada preenchido, devolve o draft igual.
+ */
+export function comCausaCapaNaAbertura(draft, autor, data, hora) {
+  const ishi = draft.ishikawa || {};
+  const acts = draft.w2h || [];
+  if (!temAnalise(ishi) && !acts.length) return draft;
+  let out = { ...draft, historico: [...(draft.historico || [])] };
+  if (temAnalise(ishi)) {
+    out.ishikawa = { ...ishi, efeito: cheio(ishi.efeito) ? ishi.efeito : (draft.desc || "").split("\n")[0].substring(0, 120) };
+    out.historico.push({ data, hora, acao: "Análise de causa registrada na abertura", detalhes: resumoAnaliseCausa({}, out.ishikawa), resp: autor, tipo: "analise" });
+  }
+  if (acts.length) {
+    const p = patchSalvarCapa(out, acts, autor, data);
+    out = { ...out, ...p, historico: p.historico.map((h, i) => (i >= out.historico.length ? { ...h, hora } : h)) };
+  }
+  if (out.status === "Aberta") {
+    out.status = "Em andamento";
+    out.historico.push({ data, hora, acao: `Status alterado -> Em andamento (${acts.length ? "análise de causa e plano CAPA" : "análise de causa"} na abertura)`, resp: autor, tipo: "status" });
+  }
+  return out;
+}
