@@ -23,6 +23,7 @@ import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
 import { comCausaCapaNaAbertura, errosCausaCapaNaAbertura, etapasDaRnc, rncTemMaterial } from "./ferramentasLogic";
 import { CausaCapaAbertura } from "./CausaCapaAbertura";
+import { historicoDaNova, patchSucessora } from "./rncVinculadaLogic";
 import { PRAZO_RESPOSTA_FORNECEDOR_DIAS, ROTULO_TIPO_RNC, TIPOS_RNC, errosAberturaPorTipo, somarDias, tipoRnc } from "./tipoRncLogic";
 import { EspiadaRnc } from "./EspiadaRnc";
 import { ofertaNotificar } from "../email/ofertaNotificar";
@@ -385,11 +386,12 @@ export function openCOA(coa) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
+export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
   const [f, setF] = useState({ tipoRnc: "", data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
   const modoPrazo = f.modoPrazo || "definicao";
   const [origemDesvio, setOrigemDesvio] = useState(null);
+  const [origemRnc, setOrigemRnc] = useState(null);
   const [anexos, setAnexos] = useState([]);
   const [ishikawa, setIshikawa] = useState({ efeito: "", causes: { mao: [], maquina: [], metodo: [], material: [], medicao: [], meioamb: [] }, whys: [], root: "", whyCausa: "" });
   const [w2h, setW2h] = useState([]);
@@ -414,8 +416,13 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       desc: rncPrefill.desc || p.desc,
       tipo: rncPrefill.tipo || p.tipo,
       origemAnalise: rncPrefill.origemAnalise || "",
+      // Reincidência de RNC ineficaz: o tipo e a NF já vêm (a tela de escolha é pulada).
+      tipoRnc: rncPrefill.tipoRnc || p.tipoRnc,
+      nf: rncPrefill.nf || p.nf,
+      tipoOutros: rncPrefill.tipoOutros || p.tipoOutros,
     }));
     if (rncPrefill.origemDesvioDoc) setOrigemDesvio(rncPrefill.origemDesvioDoc);
+    if (rncPrefill.origemRncDoc) setOrigemRnc(rncPrefill.origemRncDoc);
     if (rncPrefill.anexos?.length) setAnexos(rncPrefill.anexos);
     setIshikawa(p => ({ ...p, whys: ["", "", "", "", ""] }));
     if (setRncPrefill) setRncPrefill(null);
@@ -472,7 +479,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const finalizarSalvar = async (assinaturaElaborador) => {
     try {
       const externa = f.tipoRnc === "externa";
-      let draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+      let draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, origemRnc: origemRnc?.id || null, origemRncNum: origemRnc?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
       // Externa: o fornecedor tem prazo para responder (padrão de 15 dias, editável na ficha).
       if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
       // Externa: a Herbamed não faz 5 Porquês nem CAPA (o fornecedor responde).
@@ -481,6 +488,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
         draft.prazoAC = "";
         draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
       }
+      if (origemRnc) draft.historico.push(historicoDaNova(origemRnc, user.name, tod(), new Date().toLocaleTimeString("pt-BR")));
       if (!externa) draft = comCausaCapaNaAbertura(draft, user.name, tod(), new Date().toLocaleTimeString("pt-BR"));
       const rnc = await doSaveRNC(draft);
       setAssinaturaModal(false);
@@ -489,6 +497,12 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
         await doSaveDesvio({ ...origemDesvio, status: "Convertido em RNC", convertidoPor: user.name, convertidoEm: tod(), rncId: rnc.id, rncNum: rnc.num,
           historico: [...(origemDesvio.historico || []), { data: tod(), acao: `Convertido em RNC ${rnc.num}`, resp: user.name }] });
         setOrigemDesvio(null);
+      }
+      // Vínculo nas duas: a RNC ineficaz ganha a sucessora no histórico.
+      if (origemRnc && doUpdateRNC) {
+        try { await doUpdateRNC(origemRnc.id, patchSucessora(origemRnc, rnc, user.name, tod(), new Date().toLocaleTimeString("pt-BR"))); }
+        catch { toast_(`${rnc.num} registrada, mas o vínculo na ${origemRnc.num} não foi gravado. Avise a Qualidade.`, "red"); setOrigemRnc(null); setTab("lista"); return; }
+        setOrigemRnc(null);
       }
       toast_(`${rnc.num} registrada.`, "green", ofertaNotificar(rnc, "abertura", openEmail));
       setTab("lista");
@@ -505,6 +519,11 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       {anexos.some(a => a.origemDesvio) && <> · {anexos.filter(a => a.origemDesvio).length} anexo(s) do desvio já incluído(s) na aba Descrição</>}
     </div>
   );
+  const bannerOrigemRnc = origemRnc && (
+    <div style={{ fontSize:13, color:T.text, background:`${T.red}12`, border:`1px solid ${T.red}44`, borderRadius:8, padding:"10px 14px", marginBottom:12 }}>
+      ↻ Reincidência da RNC <strong>{origemRnc.num}</strong>, encerrada como Ineficaz. A descrição já traz a original e o resultado da verificação; complete com o que aconteceu agora.
+    </div>
+  );
   const OPCOES_TIPO = [
     ["interna", "🏭", "RNC interna", "A não conformidade nasceu aqui dentro (processo, produção, laboratório).", "A Herbamed investiga a causa (Ishikawa, 5 Porquês), monta o plano CAPA e verifica a eficácia."],
     ["externa", "🚚", "RNC externa", "A não conformidade veio de um fornecedor (matéria-prima, embalagem, serviço).", "O fornecedor analisa a causa e responde; a Herbamed avalia e verifica no recebimento seguinte. Fornecedor, NF e lote são obrigatórios."],
@@ -514,7 +533,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   // 1º passo: só a escolha do tipo. O formulário de cada uma abre depois.
   if (!f.tipoRnc) return (
     <div>
-      {bannerDesvio}
+      {bannerDesvio}{bannerOrigemRnc}
       <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Que tipo de RNC você vai abrir?</div>
       <div style={{ fontSize:12, color:T.text3, marginBottom:16 }}>A não conformidade veio de um fornecedor ou nasceu aqui dentro?</div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:14 }}>
@@ -537,7 +556,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
 
   return (
     <div>
-      {bannerDesvio}
+      {bannerDesvio}{bannerOrigemRnc}
       <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", marginBottom:12 }}>
         <span style={{ fontSize:20 }}>{opcaoAtual[1]}</span>
         <div style={{ flex:1, minWidth:200 }}>

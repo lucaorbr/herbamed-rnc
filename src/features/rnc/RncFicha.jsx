@@ -20,6 +20,7 @@ import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "./tipoRncLogic";
 import { AvaliacaoExternaEtapa, RespostaFornecedorEtapa } from "./EtapasExterna";
 import { EvidenciasRnc, ReunioesInternas } from "./ReunioesInternas";
 import { IshikawaEspinha, SeletorVistaIshikawa, useVistaIshikawa } from "./IshikawaEspinha";
+import { podeAbrirVinculada, prefillDaIneficaz } from "./rncVinculadaLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
@@ -31,7 +32,7 @@ const CATS_ISHIKAWA = [["mao", "Mão de obra"], ["maquina", "Máquina"], ["metod
 const ICONE_ESTADO = { concluida: "✓", bloqueada: "🔒", dispensada: "—" };
 const ESTADOS_SOMENTE_LEITURA = ["causa", "reunioes", "capa", "eficacia", "resposta", "avaliacao"];
 
-export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
+export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm, setRncPrefill, abrirRnc }) {
   const T = useTheme(); const s = useS();
   const [vistaIshi, setVistaIshi] = useVistaIshikawa();
   const vivo = rncs.find(x => x.id === rncId) || null;
@@ -255,6 +256,11 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       </div>
     );
   };
+
+  // Link para outra RNC (reincidência ou sucessora). Sem abrirRnc, só o número.
+  const linkRnc = (id, num) => (abrirRnc && id
+    ? <button onClick={() => abrirRnc(id)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", color: T.accent, fontWeight: 700, textDecoration: "underline" }}>{num}</button>
+    : <strong>{num}</strong>);
 
   const causaBloco = () => {
     const ishi = r.ishikawa || {};
@@ -520,13 +526,27 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{r.num}</div>
-          <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.tipo} · aberta em {fmt(r.data)} por {r.detector || r.criadoPor || "—"}{r.origemDesvioNum && <> · origem: desvio <strong>{r.origemDesvioNum}</strong></>}</div>
+          <div style={{ fontSize: 12, color: T.text2, marginTop: 2 }}>{r.tipo} · aberta em {fmt(r.data)} por {r.detector || r.criadoPor || "—"}{r.origemDesvioNum && <> · origem: desvio <strong>{r.origemDesvioNum}</strong></>}{r.origemRncNum && <> · reincidência da RNC {linkRnc(r.origemRnc, r.origemRncNum)}</>}</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span title={externa ? "Causa no fornecedor: ele responde a análise de causa e o plano" : "Causa na Herbamed: investigação, análise de causa e CAPA"} style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, border: `1px solid ${externa ? T.blue : T.accent}55`, color: externa ? T.blue : T.accent, background: `${externa ? T.blue : T.accent}14` }}>{externa ? "🚚" : "🏭"} {ROTULO_TIPO_RNC[tipoRnc(r)]}</span>
           <SevB s={r.sev} /><Badge s={r.status} />
         </div>
       </div>
+
+      {r.status === "Ineficaz" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: `${T.red}10`, border: `1px solid ${T.red}40`, borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13 }}>
+          <span style={{ fontSize: 18 }}>↻</span>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            {r.rncSucessora?.id
+              ? <>O problema persistiu e o tratamento seguiu na RNC {linkRnc(r.rncSucessora.id, r.rncSucessora.num)}<span style={{ color: T.text3 }}> · aberta em {fmt(r.rncSucessora.em)} por {r.rncSucessora.por}</span></>
+              : <><b>Encerrada como Ineficaz:</b> o problema persistiu. Abra uma nova RNC para seguir o tratamento; ela já vem preenchida e fica ligada a esta.</>}
+          </div>
+          {podeAbrirVinculada(r) && !isViewer && perm?.("criarRNC") && setRncPrefill && (
+            <button style={s.btnA} onClick={() => { setRncPrefill(prefillDaIneficaz(r)); setTab("nova"); }}>↻ Abrir nova RNC vinculada</button>
+          )}
+        </div>
+      )}
 
       {/* Abas = etapas */}
       <div role="tablist" style={{ display: "flex", gap: 2, borderBottom: `1px solid ${T.border2}`, overflowX: "auto", marginBottom: 16 }}>
