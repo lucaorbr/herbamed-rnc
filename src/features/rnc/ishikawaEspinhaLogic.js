@@ -57,11 +57,14 @@ export function layoutEspinha({ efeito, causes, whyCausa } = {}, mede = medidaAp
   // cauda, espinha e cabeça
   add("path", { d: `M${X0} ${Y} L${X0 - 26} ${Y - 26} L${X0 - 18} ${Y} L${X0 - 26} ${Y + 26} Z` }, "osso-preenchido");
   add("line", { x1: X0, y1: Y, x2: XH, y2: Y, "stroke-width": 5, "stroke-linecap": "round" }, "osso");
-  const HW = 200, HH = 150;
-  add("path", { d: `M${XH} ${Y - HH / 2} C${XH + HW * 0.75} ${Y - HH / 2}, ${XH + HW} ${Y - 30}, ${XH + HW} ${Y} C${XH + HW} ${Y + 30}, ${XH + HW * 0.75} ${Y + HH / 2}, ${XH} ${Y + HH / 2} Z`, "stroke-width": 2.5 }, "cabeca");
-  add("text", { x: XH + 92, y: Y - 40, "text-anchor": "middle", "font-size": 10, "font-weight": 700, "letter-spacing": 1 }, "apagado", "EFEITO");
-  const lEf = quebrarTexto(efeito || "—", 150, mede, 700, 14, 3);
-  lEf.forEach((l, i) => add("text", { x: XH + 92, y: Y + 5 - (lEf.length - 1) * 9 + i * 18, "text-anchor": "middle", "font-size": 14, "font-weight": 700 }, "texto", l));
+  // Cabeça (v3.31.4): a espinha termina numa seta que aponta para a caixa do efeito —
+  // "tudo isto leva a este efeito". A caixa cabe efeito de até 4 linhas.
+  const AW = 24, BX = XH + 32, BW = 176, BH = 130, TX = BX + BW / 2;
+  add("path", { d: `M${XH - 2} ${Y - 15} L${XH + AW} ${Y} L${XH - 2} ${Y + 15} Z`, "stroke-linejoin": "round" }, "osso-preenchido");
+  add("rect", { x: BX, y: Y - BH / 2, width: BW, height: BH, rx: 10, "stroke-width": 2.5 }, "cabeca");
+  add("text", { x: TX, y: Y - 40, "text-anchor": "middle", "font-size": 10, "font-weight": 700, "letter-spacing": 1 }, "apagado", "EFEITO");
+  const lEf = quebrarTexto(efeito || "—", BW - 26, mede, 700, 14, 4);
+  lEf.forEach((l, i) => add("text", { x: TX, y: Y + 5 - (lEf.length - 1) * 9 + i * 18, "text-anchor": "middle", "font-size": 14, "font-weight": 700 }, "texto", l));
 
   CATS_ESPINHA.forEach(([k, label], i) => {
     const cima = i < 3, xEnd = COLS[i % 3], yOut = cima ? YTOP : YBOT, xOut = xEnd - DX;

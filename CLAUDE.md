@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.31.3`
+- Versão atual: `3.31.4`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -240,6 +240,7 @@ Veja `/memory` — as memórias contêm:
 - **Autocorreção — campo Unidade dos ensaios recebe símbolos e unidades (v3.31.1)** — a v3.16.0 deixou de fora justamente o campo **Unidade** (cadastro de ensaios do CQ, editor de ensaios e Laudos): ele tinha `data-auto-capitalize="off"` (para `mm`/`pH` não virarem `Mm`/`PH`), e isso também o tirava da autocorreção, então `g/cm3` ficava `g/cm3`. Novo modo `data-autocorrect="simbolos"` em `src/services/autocorrect.js`: o campo recebe **só** operadores (≤ ≥ ±…) e unidades (cm³, µg, µL, °C…), sem troca de palavras e sem maiúscula. Conferido na tela: `g/cm3` → `g/cm³` ao sair do campo; `pH mm` fica igual. 1 teste novo.
 - **RNC externa — prazo de resposta do fornecedor em 7 dias corridos (v3.31.2)** — decisão do usuário: o padrão era 15 dias e passa a **7 dias corridos** (do calendário, fim de semana conta) a partir da abertura. Fonte única `PRAZO_RESPOSTA_FORNECEDOR_DIAS` em `tipoRncLogic.js`; a dica do campo diz "dias corridos". Segue editável na abertura. ⚠️ RNC já aberta mantém a data gravada em `prazoRespostaFornecedor` (nada migrado). Conferido na tela: externa aberta em 11/11 nasce com prazo 18/11.
 - **RNC — Aviso de disposição só em RNC em aberto (v3.31.3)** — a ficha de RNC já encerrada (Eficaz antiga, Ineficaz) com material/lote e sem disposição mostrava "registre a disposição antes de encerrar como Eficaz", como se ainda faltasse algo. O aviso passa a aparecer só com `rncAtiva(r.status)`. Achado no pente fino de 11/11; conferido na tela (NC-2026-T10 Ineficaz sem aviso, NC-2026-T07 em andamento com aviso).
+- **RNC — Cabeça do Ishikawa vira seta até a caixa do efeito (v3.31.4)** — a cabeça em forma de bala da espinha de peixe ficava estranha (pedido do usuário, escolhido entre 6 modelos). Agora a espinha termina numa **ponta de seta** que aponta para uma **caixa arredondada** com "EFEITO" e o efeito em até 4 linhas — leitura de "tudo isto leva a este efeito". Só a geometria da cabeça mudou em `layoutEspinha` (`ishikawaEspinhaLogic.js`), então vale igual na tela (abertura, etapa 3, Resumo) e no PDF. Nenhum dado mudou.
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
 - **Inverter o padrão da navegação** (`sgq_nav`) depois de acompanhar a adoção da 3.0.0
