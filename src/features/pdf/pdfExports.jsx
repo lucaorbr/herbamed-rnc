@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { rotuloDisposicao } from "../../core/status";
 import { createElectronicSignature } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, seloAssHTML, sigCodigo } from "../../core/utils";
@@ -215,6 +216,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="field"><div class="field-label">Setor</div><div class="field-value">${rnc.setor||"—"}</div></div>
       <div class="field"><div class="field-label">Detectado por</div><div class="field-value">${rnc.detector||"—"}</div></div>
     </div>
+    ${rnc.origemDesvioNum?`<div class="field" style="margin-top:8px;"><div class="field-label">Origem</div><div class="field-value">Convertida do desvio ${rnc.origemDesvioNum}</div></div>`:""}
     <div class="grid3" style="margin-top:8px;">
       <div class="field"><div class="field-label">Produto / Material</div><div class="field-value">${rnc.produto||"—"}</div></div>
       <div class="field"><div class="field-label">Fornecedor</div><div class="field-value">${rnc.fornecedor||"—"}</div></div>
@@ -249,12 +251,11 @@ export function exportRNCPDF(rnc, assinatura = null) {
 
   <!-- DISPOSIÇÃO DO MATERIAL -->
   ${rnc.disposicao?.decisao?(()=>{
-    const DL={liberar:"Liberar (uso normal)",concessao:"Liberar sob concessão",segregar:"Segregar / Quarentena",retrabalho:"Retrabalho / Reprocesso",reprovar:"Reprovar / Descartar",devolver:"Devolver ao fornecedor"};
     return `
   <div class="section">
     <div class="section-title">📦 Disposição do material</div>
     <div class="contencao-box">
-      <div style="font-size:13px;font-weight:bold;">${DL[rnc.disposicao.decisao]||rnc.disposicao.decisao}</div>
+      <div style="font-size:13px;font-weight:bold;">${rotuloDisposicao(rnc.disposicao)}</div>
       ${rnc.disposicao.justificativa?`<div style="margin-top:4px;">${rnc.disposicao.justificativa}</div>`:""}
       <div style="margin-top:6px;font-size:11px;color:#666;">Por: <strong>${rnc.disposicao.por||"—"}</strong> &nbsp;|&nbsp; Data: <strong>${fmt(rnc.disposicao.data)}</strong></div>
       ${rnc.disposicao.assinaturaRT?`<div style="margin-top:4px;font-size:11px;color:#2ab84a;">✔ Liberação assinada pelo RT: ${rnc.disposicao.assinaturaRT.nome} — ${rnc.disposicao.assinaturaRT.timestamp?new Date(rnc.disposicao.assinaturaRT.timestamp).toLocaleString("pt-BR"):rnc.disposicao.assinaturaRT.dataHora}</div>`:""}

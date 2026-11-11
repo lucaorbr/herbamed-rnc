@@ -29,15 +29,41 @@ export function taxaEficaciaRNC(rncs = []) {
 // Disposição do material/lote (padrão farma / SE Suite). `libera` marca as decisões que
 // liberam material NÃO CONFORME para uso — por isso exigem assinatura do RT (segregação:
 // quem libera NC ≠ quem detectou). As demais gravam só justificativa + autor.
+// Decisões de disposição do material. Desde a v3.27.0 (reunião de 11/11/2026):
+// - "liberar" (uso normal) saiu das opções; fica na lista só para as RNCs antigas
+//   que a registraram continuarem mostrando o rótulo (`retirada: true`).
+// - nenhuma decisão exige mais assinatura do RT (concessão inclusive); a assinatura
+//   gravada nas disposições antigas continua sendo exibida.
+// - "outros" exige a descrição da decisão em texto livre (`disposicao.outro`).
 export const DISPOSICOES = [
-  { key: "liberar",    label: "Liberar (uso normal)",    libera: true,  cor: "#2ab84a" },
-  { key: "concessao",  label: "Liberar sob concessão",   libera: true,  cor: "#ffd166" },
-  { key: "segregar",   label: "Segregar / Quarentena",   libera: false, cor: "#4fc3f7" },
-  { key: "retrabalho", label: "Retrabalho / Reprocesso", libera: false, cor: "#a78bfa" },
-  { key: "reprovar",   label: "Reprovar / Descartar",    libera: false, cor: "#ff4f6a" },
-  { key: "devolver",   label: "Devolver ao fornecedor",  libera: false, cor: "#ff8c42" },
+  { key: "liberar",    label: "Liberar (uso normal)",    cor: "#2ab84a", retirada: true },
+  { key: "concessao",  label: "Liberar sob concessão",   cor: "#ffd166" },
+  { key: "segregar",   label: "Segregar / Quarentena",   cor: "#4fc3f7" },
+  { key: "retrabalho", label: "Retrabalho / Reprocesso", cor: "#a78bfa" },
+  { key: "reprovar",   label: "Reprovar / Descartar",    cor: "#ff4f6a" },
+  { key: "devolver",   label: "Devolver ao fornecedor",  cor: "#ff8c42" },
+  { key: "outros",     label: "Outros",                  cor: "#94a3b8", pedeTexto: true },
 ];
 export const dispMeta = (key) => DISPOSICOES.find(d => d.key === key) || null;
+// Opções oferecidas numa disposição nova (sem as retiradas).
+export const DISPOSICOES_ATIVAS = DISPOSICOES.filter(d => !d.retirada);
+// Rótulo para exibir uma disposição gravada: "Outros — <texto>" quando houver texto.
+export const rotuloDisposicao = (disposicao) => {
+  const dec = disposicao?.decisao;
+  if (!dec) return "";
+  const label = dispMeta(dec)?.label || dec;
+  const outro = (disposicao.outro || "").trim();
+  return dec === "outros" && outro ? `${label} — ${outro}` : label;
+};
+// Erros de uma disposição a registrar (lista vazia = pode gravar).
+export const errosDisposicao = ({ decisao, justificativa, outro }) => {
+  const erros = [];
+  const meta = dispMeta(decisao);
+  if (!decisao || !meta || meta.retirada) erros.push("Selecione a decisão de disposição.");
+  if (meta?.pedeTexto && !(outro || "").trim()) erros.push("Descreva a decisão em \"Outros\".");
+  if (!(justificativa || "").trim()) erros.push("A justificativa técnica da disposição é obrigatória.");
+  return erros;
+};
 
 export const SEVMETA = {
   "Crítica": { c: "#ff4f6a", bg: "#ff4f6a18" },

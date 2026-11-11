@@ -127,6 +127,8 @@ const normTipo = (str) => (str || "")
   .trim();
 
 // Texto do desvio reaproveitado ao pré-popular a RNC.
+import { anexosParaRnc } from "./conversaoRnc";
+
 function descParaRNC(d) {
   const partes = [d.desc?.trim()];
   if (d.acaoImediata === "Sim" && d.acaoDesc?.trim()) partes.push(`\n\nAção imediata adotada: ${d.acaoDesc.trim()}`);
@@ -305,6 +307,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
       origemDesvio: d.id,
       origemDesvioNum: d.num,
       origemDesvioDoc: d,
+      anexos: anexosParaRnc(d),
     });
     setSel(null);
     setTab("nova");

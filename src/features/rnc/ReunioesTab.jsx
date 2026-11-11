@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { deleteFromCollection, saveCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, tod } from "../../core/utils";
-import { rncAtiva } from "../../core/status";
+import { rncAtiva, rotuloDisposicao } from "../../core/status";
 import { useS } from "../../shared/styles";
 import { F, G2, G3, Inp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
 import { AssinaturaModal, exportAtaReuniaoPDF } from "../pdf/pdfExports";
-import { calcGut, dispMeta, rncTemMaterial } from "./RncTabs";
+import { calcGut, rncTemMaterial } from "./RncTabs";
 import { travaEficacia } from "./ferramentasLogic";
 
 // Reunião de Análise Crítica (RAC) — o fórum onde a gestão analisa as RNCs em aberto e
@@ -224,7 +224,7 @@ export function ReunioesTab({ rncs, user, users = [], toast_, doUpdateRNC, openE
       it.encaminhamento && `Encaminhamento: ${it.encaminhamento}`,
       it.novoResponsavel && `Responsável indicado: ${it.novoResponsavel}`,
       it.deliberacao === "reforcar_prazo" && `Novo prazo: ${fmt(it.novoPrazo)} (anterior: ${fmt(rnc.prazoAC)})`,
-      fechaAgora && `Encerrada por disposição do material (${dispMeta(rnc.disposicao?.decisao)?.label || rnc.disposicao?.decisao}), aprovado na reunião.`,
+      fechaAgora && `Encerrada por disposição do material (${rotuloDisposicao(rnc.disposicao)}), aprovado na reunião.`,
       aprovacaoPendente && `Encerramento aprovado pela reunião, condicionado à conclusão: ${pendenciasTexto()}.`,
     ].filter(Boolean);
 

@@ -3,7 +3,7 @@
 // Texto puro, sem alinhar colunas com espaços: o Outlook mostra em fonte proporcional
 // e o alinhamento entortava. Cada e-mail começa pelo que aconteceu no evento (o que
 // mudou) e depois traz a situação da RNC, com o link para abrir a ficha na etapa certa.
-import { dispMeta, rncAtiva } from "../../core/status";
+import { rncAtiva, rotuloDisposicao } from "../../core/status";
 import { fmt } from "../../core/utils";
 import { MIN_PORQUES, contagemCapa, porquesPreenchidos } from "../rnc/ferramentasLogic";
 
@@ -90,7 +90,7 @@ function linhasDisposicao(r) {
   const d = r?.disposicao;
   if (!d?.decisao) return [];
   return [
-    `Decisão: ${dispMeta(d.decisao)?.label || d.decisao}`,
+    `Decisão: ${rotuloDisposicao(d)}`,
     cheio(d.justificativa) ? `Justificativa: ${d.justificativa.trim()}` : null,
     `Por: ${d.por || "—"} · Data: ${fmt(d.data)}`,
   ];
