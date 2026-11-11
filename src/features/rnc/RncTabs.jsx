@@ -21,7 +21,8 @@ import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/ca
 import { Table } from "../../shared/Table";
 import { AIPanel } from "../ai/AIPanel";
 import { AssinaturaModal } from "../pdf/pdfExports";
-import { rncTemMaterial } from "./ferramentasLogic";
+import { etapasDaRnc, rncTemMaterial } from "./ferramentasLogic";
+import { PRAZO_RESPOSTA_FORNECEDOR_DIAS, ROTULO_TIPO_RNC, TIPOS_RNC, errosAberturaPorTipo, somarDias, tipoRnc } from "./tipoRncLogic";
 import { EspiadaRnc } from "./EspiadaRnc";
 import { ofertaNotificar } from "../email/ofertaNotificar";
 import { montarApresentacao } from "../apresentacao/apresentacaoLogic";
@@ -292,24 +293,17 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
   const [q, setQ] = useState("");
   const [fSt, setFSt] = useState("");
   const [fTp, setFTp] = useState("");
+  const [fOrig, setFOrig] = useState("");
   const [espiada, setEspiada] = useState("");
   const rEsp = rncs.find(r => r.id === espiada) || null;
   const fecharEspiada = React.useCallback(() => setEspiada(""), []);
   const list = rncs.filter(r =>
     (!q || [r.desc, r.produto, r.num, r.fornecedor].some(x => x?.toLowerCase().includes(q.toLowerCase()))) &&
-    (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp)
+    (!fSt || r.status === fSt) && (!fTp || r.tipo === fTp) && (!fOrig || tipoRnc(r) === fOrig)
   );
 
-  // Steps de progresso da RNC
-  const getRNCStep = (r) => {
-    if (r.status === "Eficaz" || r.status === "Ineficaz") return 4;
-    if (r.eficacia?.resultado) return 4;
-    if (r.w2h?.length > 0) return 3;
-    if (r.ishikawa?.root) return 2;
-    return 1;
-  };
-
-  const STEPS = ["Abertura", "Análise", "CAPA", "Eficácia"];
+  // Barra de progresso = as etapas da própria ficha (externa 4, interna 5; reuniões internas são opcionais e não contam).
+  const etapasDaBarra = r => etapasDaRnc(r).filter(e => e.id !== "reunioes");
 
   const colunasRNC = [
     { key: "num", label: "Nº", render: r => <span style={{ color: T.accent, fontWeight: 700, fontSize: 11 }}>{r.num}</span> },
@@ -317,12 +311,13 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
       <div style={{ minWidth: 180 }}>
         <Badge s={r.status} />
         <div style={{ display: "flex", gap: 2, marginTop: 5 }}>
-          {STEPS.map((st, i) => (
-            <div key={st} title={st} style={{ flex: 1, height: 3, borderRadius: 2, background: i < getRNCStep(r) ? T.accent : T.border, transition: "background .3s" }} />
+          {etapasDaBarra(r).map(e => (
+            <div key={e.id} title={e.label} style={{ flex: 1, height: 3, borderRadius: 2, background: e.estado === "concluida" || e.estado === "dispensada" ? T.accent : T.border, transition: "background .3s" }} />
           ))}
         </div>
       </div>
     ) },
+    { key: "origem", label: "Origem", accessor: r => tipoRnc(r), render: r => <span style={{ fontSize: 11, color: tipoRnc(r) === "externa" ? T.blue : T.text2 }}>{tipoRnc(r) === "externa" ? "🚚" : "🏭"} {ROTULO_TIPO_RNC[tipoRnc(r)]}</span> },
     { key: "desc", label: "Descrição", maxWidth: 240, nowrap: true, render: r => r.desc },
     { key: "tipo", label: "Tipo", render: r => (
       <><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: tipoCor(r.tipo, T), marginRight: 4 }} />{r.tipo}</>
@@ -344,6 +339,9 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
         <Sel value={fSt} onChange={e=>setFSt(e.target.value)} sx={{ width:"auto", minWidth:165 }}>
           <option value="">Todos os status</option>{Object.keys(SMETA).map(x=><option key={x}>{x}</option>)}
         </Sel>
+        <Sel value={fOrig} onChange={e=>setFOrig(e.target.value)} sx={{ width:"auto", minWidth:140 }}>
+          <option value="">Interna e externa</option>{TIPOS_RNC.map(x=><option key={x} value={x}>{ROTULO_TIPO_RNC[x]}</option>)}
+        </Sel>
         <Sel value={fTp} onChange={e=>setFTp(e.target.value)} sx={{ width:"auto", minWidth:155 }}>
           <option value="">Todos os tipos</option>{Object.keys(TIPOC).map(x=><option key={x}>{x}</option>)}
         </Sel>
@@ -355,7 +353,7 @@ export function ListaTab({ rncs, isViewer, abrirRnc }) {
       )}
       <div style={{ display: "grid", gridTemplateColumns: rEsp ? "minmax(0,1fr) 300px" : "minmax(0,1fr)", gap: 16, alignItems: "start" }}>
       <Table
-        columns={rEsp ? colunasRNC.filter(c => !["tipo", "resp"].includes(c.key)) : colunasRNC}
+        columns={rEsp ? colunasRNC.filter(c => !["tipo", "resp", "origem"].includes(c.key)) : colunasRNC}
         rows={list}
         rowKey={r => r.id}
         onRowClick={r => setEspiada(e => e === r.id ? "" : r.id)}
@@ -388,7 +386,7 @@ export function openCOA(coa) {
 
 export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
-  const [f, setF] = useState({ data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
+  const [f, setF] = useState({ tipoRnc: "", data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
   const modoPrazo = f.modoPrazo || "definicao";
   const [origemDesvio, setOrigemDesvio] = useState(null);
   const [anexos, setAnexos] = useState([]);
@@ -445,6 +443,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   // modal de assinatura; o contador só é consumido quando a assinatura é confirmada
   // (em finalizarSalvar), evitando "queimar" número se o elaborador desistir de assinar.
   const salvar = () => {
+    const errosTipo = errosAberturaPorTipo(f);
+    if (errosTipo.length) { if (!f.tipoRnc) setNovaAba("ident"); alert(errosTipo.join(" ")); return; }
     if (!f.desc.trim())        { alert("Preencha a descrição da não conformidade."); return; }
     if (modoPrazo === "definicao") {
       if (!f.justificativaPrazo?.trim()) { alert("Informe a justificativa para o prazo em definicao."); return; }
@@ -460,6 +460,8 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   const finalizarSalvar = async (assinaturaElaborador) => {
     try {
       const draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
+      // Externa: o fornecedor tem prazo para responder (padrão de 15 dias, editável na ficha).
+      if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
       if (modoPrazo === "definicao") {
         draft.prazoAC = "";
         draft.historico.push({ data:tod(), acao:"Prazo de acao corretiva em definicao", detalhes:[`Justificativa: ${f.justificativaPrazo}`, `Reavaliar em: ${f.proximaReavaliacao}`], resp:user.name, tipo:"prazo_em_definicao" });
@@ -507,6 +509,19 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
           <span style={{ fontSize:13, fontWeight:600, color:"#6366f1", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:8, padding:"4px 12px" }}>
             Nº atribuído ao salvar
           </span>
+        </div>
+        <div style={{ background:T.surf, border:`1px solid ${f.tipoRnc ? T.border : T.yellow + "88"}`, borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:600, marginBottom:8 }}>A não conformidade veio de um fornecedor? *</div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {[["externa","Sim — RNC externa","O fornecedor analisa a causa e responde; fornecedor, NF e lote são obrigatórios."],["interna","Não — RNC interna","A Herbamed investiga, faz o plano CAPA e verifica a eficácia."]].map(([k,l,d]) => (
+              <button key={k} type="button" onClick={() => set("tipoRnc", k)} aria-pressed={f.tipoRnc===k}
+                style={{ flex:"1 1 240px", textAlign:"left", padding:"10px 12px", borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+                  border:`1px solid ${f.tipoRnc===k ? T.accent : T.border2}`, background:f.tipoRnc===k ? T.accentDim : T.card, color:T.text }}>
+                <div style={{ fontSize:13, fontWeight:700, color:f.tipoRnc===k ? T.accent : T.text }}>{l}</div>
+                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{d}</div>
+              </button>
+            ))}
+          </div>
         </div>
         <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}><option value="">— Selecione —</option>{SEVERIDADES_RNC.map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>

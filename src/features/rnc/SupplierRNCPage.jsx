@@ -126,6 +126,15 @@ export function SupplierRNCPage({ token }) {
         </div>
       </div>
 
+      {/* Complemento pedido pela Qualidade: o mesmo link volta a aceitar resposta */}
+      {data?.complemento && (
+        <div style={{ ...s.card, background: "#fff8e6", border: "1px solid #f3d38a", padding: "12px 20px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#8a5a00", marginBottom: 4 }}>A Herbamed pediu um complemento à sua resposta</div>
+          <div style={{ fontSize: 13, color: "#5c4300", whiteSpace: "pre-wrap" }}>{data.complemento.motivo}</div>
+          <div style={{ fontSize: 12, color: "#8a6d2a", marginTop: 6 }}>Envie a análise completa abaixo; ela substitui a anterior, que fica arquivada.</div>
+        </div>
+      )}
+
       {/* Dados da RNC */}
       <div style={s.card}>
         <div style={{ fontSize: 15, fontWeight: 700, color: s.verde, marginBottom: 14, paddingBottom: 10, borderBottom: "2px solid #e8f5e9" }}>

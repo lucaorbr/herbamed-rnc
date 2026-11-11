@@ -5,6 +5,8 @@ import { useTheme } from "../../core/theme";
 import { fmt, past, seloAssHTML, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
+import { etapasDaRnc } from "../rnc/ferramentasLogic";
+import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "../rnc/tipoRncLogic";
 import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
 // Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
@@ -153,6 +155,21 @@ export function exportRNCPDF(rnc, assinatura = null) {
   // A assinatura principal do PDF é SEMPRE a do elaborador gravada na RNC (assinaturaElaborador),
   // nunca a de quem está exportando/imprimindo. O param `assinatura` fica só como fallback legado.
   const assElab = rnc.assinaturaElaborador || assinatura;
+  // Progresso = as etapas da ficha (externa 4, interna 5; reuniões internas são opcionais).
+  const etapasPdf = etapasDaRnc(rnc).filter(e => e.id !== "reunioes");
+  const feitaPdf = e => e.estado === "concluida" || e.estado === "dispensada";
+  const externa = rncExterna(rnc);
+  const quandoPdf = iso => { try { return iso ? new Date(iso).toLocaleString("pt-BR") : ""; } catch { return iso; } };
+  const anexosPdf = l => (l || []).length ? ` · anexos: ${l.map(a => a.name).join(", ")}` : "";
+  const respostaPdf = (rf, titulo) => {
+    const pl = rf?.planoAcao || {};
+    const linhas = [["O quê", pl.oQue], ["Por quê", pl.porQue], ["Como", pl.como], ["Quem", pl.quem], ["Onde", pl.onde], ["Quando", pl.quando], ["Quanto", pl.quanto]].filter(([, v]) => v);
+    return `<div style="margin-bottom:10px;"><div class="field-label">${titulo} · ${quandoPdf(rf.respondidoEm)}</div>
+      ${(rf.porques || []).filter(x => x && x.trim()).map((w, i) => `<div class="step"><div class="step-num">${i + 1}</div><div class="step-text">${w}</div></div>`).join("")}
+      ${rf.causaRaiz ? `<div class="causa-box">🎯 Causa Raiz (fornecedor): ${rf.causaRaiz}</div>` : ""}
+      ${linhas.map(([k, v]) => `<div style="font-size:11px;"><strong>${k}:</strong> ${v}</div>`).join("")}
+      ${rf.observacoes ? `<div style="font-size:11px;margin-top:4px;"><strong>Observações:</strong> ${rf.observacoes}</div>` : ""}</div>`;
+  };
   const corpo = `
 <style>
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
@@ -195,16 +212,10 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <div class="section">
     <div class="section-title">Progresso da RNC</div>
     <div class="progress-bar">
-      ${["Abertura","Análise de Causa","Plano de Ação","Verificação de Eficácia"].map((st,i)=>{
-        const step = rnc.status==="Eficaz"||rnc.eficacia?.resultado?4:rnc.w2h?.length>0?3:rnc.ishikawa?.root?2:1;
-        return `<div class="progress-step" style="background:${i<step?"#1a7a3c":"#e0e0e0"};"></div>`;
-      }).join("")}
+      ${etapasPdf.map(e=>`<div class="progress-step" style="background:${feitaPdf(e)?"#1a7a3c":"#e0e0e0"};"></div>`).join("")}
     </div>
     <div style="display:flex;gap:4px;margin-top:4px;">
-      ${["Abertura","Análise","5W2H","Eficácia"].map((st,i)=>{
-        const step = rnc.status==="Eficaz"?4:rnc.w2h?.length>0?3:rnc.ishikawa?.root?2:1;
-        return `<div style="flex:1;font-size:9px;color:${i<step?"#1a7a3c":"#aaa"};text-align:center;font-weight:${i<step?700:400};">${st}</div>`;
-      }).join("")}
+      ${etapasPdf.map(e=>`<div style="flex:1;font-size:9px;color:${feitaPdf(e)?"#1a7a3c":"#aaa"};text-align:center;font-weight:${feitaPdf(e)?700:400};">${e.label}</div>`).join("")}
     </div>
   </div>
 
@@ -229,6 +240,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
     </div>
     <div class="grid3" style="margin-top:8px;">
       <div class="field"><div class="field-label">Responsável pela Análise</div><div class="field-value">${rnc.resp||"—"}</div></div>
+      <div class="field"><div class="field-label">Origem da causa</div><div class="field-value">${ROTULO_TIPO_RNC[tipoRnc(rnc)]}${externa?" (fornecedor)":""}</div></div>
     </div>
   </div>
 
@@ -265,11 +277,11 @@ export function exportRNCPDF(rnc, assinatura = null) {
   <!-- PRAZOS -->
   <div class="section">
     <div class="section-title">Prazos</div>
-    <div class="grid3">
+    ${externa?`<div class="grid3"><div class="field"><div class="field-label">Resposta do fornecedor</div><div class="field-value">${fmt(rnc.prazoRespostaFornecedor)}</div></div></div>`:`<div class="grid3">
       <div class="field"><div class="field-label">Análise de Causa</div><div class="field-value">${fmt(rnc.prazoCausa)}</div></div>
       <div class="field"><div class="field-label">Ação Corretiva</div><div class="field-value" style="color:${past(rnc.prazoAC)&&rnc.status!=="Eficaz"&&rnc.status!=="Encerrada"?"#cc2244":"inherit"}">${fmt(rnc.prazoAC)}${past(rnc.prazoAC)&&rnc.status!=="Eficaz"&&rnc.status!=="Encerrada"?" ⚠":""}  </div></div>
       <div class="field"><div class="field-label">Verificação Eficácia</div><div class="field-value">${fmt(rnc.prazoEfic)}</div></div>
-    </div>
+    </div>`}
   </div>
 
   <!-- INVESTIGAÇÃO -->
@@ -280,6 +292,36 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="step">
         <div class="step-num">${i+1}</div>
         <div class="step-text" style="white-space:pre-wrap">${reg.texto}<div style="font-size:10px;color:#6b7280;margin-top:2px">${reg.por||""} · ${reg.em?new Date(reg.em).toLocaleString("pt-BR"):""}${reg.anexos?.length?` · anexos: ${reg.anexos.map(a=>a.name).join(", ")}`:""}</div></div>
+      </div>`).join("")}
+  </div>`:""}
+
+  <!-- RNC EXTERNA: resposta, avaliação e verificação no recebimento -->
+  ${externa?`
+  <div class="section">
+    <div class="section-title">🚚 Resposta do fornecedor</div>
+    ${rnc.respostaFornecedor?respostaPdf(rnc.respostaFornecedor,"Pelo link público"):""}
+    ${(rnc.respostasPlanilha||[]).map(pl=>`<div style="font-size:11px;margin-bottom:4px;">Planilha anexada em ${quandoPdf(pl.em)} por ${pl.por||"—"}${anexosPdf(pl.anexos)}</div>`).join("")}
+    ${(rnc.respostasFornecedorAnteriores||[]).length?`<div style="font-size:10px;color:#6b7280;margin-top:4px;">${rnc.respostasFornecedorAnteriores.length} resposta(s) anterior(es) substituída(s) após pedido de complemento.</div>`:""}
+    ${(rnc.complementosFornecedor||[]).map(c=>`<div style="font-size:11px;margin-top:4px;"><strong>Complemento pedido</strong> em ${quandoPdf(c.pedidoEm)} por ${c.pedidoPor||"—"}: ${c.motivo}</div>`).join("")}
+    ${!rnc.respostaFornecedor&&!(rnc.respostasPlanilha||[]).length?`<div style="font-size:12px;color:#888;">Aguardando a resposta do fornecedor.</div>`:""}
+  </div>
+  <div class="section">
+    <div class="section-title">🧐 Avaliação e verificação no recebimento</div>
+    <div class="grid2">
+      <div class="field"><div class="field-label">Avaliação da resposta</div><div class="field-value">${rnc.avaliacaoFornecedor?.resultado==="aceita"?`Aceita por ${rnc.avaliacaoFornecedor.por} em ${quandoPdf(rnc.avaliacaoFornecedor.em)}${rnc.avaliacaoFornecedor.obs?` — ${rnc.avaliacaoFornecedor.obs}`:""}`:"—"}</div></div>
+      <div class="field"><div class="field-label">Recebimento seguinte</div><div class="field-value">${rnc.verificacaoRecebimento?`${rnc.verificacaoRecebimento.resultado} em ${fmt(rnc.verificacaoRecebimento.data)}${rnc.verificacaoRecebimento.lote?` · lote ${rnc.verificacaoRecebimento.lote}`:""}`:"—"}</div></div>
+    </div>
+    ${rnc.verificacaoRecebimento?.obs?`<div style="font-size:12px;margin-top:6px;">${rnc.verificacaoRecebimento.obs}</div>`:""}
+  </div>`:""}
+
+  <!-- REUNIÕES INTERNAS -->
+  ${(rnc.reunioesInternas||[]).length>0?`
+  <div class="section">
+    <div class="section-title">👥 Reuniões internas</div>
+    ${rnc.reunioesInternas.map((m,i)=>`
+      <div class="step">
+        <div class="step-num">${i+1}</div>
+        <div class="step-text" style="white-space:pre-wrap"><strong>${fmt(m.data)}${m.local?` · ${m.local}`:""}</strong> — Participantes: ${m.participantes}<br/>${m.decidido}<div style="font-size:10px;color:#6b7280;margin-top:2px">${m.por||""}${anexosPdf(m.anexos)}</div></div>
       </div>`).join("")}
   </div>`:""}
 

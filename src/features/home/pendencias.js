@@ -11,6 +11,7 @@
 // carregado pela App, o que sai é lista pronta para desenhar.
 
 import { rncAtiva } from "../../core/status";
+import { respostaAtrasada, rncExterna } from "../rnc/tipoRncLogic";
 
 export const URGENCIA = { CRITICO: "critico", ATENCAO: "atencao" };
 
@@ -31,6 +32,23 @@ export function pendenciasDeRNC({ rncs = [], userName = "", hoje }) {
   for (const r of rncs) {
     if (!rncAtiva(r?.status)) continue;
     const minha = !!userName && r.resp === userName;
+    if (rncExterna(r)) {
+      // Externa: o prazo que conta é o da resposta do fornecedor (a ação corretiva é dele).
+      if (respostaAtrasada(r, hoje)) {
+        out.push(item({
+          id: `rnc-forn-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, etapa: "resposta", minha,
+          titulo: `${r.num} — fornecedor não respondeu no prazo`,
+          detalhe: [r.fornecedor, r.desc].filter(Boolean).join(" · "), dias: diasEntre(r.prazoRespostaFornecedor, hoje), urgencia: URGENCIA.CRITICO,
+        }));
+      } else if (minha && r.status === "Aberta") {
+        out.push(item({
+          id: `rnc-minha-${r.id}`, fonte: "rnc", tab: "lista", rncId: r.id, minha: true,
+          titulo: `${r.num} — aguardando seu tratamento`,
+          detalhe: r.desc || "", dias: r.data ? diasEntre(r.data, hoje) : 0,
+        }));
+      }
+      continue;
+    }
     const vencida = r.prazoAC && r.prazoAC < hoje;
     if (vencida) {
       out.push(item({

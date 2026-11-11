@@ -33,7 +33,7 @@ function LinhaPendencia({ p, setTab, abrirRnc, abrirDoc, T }) {
   const cor = CORES(T)[p.urgencia] || T.text3;
   return (
     <button
-      onClick={() => (p.rncId && abrirRnc ? abrirRnc(p.rncId) : p.docId && abrirDoc ? abrirDoc(p.docId) : setTab(p.tab))}
+      onClick={() => (p.rncId && abrirRnc ? abrirRnc(p.rncId, p.etapa) : p.docId && abrirDoc ? abrirDoc(p.docId) : setTab(p.tab))}
       style={{ width:"100%", display:"flex", alignItems:"center", gap:12, padding:"11px 14px",
         background:"transparent", border:"none", borderBottom:`1px solid ${T.border}`,
         cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}
