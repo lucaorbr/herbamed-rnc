@@ -19,6 +19,7 @@ import { etapasDaRnc, etapasDoTipo, porquesPreenchidos, rncEditavelNasFerramenta
 import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "./tipoRncLogic";
 import { AvaliacaoExternaEtapa, RespostaFornecedorEtapa } from "./EtapasExterna";
 import { EvidenciasRnc, ReunioesInternas } from "./ReunioesInternas";
+import { IshikawaEspinha, SeletorVistaIshikawa, useVistaIshikawa } from "./IshikawaEspinha";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
@@ -32,6 +33,7 @@ const ESTADOS_SOMENTE_LEITURA = ["causa", "reunioes", "capa", "eficacia", "respo
 
 export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_, setTab, openEmail, doUpdateRNC, doDeleteRNC, isViewer, isAdmin, perm }) {
   const T = useTheme(); const s = useS();
+  const [vistaIshi, setVistaIshi] = useVistaIshikawa();
   const vivo = rncs.find(x => x.id === rncId) || null;
   // Cópia local: mostra a gravação na hora (a lista só relê o servidor a cada 5 s) e é
   // substituída pela versão do servidor a cada leitura — assim a ficha também reflete
@@ -263,6 +265,13 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       <div>
         {ishi.efeito && <div style={{ fontSize: 12, color: T.text2, marginBottom: 10 }}>Efeito analisado: <b style={{ color: T.text }}>{ishi.efeito}</b></div>}
         {causas.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+            <div style={rot}>🐟 Ishikawa</div>
+            <SeletorVistaIshikawa vista={vistaIshi} setVista={setVistaIshi} />
+          </div>
+        )}
+        {causas.length > 0 && vistaIshi === "espinha" && <IshikawaEspinha ishikawa={{ ...ishi, efeito: ishi.efeito || (r.desc || "").split("\n")[0].substring(0, 120) }} />}
+        {causas.length > 0 && vistaIshi === "grade" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 8, marginBottom: 12 }}>
             {causas.map(([k, label]) => (
               <div key={k} style={{ background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" }}>
