@@ -640,7 +640,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
       )}
 
       {novaAba==="causa" && f.tipoRnc==="interna" && (
-        <CausaCapaAbertura ishikawa={ishikawa} setIshikawa={setIshikawa} w2h={w2h} setW2h={setW2h} autor={user.name} erros={errosCausa} />
+        <CausaCapaAbertura ishikawa={ishikawa} setIshikawa={setIshikawa} w2h={w2h} setW2h={setW2h} autor={user.name} erros={errosCausa} efeitoPadrao={(f.desc || "").split("\n")[0].substring(0, 120)} />
       )}
 
       {novaAba==="prazos" && f.tipoRnc === "externa" && (

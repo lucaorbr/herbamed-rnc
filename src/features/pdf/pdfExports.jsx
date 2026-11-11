@@ -7,6 +7,7 @@ import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
 import { etapasDaRnc } from "../rnc/ferramentasLogic";
 import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "../rnc/tipoRncLogic";
+import { CORES_PDF, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
 import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
 // Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
@@ -326,9 +327,11 @@ export function exportRNCPDF(rnc, assinatura = null) {
   </div>`:""}
 
   <!-- ISHIKAWA / 5 PORQUÊS -->
-  ${rnc.ishikawa?.root?`
+  ${rnc.ishikawa?.root||temCausasIshikawa(rnc.ishikawa)?`
   <div class="section">
     <div class="section-title">🐟 Análise de Causa — Ishikawa / 5 Porquês</div>
+    ${temCausasIshikawa(rnc.ishikawa)?`<div style="margin-bottom:10px;page-break-inside:avoid">${espinhaSvg({ ...rnc.ishikawa, efeito: rnc.ishikawa.efeito || (rnc.desc || "").split("\n")[0].substring(0, 120) }, CORES_PDF, medidaCanvas("Arial, Helvetica, sans-serif"))}</div>`:""}
+    ${rnc.ishikawa.whyCausa?`<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Causa aprofundada nos 5 Porquês: <strong>${rnc.ishikawa.whyCausa}</strong></div>`:""}
     ${rnc.ishikawa.whys?.filter(w=>w).length>0?`
     <div style="margin-bottom:10px;">
       ${rnc.ishikawa.whys.filter(w=>w).map((w,i)=>`
@@ -337,7 +340,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
           <div class="step-text">${w}</div>
         </div>`).join("")}
     </div>`:""}
-    <div class="causa-box">🎯 Causa Raiz: ${rnc.ishikawa.root}</div>
+    ${rnc.ishikawa.root?`<div class="causa-box">🎯 Causa Raiz: ${rnc.ishikawa.root}</div>`:""}
   </div>`:""}
 
   <!-- 5W2H -->

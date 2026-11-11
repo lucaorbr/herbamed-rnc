@@ -6,6 +6,7 @@ import { F, Inp, SecTitle, SevB, TA } from "../../shared/ui";
 import { Table } from "../../shared/Table";
 import { andamentoPatch } from "./RncTabs";
 import { ofertaNotificar } from "../email/ofertaNotificar";
+import { IshikawaEspinha, SeletorVistaIshikawa, useVistaIshikawa } from "./IshikawaEspinha";
 import { MIN_PORQUES, filaAnaliseCausa, partirDaRespostaFornecedor, porquesPreenchidos, resumoAnaliseCausa } from "./ferramentasLogic";
 
 // Etapa 3 da ficha da RNC (onda 3): Ishikawa (opcional) + 5 Porquês (obrigatório, mín. 3)
@@ -44,6 +45,7 @@ export function AnaliseCausaEditor({ r, user, toast_, openEmail, gravar }) {
   const [usouFornecedor, setUsouFornecedor] = useState(false);
   const [carregandoIA, setCarregandoIA] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [vista, setVista] = useVistaIshikawa();
   const [ishiAberto, setIshiAberto] = useState(Object.values(ishi.causes || {}).some(v => v?.length));
 
   const addC = cat => { const v = (inps[cat] || "").trim(); if (!v) return; setCauses(p => ({ ...p, [cat]: [...p[cat], v] })); setInps(p => ({ ...p, [cat]: "" })); };
@@ -138,10 +140,14 @@ Responda APENAS em JSON sem markdown:
           <button onClick={() => setIshiAberto(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
             <SecTitle icon="🐟" ch={`Ishikawa — 6M ${ishiAberto ? "▾" : "▸"}`} />
           </button>
-          <span style={{ fontSize: 11, color: T.text3 }}>Opcional · levanta as causas possíveis; clique numa causa para aprofundar nos 5 Porquês</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.text3 }}>Opcional · levanta as causas possíveis; clique numa causa para aprofundar nos 5 Porquês</span>
+            {ishiAberto && <SeletorVistaIshikawa vista={vista} setVista={setVista} />}
+          </div>
         </div>
         {ishiAberto && (
           <>
+            {vista === "espinha" && <div style={{ marginTop: 10 }}><IshikawaEspinha ishikawa={{ efeito, causes, whyCausa: wCausa }} onMarcar={c => setWCausa(w => (w === c ? "" : c))} /></div>}
             <div style={{ textAlign: "right", marginBottom: 10 }}>{btnIA("ishikawa", "Sugerir causas com IA", gerarIshikawaIA)}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10 }}>
               {CATS.map(([cat, label]) => (

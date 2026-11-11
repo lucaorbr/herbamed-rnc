@@ -3,6 +3,7 @@ import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { F, Inp, SecTitle, TA } from "../../shared/ui";
 import { MIN_PORQUES } from "./ferramentasLogic";
+import { IshikawaEspinha, SeletorVistaIshikawa, useVistaIshikawa } from "./IshikawaEspinha";
 
 // Aba "Causa e CAPA" da abertura da RNC interna (v3.30.0). Opcional: quem já sabe a
 // causa registra os 5 Porquês e o plano junto com a RNC; senão, faz depois na ficha.
@@ -15,7 +16,7 @@ const PERGUNTAS = ["Por que ocorreu?", "Por que isso aconteceu?", "Por que essa 
 
 const novaAcao = autor => ({ id: String(Date.now() + Math.random()), tipo: "Corretiva", what: "", why: "", who: autor || "", where: "", when: "", how: "", howMuch: "", status: "Pendente", evidencias: [] });
 
-export function CausaCapaAbertura({ ishikawa, setIshikawa, w2h, setW2h, autor, erros = [] }) {
+export function CausaCapaAbertura({ ishikawa, setIshikawa, w2h, setW2h, autor, erros = [], efeitoPadrao = "" }) {
   const T = useTheme(); const s = useS();
   const whys = [...(ishikawa.whys || []), "", "", "", "", ""].slice(0, 5);
   const nPorques = whys.filter(w => w.trim()).length;
@@ -28,6 +29,7 @@ export function CausaCapaAbertura({ ishikawa, setIshikawa, w2h, setW2h, autor, e
   const nCausas = Object.values(causes).reduce((n, v) => n + (v?.length || 0), 0);
   const [ishiAberto, setIshiAberto] = useState(nCausas > 0);
   const [inps, setInps] = useState({});
+  const [vista, setVista] = useVistaIshikawa();
   const comCausas = (p, cat, lista) => ({ ...p, causes: { ...VAZIO_CAUSAS, ...(p.causes || {}), [cat]: lista } });
   const addC = cat => { const v = (inps[cat] || "").trim(); if (!v) return; setIshikawa(p => comCausas(p, cat, [...((p.causes || {})[cat] || []), v])); setInps(p => ({ ...p, [cat]: "" })); };
   const remC = (cat, i) => setIshikawa(p => comCausas(p, cat, ((p.causes || {})[cat] || []).filter((_, j) => j !== i)));
@@ -45,8 +47,14 @@ export function CausaCapaAbertura({ ishikawa, setIshikawa, w2h, setW2h, autor, e
           <button type="button" onClick={() => setIshiAberto(o => !o)} aria-expanded={ishiAberto} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
             <SecTitle icon="🐟" ch={`Ishikawa — 6M${nCausas ? ` (${nCausas})` : ""} ${ishiAberto ? "▾" : "▸"}`} />
           </button>
-          <span style={{ fontSize: 11, color: T.text3 }}>Opcional · levanta as causas possíveis; clique numa causa para aprofundá-la nos 5 Porquês</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.text3 }}>Opcional · levanta as causas possíveis; clique numa causa para aprofundá-la nos 5 Porquês</span>
+            {ishiAberto && <SeletorVistaIshikawa vista={vista} setVista={setVista} />}
+          </div>
         </div>
+        {ishiAberto && vista === "espinha" && (
+          <div style={{ marginTop: 10 }}><IshikawaEspinha ishikawa={{ ...ishikawa, efeito: ishikawa.efeito || efeitoPadrao }} onMarcar={aprofundar} /></div>
+        )}
         {ishiAberto && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 10, marginTop: 8 }}>
             {CATS.map(([cat, label]) => (
