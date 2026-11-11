@@ -1,5 +1,5 @@
 import {
-  tipoRnc, somarDias, errosAberturaPorTipo, ultimaRespostaEm, complementoAberto, temRespostaValida,
+  tipoRnc, somarDias, PRAZO_RESPOSTA_FORNECEDOR_DIAS, errosAberturaPorTipo, ultimaRespostaEm, complementoAberto, temRespostaValida,
   respostaAtrasada, patchPlanilhaRespondida, patchPedirComplemento, patchAceitarResposta, patchConverterEmInterna,
   travaEncerramentoExterna, patchEncerrarExterna, novaReuniaoInterna, patchReuniaoInterna, evidenciasDaRnc,
 } from "./tipoRncLogic";
@@ -16,6 +16,10 @@ describe("tipo da RNC", () => {
   test("somarDias soma dias do calendário, virando mês", () => {
     expect(somarDias("2026-11-20", 15)).toBe("2026-12-05");
     expect(somarDias("", 15)).toBe("");
+  });
+  test("prazo de resposta do fornecedor: 7 dias corridos, inclusive no fim de semana", () => {
+    expect(PRAZO_RESPOSTA_FORNECEDOR_DIAS).toBe(7);
+    expect(somarDias("2026-11-27", PRAZO_RESPOSTA_FORNECEDOR_DIAS)).toBe("2026-12-04");
   });
   test("abertura: a pergunta é obrigatória e a externa exige fornecedor, NF e lote", () => {
     expect(errosAberturaPorTipo({})).toHaveLength(1);

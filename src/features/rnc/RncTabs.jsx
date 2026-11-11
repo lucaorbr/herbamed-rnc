@@ -485,7 +485,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRN
     try {
       const externa = f.tipoRnc === "externa";
       let draft = { id: draftId, ...f, origemAnalise: f.origemAnalise || null, origemDesvio: origemDesvio?.id || null, origemDesvioNum: origemDesvio?.num || null, origemRnc: origemRnc?.id || null, origemRncNum: origemRnc?.num || null, anexos, ishikawa, w2h, eficacia: { criterio: "", data: "", resp: "", evidencias: "", resultado: "", obs: "" }, historico: [{ data: tod(), acao: "RNC aberta", resp: user.name }, { data: tod(), hora: new Date().toLocaleTimeString("pt-BR"), acao: "Assinatura do elaborador registrada", resp: user.name, tipo: "assinatura" }], criadoPor: user.name, createdAt: Date.now(), assinaturaElaborador, assinaturaRT: null };
-      // Externa: o fornecedor tem prazo para responder (padrão de 15 dias, editável na ficha).
+      // Externa: o fornecedor tem prazo para responder (padrão de PRAZO_RESPOSTA_FORNECEDOR_DIAS dias corridos, editável).
       if (f.tipoRnc === "externa") draft.prazoRespostaFornecedor = f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS);
       // Externa: a Herbamed não faz 5 Porquês nem CAPA (o fornecedor responde).
       if (externa) { draft.ishikawa = { efeito: "", causes: {}, whys: [], root: "", whyCausa: "" }; draft.w2h = []; }
@@ -673,7 +673,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRN
         <div style={{ fontSize: 12, color: T.text3, marginBottom: 12 }}>RNC externa: o fornecedor faz a análise de causa e o plano de ação. Aqui vale só o prazo para ele responder.</div>
         <G2 ch={<>
           <F lbl="Responsável na Herbamed" tip="Quem acompanha a RNC: cobra o fornecedor, avalia a resposta e verifica o recebimento seguinte." ch={<Inp value={f.resp} onChange={e => set("resp", e.target.value)} placeholder="Ex.: Ana (Qualidade)" />} />
-          <F lbl="Prazo de resposta do fornecedor" tip={`Padrão de ${PRAZO_RESPOSTA_FORNECEDOR_DIAS} dias a partir da abertura.`} ch={<Inp type="date" value={f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS)} onChange={e => set("prazoRespostaFornecedor", e.target.value)} />} />
+          <F lbl="Prazo de resposta do fornecedor" tip={`Padrão de ${PRAZO_RESPOSTA_FORNECEDOR_DIAS} dias corridos a partir da abertura.`} ch={<Inp type="date" value={f.prazoRespostaFornecedor || somarDias(f.data || tod(), PRAZO_RESPOSTA_FORNECEDOR_DIAS)} onChange={e => set("prazoRespostaFornecedor", e.target.value)} />} />
         </>} />
       </div>
       )}
