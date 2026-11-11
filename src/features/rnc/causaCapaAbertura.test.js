@@ -43,4 +43,13 @@ describe("comCausaCapaNaAbertura", () => {
     const r = comCausaCapaNaAbertura({ ...base(), status: "Em andamento", ishikawa: analise }, "Lucas", "2026-11-11", "10:00");
     expect(r.historico.some(h => h.tipo === "status")).toBe(false);
   });
+  test("Ishikawa entra no histórico com a causa aprofundada", () => {
+    const ishi = { ...analise, causes: { material: ["MP nova", "Cápsula"], metodo: ["Sem teste"] }, whyCausa: "MP nova" };
+    const r = comCausaCapaNaAbertura({ ...base(), ishikawa: ishi }, "Lucas", "2026-11-11", "10:00");
+    expect(r.historico[1].detalhes).toEqual(["Ishikawa: 3 causa(s) levantada(s)", "Causa aprofundada: MP nova", "5 Porquês: 3 de 5 preenchido(s)", "Causa raiz: MP trocada"]);
+  });
+  test("só o Ishikawa já conta como início da análise", () => {
+    const r = comCausaCapaNaAbertura({ ...base(), ishikawa: { causes: { mao: ["Treino"] }, whys: [], root: "" } }, "Lucas", "2026-11-11", "10:00");
+    expect(r.status).toBe("Em andamento");
+  });
 });

@@ -360,10 +360,10 @@ export function patchInvestigacao(r, registro, data, hora) {
 // ── Análise de causa e CAPA já na abertura da RNC interna (v3.30.0) ──────────────
 // Opcionais: quem abre a RNC e já sabe a causa registra os 5 Porquês, a causa raiz e as
 // ações ali mesmo; senão faz depois, na ficha. Mesma trava da ficha: ação CAPA só entra
-// com a análise completa (≥3 porquês + causa raiz). O Ishikawa fica só na ficha.
+// com a análise completa (≥3 porquês + causa raiz). Ishikawa opcional, como na ficha.
 
 const analiseCompleta = ishi => (ishi?.whys || []).filter(cheio).length >= MIN_PORQUES && cheio(ishi?.root);
-const temAnalise = ishi => (ishi?.whys || []).some(cheio) || cheio(ishi?.root);
+const temAnalise = ishi => (ishi?.whys || []).some(cheio) || cheio(ishi?.root) || totalCausas(ishi) > 0;
 
 /** Erros da aba "Causa e CAPA" da abertura. Vazio = pode salvar. */
 export function errosCausaCapaNaAbertura(ishikawa, acts) {
@@ -384,7 +384,7 @@ export function comCausaCapaNaAbertura(draft, autor, data, hora) {
   let out = { ...draft, historico: [...(draft.historico || [])] };
   if (temAnalise(ishi)) {
     out.ishikawa = { ...ishi, efeito: cheio(ishi.efeito) ? ishi.efeito : (draft.desc || "").split("\n")[0].substring(0, 120) };
-    out.historico.push({ data, hora, acao: "Análise de causa registrada na abertura", detalhes: [`5 Porquês: ${(ishi.whys || []).filter(cheio).length} de 5 preenchido(s)`, ...(cheio(ishi.root) ? [`Causa raiz: ${ishi.root.trim()}`] : [])], resp: autor, tipo: "analise" });
+    out.historico.push({ data, hora, acao: "Análise de causa registrada na abertura", detalhes: [...(totalCausas(ishi) ? [`Ishikawa: ${totalCausas(ishi)} causa(s) levantada(s)`] : []), ...(cheio(ishi.whyCausa) ? [`Causa aprofundada: ${ishi.whyCausa.trim()}`] : []), `5 Porquês: ${(ishi.whys || []).filter(cheio).length} de 5 preenchido(s)`, ...(cheio(ishi.root) ? [`Causa raiz: ${ishi.root.trim()}`] : [])], resp: autor, tipo: "analise" });
   }
   if (acts.length) {
     const p = patchSalvarCapa({ ...out, w2h: [] }, acts, autor, data); // tudo é inclusão

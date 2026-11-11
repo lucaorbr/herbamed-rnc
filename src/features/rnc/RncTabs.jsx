@@ -499,14 +499,53 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
   };
   const rncPreview = { ...f, ishikawa, w2h };
 
+  const bannerDesvio = origemDesvio && (
+    <div style={{ fontSize:13, color:T.text, background:`${T.blue}14`, border:`1px solid ${T.blue}44`, borderRadius:8, padding:"10px 14px", marginBottom:12 }}>
+      ↗ Convertendo o desvio <strong>{origemDesvio.num}</strong> em RNC
+      {anexos.some(a => a.origemDesvio) && <> · {anexos.filter(a => a.origemDesvio).length} anexo(s) do desvio já incluído(s) na aba Descrição</>}
+    </div>
+  );
+  const OPCOES_TIPO = [
+    ["interna", "🏭", "RNC interna", "A não conformidade nasceu aqui dentro (processo, produção, laboratório).", "A Herbamed investiga a causa (Ishikawa, 5 Porquês), monta o plano CAPA e verifica a eficácia."],
+    ["externa", "🚚", "RNC externa", "A não conformidade veio de um fornecedor (matéria-prima, embalagem, serviço).", "O fornecedor analisa a causa e responde; a Herbamed avalia e verifica no recebimento seguinte. Fornecedor, NF e lote são obrigatórios."],
+  ];
+  const escolherTipo = k => { set("tipoRnc", k); setNovaAba("ident"); };
+
+  // 1º passo: só a escolha do tipo. O formulário de cada uma abre depois.
+  if (!f.tipoRnc) return (
+    <div>
+      {bannerDesvio}
+      <div style={{ fontSize:15, fontWeight:700, marginBottom:4 }}>Que tipo de RNC você vai abrir?</div>
+      <div style={{ fontSize:12, color:T.text3, marginBottom:16 }}>A não conformidade veio de um fornecedor ou nasceu aqui dentro?</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:14 }}>
+        {OPCOES_TIPO.map(([k, ic, l, quando, como]) => (
+          <button key={k} type="button" onClick={() => escolherTipo(k)}
+            style={{ ...s.card, textAlign:"left", cursor:"pointer", fontFamily:"inherit", color:T.text, border:`1px solid ${T.border2}`, padding:"20px" }}>
+            <div style={{ fontSize:30, marginBottom:8 }}>{ic}</div>
+            <div style={{ fontSize:16, fontWeight:700, color:T.accent, marginBottom:6 }}>{l}</div>
+            <div style={{ fontSize:13, marginBottom:8 }}>{quando}</div>
+            <div style={{ fontSize:12, color:T.text2 }}>{como}</div>
+          </button>
+        ))}
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", marginTop:16 }}>
+        <button style={s.btn} onClick={() => setTab("lista")}>Cancelar</button>
+      </div>
+    </div>
+  );
+  const opcaoAtual = OPCOES_TIPO.find(o => o[0] === f.tipoRnc);
+
   return (
     <div>
-      {origemDesvio && (
-        <div style={{ fontSize:13, color:T.text, background:`${T.blue}14`, border:`1px solid ${T.blue}44`, borderRadius:8, padding:"10px 14px", marginBottom:12 }}>
-          ↗ Convertendo o desvio <strong>{origemDesvio.num}</strong> em RNC
-          {anexos.some(a => a.origemDesvio) && <> · {anexos.filter(a => a.origemDesvio).length} anexo(s) do desvio já incluído(s) na aba Descrição</>}
+      {bannerDesvio}
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", marginBottom:12 }}>
+        <span style={{ fontSize:20 }}>{opcaoAtual[1]}</span>
+        <div style={{ flex:1, minWidth:200 }}>
+          <div style={{ fontSize:14, fontWeight:700 }}>Nova {opcaoAtual[2]}</div>
+          <div style={{ fontSize:11, color:T.text2 }}>{opcaoAtual[4]}</div>
         </div>
-      )}
+        <button type="button" style={{ ...s.btn, fontSize:12 }} onClick={() => set("tipoRnc", "")}>Trocar tipo</button>
+      </div>
       {/* ── Abas do formulário ── */}
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
         {[["ident","🪪 Identificação"],["desc","📝 Descrição"],["contencao","⚡ Contenção"],...(f.tipoRnc==="interna"?[["causa","🔍 Causa e CAPA (opcional)"]]:[]),["prazos","🗓️ Prazos"]].map(([k,l])=>(
@@ -525,19 +564,6 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doSaveDesv
           <span style={{ fontSize:13, fontWeight:600, color:"#6366f1", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:8, padding:"4px 12px" }}>
             Nº atribuído ao salvar
           </span>
-        </div>
-        <div style={{ background:T.surf, border:`1px solid ${f.tipoRnc ? T.border : T.yellow + "88"}`, borderRadius:10, padding:"12px 14px", marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:600, marginBottom:8 }}>A não conformidade veio de um fornecedor? *</div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            {[["externa","Sim — RNC externa","O fornecedor analisa a causa e responde; fornecedor, NF e lote são obrigatórios."],["interna","Não — RNC interna","A Herbamed investiga, faz o plano CAPA e verifica a eficácia."]].map(([k,l,d]) => (
-              <button key={k} type="button" onClick={() => set("tipoRnc", k)} aria-pressed={f.tipoRnc===k}
-                style={{ flex:"1 1 240px", textAlign:"left", padding:"10px 12px", borderRadius:8, cursor:"pointer", fontFamily:"inherit",
-                  border:`1px solid ${f.tipoRnc===k ? T.accent : T.border2}`, background:f.tipoRnc===k ? T.accentDim : T.card, color:T.text }}>
-                <div style={{ fontSize:13, fontWeight:700, color:f.tipoRnc===k ? T.accent : T.text }}>{l}</div>
-                <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{d}</div>
-              </button>
-            ))}
-          </div>
         </div>
         <G3 ch={<><F lbl="Data de abertura" tip="Data em que a não conformidade foi detectada. Use a data real da ocorrência, não a data de registro." ch={<Inp type="date" value={f.data} onChange={e => set("data", e.target.value)} />} /><F lbl="Status" tip="Estado atual da RNC. Novas RNCs iniciam como Aberta. O status evolui conforme o tratamento avança." ch={<Sel value={f.status} onChange={e => set("status", e.target.value)}>{Object.keys(SMETA).map(x => <option key={x}>{x}</option>)}</Sel>} /><F lbl="Severidade" tip="Maior: impacto significativo na qualidade. Menor: desvio leve sem impacto direto ao produto." ch={<Sel value={f.sev} onChange={e => set("sev", e.target.value)}><option value="">— Selecione —</option>{SEVERIDADES_RNC.map(x => <option key={x}>{x}</option>)}</Sel>} /></>} />
         <G3 ch={<>
