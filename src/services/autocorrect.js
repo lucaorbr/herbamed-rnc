@@ -189,8 +189,13 @@ export const getFuzzyCorrection = word => {
   return preserveCase(word, [...candidatos][0]);
 };
 
+// Campo de unidade (ensaios do CQ, laudos): só símbolos e unidades — sem trocar
+// palavras e sem maiúscula (mm não vira Mm, pH não vira PH). data-autocorrect="simbolos".
+const soSimbolos = element => element?.dataset?.autocorrect === "simbolos";
+
 export const isAutocorrectField = element => {
   if (!element) return false;
+  if (soSimbolos(element)) return true;
   if (element.dataset?.autocorrect === "off") return false;
   if (element.dataset?.autocorrect === "on") return true;
   return isDescriptiveTextField(element);
@@ -349,7 +354,7 @@ export const handleWritingInput = event => {
   const cursor = element.selectionStart;
   const result = autocorrectOperator(before, cursor)
     || autocorrectCompletedUnit(before, cursor)
-    || autocorrectCompletedWord(before, cursor);
+    || (soSimbolos(element) ? null : autocorrectCompletedWord(before, cursor));
   if (!result) {
     capitalizeWithNativeValue(element);
     return;

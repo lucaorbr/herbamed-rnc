@@ -230,4 +230,37 @@ describe("autocorreção de símbolos", () => {
     expect(element.value).toBe("densidade 1 g/cm³");
     expect(onInput).toHaveBeenCalled();
   });
+
+  test("campo de unidade (só símbolos): troca unidade e operador, sem maiúscula nem troca de palavra", () => {
+    const campo = valor => {
+      const element = document.createElement("input");
+      element.type = "text";
+      element.dataset.autoCapitalize = "off";
+      element.dataset.autocorrect = "simbolos";
+      element.value = valor;
+      element.setSelectionRange(valor.length, valor.length);
+      return element;
+    };
+    expect(isAutocorrectField(campo(""))).toBe(true);
+
+    const fim = campo("cm3");
+    handleWritingBlur({ target: fim });
+    expect(fim.value).toBe("cm³");
+
+    const ug = campo("ug/");
+    handleWritingInput({ target: ug, isComposing: false });
+    expect(ug.value).toBe("µg/");
+
+    const op = campo("<=");
+    handleWritingInput({ target: op, isComposing: false });
+    expect(op.value).toBe("≤");
+
+    const palavra = campo("prodto ");
+    handleWritingInput({ target: palavra, isComposing: false });
+    expect(palavra.value).toBe("prodto ");
+
+    const ph = campo("pH ");
+    handleWritingInput({ target: ph, isComposing: false });
+    expect(ph.value).toBe("pH ");
+  });
 });
