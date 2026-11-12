@@ -1684,6 +1684,9 @@ async function handleDocumentRender(req, res, pathname, url) {
       page.drawText(rodape, { x: 16, y: 5, size: rodSize, font: fontR, color: cinza });
     });
 
+    // Título nos metadados do PDF: é o que o visualizador do navegador mostra no
+    // lugar do nome do arquivo (sem ele aparece o código interno do endereço).
+    out.setTitle(`${codigo} Rev.${versao} - ${titulo}`, { showInWindowTitleBar: true });
     const bytes = await out.save();
 
     // Registra quem gerou cópia do documento vigente: download (não controlada,

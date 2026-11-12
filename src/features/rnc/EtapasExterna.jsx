@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { abrirAnexo } from "../../shared/abrirArquivo";
 import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -16,7 +17,7 @@ const quando = iso => { try { return new Date(iso).toLocaleString("pt-BR", { dat
 const agora = () => ({ iso: new Date().toISOString(), data: tod(), hora: new Date().toLocaleTimeString("pt-BR") });
 
 function linkAnexo(a, j, T) {
-  return <a key={j} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>;
+  return <a key={j} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>;
 }
 
 /** Uma resposta pelo link público (atual ou arquivada). */

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
+import { abrirAnexo, abreNoNavegador } from "../../shared/abrirArquivo";
 import { createElectronicSignature, subscribeCollection } from "../../firebase";
 import { DISPOSICOES, SEVERIDADES_RNC, SMETA, TIPOC, dispMeta, rncAtiva, rncEncerrada, taxaEficaciaRNC, tipoCor } from "../../core/status";
 import { FiltroPeriodo, SituacaoAtual, usePeriodo } from "../../shared/FiltroPeriodo";
@@ -385,8 +386,8 @@ export function openCOA(coa) {
     alert("Este arquivo ainda aponta para armazenamento externo antigo. Remova e anexe novamente para salvar no PostgreSQL local do SGQ.");
     return;
   }
-  const url = coa.url;
-  window.open(url, "_blank", "noopener,noreferrer");
+  if (abreNoNavegador(coa)) return abrirAnexo(null, coa);
+  window.open(coa.url, "_blank", "noopener,noreferrer");
 }
 
 const ROTULO_ESTADO_BARRA = { concluida: "concluída", dispensada: "dispensada", atual: "próxima a fazer", bloqueada: "bloqueada", pendente: "pendente" };
