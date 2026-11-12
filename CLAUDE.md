@@ -31,7 +31,7 @@ Sistema de gestão da qualidade (SGQ) para Herbamed (farmacêutica).
 - Seção 17 do roadmap depende de infraestrutura da TI
 
 ## Versão do sistema
-- Versão atual: `3.31.4`
+- Versão atual: `3.31.5`
 - A versão exibida no sistema deve vir de `src/config/appVersion.js` e acompanhar a versão do `package.json`.
 - Usar versionamento semântico no formato `MAJOR.MINOR.PATCH`.
 
@@ -241,6 +241,7 @@ Veja `/memory` — as memórias contêm:
 - **RNC externa — prazo de resposta do fornecedor em 7 dias corridos (v3.31.2)** — decisão do usuário: o padrão era 15 dias e passa a **7 dias corridos** (do calendário, fim de semana conta) a partir da abertura. Fonte única `PRAZO_RESPOSTA_FORNECEDOR_DIAS` em `tipoRncLogic.js`; a dica do campo diz "dias corridos". Segue editável na abertura. ⚠️ RNC já aberta mantém a data gravada em `prazoRespostaFornecedor` (nada migrado). Conferido na tela: externa aberta em 11/11 nasce com prazo 18/11.
 - **RNC — Aviso de disposição só em RNC em aberto (v3.31.3)** — a ficha de RNC já encerrada (Eficaz antiga, Ineficaz) com material/lote e sem disposição mostrava "registre a disposição antes de encerrar como Eficaz", como se ainda faltasse algo. O aviso passa a aparecer só com `rncAtiva(r.status)`. Achado no pente fino de 11/11; conferido na tela (NC-2026-T10 Ineficaz sem aviso, NC-2026-T07 em andamento com aviso).
 - **RNC — Cabeça do Ishikawa vira seta até a caixa do efeito (v3.31.4)** — a cabeça em forma de bala da espinha de peixe ficava estranha (pedido do usuário, escolhido entre 6 modelos). Agora a espinha termina numa **ponta de seta** que aponta para uma **caixa arredondada** com "EFEITO" e o efeito em até 4 linhas — leitura de "tudo isto leva a este efeito". Só a geometria da cabeça mudou em `layoutEspinha` (`ishikawaEspinhaLogic.js`), então vale igual na tela (abertura, etapa 3, Resumo) e no PDF. Nenhum dado mudou.
+- **PDF e anexos abrem em aba com nome legível (v3.31.5)** — ao ver um documento a aba mostrava `blob:…/<uuid>` (o PDF é baixado com a sessão e aberto como cópia na memória) e os anexos mostravam o uuid de `/api/files`. `src/shared/abrirArquivo.js` (4 testes) abre uma aba com `<title>` próprio e o arquivo num iframe: documento como "POP-SGQ-002 Rev.01 — Título (Rascunho)" (`tituloDoc`), anexo pelo nome do arquivo. Vale para todos os "Ver" da Gestão de Documentos e para os anexos de PDF/imagem da RNC, desvios, `AnexosUpload`, COA e fichas técnicas do CQ; Word/Excel e Ctrl+clique seguem o link normal. ⚠️ A aba do documento abre **dentro do clique** (antes do download, senão o navegador bloqueia) e o blob só é liberado quando ela fecha — antes era em 10 s e imprimir depois disso podia falhar. O servidor também grava o título nos metadados do PDF renderizado (`setTitle`, `showInWindowTitleBar`).
 ### ⏭️ Próximas seções
 - Seções 15, 16 (conforme roadmap)
 - **Inverter o padrão da navegação** (`sgq_nav`) depois de acompanhar a adoção da 3.0.0

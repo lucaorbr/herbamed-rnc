@@ -28,6 +28,7 @@ import {
   podeDefinirDistribuicao, semDistribuicao, situacaoDaDistribuicao, usuariosPorSetor,
 } from "./distribuicaoEletronica";
 import { enviarEmail } from "../email/enviarEmail";
+import { abrirAbaComTitulo } from "../../shared/abrirArquivo";
 import { ABAS_DOCUMENTO, abaInicial, itensDaFaixa, pendenciasPorAba } from "./paginaDocumento";
 import {
   ARMAZENAMENTOS, DESCARTES, camposDaRegra, errosDaRegra, faltaControleRegistro, geraRegistro, listaControleRegistros, normBusca, novaRegra, regraMudou,
@@ -295,13 +296,17 @@ async function uploadDocumentoControlado(file) {
 // A rota /api/files/{uuid} exige JWT — busca o arquivo controlado com o mesmo
 // token que api() usa, transforma em blob e abre numa aba (Ver) ou força o
 // download com o nome correto (Baixar). Libera o object URL depois.
-async function abrirArquivoAutenticado(url, download = false, nome = "documento") {
+async function abrirArquivoAutenticado(url, download = false, nome = "documento", titulo = nome) {
+  // Ver: a aba abre já, dentro do clique (senão o navegador bloqueia), com o nome
+  // do documento — e não o endereço interno "blob:…" — e recebe o PDF depois.
+  const aba = download ? null : abrirAbaComTitulo(titulo);
   try {
     const token = getToken();
     const resp = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
     if (!resp.ok) {
       // Recusa do servidor (permissão, arquivo protegido) vira aviso legível — antes
       // caía no window.open abaixo, que abria uma aba sem sessão.
+      aba?.fechar();
       const corpo = await resp.json().catch(() => ({}));
       alert(corpo.error || `Não foi possível abrir o arquivo (HTTP ${resp.status}).`);
       return;
@@ -319,14 +324,26 @@ async function abrirArquivoAutenticado(url, download = false, nome = "documento"
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      // Atraso para o download conseguir consumir o blob antes de revogar.
+      setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
+    } else if (aba) {
+      // A aba segue usando o PDF (imprimir, salvar) enquanto estiver aberta:
+      // só libera a memória quando ela fecha.
+      aba.mostrar(objUrl, () => URL.revokeObjectURL(objUrl));
     } else {
       window.open(objUrl, "_blank");
+      setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
     }
-    // Atraso para a aba/download conseguir consumir o blob antes de revogar.
-    setTimeout(() => URL.revokeObjectURL(objUrl), 10000);
   } catch(e) {
+    aba?.fechar();
     window.open(url, "_blank");
   }
+}
+
+// Nome da aba ao ver o documento: "POP-SGQ-002 Rev.01 — Título (Rascunho)".
+function tituloDoc(d, versao = d?.versao, situacao = "") {
+  const base = [d?.codigo, versao ? `Rev.${versao}` : ""].filter(Boolean).join(" ");
+  return [base, d?.titulo].filter(Boolean).join(" — ") + (situacao ? ` (${situacao})` : "");
 }
 
 // Monta o nome de download "{codigo}_Rev{versao}" mantendo a extensão original do arquivo.
@@ -370,16 +387,16 @@ function BotoesArquivoRender({ d, s, T, podeBaixarCopia, userName, acessoRestrit
       return <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`); }} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>;
     }
     return (<>
-      <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName)); }} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+      <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "controlada", userName), false, undefined, tituloDoc(d)); }} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
       {podeBaixarCopia && <button onClick={()=>{ onAbrir?.(d); abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", userName), true, `${codigo}_Rev${versao}_CopiaNaoControlada.pdf`); }} style={{...s.btnA,fontSize:11}}>⬇️ Baixar cópia não controlada</button>}
     </>);
   }
   if (acessoRestrito) return null; // não vê Obsoleto/Rascunho/etc.
   if (d.status === "Obsoleto") {
-    return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>;
+    return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"), false, undefined, tituloDoc(d, d.versao, "Obsoleto"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>;
   }
   // Rascunho, Em Revisão, Aguardando Aprovação
-  return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
+  return <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "rascunho"), false, undefined, tituloDoc(d, d.versao, "Rascunho"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver rascunho</button>;
 }
 
 function ResumoRapidoDocumento({ resumo, loading, error, onRefresh, s, T }) {
@@ -998,7 +1015,7 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
         setSel(r.doc);
         alvo = r.copia;
       }
-      abrirArquivoAutenticado(`${renderUrl(doc.id, "copia")}&copia=${encodeURIComponent(alvo.id)}`);
+      abrirArquivoAutenticado(`${renderUrl(doc.id, "copia")}&copia=${encodeURIComponent(alvo.id)}`, false, undefined, tituloDoc(doc, doc.versao, `Cópia ${copiaLabel(alvo)}`));
     } catch(e) { toast_(fbErr(e), "red"); console.error(e); }
   };
 
@@ -1256,9 +1273,9 @@ export function GestaoDocumentosTab({ user, toast_, users, auditLog, perm, tipos
     if (d.status === "Vigente") {
       registrarAbertura(d);
       if (acessoRestritoVigente) abrirArquivoAutenticado(renderUrl(d.id, "nao_controlada", user?.name), true, `${d.codigo}_Rev${d.versao}_CopiaNaoControlada.pdf`);
-      else abrirArquivoAutenticado(renderUrl(d.id, "controlada", user?.name));
-    } else if (d.status === "Obsoleto") abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"));
-    else abrirArquivoAutenticado(renderUrl(d.id, "rascunho"));
+      else abrirArquivoAutenticado(renderUrl(d.id, "controlada", user?.name), false, undefined, tituloDoc(d));
+    } else if (d.status === "Obsoleto") abrirArquivoAutenticado(renderUrl(d.id, "obsoleto"), false, undefined, tituloDoc(d, d.versao, "Obsoleto"));
+    else abrirArquivoAutenticado(renderUrl(d.id, "rascunho"), false, undefined, tituloDoc(d, d.versao, "Rascunho"));
   };
 
   // ── Controle de registros ─────────────────────────────────────────────────
@@ -1405,7 +1422,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
     if (acessoRestritoVigente) {
       abrirArquivoAutenticado(renderUrl(doc.id, "nao_controlada", user?.name), true, `${doc.codigo}_Rev${doc.versao}_CopiaNaoControlada.pdf`);
     } else {
-      abrirArquivoAutenticado(renderUrl(doc.id, "controlada", user?.name));
+      abrirArquivoAutenticado(renderUrl(doc.id, "controlada", user?.name), false, undefined, tituloDoc(doc));
     }
   };
 
@@ -2344,7 +2361,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                         <div style={{display:"flex",gap:6,flexShrink:0}}>
                           {arq ? (<>
                             {/* Revisão antiga sai pela renderização, com DOCUMENTO OBSOLETO — nunca o original limpo. */}
-                            <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, h.versao))} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
+                            <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, h.versao), false, undefined, tituloDoc(d, h.versao, "Obsoleto"))} style={{...s.btn,fontSize:10,color:T.accent}}>👁️ Ver</button>
                             <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, h.versao), true, `${d.codigo}_Rev${h.versao}_Obsoleto.pdf`)} style={{...s.btn,fontSize:10}}>⬇️ Baixar</button>
                           </>) : h.conteudo ? (
                             <button style={{...s.btn,fontSize:10,padding:"3px 8px"}} onClick={()=>setVerSnapshot(h)}>📄 Ver anotações</button>
@@ -2420,7 +2437,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:T.surf,borderRadius:8,border:`1px solid ${T.border}`,marginBottom:14}}>
                   <span style={{fontSize:18}}>📄</span>
                   <div style={{flex:1,fontSize:12,color:T.text}}>{verSnapshot.conteudo.arquivo.nome}</div>
-                  <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, verSnapshot.versao))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
+                  <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, verSnapshot.versao), false, undefined, tituloDoc(d, verSnapshot.versao, "Obsoleto"))} style={{...s.btn,fontSize:11,color:T.accent}}>👁️ Ver</button>
                   <button onClick={()=>abrirArquivoAutenticado(renderUrl(d.id, "obsoleto", null, verSnapshot.versao), true, `${d.codigo}_Rev${verSnapshot.versao}_Obsoleto.pdf`)} style={{...s.btn,fontSize:11}}>⬇️ Baixar</button>
                 </div>
               )}
@@ -3114,7 +3131,7 @@ Herbamed® · Sistema de Gestão da Qualidade`,
                 <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{docArquivo.nome}</div>
                 <div style={{ fontSize:11, color:T.text2 }}>{docArquivo.tamanho ? (docArquivo.tamanho/1024).toFixed(1)+" KB" : ""}</div>
               </div>
-              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url)} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
+              <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, false, undefined, docArquivo.nome || "Documento")} style={{ ...s.btn, fontSize:11, color:T.accent }}>👁️ Ver</button>
               <button onClick={()=>abrirArquivoAutenticado(docArquivo.url, true, nomeDownloadDoc(sel?.codigo || gerarCodigoGD(form.tipo, form.depto, docs, form.versao), form.versao, docArquivo))} style={{ ...s.btn, fontSize:11 }}>⬇️ Baixar</button>
               <label style={{ ...s.btn, fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center" }}>
                 🔄 Substituir

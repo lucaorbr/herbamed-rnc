@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { abrirAnexo, abreNoNavegador } from "../../shared/abrirArquivo";
 import { saveCollection, deleteFromCollection, subscribeCollection } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { UNIDADES_RECEBIMENTO, fmt, fmtQtd, parseQtd, seloAssHTML, tod } from "../../core/utils";
@@ -1299,7 +1300,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
                 {f.url ? (
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <span style={{ fontSize:12, color:T.accent, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }} title={f.nome}>📎 {f.nome}</span>
-                    <button onClick={()=>window.open(f.url,"_blank","noopener,noreferrer")} style={{ ...s.btn, padding:"3px 8px", fontSize:11, color:T.accent, whiteSpace:"nowrap" }}>👁 Ver</button>
+                    <button onClick={e=>{ if (abreNoNavegador({ name: f.nome })) abrirAnexo(e, { url: f.url, name: f.nome }); else window.open(f.url,"_blank","noopener,noreferrer"); }} style={{ ...s.btn, padding:"3px 8px", fontSize:11, color:T.accent, whiteSpace:"nowrap" }}>👁 Ver</button>
                   </div>
                 ) : (
                   <label style={{ ...s.btn, padding:"5px 12px", fontSize:11, cursor:"pointer", display:"inline-flex", alignItems:"center", gap:4 }}>

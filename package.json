@@ -1,6 +1,6 @@
 {
   "name": "herbamed-rnc",
-  "version": "3.31.4",
+  "version": "3.31.5",
   "private": true,
   "dependencies": {
     "bcryptjs": "^3.0.3",

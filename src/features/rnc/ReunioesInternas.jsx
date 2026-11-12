@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { abrirAnexo } from "../../shared/abrirArquivo";
 import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -43,7 +44,7 @@ export function ReunioesInternas({ r, user, toast_, gravar, podeRegistrar }) {
             <div style={{ fontSize: 13, fontWeight: 700 }}>{fmt(m.data)}{m.local ? ` · ${m.local}` : ""}</div>
             <div style={{ fontSize: 12, color: T.text2, margin: "3px 0" }}>Participantes: {m.participantes}</div>
             <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{m.decidido}</div>
-            {(m.anexos || []).length > 0 && <div style={{ marginTop: 4 }}>{m.anexos.map((a, j) => <a key={j} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>)}</div>}
+            {(m.anexos || []).length > 0 && <div style={{ marginTop: 4 }}>{m.anexos.map((a, j) => <a key={j} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>)}</div>}
             <div style={{ fontSize: 10, color: T.text3, marginTop: 4 }}>Registrada por {m.por} em {quando(m.em)}</div>
           </div>
         ))}
@@ -82,7 +83,7 @@ export function EvidenciasRnc({ r }) {
           <thead><tr style={{ color: T.text3, textAlign: "left" }}><th style={{ padding: "4px 6px" }}>Arquivo</th><th style={{ padding: "4px 6px" }}>Etapa</th><th style={{ padding: "4px 6px" }}>Data</th><th style={{ padding: "4px 6px" }}>Por</th></tr></thead>
           <tbody>{ev.map((x, i) => (
             <tr key={i} style={{ borderTop: `1px solid ${T.border}` }}>
-              <td style={{ padding: "6px" }}><a href={x.anexo.url} target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>📎 {x.anexo.name}</a></td>
+              <td style={{ padding: "6px" }}><a href={x.anexo.url} onClick={e => abrirAnexo(e, x.anexo)} target="_blank" rel="noopener noreferrer" style={{ color: T.accent }}>📎 {x.anexo.name}</a></td>
               <td style={{ padding: "6px" }}>{x.etapa}</td>
               <td style={{ padding: "6px" }}>{x.data ? (String(x.data).length > 10 ? quando(x.data) : fmt(x.data)) : "—"}</td>
               <td style={{ padding: "6px" }}>{x.por || "—"}</td>

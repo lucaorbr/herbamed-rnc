@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { abrirAnexo } from "../../shared/abrirArquivo";
 import { useTheme } from "../../core/theme";
 import { tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
@@ -48,7 +49,7 @@ export function Investigacao({ r, user, toast_, gravar, podeRegistrar }) {
           <div style={{ fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{reg.texto}</div>
           {reg.anexos?.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {reg.anexos.map((a, j) => <a key={j} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent }}>📎 {a.name}</a>)}
+              {reg.anexos.map((a, j) => <a key={j} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent }}>📎 {a.name}</a>)}
             </div>
           )}
         </div>

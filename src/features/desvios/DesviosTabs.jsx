@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { abrirAnexo } from "../../shared/abrirArquivo";
 import { useTheme } from "../../core/theme";
 import { fmt, genNum, tod } from "../../core/utils";
 import { incrementCounter } from "../../firebase";
@@ -483,7 +484,7 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                   <div style={{ fontSize: 10, color: T.text3, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>📎 Anexos ({sel.anexos.length})</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {sel.anexos.map((a, i) => (
-                      <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, textDecoration: "none", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px" }}>📎 {a.name}</a>
+                      <a key={i} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, textDecoration: "none", background: T.surf, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 12px" }}>📎 {a.name}</a>
                     ))}
                   </div>
                 </div>

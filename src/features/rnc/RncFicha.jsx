@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { abrirAnexo } from "../../shared/abrirArquivo";
 import { DISPOSICOES_ATIVAS, SEVERIDADES_RNC, SMETA, TIPOC, dispMeta, errosDisposicao, rncAtiva, rncEncerrada, rotuloDisposicao } from "../../core/status";
 import { useTheme } from "../../core/theme";
 import { fmt, past, sigCodigo, tod } from "../../core/utils";
@@ -195,7 +196,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
       <div style={rot}>📎 Anexos ({r.anexos.length})</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {r.anexos.map((a, i) => (
-          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surf, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.accent, textDecoration: "none", fontSize: 12 }}>
+          <a key={i} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surf, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.accent, textDecoration: "none", fontSize: 12 }}>
             {a.type?.includes("image") ? "🖼️" : a.type?.includes("pdf") ? "📄" : "📎"} {a.name}
           </a>
         ))}
@@ -331,7 +332,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {ef.resultado && <div style={{ marginBottom: 10 }}><Badge s={ef.resultado === "Pendente verificação" ? "Pendente verificação" : ef.resultado} /></div>}
         {ef.criterio && <div style={{ marginBottom: 10 }}><div style={rot}>Critério</div><div style={{ fontSize: 13 }}>{ef.criterio}</div></div>}
         {ef.evidencias && <div style={{ marginBottom: 10 }}><div style={rot}>Evidências</div><div style={{ fontSize: 13 }}>{ef.evidencias}</div></div>}
-        {ef.anexos?.length > 0 && <div style={{ marginBottom: 10 }}><div style={rot}>Anexos</div>{ef.anexos.map((a, i) => <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>)}</div>}
+        {ef.anexos?.length > 0 && <div style={{ marginBottom: 10 }}><div style={rot}>Anexos</div>{ef.anexos.map((a, i) => <a key={i} href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.accent, marginRight: 10 }}>📎 {a.name}</a>)}</div>}
         {ef.obs && <div style={{ marginBottom: 10 }}><div style={rot}>Lições aprendidas</div><div style={{ fontSize: 13 }}>{ef.obs}</div></div>}
         <div style={{ fontSize: 11, color: T.text3 }}>
           {ef.data ? `Verificação em ${fmt(ef.data)}` : ""}{ef.resp ? ` · responsável: ${ef.resp}` : ""}{ef.registradoPor ? ` · registrado por ${ef.registradoPor}` : ""}

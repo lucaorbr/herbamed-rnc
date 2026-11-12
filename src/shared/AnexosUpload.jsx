@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { abrirAnexo } from "./abrirArquivo";
 import { useTheme } from "../core/theme";
 import { useS } from "./styles";
 import { uploadStoredFile } from "../services/localFileStorage";
@@ -108,7 +109,7 @@ export function AnexosUpload({
                   {a.origemDesvio ? ` · do desvio ${a.origemDesvio}` : ""}
                 </div>
               </div>
-              <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, textDecoration: "none", fontWeight: 600, padding: "4px 10px", background: T.accentDim, borderRadius: 6 }}>Ver</a>
+              <a href={a.url} onClick={e => abrirAnexo(e, a)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: T.accent, textDecoration: "none", fontWeight: 600, padding: "4px 10px", background: T.accentDim, borderRadius: 6 }}>Ver</a>
               {podeRemover && (
                 <button onClick={() => removeAnexo(i)} style={{ background: "none", border: "none", color: T.text3, cursor: "pointer", fontSize: 16, padding: "0 4px", fontFamily: "inherit" }}>✕</button>
               )}
