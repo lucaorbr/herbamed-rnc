@@ -1,4 +1,4 @@
-import { CORES_PDF, MAX_POR_OSSO, espinhaSvg, layoutEspinha, quebrarTexto, temCausasIshikawa } from "./ishikawaEspinhaLogic";
+import { CORES_PDF, causasForaDoDesenho, MAX_POR_OSSO, espinhaSvg, layoutEspinha, quebrarTexto, temCausasIshikawa } from "./ishikawaEspinhaLogic";
 
 const mede = (t) => String(t).length * 7;
 const causasDe = layout => layout.elementos.filter(e => e.papel === "causa");
@@ -56,5 +56,20 @@ describe("espinhaSvg (PDF)", () => {
     expect(svg).toContain("A &lt; B");
     expect(svg).toContain("Falta &amp; treino");
     expect(svg).toContain(CORES_PDF.sel);
+  });
+});
+
+describe("causas fora do desenho (lista no PDF)", () => {
+  it("lista por extenso a categoria com mais causas do que cabem no osso", () => {
+    const causes = { mao: ["a1", "a2", "a3", "a4", "a5", "a6"], maquina: ["m1"] };
+    expect(causasForaDoDesenho({ causes })).toEqual([{ categoria: "Mão de obra", causas: ["a1", "a2", "a3", "a4", "a5", "a6"] }]);
+  });
+  it("lista a categoria cuja causa saiu cortada com reticências", () => {
+    const longa = "Operador não conferiu a identificação do lote na etapa de pesagem porque a etiqueta estava ilegível e o procedimento não previa dupla checagem do material recebido";
+    expect(causasForaDoDesenho({ causes: { metodo: [longa] } })).toEqual([{ categoria: "Método", causas: [longa] }]);
+  });
+  it("tudo cabendo no desenho, não lista nada", () => {
+    expect(causasForaDoDesenho({ causes: { mao: ["Falta de treino"] } })).toEqual([]);
+    expect(causasForaDoDesenho({})).toEqual([]);
   });
 });

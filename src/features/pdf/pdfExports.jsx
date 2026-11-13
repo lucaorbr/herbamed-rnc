@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import { rotuloDisposicao } from "../../core/status";
-import { createElectronicSignature } from "../../firebase";
+import { createElectronicSignature, getToken } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { fmt, past, seloAssHTML, sigCodigo } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
 import { etapasDaRnc } from "../rnc/ferramentasLogic";
 import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "../rnc/tipoRncLogic";
-import { CORES_PDF, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
+import { figurasDaRnc, gruposPorEtapa, nomesComFigura } from "../rnc/anexoFotograficoLogic";
+import { CORES_PDF, causasForaDoDesenho, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
 import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
 // Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
@@ -61,9 +62,59 @@ export const PDF_CSS = `
 `;
 
 export function openPDFWindow(title, html) {
-  const win = window.open("","_blank");
+  escreverPDFNaJanela(window.open("","_blank"), title, html);
+}
+
+function escreverPDFNaJanela(win, title, html) {
+  if (!win) return;
+  win.document.open();
   win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>${title}</title><style>${PDF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
   win.document.close();
+}
+
+const escHtml = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtQuando = v => { const s = String(v || ""); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return fmt(s); const d = new Date(s); return isNaN(d) ? s : d.toLocaleString("pt-BR"); };
+
+// Baixa a foto com a sessão (o arquivo só sai para quem está logado) e devolve um
+// data: URI reduzido — a janela de impressão não carrega o endereço protegido, e
+// foto de celular em tamanho original deixaria o PDF pesado. Falhou → null.
+async function imagemEmbutida(url, lado = 1400) {
+  try {
+    const token = getToken();
+    const resp = await fetch(url, { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!resp.ok) return null;
+    const obj = URL.createObjectURL(await resp.blob());
+    try {
+      const img = await new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = obj; });
+      const escala = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.naturalWidth * escala));
+      c.height = Math.max(1, Math.round(img.naturalHeight * escala));
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL("image/jpeg", 0.85);
+    } finally { URL.revokeObjectURL(obj); }
+  } catch { return null; }
+}
+
+// Última parte do PDF da RNC: as fotos numeradas, agrupadas pela etapa de origem.
+function anexoFotograficoHTML(figuras, srcs) {
+  if (!figuras.length) return "";
+  return `
+  <div class="section anexo-foto" style="page-break-before:always;break-before:page;">
+    <div class="section-title">📷 Anexo fotográfico</div>
+    <div style="font-size:11px;color:#666;margin-bottom:6px;">${figuras.length} foto(s) anexada(s) à RNC, numeradas na ordem das etapas. No relatório, cada anexo indica a figura correspondente.</div>
+    ${gruposPorEtapa(figuras).map(g => `
+      <div class="field-label" style="margin:12px 0 6px;">${escHtml(g.etapa)}</div>
+      <div class="fotos">
+        ${g.figuras.map(f => `
+          <div class="foto">
+            ${srcs[f.n] ? `<img src="${srcs[f.n]}" alt="Figura ${f.n}"/>` : `<div class="foto-falha">Imagem indisponível — abra o anexo no sistema</div>`}
+            <div class="foto-leg"><strong>Figura ${f.n}</strong> · ${escHtml(f.anexo.name || "foto")}${f.por || f.data ? `<br/><span>${escHtml(f.por || "")}${f.por && f.data ? " · " : ""}${f.data ? escHtml(fmtQuando(f.data)) : ""}</span>` : ""}</div>
+          </div>`).join("")}
+      </div>`).join("")}
+  </div>`;
 }
 
 // Envolve o miolo (`corpo`) no "rosto" padrão: faixa verde no topo (logo Herbamed +
@@ -152,7 +203,22 @@ export function AssinaturaModal({ user, onConfirm, onClose, titulo, contexto = "
   );
 }
 
+// As fotos precisam ser baixadas antes de escrever o PDF, mas a janela tem de abrir
+// dentro do clique (senão o navegador bloqueia): abre já com um aviso e escreve depois.
 export function exportRNCPDF(rnc, assinatura = null) {
+  const figuras = figurasDaRnc(rnc);
+  if (!figuras.length) { const { title, html } = montarRNCPDF(rnc, assinatura, figuras, {}); openPDFWindow(title, html); return; }
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<p style="font-family:'Segoe UI',Arial,sans-serif;padding:24px;color:#333">Preparando o PDF da RNC ${escHtml(rnc.num || "")} com ${figuras.length} foto(s)…</p>`);
+  Promise.all(figuras.map(f => imagemEmbutida(f.anexo.url))).then(lista => {
+    const srcs = Object.fromEntries(figuras.map((f, i) => [f.n, lista[i]]));
+    const { title, html } = montarRNCPDF(rnc, assinatura, figuras, srcs);
+    escreverPDFNaJanela(win, title, html);
+  });
+}
+
+function montarRNCPDF(rnc, assinatura, figuras, srcs) {
   // A assinatura principal do PDF é SEMPRE a do elaborador gravada na RNC (assinaturaElaborador),
   // nunca a de quem está exportando/imprimindo. O param `assinatura` fica só como fallback legado.
   const assElab = rnc.assinaturaElaborador || assinatura;
@@ -161,7 +227,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
   const feitaPdf = e => e.estado === "concluida" || e.estado === "dispensada";
   const externa = rncExterna(rnc);
   const quandoPdf = iso => { try { return iso ? new Date(iso).toLocaleString("pt-BR") : ""; } catch { return iso; } };
-  const anexosPdf = l => (l || []).length ? ` · anexos: ${l.map(a => a.name).join(", ")}` : "";
+  const anexosPdf = l => (l || []).length ? ` · anexos: ${nomesComFigura(l, figuras)}` : "";
   const respostaPdf = (rf, titulo) => {
     const pl = rf?.planoAcao || {};
     const linhas = [["O quê", pl.oQue], ["Por quê", pl.porQue], ["Como", pl.como], ["Quem", pl.quem], ["Onde", pl.onde], ["Quando", pl.quando], ["Quanto", pl.quanto]].filter(([, v]) => v);
@@ -201,6 +267,16 @@ export function exportRNCPDF(rnc, assinatura = null) {
   .progress-step{flex:1;height:6px;border-radius:3px;}
   .w2h-item{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:10px;margin-bottom:8px;}
   .w2h-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+  .fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .foto{border:1px solid #e0e0e0;border-radius:6px;padding:6px;page-break-inside:avoid;break-inside:avoid;}
+  .foto img{display:block;width:100%;height:68mm;object-fit:contain;background:#f4f5f4;border-radius:4px;}
+  .foto-falha{height:68mm;display:flex;align-items:center;justify-content:center;text-align:center;background:#f4f5f4;color:#999;font-size:11px;border-radius:4px;padding:10px;}
+  .foto-leg{font-size:10px;color:#333;margin-top:5px;line-height:1.4;word-break:break-word;}
+  .foto-leg span{color:#888;}
+  /* Na impressão o anexo começa em página nova; na tela (folha contínua) ganha
+     espaço e um corte visível para não colar nas assinaturas. */
+  @media screen{.anexo-foto{margin-top:44px;padding-top:26px;border-top:2px dashed #c8d3ca;}}
+  @media print{.anexo-foto{margin-top:0;padding-top:0;border-top:0;}}
 </style>
 
   <!-- STATUS -->
@@ -252,6 +328,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
     <div class="section-title">Descrição da Não Conformidade</div>
     <div class="desc-box">${rnc.desc||"—"}</div>
     ${rnc.evidencia?`<div style="margin-top:8px;font-size:11px;color:#666;"><strong>Evidências:</strong> ${rnc.evidencia}</div>`:""}
+    ${(rnc.anexos||[]).length?`<div style="margin-top:6px;font-size:11px;color:#666;"><strong>Anexos:</strong> ${nomesComFigura(rnc.anexos, figuras)}</div>`:""}
   </div>
 
   <!-- CONTENÇÃO -->
@@ -294,7 +371,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
     ${rnc.investigacao.map((reg,i)=>`
       <div class="step">
         <div class="step-num">${i+1}</div>
-        <div class="step-text" style="white-space:pre-wrap">${reg.texto}<div style="font-size:10px;color:#6b7280;margin-top:2px">${reg.por||""} · ${reg.em?new Date(reg.em).toLocaleString("pt-BR"):""}${reg.anexos?.length?` · anexos: ${reg.anexos.map(a=>a.name).join(", ")}`:""}</div></div>
+        <div class="step-text" style="white-space:pre-wrap">${reg.texto}<div style="font-size:10px;color:#6b7280;margin-top:2px">${reg.por||""} · ${reg.em?new Date(reg.em).toLocaleString("pt-BR"):""}${anexosPdf(reg.anexos)}</div></div>
       </div>`).join("")}
   </div>`:""}
 
@@ -315,6 +392,7 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="field"><div class="field-label">Recebimento seguinte</div><div class="field-value">${rnc.verificacaoRecebimento?`${rnc.verificacaoRecebimento.resultado} em ${fmt(rnc.verificacaoRecebimento.data)}${rnc.verificacaoRecebimento.lote?` · lote ${rnc.verificacaoRecebimento.lote}`:""}`:"—"}</div></div>
     </div>
     ${rnc.verificacaoRecebimento?.obs?`<div style="font-size:12px;margin-top:6px;">${rnc.verificacaoRecebimento.obs}</div>`:""}
+    ${(rnc.verificacaoRecebimento?.anexos||[]).length?`<div style="font-size:11px;margin-top:6px;color:#666;"><strong>Anexos:</strong> ${nomesComFigura(rnc.verificacaoRecebimento.anexos, figuras)}</div>`:""}
   </div>`:""}
 
   <!-- REUNIÕES INTERNAS -->
@@ -332,7 +410,16 @@ export function exportRNCPDF(rnc, assinatura = null) {
   ${rnc.ishikawa?.root||temCausasIshikawa(rnc.ishikawa)?`
   <div class="section">
     <div class="section-title">🐟 Análise de Causa — Ishikawa / 5 Porquês</div>
-    ${temCausasIshikawa(rnc.ishikawa)?`<div style="margin-bottom:10px;page-break-inside:avoid">${espinhaSvg({ ...rnc.ishikawa, efeito: rnc.ishikawa.efeito || (rnc.desc || "").split("\n")[0].substring(0, 120) }, CORES_PDF, medidaCanvas("Arial, Helvetica, sans-serif"))}</div>`:""}
+    ${temCausasIshikawa(rnc.ishikawa)?(()=>{
+      const ishiPdf = { ...rnc.ishikawa, efeito: rnc.ishikawa.efeito || (rnc.desc || "").split("\n")[0].substring(0, 120) };
+      const mede = medidaCanvas("Arial, Helvetica, sans-serif");
+      const fora = causasForaDoDesenho(ishiPdf, mede);
+      return `<div style="margin-bottom:10px;page-break-inside:avoid">${espinhaSvg(ishiPdf, CORES_PDF, mede)}</div>
+      ${fora.length?`<div style="margin-bottom:10px;font-size:11px;page-break-inside:avoid;">
+        <div class="field-label">Causas completas das categorias que não cabem no desenho</div>
+        ${fora.map(g=>`<div style="margin-top:4px;"><strong>${escHtml(g.categoria)} (${g.causas.length}):</strong> ${g.causas.map(escHtml).join("; ")}</div>`).join("")}
+      </div>`:""}`;
+    })():""}
     ${rnc.ishikawa.whyCausa?`<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Causa aprofundada nos 5 Porquês: <strong>${rnc.ishikawa.whyCausa}</strong></div>`:""}
     ${rnc.ishikawa.whys?.filter(w=>w).length>0?`
     <div style="margin-bottom:10px;">
@@ -351,14 +438,17 @@ export function exportRNCPDF(rnc, assinatura = null) {
     <div class="section-title">📌 Plano de Ação 5W2H</div>
     ${rnc.w2h.map((a,i)=>`
       <div class="w2h-item">
-        <div style="font-size:12px;font-weight:700;color:#1a7a3c;margin-bottom:6px;">Ação #${i+1}: ${a.what||"—"}</div>
+        <div style="font-size:12px;font-weight:700;color:#1a7a3c;margin-bottom:6px;">Ação #${i+1}${a.tipo?` <span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;border:1px solid ${a.tipo==="Preventiva"?"#1a4a8a55":"#1a7a3c55"};color:${a.tipo==="Preventiva"?"#1a4a8a":"#1a7a3c"};vertical-align:middle;">${escHtml(a.tipo)}</span>`:""}: ${a.what||"—"}</div>
         <div class="w2h-grid">
           <div><span style="font-size:9px;color:#888;font-weight:700;">POR QUÊ</span><br/><span style="font-size:11px;">${a.why||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">QUEM</span><br/><span style="font-size:11px;">${a.who||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">ONDE</span><br/><span style="font-size:11px;">${a.where||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">QUANDO</span><br/><span style="font-size:11px;">${fmt(a.when)}</span></div>
           <div style="grid-column:span 2;"><span style="font-size:9px;color:#888;font-weight:700;">COMO</span><br/><span style="font-size:11px;">${a.how||"—"}</span></div>
+          ${String(a.howMuch||"").trim()?`<div style="grid-column:span 2;"><span style="font-size:9px;color:#888;font-weight:700;">QUANTO (CUSTO/ESFORÇO)</span><br/><span style="font-size:11px;">${escHtml(a.howMuch)}</span></div>`:""}
         </div>
+        ${typeof a.evidencia==="string"&&a.evidencia.trim()?`<div style="margin-top:6px;font-size:10px;color:#666;white-space:pre-wrap;"><strong>Execução registrada:</strong> ${escHtml(a.evidencia)}</div>`:""}
+        ${Array.isArray(a.evidencias)&&a.evidencias.length?`<div style="margin-top:6px;font-size:10px;color:#666;"><strong>Evidências:</strong> ${nomesComFigura(a.evidencias, figuras)}</div>`:""}
         <div style="margin-top:6px;"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${a.status==="Concluída"?"#22c97a18":a.status==="Em andamento"?"#ffd16618":"#f0f0f0"};color:${a.status==="Concluída"?"#1a7a3c":a.status==="Em andamento"?"#8a6000":"#666"};">${a.status||"Pendente"}</span></div>
       </div>`).join("")}
   </div>`:""}
@@ -371,20 +461,11 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div class="field"><div class="field-label">Resultado</div><div class="field-value" style="color:${rnc.eficacia.resultado==="Eficaz"?"#1a7a3c":"#cc2244"};font-weight:700;">${rnc.eficacia.resultado}</div></div>
       <div class="field"><div class="field-label">Data da Verificação</div><div class="field-value">${fmt(rnc.eficacia.data)}</div></div>
     </div>
+    ${String(rnc.eficacia.resp||"").trim()?`<div style="margin-top:8px;font-size:12px;color:#333;"><strong>Responsável pela verificação:</strong> ${escHtml(rnc.eficacia.resp)}</div>`:""}
     ${rnc.eficacia.criterio?`<div style="margin-top:8px;font-size:12px;color:#333;"><strong>Critério:</strong> ${rnc.eficacia.criterio}</div>`:""}
+    ${String(rnc.eficacia.evidencias||"").trim()?`<div style="margin-top:6px;font-size:12px;color:#333;white-space:pre-wrap;"><strong>Evidências coletadas:</strong> ${escHtml(rnc.eficacia.evidencias)}</div>`:""}
     ${rnc.eficacia.obs?`<div style="margin-top:6px;font-size:12px;color:#333;"><strong>Lições aprendidas:</strong> ${rnc.eficacia.obs}</div>`:""}
-  </div>`:""}
-
-  <!-- HISTÓRICO -->
-  ${rnc.historico?.length>0?`
-  <div class="section">
-    <div class="section-title">📜 Histórico de Versões</div>
-    ${[...rnc.historico].reverse().slice(0,6).map(h=>`
-      <div class="hist-item">
-        <div class="hist-date">${fmt(h.data)}${h.hora?" · "+h.hora:""} · ${h.resp||"—"}</div>
-        <div class="hist-acao">${h.acao}</div>
-        ${h.detalhes?.length>0?`<div style="margin-top:4px;">${h.detalhes.map(d=>`<div style="font-size:10px;color:#888;">• ${d}</div>`).join("")}</div>`:""}
-      </div>`).join("")}
+    ${!rnc.verificacaoRecebimento&&(rnc.eficacia.anexos||[]).length?`<div style="margin-top:6px;font-size:11px;color:#666;"><strong>Anexos:</strong> ${nomesComFigura(rnc.eficacia.anexos, figuras)}</div>`:""}
   </div>`:""}
 
   <!-- ASSINATURA -->
@@ -420,14 +501,17 @@ export function exportRNCPDF(rnc, assinatura = null) {
       <div style="font-size:9px;color:#999;font-family:monospace;margin-top:2px;">Cód. verificação: ${sigCodigo(rnc.assinaturaRT, `RNC|${rnc.num||rnc.id||""}`)}</div>
     </div>
   </div>` : ""}
+
+  <!-- ANEXO FOTOGRÁFICO -->
+  ${anexoFotograficoHTML(figuras, srcs)}
 `;
-  openPDFWindow(`RNC ${rnc.num} — Herbamed®`, buildPDFShell({
+  return { title: `RNC ${rnc.num} — Herbamed®`, html: buildPDFShell({
     titulo: "Registro de Não Conformidade",
     numero: rnc.num,
     meta: `Aberta em ${fmt(rnc.data)} por ${rnc.detector||"—"} · ${rnc.sev}`,
     rodapeEsq: 'Herbamed® · SGQ · RNC · Confidencial',
     corpo,
-  }));
+  }) };
 }
 
 export function exportFMEAPDF(items) {
