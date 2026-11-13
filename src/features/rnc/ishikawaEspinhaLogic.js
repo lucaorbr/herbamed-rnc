@@ -41,6 +41,18 @@ export function quebrarTexto(texto, larg, mede, peso, tam, maxLinhas) {
   return corte;
 }
 
+/**
+ * Categorias que o desenho não mostra por inteiro (mais de MAX_POR_OSSO causas, ou
+ * texto cortado com reticências), com todas as causas — o PDF lista essas por extenso
+ * para nenhuma causa registrada sumir do papel.
+ */
+export function causasForaDoDesenho(ishi, mede = medidaAproximada) {
+  if (!temCausasIshikawa(ishi)) return [];
+  const { incompletas } = layoutEspinha(ishi, mede);
+  return CATS_ESPINHA.filter(([k]) => incompletas.includes(k))
+    .map(([k, label]) => ({ categoria: label, causas: (ishi.causes[k] || []).map(c => String(c || "").trim()).filter(Boolean) }));
+}
+
 /** Ishikawa tem alguma causa levantada? (decide se vale desenhar) */
 export const temCausasIshikawa = ishi => CATS_ESPINHA.some(([k]) => (ishi?.causes?.[k] || []).some(c => String(c || "").trim()));
 
@@ -52,6 +64,7 @@ export const temCausasIshikawa = ishi => CATS_ESPINHA.some(([k]) => (ishi?.cause
 export function layoutEspinha({ efeito, causes, whyCausa } = {}, mede = medidaAproximada) {
   const { W, H, Y, X0, XH, COLS, DX, YTOP, YBOT, FONTE, LH } = G;
   const els = [];
+  const incompletas = []; // categorias que o desenho não mostra por inteiro
   const add = (tag, attrs, papel, texto) => { const e = { tag, attrs, papel }; if (texto != null) e.texto = texto; els.push(e); return e; };
 
   // cauda, espinha e cabeça
@@ -88,6 +101,7 @@ export function layoutEspinha({ efeito, causes, whyCausa } = {}, mede = medidaAp
       add("text", { x: xAt(ym) - 12, y: ym + 4, "text-anchor": "end", "font-size": 11, "font-style": "italic" }, "apagado", "nenhuma causa");
       return;
     }
+    if (causas.length > MAX_POR_OSSO) incompletas.push(k);
     const lista = causas.length > MAX_POR_OSSO ? [...causas.slice(0, MAX_POR_OSSO - 1), { mais: causas.length - (MAX_POR_OSSO - 1) }] : causas;
     lista.forEach((cz, j) => {
       const y = yIni + passo * j, px = xAt(y);
@@ -101,6 +115,7 @@ export function layoutEspinha({ efeito, causes, whyCausa } = {}, mede = medidaAp
       const sel = !!whyCausa && whyCausa.trim() === cz;
       const peso = sel ? 700 : 500;
       const linhas = quebrarTexto(cz, larg, mede, peso, FONTE, 2);
+      if (linhas.join(" ") !== cz.replace(/\s+/g, " ") && !incompletas.includes(k)) incompletas.push(k);
       const largTexto = Math.max(...linhas.map(l => mede(l, peso, FONTE)));
       const x1 = px - largTexto - 18;
       const yLinha = li => (cima ? y + 15 + li * LH : y - 6 - (linhas.length - 1 - li) * LH);
@@ -114,7 +129,7 @@ export function layoutEspinha({ efeito, causes, whyCausa } = {}, mede = medidaAp
       els.push({ tag: "g", attrs: {}, papel: "causa", causa: cz, categoria: label, marcada: sel, filhos });
     });
   });
-  return { largura: W, altura: H, elementos: els };
+  return { largura: W, altura: H, elementos: els, incompletas };
 }
 
 /** Atributos de cor (fill/stroke) de cada papel. `c` = paleta já resolvida. */

@@ -8,7 +8,7 @@ import { F, Inp } from "../../shared/ui";
 import { etapasDaRnc } from "../rnc/ferramentasLogic";
 import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "../rnc/tipoRncLogic";
 import { figurasDaRnc, gruposPorEtapa, nomesComFigura } from "../rnc/anexoFotograficoLogic";
-import { CORES_PDF, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
+import { CORES_PDF, causasForaDoDesenho, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
 import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
 // Verde institucional do "rosto" padrão — espelha o `verde` (rgb 0.10,0.29,0.18)
@@ -410,7 +410,16 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
   ${rnc.ishikawa?.root||temCausasIshikawa(rnc.ishikawa)?`
   <div class="section">
     <div class="section-title">🐟 Análise de Causa — Ishikawa / 5 Porquês</div>
-    ${temCausasIshikawa(rnc.ishikawa)?`<div style="margin-bottom:10px;page-break-inside:avoid">${espinhaSvg({ ...rnc.ishikawa, efeito: rnc.ishikawa.efeito || (rnc.desc || "").split("\n")[0].substring(0, 120) }, CORES_PDF, medidaCanvas("Arial, Helvetica, sans-serif"))}</div>`:""}
+    ${temCausasIshikawa(rnc.ishikawa)?(()=>{
+      const ishiPdf = { ...rnc.ishikawa, efeito: rnc.ishikawa.efeito || (rnc.desc || "").split("\n")[0].substring(0, 120) };
+      const mede = medidaCanvas("Arial, Helvetica, sans-serif");
+      const fora = causasForaDoDesenho(ishiPdf, mede);
+      return `<div style="margin-bottom:10px;page-break-inside:avoid">${espinhaSvg(ishiPdf, CORES_PDF, mede)}</div>
+      ${fora.length?`<div style="margin-bottom:10px;font-size:11px;page-break-inside:avoid;">
+        <div class="field-label">Causas completas das categorias que não cabem no desenho</div>
+        ${fora.map(g=>`<div style="margin-top:4px;"><strong>${escHtml(g.categoria)} (${g.causas.length}):</strong> ${g.causas.map(escHtml).join("; ")}</div>`).join("")}
+      </div>`:""}`;
+    })():""}
     ${rnc.ishikawa.whyCausa?`<div style="font-size:11px;color:#6b7280;margin-bottom:6px">Causa aprofundada nos 5 Porquês: <strong>${rnc.ishikawa.whyCausa}</strong></div>`:""}
     ${rnc.ishikawa.whys?.filter(w=>w).length>0?`
     <div style="margin-bottom:10px;">
@@ -429,14 +438,16 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
     <div class="section-title">📌 Plano de Ação 5W2H</div>
     ${rnc.w2h.map((a,i)=>`
       <div class="w2h-item">
-        <div style="font-size:12px;font-weight:700;color:#1a7a3c;margin-bottom:6px;">Ação #${i+1}: ${a.what||"—"}</div>
+        <div style="font-size:12px;font-weight:700;color:#1a7a3c;margin-bottom:6px;">Ação #${i+1}${a.tipo?` <span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:20px;border:1px solid ${a.tipo==="Preventiva"?"#1a4a8a55":"#1a7a3c55"};color:${a.tipo==="Preventiva"?"#1a4a8a":"#1a7a3c"};vertical-align:middle;">${escHtml(a.tipo)}</span>`:""}: ${a.what||"—"}</div>
         <div class="w2h-grid">
           <div><span style="font-size:9px;color:#888;font-weight:700;">POR QUÊ</span><br/><span style="font-size:11px;">${a.why||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">QUEM</span><br/><span style="font-size:11px;">${a.who||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">ONDE</span><br/><span style="font-size:11px;">${a.where||"—"}</span></div>
           <div><span style="font-size:9px;color:#888;font-weight:700;">QUANDO</span><br/><span style="font-size:11px;">${fmt(a.when)}</span></div>
           <div style="grid-column:span 2;"><span style="font-size:9px;color:#888;font-weight:700;">COMO</span><br/><span style="font-size:11px;">${a.how||"—"}</span></div>
+          ${String(a.howMuch||"").trim()?`<div style="grid-column:span 2;"><span style="font-size:9px;color:#888;font-weight:700;">QUANTO (CUSTO/ESFORÇO)</span><br/><span style="font-size:11px;">${escHtml(a.howMuch)}</span></div>`:""}
         </div>
+        ${typeof a.evidencia==="string"&&a.evidencia.trim()?`<div style="margin-top:6px;font-size:10px;color:#666;white-space:pre-wrap;"><strong>Execução registrada:</strong> ${escHtml(a.evidencia)}</div>`:""}
         ${Array.isArray(a.evidencias)&&a.evidencias.length?`<div style="margin-top:6px;font-size:10px;color:#666;"><strong>Evidências:</strong> ${nomesComFigura(a.evidencias, figuras)}</div>`:""}
         <div style="margin-top:6px;"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${a.status==="Concluída"?"#22c97a18":a.status==="Em andamento"?"#ffd16618":"#f0f0f0"};color:${a.status==="Concluída"?"#1a7a3c":a.status==="Em andamento"?"#8a6000":"#666"};">${a.status||"Pendente"}</span></div>
       </div>`).join("")}
@@ -450,7 +461,9 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
       <div class="field"><div class="field-label">Resultado</div><div class="field-value" style="color:${rnc.eficacia.resultado==="Eficaz"?"#1a7a3c":"#cc2244"};font-weight:700;">${rnc.eficacia.resultado}</div></div>
       <div class="field"><div class="field-label">Data da Verificação</div><div class="field-value">${fmt(rnc.eficacia.data)}</div></div>
     </div>
+    ${String(rnc.eficacia.resp||"").trim()?`<div style="margin-top:8px;font-size:12px;color:#333;"><strong>Responsável pela verificação:</strong> ${escHtml(rnc.eficacia.resp)}</div>`:""}
     ${rnc.eficacia.criterio?`<div style="margin-top:8px;font-size:12px;color:#333;"><strong>Critério:</strong> ${rnc.eficacia.criterio}</div>`:""}
+    ${String(rnc.eficacia.evidencias||"").trim()?`<div style="margin-top:6px;font-size:12px;color:#333;white-space:pre-wrap;"><strong>Evidências coletadas:</strong> ${escHtml(rnc.eficacia.evidencias)}</div>`:""}
     ${rnc.eficacia.obs?`<div style="margin-top:6px;font-size:12px;color:#333;"><strong>Lições aprendidas:</strong> ${rnc.eficacia.obs}</div>`:""}
     ${!rnc.verificacaoRecebimento&&(rnc.eficacia.anexos||[]).length?`<div style="margin-top:6px;font-size:11px;color:#666;"><strong>Anexos:</strong> ${nomesComFigura(rnc.eficacia.anexos, figuras)}</div>`:""}
   </div>`:""}
@@ -458,9 +471,9 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
   <!-- HISTÓRICO -->
   ${rnc.historico?.length>0?`
   <div class="section">
-    <div class="section-title">📜 Histórico de Versões</div>
-    ${[...rnc.historico].reverse().slice(0,6).map(h=>`
-      <div class="hist-item">
+    <div class="section-title">📜 Histórico (${rnc.historico.length} registro${rnc.historico.length>1?"s":""}, do mais recente ao mais antigo)</div>
+    ${[...rnc.historico].reverse().map(h=>`
+      <div class="hist-item" style="page-break-inside:avoid;break-inside:avoid;">
         <div class="hist-date">${fmt(h.data)}${h.hora?" · "+h.hora:""} · ${h.resp||"—"}</div>
         <div class="hist-acao">${h.acao}</div>
         ${h.detalhes?.length>0?`<div style="margin-top:4px;">${h.detalhes.map(d=>`<div style="font-size:10px;color:#888;">• ${d}</div>`).join("")}</div>`:""}
