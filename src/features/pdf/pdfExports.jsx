@@ -468,18 +468,6 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
     ${!rnc.verificacaoRecebimento&&(rnc.eficacia.anexos||[]).length?`<div style="margin-top:6px;font-size:11px;color:#666;"><strong>Anexos:</strong> ${nomesComFigura(rnc.eficacia.anexos, figuras)}</div>`:""}
   </div>`:""}
 
-  <!-- HISTÓRICO -->
-  ${rnc.historico?.length>0?`
-  <div class="section">
-    <div class="section-title">📜 Histórico (${rnc.historico.length} registro${rnc.historico.length>1?"s":""}, do mais recente ao mais antigo)</div>
-    ${[...rnc.historico].reverse().map(h=>`
-      <div class="hist-item" style="page-break-inside:avoid;break-inside:avoid;">
-        <div class="hist-date">${fmt(h.data)}${h.hora?" · "+h.hora:""} · ${h.resp||"—"}</div>
-        <div class="hist-acao">${h.acao}</div>
-        ${h.detalhes?.length>0?`<div style="margin-top:4px;">${h.detalhes.map(d=>`<div style="font-size:10px;color:#888;">• ${d}</div>`).join("")}</div>`:""}
-      </div>`).join("")}
-  </div>`:""}
-
   <!-- ASSINATURA -->
   <div style="display:flex;gap:40px;margin-top:24px;padding-top:12px;border-top:1px solid #ccc;">
     <div style="flex:1;text-align:center;">
