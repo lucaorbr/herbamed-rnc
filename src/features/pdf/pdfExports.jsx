@@ -102,7 +102,7 @@ async function imagemEmbutida(url, lado = 1400) {
 function anexoFotograficoHTML(figuras, srcs) {
   if (!figuras.length) return "";
   return `
-  <div class="section" style="page-break-before:always;break-before:page;">
+  <div class="section anexo-foto" style="page-break-before:always;break-before:page;">
     <div class="section-title">📷 Anexo fotográfico</div>
     <div style="font-size:11px;color:#666;margin-bottom:6px;">${figuras.length} foto(s) anexada(s) à RNC, numeradas na ordem das etapas. No relatório, cada anexo indica a figura correspondente.</div>
     ${gruposPorEtapa(figuras).map(g => `
@@ -273,6 +273,10 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
   .foto-falha{height:68mm;display:flex;align-items:center;justify-content:center;text-align:center;background:#f4f5f4;color:#999;font-size:11px;border-radius:4px;padding:10px;}
   .foto-leg{font-size:10px;color:#333;margin-top:5px;line-height:1.4;word-break:break-word;}
   .foto-leg span{color:#888;}
+  /* Na impressão o anexo começa em página nova; na tela (folha contínua) ganha
+     espaço e um corte visível para não colar nas assinaturas. */
+  @media screen{.anexo-foto{margin-top:44px;padding-top:26px;border-top:2px dashed #c8d3ca;}}
+  @media print{.anexo-foto{margin-top:0;padding-top:0;border-top:0;}}
 </style>
 
   <!-- STATUS -->
