@@ -9,6 +9,7 @@ import { CampoHistoricoEdicao, CampoHistoricoLeitura } from "../../shared/CampoH
 import { acrescentarAoCampo, campoVazio, resumoAcrescimo } from "../../shared/campoHistoricoLogic";
 import { Table } from "../../shared/Table";
 import { AnexosUpload } from "../rnc/RncTabs";
+import { exportDesvioPDF } from "../pdf/pdfExports";
 import { DesviosIndicadores } from "./DesviosIndicadores";
 import { setoresDaHierarquia, normSetor } from "./fusaoSetores";
 
@@ -419,6 +420,9 @@ function DesviosLista({ user, toast_, setTab, desvios, doSaveDesvio, doDeleteDes
                 <DesvioBadge status={sel.status} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!editando && (
+                  <button onClick={() => exportDesvioPDF(sel)} title="Gerar o PDF do desvio para imprimir ou arquivar" style={{ ...s.btn, fontSize: 11, padding: "6px 12px" }}><span className="btn-emoji">🖨️ </span>PDF</button>
+                )}
                 {podeEditar(sel) && !editando && (
                   <button onClick={() => abrirEdicao(sel)} style={{ ...s.btn, fontSize: 11, padding: "6px 12px", color: T.accent, borderColor: T.accent + "33", background: T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>
                 )}

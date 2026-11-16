@@ -7,7 +7,8 @@ import { useS } from "../../shared/styles";
 import { F, Inp } from "../../shared/ui";
 import { etapasDaRnc } from "../rnc/ferramentasLogic";
 import { ROTULO_TIPO_RNC, rncExterna, tipoRnc } from "../rnc/tipoRncLogic";
-import { figurasDaRnc, gruposPorEtapa, nomesComFigura } from "../rnc/anexoFotograficoLogic";
+import { figurasDaRnc, figurasDoDesvio, gruposPorEtapa, nomesComFigura } from "../rnc/anexoFotograficoLogic";
+import { META_TRIAGEM_DIAS, triagemStatus } from "../desvios/triagem";
 import { CORES_PDF, causasForaDoDesenho, espinhaSvg, medidaCanvas, temCausasIshikawa } from "../rnc/ishikawaEspinhaLogic";
 import { SITUACAO, SITUACAO_LABEL, contagemSituacoes, situacaoParticipante } from "../documentos/sessoes";
 
@@ -98,13 +99,27 @@ async function imagemEmbutida(url, lado = 1400) {
   } catch { return null; }
 }
 
+// Estilo do anexo fotográfico — o mesmo no PDF da RNC e no do desvio.
+const CSS_ANEXO_FOTO = `
+  .fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .foto{border:1px solid #e0e0e0;border-radius:6px;padding:6px;page-break-inside:avoid;break-inside:avoid;}
+  .foto img{display:block;width:100%;height:68mm;object-fit:contain;background:#f4f5f4;border-radius:4px;}
+  .foto-falha{height:68mm;display:flex;align-items:center;justify-content:center;text-align:center;background:#f4f5f4;color:#999;font-size:11px;border-radius:4px;padding:10px;}
+  .foto-leg{font-size:10px;color:#333;margin-top:5px;line-height:1.4;word-break:break-word;}
+  .foto-leg span{color:#888;}
+  /* Na impressão o anexo começa em página nova; na tela (folha contínua) ganha
+     espaço e um corte visível para não colar nas assinaturas. */
+  @media screen{.anexo-foto{margin-top:44px;padding-top:26px;border-top:2px dashed #c8d3ca;}}
+  @media print{.anexo-foto{margin-top:0;padding-top:0;border-top:0;}}
+`;
+
 // Última parte do PDF da RNC: as fotos numeradas, agrupadas pela etapa de origem.
-function anexoFotograficoHTML(figuras, srcs) {
+function anexoFotograficoHTML(figuras, srcs, { de = "à RNC" } = {}) {
   if (!figuras.length) return "";
   return `
   <div class="section anexo-foto" style="page-break-before:always;break-before:page;">
     <div class="section-title">📷 Anexo fotográfico</div>
-    <div style="font-size:11px;color:#666;margin-bottom:6px;">${figuras.length} foto(s) anexada(s) à RNC, numeradas na ordem das etapas. No relatório, cada anexo indica a figura correspondente.</div>
+    <div style="font-size:11px;color:#666;margin-bottom:6px;">${figuras.length} foto(s) anexada(s) ${de}, numeradas na ordem das etapas. No relatório, cada anexo indica a figura correspondente.</div>
     ${gruposPorEtapa(figuras).map(g => `
       <div class="field-label" style="margin:12px 0 6px;">${escHtml(g.etapa)}</div>
       <div class="fotos">
@@ -267,16 +282,7 @@ function montarRNCPDF(rnc, assinatura, figuras, srcs) {
   .progress-step{flex:1;height:6px;border-radius:3px;}
   .w2h-item{background:#f8f9fa;border:1px solid #e8e8e8;border-radius:6px;padding:10px;margin-bottom:8px;}
   .w2h-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
-  .fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  .foto{border:1px solid #e0e0e0;border-radius:6px;padding:6px;page-break-inside:avoid;break-inside:avoid;}
-  .foto img{display:block;width:100%;height:68mm;object-fit:contain;background:#f4f5f4;border-radius:4px;}
-  .foto-falha{height:68mm;display:flex;align-items:center;justify-content:center;text-align:center;background:#f4f5f4;color:#999;font-size:11px;border-radius:4px;padding:10px;}
-  .foto-leg{font-size:10px;color:#333;margin-top:5px;line-height:1.4;word-break:break-word;}
-  .foto-leg span{color:#888;}
-  /* Na impressão o anexo começa em página nova; na tela (folha contínua) ganha
-     espaço e um corte visível para não colar nas assinaturas. */
-  @media screen{.anexo-foto{margin-top:44px;padding-top:26px;border-top:2px dashed #c8d3ca;}}
-  @media print{.anexo-foto{margin-top:0;padding-top:0;border-top:0;}}
+${CSS_ANEXO_FOTO}
 </style>
 
   <!-- STATUS -->
@@ -838,4 +844,110 @@ export function buildListaPresencaHTML(sessao, doc = null, { modo = "definitiva"
 
 export function exportListaPresencaPDF(sessao, doc = null, opcoes = {}) {
   openPDFWindow(`Lista de Presença ${sessao.num} — Herbamed®`, buildListaPresencaHTML(sessao, doc, opcoes));
+}
+
+// ── PDF do desvio ──
+// Registro individual do desvio para arquivo, reunião ou inspeção: o que foi
+// registrado (com os acréscimos carimbados da descrição e da ação imediata), a
+// triagem (encerramento com justificativa ou conversão em RNC), os anexos e o
+// histórico. As fotos saem no fim, como no PDF da RNC.
+const COR_STATUS_DESVIO = { "Registrado": "#0277bd", "Encerrado": "#1a7a3c", "Convertido em RNC": "#b85c00" };
+
+export function buildDesvioHTML(d, figuras = [], srcs = {}, { hoje } = {}) {
+  const e = escHtml;
+  const comOutro = (v, outro) => v === "Outros" ? `Outros — ${outro || ""}` : (v || "—");
+  const campo = (l, v) => `<div class="field"><div class="flabel">${l}</div><div class="fval">${e(v || "—")}</div></div>`;
+  const bloco = (l, v, cls = "desc-box") => `<div class="section"><div class="section-title">${l}</div><div class="${cls}">${e(v || "—")}</div></div>`;
+  const cor = COR_STATUS_DESVIO[d.status] || "#333";
+  const st = triagemStatus(d, hoje);
+
+  const triagem = d.status === "Encerrado"
+    ? `<div class="grid2">${campo("Encerrado por", d.encerradoPor)}${campo("Encerrado em", fmt(d.encerradoEm))}</div>
+       ${d.encerramentoMotivo ? `<div style="margin-top:8px;"><div class="field-label">Justificativa do encerramento</div><div class="desc-box">${e(d.encerramentoMotivo)}</div></div>` : ""}`
+    : d.status === "Convertido em RNC"
+      ? `<div class="grid3">${campo("Convertido por", d.convertidoPor)}${campo("Convertido em", fmt(d.convertidoEm))}${campo("RNC aberta", d.rncNum)}</div>
+         <div style="font-size:11px;color:#666;margin-top:6px;">O tratamento (análise de causa, CAPA e eficácia) segue na RNC.</div>`
+      : `<div class="box-orange">Aguardando triagem da Qualidade${st ? ` há ${st.dias} dia(s) — meta: ${META_TRIAGEM_DIAS} dias${st.atrasado ? " (atrasado)" : ""}` : ""}.</div>`;
+
+  const anexos = (d.anexos || []).filter(Boolean);
+  const historico = d.historico || [];
+
+  const corpo = `
+<style>
+  .section-title{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:6px;}
+  .section-title::before{content:'';display:inline-block;width:3px;height:12px;background:#1a4a2e;border-radius:2px;}
+  .field-label{font-size:9px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+  /* pre-wrap: descrição e ação imediata são append-only — os acréscimos carimbados
+     vêm separados por linha em branco e precisam sair separados no papel. */
+  .desc-box{background:#f0f9f0;border:1px solid #c8e6c9;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;}
+  .acao-box{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;}
+  .hist-item{padding:7px 10px;border-left:3px solid #1a4a2e;background:#f8f9fa;margin-bottom:6px;border-radius:0 6px 6px 0;page-break-inside:avoid;break-inside:avoid;}
+  .hist-date{font-size:10px;color:#888;margin-bottom:2px;}
+  .hist-acao{font-size:12px;color:#1a1a1a;}
+  .hist-det{font-size:11px;color:#444;margin-top:3px;}
+${CSS_ANEXO_FOTO}
+</style>
+  <div class="section"><span class="badge" style="background:${cor}18;color:${cor};border:1px solid ${cor}40;text-transform:uppercase;">${e(d.status || "Registrado")}</span></div>
+
+  <div class="section">
+    <div class="section-title">Identificação</div>
+    <div class="grid3">
+      ${campo("Data da ocorrência", fmt(d.dataOcorrencia))}
+      ${campo("Registrado em", fmt(d.dataRegistro))}
+      ${campo("Registrado por", d.registradoPor)}
+      ${campo("Setor", comOutro(d.setor, d.setorOutro))}
+      ${campo("Tipo", comOutro(d.tipo, d.tipoOutro))}
+      ${campo("Produto / Lote", d.produto)}
+    </div>
+  </div>
+
+  ${bloco("Descrição do desvio", d.desc)}
+
+  <div class="section">
+    <div class="section-title">Ação imediata</div>
+    ${d.acaoImediata === "Sim"
+      ? `<div class="acao-box">${e(d.acaoDesc || "—")}</div>`
+      : `<div style="font-size:12px;color:#444;">Não houve ação imediata registrada.</div>`}
+  </div>
+
+  <div class="section">
+    <div class="section-title">Triagem</div>
+    ${triagem}
+  </div>
+
+  ${anexos.length ? `<div class="section"><div class="section-title">Anexos (${anexos.length})</div><div style="font-size:12px;">${e(nomesComFigura(anexos, figuras))}</div></div>` : ""}
+
+  ${historico.length ? `<div class="section">
+    <div class="section-title">Histórico</div>
+    ${historico.map(h => `<div class="hist-item">
+      <div class="hist-date">${e(fmt(h.data))}${h.hora ? ` · ${e(h.hora)}` : ""} · ${e(h.resp || "—")}</div>
+      <div class="hist-acao">${e(h.acao)}</div>
+      ${(h.detalhes || []).length ? `<div class="hist-det">${h.detalhes.map(x => `• ${e(x)}`).join("<br/>")}</div>` : ""}
+    </div>`).join("")}
+  </div>` : ""}
+
+  ${anexoFotograficoHTML(figuras, srcs, { de: "ao desvio" })}`;
+
+  return buildPDFShell({
+    titulo: "Registro de Desvio",
+    numero: d.num || "",
+    meta: `Ocorrência em ${fmt(d.dataOcorrencia)}`,
+    rodapeEsq: "Herbamed® · SGQ · Desvio",
+    corpo,
+  });
+}
+
+// A janela abre dentro do clique (senão o navegador bloqueia) e é escrita depois de
+// baixar as fotos, igual ao PDF da RNC.
+export function exportDesvioPDF(d) {
+  const title = `Desvio ${d.num || ""} — Herbamed®`;
+  const figuras = figurasDoDesvio(d);
+  if (!figuras.length) { openPDFWindow(title, buildDesvioHTML(d)); return; }
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<p style="font-family:'Segoe UI',Arial,sans-serif;padding:24px;color:#333">Preparando o PDF do desvio ${escHtml(d.num || "")} com ${figuras.length} foto(s)…</p>`);
+  Promise.all(figuras.map(f => imagemEmbutida(f.anexo.url))).then(lista => {
+    const srcs = Object.fromEntries(figuras.map((f, i) => [f.n, lista[i]]));
+    escreverPDFNaJanela(win, title, buildDesvioHTML(d, figuras, srcs));
+  });
 }

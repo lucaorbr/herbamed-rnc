@@ -54,3 +54,18 @@ export function nomesComFigura(lista, figuras) {
     return n ? `${nome} (Figura ${n})` : nome;
   }).join(", ");
 }
+
+// Desvio só tem anexos do registro: as fotos saem num grupo único, na ordem em que
+// foram anexadas, com quem registrou e quando.
+export function figurasDoDesvio(desvio = {}) {
+  const figuras = [];
+  const vistos = new Set();
+  for (const a of desvio.anexos || []) {
+    if (!a || !ehImagem(a)) continue;
+    const k = chave(a);
+    if (!k || vistos.has(k)) continue;
+    vistos.add(k);
+    figuras.push({ n: figuras.length + 1, anexo: a, etapa: "Registro do desvio", por: desvio.registradoPor || "", data: desvio.dataRegistro || "" });
+  }
+  return figuras;
+}
