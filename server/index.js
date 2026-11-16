@@ -30,6 +30,10 @@ const {
   copiaParaEmitir, marcaDaCopia, identificacaoDaCopiaFisica, numeroDaCopia, destinoDaCopia,
 } = require("./acessoDocumento");
 const { linhasHistoricoCapa } = require("./historicoCapa");
+const {
+  precisaDoAnterior, validarGravacaoColecao, validarExclusaoColecao,
+  validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro,
+} = require("./permissoesColecao");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const { podeResponder, complementoAberto, rncComResposta } = require("./respostaFornecedor");
@@ -432,17 +436,13 @@ async function handleUsers(req, res, pathname) {
   if (req.method === "PATCH" || req.method === "PUT") {
     const currentUser = await requireUser(req);
     const data = sanitize(await readBody(req));
-    const existing = await query("SELECT data, role FROM users WHERE id = $1", [id]);
+    const existing = await query("SELECT data, role, permissoes FROM users WHERE id = $1", [id]);
     if (!existing.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
 
-    const isAdmin = currentUser.role === "admin";
-    if (!isAdmin) {
-      // Usuario comum so pode editar o proprio cadastro.
-      if (String(id) !== String(currentUser.id)) return sendJson(res, 403, { error: "Sem permissao" });
-      // Usuario comum nunca pode alterar o campo role (nem o proprio).
-      if (data.role !== undefined && data.role !== existing.rows[0].role) {
-        return sendJson(res, 403, { error: "Sem permissao" });
-      }
+    // Usuario comum so edita o proprio cadastro, e nunca o papel nem as permissoes
+    // (antes gravava `permissoes` no proprio cadastro e se dava todas).
+    if (camposProibidosNoCadastro(currentUser, id, data, existing.rows[0]).length) {
+      return sendJson(res, 403, { error: "Sem permissao" });
     }
 
     const merged = { ...(existing.rows[0].data || {}), ...data };
@@ -532,7 +532,7 @@ async function handleRncs(req, res, pathname) {
   }
 
   if (pathname === "/api/rncs" && req.method === "POST") {
-    await requireUser(req);
+    validarGravacaoRNC(await requireUser(req));
     const body = sanitize(await readBody(req));
     const created = await transaction(async client => {
       const id = String(body.id || crypto.randomUUID());
@@ -553,8 +553,10 @@ async function handleRncs(req, res, pathname) {
 
   const match = pathname.match(/^\/api\/rncs\/([^/]+)$/);
   if (!match) return false;
-  await requireUser(req);
+  const rncUser = await requireUser(req);
   const id = decodeURIComponent(match[1]);
+  if (req.method === "DELETE") validarExclusaoRNC(rncUser);
+  else if (req.method !== "GET") validarGravacaoRNC(rncUser);
 
   // PATCH NÃO entra aqui: este bloco substitui o registro inteiro (ver rncGravacao.js).
   if (req.method === "PUT" || req.method === "POST") {
@@ -1051,7 +1053,7 @@ async function handleCollections(req, res, pathname) {
     const data = sanitize(await readBody(req));
 
     let oldData = null;
-    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes") {
+    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes" || precisaDoAnterior(collection)) {
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
         [collection, id]
@@ -1059,6 +1061,7 @@ async function handleCollections(req, res, pathname) {
       oldData = prev.rows[0]?.data || null;
     }
 
+    validarGravacaoColecao(user, collection, data, oldData);
     if (collection === "laudos") validateLaudoUpdate(oldData, data);
     if (collection === "homologacoes") validateHomologacaoUpdate(user, oldData, data);
     if (collection === "gestao_docs") validarGravacaoDocumento(user, oldData, data);
@@ -1081,6 +1084,7 @@ async function handleCollections(req, res, pathname) {
   }
 
   if (id && req.method === "DELETE") {
+    validarExclusaoColecao(user, collection);
     if (collection === "homologacoes") {
       if (user.role !== "admin") {
         const error = new Error("Apenas administrador pode excluir rascunho de homologacao");
