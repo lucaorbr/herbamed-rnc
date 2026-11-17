@@ -159,6 +159,8 @@ export function SupplierRNCPage({ token }) {
           ["Produto/Material", rnc.produto || rnc.item || "—"],
           ["Lote", rnc.lote || "—"],
           ["Fornecedor", rnc.fornecedor || "—"],
+          ...(rnc.nf ? [["Nota fiscal", rnc.nf]] : []),
+          ...(rnc.ordemCompra ? [["Ordem de compra", rnc.ordemCompra]] : []),
           ["Qtd. afetada", rnc.qtd || "—"],
           ["Descrição", rnc.desc || rnc.descricao || "—"],
           ["Ação de contenção", rnc.contencao || "—"],

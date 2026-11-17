@@ -113,6 +113,7 @@ export function TA({ sx, ...p }) { const s = useS(); return <textarea style={{ .
 export function G2({ ch }) { return <div className="grid-2">{ch}</div>; }
 
 export function G3({ ch }) { return <div className="grid-3">{ch}</div>; }
+export function G4({ ch }) { return <div className="grid-4">{ch}</div>; }
 
 export function Divider() { const T = useTheme(); return <div style={{ height: 1, background: T.border, margin: "1rem 0" }} />; }
 

@@ -43,6 +43,7 @@ export function prefillDaIneficaz(r) {
     fornecedor: r.fornecedor || "",
     lote: r.lote || "",
     nf: r.nf || "",
+    ordemCompra: r.ordemCompra || "",
     setor: r.setor || "",
     sev: r.sev || "",
     desc,

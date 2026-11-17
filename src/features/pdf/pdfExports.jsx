@@ -323,6 +323,7 @@ ${CSS_ANEXO_FOTO}
       <div class="field"><div class="field-label">Qtd. Afetada</div><div class="field-value">${rnc.qtd||"—"}</div></div>
       <div class="field"><div class="field-label">Referência Normativa</div><div class="field-value">${rnc.ref||"—"}</div></div>
     </div>
+    ${rnc.ordemCompra ? `<div class="grid3" style="margin-top:8px;"><div class="field"><div class="field-label">Nº da Ordem de Compra</div><div class="field-value">${escHtml(rnc.ordemCompra)}</div></div></div>` : ""}
     <div class="grid3" style="margin-top:8px;">
       <div class="field"><div class="field-label">Responsável pela Análise</div><div class="field-value">${rnc.resp||"—"}</div></div>
       <div class="field"><div class="field-label">Origem da causa</div><div class="field-value">${ROTULO_TIPO_RNC[tipoRnc(rnc)]}${externa?" (fornecedor)":""}</div></div>

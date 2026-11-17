@@ -117,7 +117,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const startEdit = (etapaDestino) => {
     setEditData({
       produto: r.produto || "", fornecedor: r.fornecedor || "",
-      lote: r.lote || "", nf: r.nf || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
+      lote: r.lote || "", nf: r.nf || "", ordemCompra: r.ordemCompra || "", qtd: r.qtd || "", ref: r.ref || "", evidencia: r.evidencia || "",
       tipo: r.tipo || "Matéria-prima", sev: r.sev || "Maior", setor: r.setor || "",
       resp: r.resp || "", prazoCausa: r.prazoCausa || "", prazoAC: r.prazoAC || "",
       prazoEfic: r.prazoEfic || "", respCont: r.respCont || "",
@@ -133,7 +133,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
     // ⚠️ `campos` TEM DE COBRIR TUDO QUE O FORMULÁRIO EDITA: com o retorno de "nada
     // mudou" logo abaixo, um campo esquecido aqui descarta a edição em silêncio.
     const alterados = [];
-    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", prazoRespostaFornecedor: "Prazo de resposta do fornecedor" };
+    const campos = { produto: "Produto", fornecedor: "Fornecedor", lote: "Lote", nf: "Nota Fiscal", ordemCompra: "Ordem de compra", qtd: "Quantidade", ref: "Referência", evidencia: "Evidências", setor: "Setor", sev: "Severidade", tipo: "Tipo", resp: "Responsável", respCont: "Responsável da contenção", prazoCausa: "Prazo da análise de causa", prazoAC: "Prazo AC", prazoEfic: "Prazo Eficácia", prazoRespostaFornecedor: "Prazo de resposta do fornecedor" };
     Object.entries(campos).forEach(([k, label]) => {
       if ((r[k] || "") !== (editData[k] || "")) alterados.push(`${label}: "${r[k] || "—"}" → "${editData[k] || "—"}"`);
     });
@@ -179,7 +179,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const ed = (k, v) => setEditData(p => ({ ...p, [k]: v }));
 
   const dadosBloco = () => {
-    const itens = [["Tipo", r.tipo], ["Setor", r.setor], ["Produto", r.produto], ["Fornecedor", r.fornecedor], ["Lote", r.lote], ["Nota Fiscal", r.nf], ["Qtd.", r.qtd], ["Referência", r.ref], ["Evidências", r.evidencia]].filter(([, v]) => v);
+    const itens = [["Tipo", r.tipo], ["Setor", r.setor], ["Produto", r.produto], ["Fornecedor", r.fornecedor], ["Lote", r.lote], ["Nota Fiscal", r.nf], ["Ordem de compra", r.ordemCompra], ["Qtd.", r.qtd], ["Referência", r.ref], ["Evidências", r.evidencia]].filter(([, v]) => v);
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10, marginBottom: 14 }}>
         {itens.map(([k, v]) => (
@@ -421,6 +421,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             <F lbl="Fornecedor" ch={<Inp value={editData.fornecedor} onChange={e => ed("fornecedor", e.target.value)} />} />
             <F lbl="Nº do lote" ch={<Inp value={editData.lote} onChange={e => ed("lote", e.target.value)} />} />
             <F lbl="Nº da Nota Fiscal" ch={<Inp value={editData.nf} onChange={e => ed("nf", e.target.value)} />} />
+            {(externa || r.ordemCompra) && <F lbl="Nº da ordem de compra" ch={<Inp value={editData.ordemCompra} onChange={e => ed("ordemCompra", e.target.value)} />} />}
             <F lbl="Quantidade afetada" ch={<Inp value={editData.qtd} onChange={e => ed("qtd", e.target.value)} />} />
             <F lbl="Referência normativa" ch={<Inp value={editData.ref} onChange={e => ed("ref", e.target.value)} />} />
           </div>
@@ -577,7 +578,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           <div><div style={rot}>Responsável</div><div>{r.resp || "—"}</div></div>
           {r.setor && <div><div style={rot}>Setor</div><div>{r.setor}</div></div>}
           {(r.produto || r.lote) && <div><div style={rot}>Produto · lote</div><div>{[r.produto, r.lote].filter(Boolean).join(" · ")}</div></div>}
-          {r.fornecedor && <div><div style={rot}>Fornecedor</div><div>{r.fornecedor}{r.nf ? ` · NF ${r.nf}` : ""}</div></div>}
+          {r.fornecedor && <div><div style={rot}>Fornecedor</div><div>{r.fornecedor}{r.nf ? ` · NF ${r.nf}` : ""}{r.ordemCompra ? ` · OC ${r.ordemCompra}` : ""}</div></div>}
           {externa ? prazoLinha("Prazo de resposta do fornecedor", r.prazoRespostaFornecedor, !etapas.find(e => e.id === "resposta" && e.estado === "concluida")) : <>
             {prazoLinha("Prazo análise de causa", r.prazoCausa, porquesPreenchidos(r) < 3)}
             {prazoLinha("Prazo ação corretiva", r.prazoAC)}
