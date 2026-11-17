@@ -183,6 +183,8 @@ export async function exportFormularioFornecedor(rnc) {
   campo("Produto / Material", { fixo: true, valor: rnc?.produto || "" });
   campo("Lote", { fixo: true, valor: rnc?.lote || "" });
   campo("Fornecedor", { fixo: true, valor: rnc?.fornecedor || "" });
+  if (rnc?.nf) campo("Nota fiscal", { fixo: true, valor: rnc.nf });
+  if (rnc?.ordemCompra) campo("Ordem de compra", { fixo: true, valor: rnc.ordemCompra });
   campo("Qtd. afetada", { fixo: true, valor: rnc?.qtd || "" });
   campo("Descrição da não-conformidade", { fixo: true, altura: 48, valor: rnc?.desc || "" });
   campo("Ação de contenção (Herbamed)", { fixo: true, altura: 32, valor: rnc?.contencao || "" });

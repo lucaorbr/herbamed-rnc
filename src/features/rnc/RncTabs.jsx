@@ -394,7 +394,7 @@ const ROTULO_ESTADO_BARRA = { concluida: "concluída", dispensada: "dispensada",
 
 export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRNC, doSaveDesvio, fornecedores = [], rncPrefill = null, setRncPrefill }) {
   const s = useS(); const T = useTheme();
-  const [f, setF] = useState({ tipoRnc: "", data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
+  const [f, setF] = useState({ tipoRnc: "", data: tod(), status: "Aberta", tipo: "Matéria-prima", sev: "Maior", produto: "", fornecedor: "", setor: "", detector: "", desc: "", lote: "", nf: "", ordemCompra: "", qtd: "", ref: "", evidencia: "", contencao: "", respCont: "", dataContencao: "", resp: "", prazoCausa: "", prazoAC: "", prazoEfic: "", origemAnalise: "" });
   const modoPrazo = f.modoPrazo || "definicao";
   const [origemDesvio, setOrigemDesvio] = useState(null);
   const [origemRnc, setOrigemRnc] = useState(null);
@@ -425,6 +425,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRN
       // Reincidência de RNC ineficaz: o tipo e a NF já vêm (a tela de escolha é pulada).
       tipoRnc: rncPrefill.tipoRnc || p.tipoRnc,
       nf: rncPrefill.nf || p.nf,
+      ordemCompra: rncPrefill.ordemCompra || p.ordemCompra,
       tipoOutros: rncPrefill.tipoOutros || p.tipoOutros,
     }));
     if (rncPrefill.origemDesvioDoc) setOrigemDesvio(rncPrefill.origemDesvioDoc);
@@ -645,6 +646,7 @@ export function NovaTab({ user, toast_, setTab, openEmail, doSaveRNC, doUpdateRN
         <SecTitle icon="📝" ch="Descrição" />
         <F lbl="Descrição da não conformidade" tip="Descreva objetivamente o que foi encontrado fora do padrão. Ex: Cápsulas do lote 2024-001 apresentaram coloração amarelada em 3% das unidades." ch={<TA rows={4} placeholder="Descreva o problema observado, local, data e impacto..." value={f.desc} onChange={e => set("desc", e.target.value)} />} />
         <G3 ch={<><F lbl="Nº do lote" tip="Número do lote afetado conforme registrado no sistema de rastreabilidade. Essencial para eventual recall ou bloqueio de lote." ch={<Inp placeholder="Ex: LOTE-2025-XXX" value={f.lote} onChange={e => set("lote", e.target.value)} />} /><F lbl="Nº da Nota Fiscal" tip="Nota Fiscal de entrada do material (quando aplicável). Amarra o lote reprovado à entrada para eventual devolução/recusa ao fornecedor." ch={<Inp placeholder="Ex: NF 12345" value={f.nf} onChange={e => set("nf", e.target.value)} />} /><F lbl="Quantidade afetada" tip="Quantidade de unidades, kg ou litros afetados. Ex: 500 cápsulas, 20kg, 2 tambores." ch={<Inp placeholder="Ex: 100 kg / 500 unidades" value={f.qtd} onChange={e => set("qtd", e.target.value)} />} /></>} />
+        {f.tipoRnc === "externa" && <F lbl="Nº da ordem de compra" tip="Ordem de compra (pedido) do material, quando houver. Ajuda Compras a localizar o pedido junto ao fornecedor. Opcional." ch={<Inp placeholder="Ex: OC 4500012345" value={f.ordemCompra} onChange={e => set("ordemCompra", e.target.value)} />} />}
         <F lbl="Referência normativa" tip="Norma ou procedimento que define o padrão descumprido. Ex: PO-CQ-003, RDC 658/2022, Especificação Técnica ETE-001." ch={<Inp placeholder="Ex: Farmacopeia Brasileira / Especificação interna" value={f.ref} onChange={e => set("ref", e.target.value)} />} />
         <F lbl="Evidências (descrição)" tip="Descreva as evidências coletadas. Ex: Foto registrada, amostra retida, laudo de análise nº 123. Anexe os arquivos abaixo." ch={<Inp value={f.evidencia} onChange={e => set("evidencia", e.target.value)} placeholder="Ex: Laudo de análise, registro fotográfico, relatório..." />} />
         <F lbl="📎 Anexos (fotos, laudos, documentos)" tip="Adicione fotos, laudos ou documentos que comprovem a não conformidade. Formatos aceitos: JPG, PNG, PDF." ch={<AnexosUpload anexos={anexos} setAnexos={setAnexos} />} />

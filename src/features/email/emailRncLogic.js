@@ -158,6 +158,8 @@ export function buildEmail(rnc, evento, { origem = "", hoje = hojeIso() } = {}) 
       r.lote ? `Lote: ${r.lote}` : null,
       r.qtd ? `Quantidade afetada: ${r.qtd}` : null,
       r.fornecedor ? `Fornecedor: ${r.fornecedor}` : null,
+      r.nf ? `Nota fiscal: ${r.nf}` : null,
+      r.ordemCompra ? `Ordem de compra: ${r.ordemCompra}` : null,
       `Setor: ${r.setor || "—"}`,
       `Detectado por: ${r.detector || "—"}`,
       `Responsável: ${r.resp || "—"}`,
