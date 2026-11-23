@@ -49,3 +49,8 @@ test("linha da tabela mostra o rótulo da tela quando houver", () => {
   assert.strictEqual(l.acaoSistema, "Alterou");
   assert.strictEqual(l.id, "s3");
 });
+
+test("objeto alterado lista só os itens que mudaram", () => {
+  const d = diferencas({ permissoes: { criarRNC: true, excluirRNC: false } }, { permissoes: { criarRNC: true, excluirRNC: true } });
+  assert.deepStrictEqual(d, [{ campo: "permissoes.excluirRNC", antes: false, depois: true }]);
+});

@@ -50,6 +50,8 @@ function canonico(v) {
 }
 const igual = (a, b) => JSON.stringify(canonico(a ?? null)) === JSON.stringify(canonico(b ?? null));
 
+const simples = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+
 /**
  * Diferenças de 1º nível entre dois registros.
  * Lista que só cresceu no fim (histórico, anexos) vira `acrescentado` — guardar a
@@ -66,6 +68,14 @@ function diferencas(antes, depois) {
     const va = a[campo];
     const vd = d[campo];
     if (igual(va, vd)) continue;
+    // Objeto que mudou só em alguns itens (permissões, rota, disposição) lista só
+    // esses itens, como "permissoes.excluirRNC" — não o objeto inteiro duas vezes.
+    if (simples(va) && simples(vd)) {
+      for (const sub of diferencas(va, vd)) {
+        lista.push({ ...sub, campo: `${campo}.${sub.campo}` });
+      }
+      continue;
+    }
     if (Array.isArray(va) && Array.isArray(vd) && vd.length > va.length
         && va.every((item, i) => igual(item, vd[i]))) {
       lista.push({ campo, acrescentado: enxuto(vd.slice(va.length)) });
