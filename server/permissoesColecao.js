@@ -141,10 +141,23 @@ function validarExclusaoRNC(user) {
 }
 
 /**
- * Campos do próprio cadastro que só o admin altera. Sem isso, qualquer usuário
- * gravava `permissoes` no próprio cadastro e se dava todas as permissões.
+ * O que a própria pessoa pode alterar no seu cadastro: só o carimbo de presença.
+ * Todo o resto (nome, e-mail, setor, CRF, cargo, papel, permissões, imagem de
+ * assinatura) é do admin. Nome, cargo e CRF saem impressos em cada assinatura
+ * eletrônica, e o e-mail é o login — quem muda o próprio registro profissional
+ * muda o que a assinatura atesta. Lista do que é LIVRE, não do que é proibido:
+ * campo novo no cadastro já nasce travado.
  */
-const CAMPOS_SO_ADMIN_NO_CADASTRO = ["role", "permissoes"];
+const CAMPOS_LIVRES_NO_PROPRIO_CADASTRO = new Set(["online", "ultimoAcesso", "ultimo_acesso"]);
+
+// Valor gravado de um campo: coluna própria da tabela ou o JSON `data`.
+function valorGravado(atual, campo) {
+  if (atual && atual[campo] !== undefined && atual[campo] !== null) return atual[campo];
+  const noJson = atual?.data?.[campo];
+  if (noJson !== undefined && noJson !== null) return noJson;
+  return campo === "permissoes" ? {} : null;
+}
+const vazio = (v) => v === null || v === undefined || v === "";
 
 // Comparação que ignora a ordem das chaves (o jsonb do Postgres reordena).
 function canonico(v) {
@@ -163,11 +176,14 @@ const igual = (a, b) => JSON.stringify(canonico(a)) === JSON.stringify(canonico(
 function camposProibidosNoCadastro(user, alvoId, dados, atual = {}) {
   if (ehAdmin(user)) return [];
   if (!mesmoUsuario(alvoId, user?.id)) return ["*"];
-  return CAMPOS_SO_ADMIN_NO_CADASTRO.filter(campo => {
-    if (dados?.[campo] === undefined) return false;
-    const gravado = atual?.[campo] ?? (campo === "permissoes" ? {} : null);
-    return !igual(dados[campo], gravado);
-  });
+  return Object.keys(dados || {}).filter(campo => {
+    if (CAMPOS_LIVRES_NO_PROPRIO_CADASTRO.has(campo)) return false;
+    const enviado = dados[campo];
+    if (enviado === undefined) return false;
+    const gravado = valorGravado(atual, campo);
+    if (vazio(enviado) && vazio(gravado)) return false;
+    return !igual(enviado, gravado);
+  }).sort();
 }
 
 module.exports = {

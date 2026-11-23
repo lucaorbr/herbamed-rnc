@@ -505,10 +505,15 @@ async function handleUsers(req, res, pathname) {
     const existing = await query("SELECT * FROM users WHERE id = $1", [id]);
     if (!existing.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
 
-    // Usuario comum so edita o proprio cadastro, e nunca o papel nem as permissoes
-    // (antes gravava `permissoes` no proprio cadastro e se dava todas).
-    if (camposProibidosNoCadastro(currentUser, id, data, existing.rows[0]).length) {
-      return sendJson(res, 403, { error: "Sem permissao" });
+    // Usuario comum so mexe no proprio carimbo de presenca; o resto do cadastro
+    // (nome, e-mail, setor, CRF, cargo, papel, permissoes) e do admin.
+    const proibidos = camposProibidosNoCadastro(currentUser, id, data, existing.rows[0]);
+    if (proibidos.length) {
+      await registrarAuditoria({ user: currentUser, acao: "Alteração de cadastro recusada", colecao: "usuarios", docId: id,
+        docNome: existing.rows[0].name, detalhe: { campo: "Campos recusados (nada foi gravado)", depois: proibidos.join(", ") } });
+      return sendJson(res, 403, { error: proibidos[0] === "*"
+        ? "Sem permissao para alterar o cadastro de outra pessoa."
+        : `Somente o administrador altera: ${proibidos.join(", ")}.` });
     }
 
     const merged = { ...(existing.rows[0].data || {}), ...data };
