@@ -1,9 +1,11 @@
+import { MATRIZ_TREINAMENTO_ATIVA } from "../../config/funcionalidades";
+
 export const PERMS_GRUPOS = [
   { grupo: "RNCs", items: [
     { key: "criarRNC",           label: "Criar nova RNC" },
     { key: "editarRNCpropria",   label: "Editar RNC própria" },
     { key: "editarRNCtodas",     label: "Editar qualquer RNC" },
-    { key: "analisarRNC",        label: "Ishikawa / 5W2H / Eficácia" },
+    { key: "analisarRNC",        label: "Tratar RNC: análise de causa, CAPA, eficácia e disposição" },
     { key: "aprovarRNC",         label: "Aprovar como RT (RNC crítica)" },
     { key: "excluirRNC",         label: "Excluir RNC" },
     { key: "gerenciarReunioesRNC", label: "Conduzir reunião de análise crítica" },
@@ -41,10 +43,10 @@ export const PERMS_GRUPOS = [
     { key: "verDocumentos",               label: "Visualizar área de documentos" },
     { key: "iniciarRevisao",              label: "Iniciar nova revisão" },
     { key: "tornarObsoleto",              label: "Arquivar documento como obsoleto" },
-    { key: "configurarDocumentos",        label: "Configurar tipos e prazos de revisão" },
+    { key: "configurarDocumentos",        label: "Baixar PDF original (sem marca d'água) de documento controlado" },
     { key: "baixarArquivoFonte",          label: "Baixar arquivo fonte editável" },
     { key: "baixarCopiaNaoControlada",    label: "Baixar cópia não controlada" },
-    { key: "gerenciarTreinamento",        label: "Atribuir e acompanhar leitura/treinamento (Fase 7)" },
+    { key: "gerenciarTreinamento",        label: "Ver log de distribuição de cópias" },
     { key: "acessoRestritoVigente",       label: "Acesso restrito: somente documento vigente / cópia não controlada" },
   ]},
   { grupo: "Outras áreas", items: [
@@ -55,6 +57,26 @@ export const PERMS_GRUPOS = [
     { key: "editarIPCProdutos",   label: "Gerenciar catálogo IPC Produtos" },
   ]},
 ];
+
+// Permissões que hoje NÃO controlam nada no sistema: marcar ou desmarcar não muda o
+// que a pessoa consegue fazer. Ficam fora da tela do Admin para não dar falsa
+// segurança (o admin desmarcava "Criar / editar Fornecedores" e a pessoa seguia
+// editando). As chaves continuam em PERMS_PADRAO e no cadastro de cada usuário —
+// nada é apagado. Ao ligar uma delas de verdade (na tela E no servidor), tire-a daqui.
+export const PERMS_SEM_EFEITO = new Set([
+  "editarRNCpropria", "editarRNCtodas", "aprovarRNC",
+  "verCQMateriais", "criarMaterialCQ", "lancarAnalise", "aprovarAnalise",
+  "editarFornecedores", "criarAuditorias", "editarClientes", "editarIPC", "editarIPCProdutos",
+  // Só tem efeito na Matriz de Treinamento, que está desligada.
+  ...(MATRIZ_TREINAMENTO_ATIVA ? [] : ["registrarTreinamento"]),
+]);
+
+/** Grupos de permissões que aparecem no Admin: só as que têm efeito; grupo vazio some. */
+export function gruposVisiveis(grupos = PERMS_GRUPOS) {
+  return grupos
+    .map(g => ({ ...g, items: g.items.filter(i => !PERMS_SEM_EFEITO.has(i.key)) }))
+    .filter(g => g.items.length > 0);
+}
 
 // Resolve uma permissão para um usuário arbitrário (não só o logado).
 // Mesma lógica do `perm` do App: usa overrides salvos no usuário, senão cai no papel.
