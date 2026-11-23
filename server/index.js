@@ -34,7 +34,7 @@ const {
 const { linhasHistoricoCapa } = require("./historicoCapa");
 const {
   precisaDoAnterior, validarGravacaoColecao, validarExclusaoColecao,
-  validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro,
+  validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro, validarLeituraColecao, filtrarLeituraColecao,
 } = require("./permissoesColecao");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { registrarAuditoria, rotularAuditoria, linhaParaTela } = require("./auditoria");
@@ -1194,12 +1194,13 @@ async function handleCollections(req, res, pathname) {
   }
 
   if (!id && req.method === "GET") {
+    validarLeituraColecao(user, collection);
     const result = await query(`
       SELECT id, data FROM generic_documents
       WHERE collection = $1
       ORDER BY updated_at DESC
     `, [collection]);
-    return sendJson(res, 200, result.rows.map(row => ({ id: row.id, ...row.data })));
+    return sendJson(res, 200, filtrarLeituraColecao(user, collection, result.rows.map(row => ({ id: row.id, ...row.data }))));
   }
 
   if (id && (req.method === "PUT" || req.method === "POST")) {

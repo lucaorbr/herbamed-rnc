@@ -20,7 +20,11 @@ import { FornecedoresTab } from "../features/fornecedores/FornecedoresTab";
 import { IPCProdutosTab, IPCTab } from "../features/ipc/IPCTabs";
 import { LaudosTab } from "../features/laudos/LaudosTab";
 import { NQATab } from "../features/nqa/NQATab";
-import { PERMS_PADRAO } from "../features/permissions/permissions";
+import { PERMS_PADRAO, userHasPerm } from "../features/permissions/permissions";
+
+// Mesma regra de leitura do servidor (server/permissoesColecao.js, REGRAS_LEITURA):
+// sem a permissão o servidor responde 403, então a tela nem pede.
+const podeLer = (u, ...keys) => u?.role === "admin" || keys.some(k => userHasPerm(u, k));
 import { ProcessosProducaoTab } from "../features/producao/ProcessosProducaoTab";
 import { ConfiguracaoDesviosTab } from "../features/desvios/ConfiguracaoDesviosTab";
 import { RevalidacaoTab } from "../features/revalidacao/RevalidacaoTabs";
@@ -290,9 +294,14 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeRNCs(setRncs);
-    const unsubDesvios = subscribeCollection("desvios", setDesvios);
-    migrarRevalidacoesLegado();
-    const unsubReval = subscribeCollection("revalidacoes", setRevalidacoes);
+    const unsubDesvios = podeLer(user, "verDesvios", "triarDesvio")
+      ? subscribeCollection("desvios", setDesvios)
+      : () => {};
+    const podeLerReval = podeLer(user, "verRevalidacao", "criarRevalidacao");
+    if (podeLerReval) migrarRevalidacoesLegado();
+    const unsubReval = podeLerReval
+      ? subscribeCollection("revalidacoes", setRevalidacoes)
+      : () => {};
     const podeLerHomologacoes = user.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, "verHomologacoes")
       ? user.permissoes.verHomologacoes === true
       : PERMS_PADRAO[user.role]?.verHomologacoes === true;

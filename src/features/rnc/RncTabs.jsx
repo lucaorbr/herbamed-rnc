@@ -30,6 +30,7 @@ import { EspiadaRnc } from "./EspiadaRnc";
 import { ofertaNotificar } from "../email/ofertaNotificar";
 import { montarApresentacao } from "../apresentacao/apresentacaoLogic";
 import { gerarApresentacaoPptx } from "../apresentacao/gerarPptx";
+import { userHasPerm } from "../permissions/permissions";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar
@@ -72,7 +73,9 @@ export function HomeTab({ rncs, user, setTab }) {
   const [laudosPendentes, setLaudosPendentes] = useState(0);
   useEffect(() => {
     const u1 = subscribeCollection("ipc_registros", list => setIpcPendentes(list.filter(r=>r.status==="Pendente").length));
-    const u2 = subscribeCollection("laudos", list => setLaudosPendentes(list.filter(l=>!l.assinaturaRT&&l.status!=="Rascunho").length));
+    const u2 = (user?.role === "admin" || userHasPerm(user, "verLaudos"))
+      ? subscribeCollection("laudos", list => setLaudosPendentes(list.filter(l=>!l.assinaturaRT&&l.status!=="Rascunho").length))
+      : null;
     return () => { u1&&u1(); u2&&u2(); };
   }, []);
   const T = useTheme(); const s = useS();

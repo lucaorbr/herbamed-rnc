@@ -21,8 +21,10 @@
 //     v3.35.0 a trilha é gerada pelo servidor (server/auditoria.js), em tabela
 //     própria; a coleção antiga fica só para leitura do que já foi gravado.
 //
-// A leitura (GET) segue aberta a quem está logado: o sistema carrega várias coleções
-// na abertura para a tela inicial e os painéis.
+// LEITURA (v3.37.0): coleção cuja tela tem permissão "Visualizar…" só é entregue a
+// quem tem a permissão (antes a permissão só escondia o menu e a API devolvia tudo).
+// Ver REGRAS_LEITURA abaixo. As demais seguem abertas a quem está logado: o sistema
+// carrega várias coleções na abertura para a tela inicial e os painéis.
 
 const { temPermissao } = require("./permissoes");
 
@@ -186,7 +188,39 @@ function camposProibidosNoCadastro(user, alvoId, dados, atual = {}) {
   }).sort();
 }
 
+/**
+ * Quem pode LER cada coleção. Coleção fora do mapa: qualquer usuário logado.
+ * Laudos e homologações têm trava própria em index.js (verLaudos / verHomologacoes).
+ */
+const REGRAS_LEITURA = {
+  desvios: algum("verDesvios", "triarDesvio"),
+  revalidacoes: algum("verRevalidacao", "criarRevalidacao"),
+  // O Executivo não tem a área de documentos, mas o painel dele conta documentos.
+  gestao_docs: user => algum("verDocumentos")(user) || user?.role === "exec",
+  // Trilha antiga (gravada pelo navegador até a v3.34): só o admin, como a nova.
+  audit_log: soAdmin,
+};
+
+function validarLeituraColecao(user, colecao) {
+  const regra = REGRAS_LEITURA[colecao];
+  if (regra && !regra(user)) throw erro(403, "Sem permissao para visualizar estes registros.");
+}
+
+/**
+ * Corta o que a pessoa não deve ver dentro de uma coleção que ela pode ler.
+ * `acessoRestritoVigente`: só documento Vigente (a tela já filtrava; a API não).
+ */
+function filtrarLeituraColecao(user, colecao, itens) {
+  if (colecao === "gestao_docs" && !ehAdmin(user) && temPermissao(user, "acessoRestritoVigente")) {
+    return itens.filter(d => d.status === "Vigente");
+  }
+  return itens;
+}
+
 module.exports = {
+  REGRAS_LEITURA,
+  validarLeituraColecao,
+  filtrarLeituraColecao,
   PAPEIS_SO_LEITURA,
   REGRAS_GRAVACAO,
   precisaDoAnterior,
