@@ -15,7 +15,9 @@ const {
   requireAdmin,
   requireUser,
   verifyPassword,
+  signToken,
 } = require("./auth");
+const { gerarSenhaTemporaria, podeExcluirConta } = require("./contas");
 const { runArecoSync, startArecoScheduler, pruneOldRecebimentos } = require("./arecoSync");
 const { getRncIntegrationPage, requireIntegrationKey } = require("./rncIntegration");
 const { checarLimite, enviarEmails, registrarEnvio, validarEnvio } = require("./email");
@@ -196,12 +198,18 @@ async function handleAuth(req, res, pathname) {
     try {
       result = await login(email, password);
     } catch (error) {
-      if (error.status === 401) {
-        // Quem tentou não está autenticado: registra o e-mail digitado.
-        const tentado = String(email || "").slice(0, 200) || "—";
+      // Quem tentou não está autenticado: registra o e-mail digitado.
+      const tentado = String(email || "").slice(0, 200) || "—";
+      const anonimo = { name: "—", email: tentado, id: null };
+      const acaoFalha = { 401: "Falha de login", 423: "Login recusado: conta bloqueada", 403: "Login recusado: conta desativada" }[error.status];
+      if (acaoFalha) {
+        await registrarAuditoria({ user: anonimo, acao: acaoFalha, colecao: "usuarios", docId: null, docNome: tentado });
+      }
+      if (error.bloqueou) {
+        const { row, ate } = error.bloqueou;
         await registrarAuditoria({
-          user: { name: "—", email: tentado, id: null },
-          acao: "Falha de login", colecao: "usuarios", docId: null, docNome: tentado,
+          user: anonimo, acao: "Conta bloqueada por senhas erradas", colecao: "usuarios", docId: row.id, docNome: row.name,
+          detalhe: { campo: "bloqueada até", depois: new Date(ate).toISOString() },
         });
       }
       throw error;
@@ -238,9 +246,13 @@ async function handleAuth(req, res, pathname) {
     const ok = await verifyPassword(user.id, senhaAtual);
     if (!ok) return sendJson(res, 401, { error: "Senha atual incorreta" });
     const hash = await bcrypt.hash(senhaNova, 12);
-    await query("UPDATE users SET password_hash = $1, senha_temporaria = false, updated_at = now() WHERE id = $2", [hash, user.id]);
+    // Trocar a senha derruba as outras sessões (quem soubesse a senha antiga perde o acesso);
+    // esta sessão continua com um token novo.
+    const novo = await query(`UPDATE users SET password_hash = $1, senha_temporaria = false, sessao_versao = sessao_versao + 1,
+      updated_at = now() WHERE id = $2 RETURNING sessao_versao`, [hash, user.id]);
     await registrarAuditoria({ user, acao: "Trocou a própria senha", colecao: "usuarios", docId: user.id, docNome: user.name });
-    return sendJson(res, 200, { ok: true });
+    const token = signToken({ ...user, sessaoVersao: novo.rows[0].sessao_versao });
+    return sendJson(res, 200, { ok: true, token }, { "Set-Cookie": cookieOptions(token) });
   }
 
   if (pathname === "/api/auth/admin-reset-password" && req.method === "POST") {
@@ -248,12 +260,54 @@ async function handleAuth(req, res, pathname) {
     const { uid } = await readBody(req);
     if (!uid) return sendJson(res, 400, { error: "uid obrigatorio" });
     const alvo = await query("SELECT name FROM users WHERE id = $1", [uid]);
+    if (!alvo.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
+    // Senha sorteada, mostrada uma vez ao admin (antes era fixa e todo mundo sabia).
+    // Também desbloqueia e derruba as sessões abertas da conta.
+    const senhaTemporaria = gerarSenhaTemporaria();
+    const hash = await bcrypt.hash(senhaTemporaria, 12);
+    await query(`UPDATE users SET password_hash = $1, senha_temporaria = true, tentativas_falhas = 0, bloqueado_ate = NULL,
+      sessao_versao = sessao_versao + 1, updated_at = now() WHERE id = $2`, [hash, uid]);
     await registrarAuditoria({
-      user: admin, acao: "Redefiniu senha de usuário", colecao: "usuarios", docId: uid, docNome: alvo.rows[0]?.name || String(uid),
+      user: admin, acao: "Redefiniu senha de usuário", colecao: "usuarios", docId: uid, docNome: alvo.rows[0].name,
     });
-    const hash = await bcrypt.hash("Herba@123", 12);
-    await query("UPDATE users SET password_hash = $1, senha_temporaria = true, updated_at = now() WHERE id = $2", [hash, uid]);
-    return sendJson(res, 200, { ok: true });
+    return sendJson(res, 200, { ok: true, senhaTemporaria });
+  }
+
+  // Administração da conta: desativar / reativar / desbloquear / encerrar sessões.
+  if (pathname === "/api/auth/admin-conta" && req.method === "POST") {
+    const admin = await requireAdmin(req);
+    const { uid, acao, motivo } = await readBody(req);
+    const alvo = await query("SELECT * FROM users WHERE id = $1", [uid]);
+    if (!alvo.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
+    const row = alvo.rows[0];
+    if (String(row.id) === String(admin.id) && acao === "desativar") {
+      return sendJson(res, 409, { error: "Você não pode desativar a própria conta." });
+    }
+    const textoMotivo = String(motivo || "").trim().slice(0, 500);
+    let sql; let params; let rotulo; let detalhe = null;
+    if (acao === "desativar") {
+      if (!textoMotivo) return sendJson(res, 400, { error: "Informe o motivo da desativação." });
+      const desativacao = { em: new Date().toISOString(), por: admin.name, porId: String(admin.id), motivo: textoMotivo };
+      sql = `UPDATE users SET ativo = false, online = false, sessao_versao = sessao_versao + 1, desativacao = $2::jsonb, updated_at = now() WHERE id = $1`;
+      params = [uid, JSON.stringify(desativacao)];
+      rotulo = "Desativou conta"; detalhe = { campo: "motivo", depois: textoMotivo };
+    } else if (acao === "reativar") {
+      sql = `UPDATE users SET ativo = true, tentativas_falhas = 0, bloqueado_ate = NULL, updated_at = now() WHERE id = $1`;
+      params = [uid]; rotulo = "Reativou conta";
+      if (row.desativacao) detalhe = { campo: "desativação anterior", antes: row.desativacao, depois: null };
+    } else if (acao === "desbloquear") {
+      sql = `UPDATE users SET tentativas_falhas = 0, bloqueado_ate = NULL, updated_at = now() WHERE id = $1`;
+      params = [uid]; rotulo = "Desbloqueou conta";
+    } else if (acao === "encerrar-sessoes") {
+      sql = `UPDATE users SET sessao_versao = sessao_versao + 1, online = false, updated_at = now() WHERE id = $1`;
+      params = [uid]; rotulo = "Encerrou sessões da conta";
+    } else {
+      return sendJson(res, 400, { error: "Ação inválida" });
+    }
+    await query(sql, params);
+    await registrarAuditoria({ user: admin, acao: rotulo, colecao: "usuarios", docId: uid, docNome: row.name, detalhe });
+    const atual = await query("SELECT * FROM users WHERE id = $1", [uid]);
+    return sendJson(res, 200, publicUser(atual.rows[0]));
   }
 
   if (pathname === "/api/auth/signature" && req.method === "POST") {
@@ -466,12 +520,14 @@ async function handleUsers(req, res, pathname) {
   if (pathname === "/api/users" && req.method === "POST") {
     const admin = await requireAdmin(req);
     const data = sanitize(await readBody(req));
-    const password = data.pw || data.password || "Herbamed@2025";
-    const passwordHash = await bcrypt.hash(password, 12);
+    // A senha inicial é sempre sorteada pelo servidor e trocada no 1º acesso:
+    // antes vinha preenchida com "Herbamed@2025" e o usuário nem era obrigado a trocar.
+    const senhaTemporaria = gerarSenhaTemporaria();
+    const passwordHash = await bcrypt.hash(senhaTemporaria, 12);
     const payload = { ...data, pw: undefined, password: undefined };
     const result = await query(`
-      INSERT INTO users (name, email, password_hash, role, setor, crf, assinatura, permissoes, data)
-      VALUES ($1, lower($2), $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb)
+      INSERT INTO users (name, email, password_hash, role, setor, crf, assinatura, permissoes, data, senha_temporaria)
+      VALUES ($1, lower($2), $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, true)
       RETURNING *
     `, [
       data.name,
@@ -486,7 +542,7 @@ async function handleUsers(req, res, pathname) {
     ]);
     const criado = publicUser(result.rows[0]);
     await registrarAuditoria({ user: admin, colecao: "usuarios", docId: criado.id, antes: null, depois: criado });
-    return sendJson(res, 201, criado);
+    return sendJson(res, 201, { ...criado, senhaTemporariaGerada: senhaTemporaria });
   }
 
   const match = pathname.match(/^\/api\/users\/([^/]+)$/);
@@ -553,6 +609,10 @@ async function handleUsers(req, res, pathname) {
   if (req.method === "DELETE") {
     const admin = await requireAdmin(req);
     const anterior = await query("SELECT * FROM users WHERE id = $1", [id]);
+    // Quem já entrou no sistema deixou o nome em assinaturas, RNCs e na trilha: desativa-se.
+    if (anterior.rowCount && !podeExcluirConta(anterior.rows[0])) {
+      return sendJson(res, 409, { error: "Este usuário já acessou o sistema e não pode ser excluído. Desative a conta." });
+    }
     await query("DELETE FROM users WHERE id = $1", [id]);
     if (anterior.rowCount) {
       await registrarAuditoria({ user: admin, colecao: "usuarios", docId: id, antes: publicUser(anterior.rows[0]), depois: null });
