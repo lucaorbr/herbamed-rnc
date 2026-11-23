@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword } from "../../firebase";
 import { useTheme } from "../../core/theme";
-import { PERMS_GRUPOS, PERMS_PADRAO } from "../permissions/permissions";
+import { gruposVisiveis, PERMS_PADRAO } from "../permissions/permissions";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { deleteUser } from "../../firebase";
@@ -324,7 +324,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <div style={{ fontSize:11, color:T.text2, marginBottom:10, padding:"8px 12px", background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8 }}>
             💡 Preenchido automaticamente pelo perfil selecionado. Ajuste individualmente se necessário. Usuários existentes não são afetados.
           </div>
-          {PERMS_GRUPOS.map(grupo => (
+          {gruposVisiveis().map(grupo => (
             <div key={grupo.grupo} style={{ marginBottom:12 }}>
               <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>{grupo.grupo}</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:4 }}>
@@ -386,7 +386,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           {/* Permissões do usuário editado — editáveis por admin */}
           <div style={{ marginTop:14, marginBottom:10 }}>
             <div style={{ fontSize:11, color:T.text3, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>Permissões</div>
-            {PERMS_GRUPOS.map(grupo => (
+            {gruposVisiveis().map(grupo => (
               <div key={grupo.grupo} style={{ marginBottom:10 }}>
                 <div style={{ fontSize:10, fontWeight:700, color:T.accent, textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>{grupo.grupo}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:3 }}>
