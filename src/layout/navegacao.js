@@ -11,6 +11,23 @@
  * Os grupos do menu, já filtrados pelo perfil de quem está logado.
  * Mesma lista que a barra lateral sempre teve, sem alteração de conteúdo.
  */
+// Telas de consulta com permissão "Visualizar…" própria: sem ela a tela some do
+// menu e, aberta por link, mostra o aviso de sem permissão (App.jsx).
+export const PERM_DA_TELA = {
+  laudos: "verLaudos",
+  desvios: "verDesvios",
+  "indicadores-desvios": "verDesvios",
+  revalidacao: "verRevalidacao",
+  "gestao-docs": "verDocumentos",
+  "cq-materiais": "verCQMateriais",
+};
+
+/** A pessoa pode abrir esta tela? Tela sem permissão própria: sim. */
+export function telaPermitida(id, perm = () => true) {
+  const chave = PERM_DA_TELA[id];
+  return !chave || !!perm(chave);
+}
+
 export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmin = false, perm = () => true } = {}) {
   const grupos = [
     { id:"principal", icon:"📋", label:"RNCs", items:[
@@ -65,17 +82,7 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       ...(isAdmin?[{ id:"admin",     icon:"⚙️", label:"Administração" }]:[]),
     ]},
   ];
-  // Telas de consulta com permissão "Visualizar…" própria. Sem ela o servidor
-  // recusa a leitura (v3.37.0), então o menu também some com a tela.
-  const pode = (...keys) => keys.some(k => perm(k));
-  const exige = {
-    laudos: () => pode("verLaudos"),
-    desvios: () => pode("verDesvios"),
-    "indicadores-desvios": () => pode("verDesvios"),
-    revalidacao: () => pode("verRevalidacao"),
-    "gestao-docs": () => pode("verDocumentos"),
-  };
-  const visivel = i => !exige[i.id] || exige[i.id]();
+  const visivel = i => telaPermitida(i.id, perm);
   return grupos
     .map(g => ({ ...g, items: g.items
       .map(i => i.subItems ? { ...i, subItems: i.subItems.filter(visivel) } : i)

@@ -65,7 +65,6 @@ export const PERMS_GRUPOS = [
 // nada é apagado. Ao ligar uma delas de verdade (na tela E no servidor), tire-a daqui.
 export const PERMS_SEM_EFEITO = new Set([
   "editarRNCpropria", "editarRNCtodas", "aprovarRNC",
-  "verCQMateriais", "criarMaterialCQ", "lancarAnalise", "aprovarAnalise",
   "editarFornecedores", "criarAuditorias", "editarClientes", "editarIPC", "editarIPCProdutos",
   // Só tem efeito na Matriz de Treinamento, que está desligada.
   ...(MATRIZ_TREINAMENTO_ATIVA ? [] : ["registrarTreinamento"]),
