@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { subscribeCollection } from "../../firebase";
+import { listarAuditoria } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
@@ -17,22 +17,30 @@ export function AuditLogTab({ user }) {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim,    setDataFim]    = useState("");
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 3000);
-    let unsub;
+  // A trilha vem do servidor (server/auditoria.js). Lida ao abrir e no "Atualizar"
+  // — não precisa ficar consultando a cada poucos segundos.
+  const [erro, setErro] = useState("");
+  const carregar = async () => {
+    setLoading(true); setErro("");
     try {
-      unsub = subscribeCollection("audit_log", list => {
-        clearTimeout(t);
-        setLogs(list.sort((a,b) => (b.ts||0) - (a.ts||0)));
-        setLoading(false);
-      });
-    } catch(e) {
-      clearTimeout(t);
+      setLogs(await listarAuditoria());
+    } catch (e) {
+      setErro(e.message || "Não foi possível carregar a trilha.");
+    } finally {
       setLoading(false);
-      console.warn("[AuditLog]", e);
     }
-    return () => { clearTimeout(t); unsub && unsub(); };
-  }, []);
+  };
+  useEffect(() => { carregar(); }, []);
+
+  const antigo = (l) => l.origem === "navegador";
+  const seloOrigem = (l) => antigo(l)
+    ? <span title="Gravado pelo navegador até a v3.34: quem fez e o conteúdo vieram da tela, sem conferência do servidor." style={{ fontSize:10, padding:"2px 8px", borderRadius:12, background:T.surf, color:T.text3, border:`1px solid ${T.border}` }}>registro antigo</span>
+    : null;
+  const fmtValor = (v) => {
+    if (v === null || v === undefined || v === "") return "—";
+    if (typeof v === "string") return v;
+    return JSON.stringify(v, null, 2);
+  };
 
   const ACOES = [...new Set(logs.map(l => l.acao).filter(Boolean))].sort();
   const USERS = [...new Set(logs.map(l => l.usuario).filter(Boolean))].sort();
@@ -92,11 +100,13 @@ export function AuditLogTab({ user }) {
   };
 
   const exportCSV = () => {
-    const header = ["Data/Hora","Usuário","E-mail","Ação","Coleção","Documento","ID"];
+    const header = ["Data/Hora","Usuário","E-mail","Ação","Coleção","Documento","ID","Origem","Campos alterados"];
     const rows = filtrados.map(l => [
       fmtDataHora(l.data), l.usuario, l.email, l.acao,
       l.colecao === "rncs" ? "RNCs" : l.colecao === "gestao_docs" ? "Gestão de Docs" : l.colecao === "cq_analises" ? "CQ Análises" : l.colecao === "cq_materiais" ? "CQ Materiais" : l.colecao === "fornecedores" ? "Fornecedores" : l.colecao === "homologacoes" ? "Homologações" : l.colecao === "auditorias" ? "Auditorias" : l.colecao === "fmea" ? "FMEA" : l.colecao === "laudos" ? "Laudos" : l.colecao === "usuarios" ? "Usuários" : l.colecao || "—",
-      l.docNome, l.docId
+      l.docNome, l.docId,
+      antigo(l) ? "Navegador (antigo)" : l.origem === "tela" ? "Tela" : "Servidor",
+      (l.alteracoes || []).map(a => a.campo).join("; ")
     ]);
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v||"").replace(/"/g,'""')}"`).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
@@ -129,8 +139,46 @@ export function AuditLogTab({ user }) {
             </div>
           ))}
         </div>
-        <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:corAcao(sel.acao)+"22", color:corAcao(sel.acao) }}>{sel.acao}</span>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <span style={{ padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700, background:corAcao(sel.acao)+"22", color:corAcao(sel.acao) }}>{sel.acao}</span>
+          {seloOrigem(sel)}
+        </div>
+        <div style={{ fontSize:11, color:T.text3, marginTop:10 }}>
+          {antigo(sel)
+            ? "Registro antigo: gravado pelo navegador, antes de a trilha passar a ser gerada pelo servidor. Quem fez e o conteúdo vieram da tela."
+            : sel.origem === "tela"
+              ? "Ação informada pela tela, sem gravação de dados correspondente. Quem fez e quando foram conferidos pelo servidor (sessão)."
+              : "Registrado pelo servidor: quem fez vem da sessão, a hora é a do servidor e as alterações foram calculadas a partir do banco."}
+        </div>
       </div>
+      {!antigo(sel) && (sel.alteracoes || []).length > 0 && (
+        <div style={s.card}>
+          <SecTitle icon="🔍" ch={`O que mudou (${sel.alteracoes.length} campo${sel.alteracoes.length > 1 ? "s" : ""})`} />
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+              <thead>
+                <tr>{["Campo","Antes","Depois"].map(h => <th key={h} style={{ textAlign:"left", padding:"6px 8px", color:T.text3, fontWeight:700, textTransform:"uppercase", fontSize:10, borderBottom:`1px solid ${T.border}` }}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {sel.alteracoes.map((a, i) => (
+                  <tr key={i} style={{ verticalAlign:"top" }}>
+                    <td style={{ padding:"6px 8px", fontWeight:700, color:T.text, borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{a.campo}</td>
+                    {"acrescentado" in a ? (
+                      <td colSpan={2} style={{ padding:"6px 8px", borderBottom:`1px solid ${T.border}` }}>
+                        <div style={{ fontSize:10, color:T.accent, fontWeight:700, marginBottom:4 }}>+ {a.acrescentado.length} item(ns) acrescentado(s)</div>
+                        <pre style={{ margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", color:T.text2, fontSize:10, maxHeight:220, overflow:"auto" }}>{fmtValor(a.acrescentado)}</pre>
+                      </td>
+                    ) : (<>
+                      <td style={{ padding:"6px 8px", borderBottom:`1px solid ${T.border}` }}><pre style={{ margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", color:T.red||"#ff4f6a", fontSize:10, maxHeight:220, overflow:"auto" }}>{fmtValor(a.antes)}</pre></td>
+                      <td style={{ padding:"6px 8px", borderBottom:`1px solid ${T.border}` }}><pre style={{ margin:0, whiteSpace:"pre-wrap", wordBreak:"break-word", color:T.accent, fontSize:10, maxHeight:220, overflow:"auto" }}>{fmtValor(a.depois)}</pre></td>
+                    </>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {(sel.dadosAntes || sel.dadosDepois) && (
         <div style={s.card}>
           <SecTitle icon="🔍" ch="Dados Alterados" />
@@ -141,7 +189,7 @@ export function AuditLogTab({ user }) {
                   {campo==="dadosAntes" ? "⬅️ Antes" : "➡️ Depois"}
                 </div>
                 <pre style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:8, padding:"10px 12px", fontSize:10, color:T.text2, overflow:"auto", maxHeight:300, whiteSpace:"pre-wrap", wordBreak:"break-all", margin:0 }}>
-                  {sel[campo] ? JSON.stringify(JSON.parse(sel[campo]), null, 2) : "—"}
+                  {(() => { if (!sel[campo]) return "—"; try { return JSON.stringify(JSON.parse(sel[campo]), null, 2); } catch { return sel[campo]; } })()}
                 </pre>
               </div>
             ))}
@@ -189,6 +237,14 @@ export function AuditLogTab({ user }) {
           <option value="fmea">FMEA</option>
           <option value="laudos">Laudos</option>
           <option value="usuarios">Usuários / Sessões</option>
+          <option value="desvios">Desvios</option>
+          <option value="revalidacoes">Revalidações</option>
+          <option value="assinaturas">Assinaturas eletrônicas</option>
+          <option value="treinamentos">Leituras / treinamentos</option>
+          <option value="configuracoes">Configurações e catálogos</option>
+          {[...new Set(logs.map(l => l.colecao).filter(Boolean))]
+            .filter(c => !["rncs","gestao_docs","cq_analises","cq_materiais","fornecedores","homologacoes","auditorias","fmea","laudos","usuarios","desvios","revalidacoes","assinaturas","treinamentos","configuracoes"].includes(c))
+            .sort().map(c => <option key={c} value={c}>{c}</option>)}
         </Sel>
         <Sel value={filtroAcao} onChange={e=>setFiltroAcao(e.target.value)}>
           <option value="todos">Todas as ações</option>
@@ -202,11 +258,13 @@ export function AuditLogTab({ user }) {
         <Inp type="date" value={dataFim}    onChange={e=>setDataFim(e.target.value)}    sx={{ fontSize:11, width:130 }} />
         <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
           <button style={{ ...s.btn, fontSize:11 }} onClick={()=>{ setFiltroCol("todos"); setFiltroAcao("todos"); setFiltroUser(""); setBusca(""); setDataInicio(""); setDataFim(""); }}>Limpar</button>
+          <button style={{ ...s.btn, fontSize:11 }} onClick={carregar}>↻ Atualizar</button>
           <button style={{ ...s.btnA, fontSize:11 }} onClick={exportCSV}>⬇️ CSV</button>
         </div>
       </div>
 
       <div style={{ fontSize:11, color:T.text3, marginBottom:8 }}>{filtrados.length} registro(s) encontrado(s)</div>
+      {erro && <div style={{ fontSize:12, color:T.red||"#ff4f6a", marginBottom:8 }}>{erro}</div>}
 
       {loading ? (
         <div style={{ textAlign:"center", padding:"3rem", color:T.text2 }}>Carregando trilha de auditoria...</div>
@@ -227,13 +285,15 @@ export function AuditLogTab({ user }) {
               <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                 <span style={{ fontSize:11, padding:"2px 8px", borderRadius:12, background:corAcao(l.acao)+"22", color:corAcao(l.acao), fontWeight:700 }}>{l.acao}</span>
                 <span style={{ fontSize:13, fontWeight:600, color:T.text }}>{l.docNome}</span>
+                {seloOrigem(l)}
+                {!antigo(l) && (l.alteracoes||[]).length > 0 && <span style={{ fontSize:10, color:T.text3 }}>{l.alteracoes.length} campo(s)</span>}
               </div>
               <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>
                 {l.usuario} · {l.email} · {fmtDataHora(l.data)}
               </div>
             </div>
             <div style={{ fontSize:10, color:T.text3, background:T.surf, padding:"2px 8px", borderRadius:8, flexShrink:0 }}>
-              {l.colecao === "rncs" ? "RNC" : "Doc"}
+              {l.colecao === "rncs" ? "RNC" : l.colecao || "—"}
             </div>
           </div>
         ))}

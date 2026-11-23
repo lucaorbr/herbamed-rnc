@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
-import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead } from "../firebase";
+import { auth, logoutUser, getUser, saveUser, updateUser, getAllUsers, createRNC, saveRNC, updateRNC, deleteRNC as fbDeleteRNC, subscribeRNCs, saveCollection, deleteFromCollection, subscribeCollection, getCollection, onAuthStateChanged, subscribeNotifications, markNotificationsRead, rotularAuditoria } from "../firebase";
 import { FormalCtx, useFormalDomScrub, ThemeCtx, THEMES } from "../core/theme";
 import { fmt, tod } from "../core/utils";
 import { rncAtiva } from "../core/status";
@@ -264,16 +264,7 @@ export default function App() {
           setUser({ ...ud, uid: fbUser.uid });
           // Grava ultimo acesso silenciosamente
           try { await saveUser(fbUser.uid, { ultimoAcesso: agora, online: true }); } catch(e) {}
-          // Audit: registra login
-          try {
-            await saveCollection("audit_log", String(Date.now()), {
-              id: Date.now(), ts: Date.now(), data: agora,
-              usuario: ud.name || "—", email: ud.email || "—", userId: fbUser.uid,
-              acao: "Login", colecao: "usuarios", docId: fbUser.uid,
-              docNome: ud.name || ud.email || "—",
-              dadosAntes: null, dadosDepois: null,
-            });
-          } catch(e) {}
+          // O login é registrado na trilha pelo próprio servidor (/api/auth/login).
         } else if (ud) {
           // Perfil-lixo (sem nome E sem email): nao loga como usuario vazio.
           // Encerra a sessao e manda pro login, evitando o estado "(sem nome)".
@@ -426,27 +417,19 @@ export default function App() {
   const toast_ = useCallback((msg, color = "green", extra = {}) => setToast({ msg, color, ...extra, key: Date.now() }), []);
 
   // ── Auditoria ────────────────────────────────────────────────────────────
-  const auditLog = useCallback(async (acao, colecao, docId, docNome, dadosAntes = null, dadosDepois = null) => {
+  // A trilha é gerada pelo SERVIDOR a cada gravação (quem, quando e o que mudou,
+  // campo a campo). Daqui vai só o NOME da ação ("Assinou como Aprovador"), que o
+  // servidor pendura na entrada que ele mesmo gravou. dadosAntes/dadosDepois não
+  // são mais enviados: quem calcula a diferença é o servidor, a partir do banco.
+  // A assinatura de 6 argumentos fica para não mexer nas dezenas de chamadas.
+  // eslint-disable-next-line no-unused-vars
+  const auditLog = useCallback(async (acao, colecao, docId, docNome, _dadosAntes = null, _dadosDepois = null) => {
     try {
-      const entrada = {
-        id: Date.now(),
-        ts: Date.now(),
-        data: new Date().toISOString(),
-        usuario: user?.name || "—",
-        email: user?.email || "—",
-        userId: user?.uid || user?.id || "—",
-        acao,
-        colecao,
-        docId: String(docId),
-        docNome: docNome || String(docId),
-        dadosAntes: dadosAntes ? JSON.stringify(dadosAntes).slice(0, 2000) : null,
-        dadosDepois: dadosDepois ? JSON.stringify(dadosDepois).slice(0, 2000) : null,
-      };
-      await saveCollection("audit_log", String(entrada.id), entrada);
+      await rotularAuditoria({ acao, colecao, docId: docId == null ? null : String(docId), docNome: docNome || String(docId) });
     } catch(e) {
       console.warn("[AuditLog] falha ao registrar:", e);
     }
-  }, [user?.name, user?.email, user?.uid, user?.id]);
+  }, []);
 
   // ── Verificação de permissões customizadas ───────────────────────────
   // Para usuários com permissoes salvas no banco local, usa elas.

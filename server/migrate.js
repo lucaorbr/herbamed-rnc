@@ -113,6 +113,35 @@ async function migrate() {
     )
   `);
 
+  // Trilha de auditoria gerada no servidor (server/auditoria.js).
+  await query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS alteracoes jsonb`);
+  await query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS origem text`);
+  await query(`ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS rotulo text`);
+  await query(`CREATE INDEX IF NOT EXISTS audit_log_user_ts ON audit_log (user_id, ts DESC)`);
+  await query(`CREATE INDEX IF NOT EXISTS audit_log_data ON audit_log (data DESC)`);
+  // Imutável no próprio banco: não se exclui entrada e não se altera nada — a única
+  // escrita permitida depois do INSERT é preencher o rótulo (nome da ação vindo da
+  // tela) uma única vez.
+  await query(`
+    CREATE OR REPLACE FUNCTION audit_log_imutavel() RETURNS trigger AS $$
+    BEGIN
+      IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'Registro de auditoria nao pode ser excluido';
+      END IF;
+      IF OLD.rotulo IS NOT NULL
+         OR (to_jsonb(NEW) - 'rotulo') IS DISTINCT FROM (to_jsonb(OLD) - 'rotulo') THEN
+        RAISE EXCEPTION 'Registro de auditoria nao pode ser alterado';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await query(`DROP TRIGGER IF EXISTS audit_log_imutavel ON audit_log`);
+  await query(`
+    CREATE TRIGGER audit_log_imutavel BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_imutavel()
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS areco_recebimentos (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
