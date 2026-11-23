@@ -133,7 +133,7 @@ function DisposicaoSecao({ T, s, registro, onAprovar }) {
         <SeloUI T={T} papel="Responsável pela análise" cor="#2d5016" ass={analista} />
         <SeloUI T={T} papel="Aprovou a disposição" cor="#1a5fb4" ass={aprov} vazioLabel="Aguardando aprovação" />
       </div>
-      {!aprov && (registro.conclusao === "Aprovado" || registro.conclusao === "Reprovado") && (
+      {!aprov && onAprovar && (registro.conclusao === "Aprovado" || registro.conclusao === "Reprovado") && (
         <div style={{ marginTop:10, textAlign:"right" }}>
           <button style={s.btnA} onClick={onAprovar}>✅ Aprovar disposição</button>
         </div>
@@ -212,7 +212,8 @@ export const ENSAIOS_PADRAO = {
   ],
 };
 
-export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill, config = {} }) {
+export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTab, rncs = [], setRncPrefill, config = {}, perm }) {
+  const podeCQ = k => user?.role === "admin" || !!perm?.(k);
   const T = useTheme(); const s = useS();
   const CQ_KEY = "cq_fichas";
   const [fichas, setFichas] = useState([]);
@@ -564,7 +565,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
     <div>
       <div style={{ display:"flex", gap:10, marginBottom:"1rem", alignItems:"center" }}>
         <div style={{ fontSize:13, color:T.text2, flex:1 }}>{fichas.length} ficha(s) de análise registrada(s)</div>
-        <button style={s.btnA} onClick={()=>{ setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name }); aplicarEnsaiosPadrao("Matéria-prima (pó)"); setView("nova"); }}>+ Nova Ficha de Análise</button>
+        {podeCQ("lancarAnalise") && <button style={s.btnA} onClick={()=>{ setForm({ material:"", tipoPadrao:"Matéria-prima (pó)", fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name }); aplicarEnsaiosPadrao("Matéria-prima (pó)"); setView("nova"); }}>+ Nova Ficha de Análise</button>}
       </div>
 
       {fichas.length === 0 ? (
@@ -662,7 +663,7 @@ export function CQTab({ user, users = [], toast_, fornecedores, doSaveRNC, setTa
             <div style={{ padding:"12px 16px", borderRadius:10, background:selFicha.conclusao==="Aprovado"?"#2ab84a18":"#ff4f6a18", fontSize:14, fontWeight:700, color:selFicha.conclusao==="Aprovado"?"#2ab84a":"#ff4f6a", textAlign:"center" }}>
               {selFicha.conclusao==="Aprovado"?"✅ APROVADO":"❌ REPROVADO"}
             </div>
-            <DisposicaoSecao T={T} s={s} registro={selFicha} onAprovar={()=>aprovarDisposicaoFicha(selFicha)} />
+            <DisposicaoSecao T={T} s={s} registro={selFicha} onAprovar={podeCQ("aprovarAnalise") ? ()=>aprovarDisposicaoFicha(selFicha) : null} />
           </div>
         </div>
       )}
@@ -820,6 +821,8 @@ function matchesMaterialSearch(material, term) {
 
 export function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
   const T = useTheme(); const s = useS();
+  // Cadastro de material e templates: criarMaterialCQ (conferido também no servidor).
+  const podeEditarMat = user?.role === "admin" || !!perm?.("criarMaterialCQ");
   const [materiais, setMateriais] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -848,8 +851,8 @@ export function CQMateriaisTab({ user, toast_, fornecedores, perm, auditLog }) {
     { key: "ref", label: "Referência", accessor: m => m.ref || "—" },
     { key: "acoes", label: "", sortable: false, render: m => (
       <div style={{ display: "flex", gap: 6 }}>
-        <button style={{ ...s.btn, padding: "4px 10px", fontSize: 11, color: T.accent, borderColor: T.accent+"33", background: T.accentDim }} onClick={() => editarMaterial(m)}><span className="btn-emoji">✏️ </span>Editar</button>
-        <button style={{ ...s.btnD, padding: "4px 10px", fontSize: 11 }} onClick={() => delMaterial(m.id)}>🗑️</button>
+        <button style={{ ...s.btn, padding: "4px 10px", fontSize: 11, color: T.accent, borderColor: T.accent+"33", background: T.accentDim }} onClick={() => editarMaterial(m)}>{podeEditarMat ? <><span className="btn-emoji">✏️ </span>Editar</> : <><span className="btn-emoji">👁️ </span>Ver</>}</button>
+        {podeEditarMat && <button style={{ ...s.btnD, padding: "4px 10px", fontSize: 11 }} onClick={() => delMaterial(m.id)}>🗑️</button>}
       </div>
     ) },
   ];
@@ -1092,7 +1095,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{matFiltrados.length} material(is) encontrado(s)</div>
-        <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setIaConfirmada(false); setView("novo"); }}>+ Novo Material</button>
+        {podeEditarMat && <button style={s.btnA} onClick={()=>{ setForm(EMPTY_MAT); setEnsaios([]); setFichasTecnicas([]); setSel(null); setTemplateSel(""); setIaConfirmada(false); setView("novo"); }}>+ Novo Material</button>}
       </div>
 
       {materiais.length===0 ? (
@@ -1139,7 +1142,7 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
     <div>
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:"1rem" }}>
         <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>← Voltar</button>
-        <div style={{ fontSize:15, fontWeight:700, color:T.text }}>{sel?"Editar material":"Novo material"}</div>
+        <div style={{ fontSize:15, fontWeight:700, color:T.text }}>{!podeEditarMat?"Material":sel?"Editar material":"Novo material"}</div>
       </div>
 
       {/* Templates */}
@@ -1154,10 +1157,10 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
             </Sel>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-            {templates.length > 0 && templateSel && (
+            {podeEditarMat && templates.length > 0 && templateSel && (
               <button style={{ ...s.btnD, fontSize:11, padding:"5px 10px" }} onClick={()=>{ const tpl=templates.find(t=>String(t.id)===String(templateSel)); if(tpl) delTemplate(tpl); }}>🗑️ Excluir template</button>
             )}
-            <button style={{ ...s.btn, fontSize:11, padding:"5px 12px", color:T.accent, borderColor:T.accent+"44", background:"transparent" }} onClick={salvarTemplate}>💾 Salvar como template</button>
+            {podeEditarMat && <button style={{ ...s.btn, fontSize:11, padding:"5px 12px", color:T.accent, borderColor:T.accent+"44", background:"transparent" }} onClick={salvarTemplate}>💾 Salvar como template</button>}
           </div>
         </div>
         {templates.length===0 && (
@@ -1322,14 +1325,22 @@ Responda APENAS com um array JSON, sem markdown, sem texto antes ou depois, no f
       </div>
 
       <div style={{ display:"flex", gap:10, justifyContent:"flex-end", paddingBottom:"1rem" }}>
-        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>Cancelar</button>
-        <button style={s.btnA} onClick={salvar}><span className="btn-emoji">💾 </span>Salvar material →</button>
+        <button style={s.btn} onClick={()=>{ setView("lista"); setSel(null); }}>{podeEditarMat ? "Cancelar" : "Voltar"}</button>
+        {podeEditarMat
+          ? <button style={s.btnA} onClick={salvar}><span className="btn-emoji">💾 </span>Salvar material →</button>
+          : <span style={{ fontSize:12, color:T.text3, alignSelf:"center" }}>Somente leitura — alterar material exige a permissão "Criar / editar material CQ".</span>}
       </div>
     </div>
   );
 }
 
 export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, perm, auditLog, rncs = [], setRncPrefill, config = {} }) {
+  // Mesma regra do servidor (server/regrasCQ.js): lançar/editar em aberto = lancarAnalise;
+  // aprovar disposição = aprovarAnalise; mexer em análise já aprovada = editarAnalise.
+  const pode = k => user?.role === "admin" || !!perm?.(k);
+  const podeLancar = pode("lancarAnalise");
+  const podeAprovar = pode("aprovarAnalise");
+  const podeMexer = a => a?.aprovacaoDisposicao ? pode("editarAnalise") : (podeLancar || pode("editarAnalise"));
   const T = useTheme(); const s = useS();
   const [materiais, setMateriais] = useState([]);
   const [analises, setAnalises] = useState([]);
@@ -1487,9 +1498,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
   };
 
   const editarAnalise = async (a) => {
-    const isOwner = a.resp === user?.name || a.analista === user?.name;
-    const canEdit = isOwner || ["admin","keyuser","rt"].includes(user?.role) || (perm && perm("editarAnalise"));
-    if (!canEdit) { alert("Você não tem permissão para editar esta análise."); return; }
+    if (!podeMexer(a)) { toast_(a.aprovacaoDisposicao ? "Análise com disposição aprovada: editar exige a permissão \"Editar análise aprovada\"." : "Você não tem permissão para lançar ou editar análise.", "red"); return; }
     // Load the material to get ensaio definitions
     const mat = materiais.find(m => (a.materialId != null && String(m.id) === String(a.materialId)) || m.nome === a.materialNome);
     if (mat) {
@@ -1861,7 +1870,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{analiseFiltradas.length} de {analises.length} análise(s)</div>
-        <button style={s.btnA} onClick={()=>{ setMatSel(null); setSelAnalise(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>
+        {podeLancar && <button style={s.btnA} onClick={()=>{ setMatSel(null); setSelAnalise(null); setFiltroTipo("Todos"); setForm({ fornecedor:"", lote:"", qtdRecebidaValor:"", qtdRecebidaUnidade:"kg", qtdRecebida:"", nf:"", dataRecebimento:tod(), dataAnalise:tod(), resp:user.name, obs:"" }); setResultados([]); setCoa(null); setView("nova"); }}>+ Nova Análise</button>}
       </div>
 
       {/* Filtros */}
@@ -1898,7 +1907,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                 <div style={{ fontSize:12, color:T.text2, marginTop:2 }}>{selAnalise.fornecedor||"—"} · Lote: {selAnalise.lote||"—"} · {fmt(selAnalise.dataAnalise)} · {selAnalise.resp}</div>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}>{selAnalise.conclusao==="Pendente"?<><span className="btn-emoji">📝 </span>Lançar Resultados</>:<><span className="btn-emoji">✏️ </span>Editar</>}</button>
+                {podeMexer(selAnalise) && <button style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editarAnalise(selAnalise)}>{selAnalise.conclusao==="Pendente"?<><span className="btn-emoji">📝 </span>Lançar Resultados</>:<><span className="btn-emoji">✏️ </span>Editar</>}</button>}
                 <button style={{ ...s.btn, fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportRA(selAnalise)}><span className="btn-emoji">📄 </span>PDF</button>
                 {perm("criarLaudos") && <button style={{ ...s.btnA, fontSize:11 }} onClick={()=>{
                   sessionStorage.setItem("sgq_laudo_prefill", JSON.stringify({
@@ -1907,7 +1916,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
                   }));
                   setTab("laudos");
                 }}><span className="btn-emoji">📋 </span>Gerar Laudo</button>}
-                <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>
+                {podeMexer(selAnalise) && <button style={s.btnD} onClick={()=>delAnalise(selAnalise.id)}>🗑️</button>}
                 <button onClick={()=>setSelAnalise(null)} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
             </div>
@@ -1939,11 +1948,11 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
               {selAnalise.coa ? (<>
                 <span style={{ fontSize:13, color:T.text, flex:1 }}>COA: {selAnalise.coa.name}</span>
                 <button onClick={()=>openCOA(selAnalise.coa)} style={{ ...s.btn, fontSize:11, color:T.accent }}>Ver COA</button>
-                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btn, fontSize:11 }}><span className="btn-emoji">🔄 </span>Trocar</button>
-                <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:null}); setSelAnalise({...selAnalise, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}><span className="btn-emoji">🗑️ </span>Excluir</button>
+                {podeMexer(selAnalise) && <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btn, fontSize:11 }}><span className="btn-emoji">🔄 </span>Trocar</button>}
+                {podeMexer(selAnalise) && <button onClick={async()=>{ if(!confirm("Remover COA desta análise?")) return; await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:null}); setSelAnalise({...selAnalise, coa:null}); toast_("COA removido.","red"); }} style={{ ...s.btnD, fontSize:11 }}><span className="btn-emoji">🗑️ </span>Excluir</button>}
               </>) : (<>
                 <span style={{ fontSize:13, color:T.text3, flex:1 }}>Nenhum COA anexado</span>
-                <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>
+                {podeMexer(selAnalise) && <button onClick={()=>document.getElementById("coa-reattach-analise").click()} style={{ ...s.btnA, fontSize:11 }}><span className="btn-emoji">📎 </span>Anexar COA</button>}
               </>)}
               <input id="coa-reattach-analise" type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={async e=>{ const file=e.target.files[0]; if(!file) return; toast_("Enviando COA...","blue"); try { const r=await uploadStoredFile(file); await saveCollection("cq_analises", String(selAnalise.id), {...selAnalise, coa:r}); setSelAnalise({...selAnalise, coa:r}); toast_("COA atualizado!","green"); } catch { toast_("Erro ao enviar COA.","red"); } }} />
             </div>
@@ -1961,7 +1970,7 @@ export function CQAnalisesTab({ user, users = [], toast_, fornecedores, setTab, 
             <div style={{ padding:"12px 16px", borderRadius:10, fontSize:14, fontWeight:700, textAlign:"center", background:selAnalise.conclusao==="Aprovado"?"#2ab84a18":selAnalise.conclusao==="Reprovado"?"#ff4f6a18":"#ffaa0018", color:selAnalise.conclusao==="Aprovado"?"#2ab84a":selAnalise.conclusao==="Reprovado"?"#ff4f6a":"#ffaa00" }}>
               {selAnalise.conclusao==="Aprovado"?"✅ APROVADO":selAnalise.conclusao==="Reprovado"?"❌ REPROVADO":"⏳ PENDENTE — aguardando lançamento de resultados"}
             </div>
-            <DisposicaoSecao T={T} s={s} registro={selAnalise} onAprovar={()=>aprovarDisposicaoAnalise(selAnalise)} />
+            <DisposicaoSecao T={T} s={s} registro={selAnalise} onAprovar={podeAprovar ? ()=>aprovarDisposicaoAnalise(selAnalise) : null} />
           </div>
         </div>
       )}

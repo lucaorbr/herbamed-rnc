@@ -1,5 +1,5 @@
 import {
-  montarGrupos, montarAbas, abaDaTela, telasDoGrupo, telasParaBusca, buscarTelas, ABAS_TOPO,
+  montarGrupos, montarAbas, telaPermitida, abaDaTela, telasDoGrupo, telasParaBusca, buscarTelas, ABAS_TOPO,
 } from "./navegacao";
 
 const admin = { isAdmin: true, isViewer: false };
@@ -55,6 +55,15 @@ describe("montarGrupos", () => {
     expect(grupos.map(g => g.id)).not.toContain("desvios-grupo");
     const tudo = montarGrupos({ ...viewer, perm: () => true }).flatMap(g => telasDoGrupo(g).map(t => t.id));
     expect(tudo).toEqual(expect.arrayContaining(["desvios", "indicadores-desvios", "revalidacao", "gestao-docs"]));
+  });
+
+  it("telaPermitida: tela de consulta exige a permissão, as demais não", () => {
+    const perm = k => k !== "verCQMateriais";
+    expect(telaPermitida("cq-materiais", perm)).toBe(false);
+    expect(telaPermitida("cq-analises", perm)).toBe(true);
+    expect(telaPermitida("home", () => false)).toBe(true);
+    const ids = montarGrupos({ ...viewer, perm }).flatMap(g => telasDoGrupo(g).map(t => t.id));
+    expect(ids).not.toContain("cq-materiais");
   });
 
   it("homologações respeita a permissão própria", () => {

@@ -34,6 +34,8 @@ import { ReunioesTab } from "../features/rnc/ReunioesTab";
 import { SupplierRNCPage } from "../features/rnc/SupplierRNCPage";
 import { SidebarNav } from "../layout/Sidebar";
 import { TopNav } from "../layout/TopNav";
+import { telaPermitida } from "../layout/navegacao";
+import SemPermissao from "../shared/SemPermissao";
 import { PrecisaDeVoce } from "../features/home/PrecisaDeVoce";
 import { Toast } from "../shared/ui";
 import { IconeSGQ } from "../shared/IconeSGQ";
@@ -892,6 +894,7 @@ export default function App() {
                   agora"; na de sempre, segue a Home antiga. Andam juntas de
                   propósito: quem volta para a lateral volta inteiro. */}
               <Suspense fallback={<AbaCarregando />}>
+              {!telaPermitida(tab, perm) && <SemPermissao onVoltar={() => setTab("home")} />}
               {tab==="home" && (navTopo
                 ? <PrecisaDeVoce rncs={rncs} desvios={desvios} user={user} setTab={setTab} abrirRnc={abrirRnc} abrirDoc={abrirDoc} perm={perm} docNotifs={docNotifs}
                     colaboradores={colaboradores} catalogoCargos={catalogoCargos} catalogoAreas={catalogoAreasSetoresDistribuicao} />
@@ -917,15 +920,15 @@ export default function App() {
               {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} homologacoes={homologacoes} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
               {tab==="homologacoes" && perm("verHomologacoes") && <HomologacoesTab user={user} users={users} fornecedores={fornecedores} homologacoes={homologacoes} toast_={toast_} auditLog={auditLog} perm={perm} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
-              {tab==="cq"           && <CQTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
-              {tab==="recebimentos-areco" && <ArecoRecebimentosTab user={user} toast_={toast_} setTab={setTab} />}
-              {tab==="cq-materiais" && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
+              {tab==="cq"           && <CQTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} config={config} perm={perm} />}
+              {tab==="recebimentos-areco" && <ArecoRecebimentosTab user={user} toast_={toast_} setTab={setTab} perm={perm} />}
+              {tab==="cq-materiais" && telaPermitida(tab, perm) && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
               {tab==="cq-analises"  && <CQAnalisesTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
               {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
               {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
-              {tab==="gestao-docs"  && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} docAberto={ficha.doc} onDocAberto={setDocAberto} />}
+              {tab==="gestao-docs"  && telaPermitida(tab, perm) && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} docAberto={ficha.doc} onDocAberto={setDocAberto} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}

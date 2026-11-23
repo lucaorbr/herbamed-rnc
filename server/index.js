@@ -36,6 +36,8 @@ const {
   precisaDoAnterior, validarGravacaoColecao, validarExclusaoColecao,
   validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro, validarLeituraColecao, filtrarLeituraColecao,
 } = require("./permissoesColecao");
+const { validarGravacaoCQ, validarExclusaoCQ, ehColecaoCQ } = require("./regrasCQ");
+const { temPermissao } = require("./permissoes");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { registrarAuditoria, rotularAuditoria, linhaParaTela } = require("./auditoria");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
@@ -1218,6 +1220,7 @@ async function handleCollections(req, res, pathname) {
     }
 
     validarGravacaoColecao(user, collection, data, oldData);
+    if (ehColecaoCQ(collection)) validarGravacaoCQ(user, collection, id, data, oldData);
     if (collection === "laudos") validateLaudoUpdate(oldData, data);
     if (collection === "homologacoes") validateHomologacaoUpdate(user, oldData, data);
     if (collection === "gestao_docs") validarGravacaoDocumento(user, oldData, data);
@@ -1275,6 +1278,7 @@ async function handleCollections(req, res, pathname) {
       "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
       [collection, id]
     );
+    if (ehColecaoCQ(collection)) validarExclusaoCQ(user, collection, anterior.rows[0]?.data || null);
     await query("DELETE FROM generic_documents WHERE collection = $1 AND id = $2", [collection, id]);
     if (anterior.rowCount) {
       await registrarAuditoria({ user, colecao: collection, docId: id, antes: anterior.rows[0].data, depois: null });
@@ -1930,7 +1934,10 @@ async function handleAreco(req, res, pathname, url) {
 
   const recebimentoMatch = pathname.match(/^\/api\/areco\/recebimentos\/([^/]+)$/);
   if (recebimentoMatch && (req.method === "PATCH" || req.method === "PUT")) {
-    await requireUser(req);
+    const quem = await requireUser(req);
+    if (quem.role !== "admin" && !temPermissao(quem, "lancarAnalise")) {
+      return sendJson(res, 403, { error: "Sem permissao para lancar analise." });
+    }
     const id = decodeURIComponent(recebimentoMatch[1]);
     const data = sanitize(await readBody(req));
     const allowed = new Set(["pendente_analise", "em_analise", "concluido", "fora_escopo"]);

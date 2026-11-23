@@ -56,7 +56,8 @@ function buildMaterialFromReceipt(item) {
   };
 }
 
-export function ArecoRecebimentosTab({ user, toast_, setTab }) {
+export function ArecoRecebimentosTab({ user, toast_, setTab, perm }) {
+  const podeCQ = k => user?.role === "admin" || !!perm?.(k);
   const T = useTheme();
   const s = useS();
   const [status, setStatus] = useState("pendente_analise");
@@ -288,12 +289,12 @@ export function ArecoRecebimentosTab({ user, toast_, setTab }) {
                     <span style={{ color:T.text3, fontSize:12, fontWeight:700 }}>Fora do CQ</span>
                   ) : (
                     <>
-                      <button style={{ ...s.btn, width:"100%" }} onClick={() => parametrizarEnsaios(item)}>
+                      {podeCQ("criarMaterialCQ") && <button style={{ ...s.btn, width:"100%" }} onClick={() => parametrizarEnsaios(item)}>
                         🔬 Parametrizar ensaios
-                      </button>
-                      <button style={{ ...s.btnA, width:"100%" }} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
+                      </button>}
+                      {podeCQ("lancarAnalise") && <button style={{ ...s.btnA, width:"100%" }} onClick={() => iniciarAnalise(item)} disabled={item.status === "concluido"}>
                         Iniciar analise
-                      </button>
+                      </button>}
                     </>
                   )}
                 </div>
