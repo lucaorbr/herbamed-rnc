@@ -83,3 +83,15 @@ test("cadastro: ninguém se dá permissão nem troca o próprio papel", () => {
   assert.deepEqual(camposProibidosNoCadastro(user, "u2", { online: true }, atual), ["*"]);
   assert.deepEqual(camposProibidosNoCadastro(admin, "u2", { permissoes: { x: true }, role: "rt" }, atual), []);
 });
+
+test("cadastro: nome, e-mail, setor, CRF e cargo só o admin altera", () => {
+  const atual = { name: "Ana", email: "ana@x", setor: "Qualidade", crf: "CRF-1", data: { cargo: "Analista", cargoId: "analista" } };
+  assert.deepEqual(camposProibidosNoCadastro(user, "u1", { crf: "CRF-2" }, atual), ["crf"]);
+  assert.deepEqual(camposProibidosNoCadastro(user, "u1", { cargo: "Farmacêutico RT", cargoId: "rt" }, atual), ["cargo", "cargoId"]);
+  assert.deepEqual(camposProibidosNoCadastro(user, "u1", { email: "outro@x", name: "Bia", setor: "Produção" }, atual), ["email", "name", "setor"]);
+  // campo que nem existe no cadastro também é do admin
+  assert.deepEqual(camposProibidosNoCadastro(user, "u1", { assinatura: { img: "x" } }, atual), ["assinatura"]);
+  // reenviar o que já está gravado (coluna ou JSON) não é alteração
+  assert.deepEqual(camposProibidosNoCadastro(user, "u1", { crf: "CRF-1", cargo: "Analista", ultimoAcesso: "2026-11-23", online: true }, atual), []);
+  assert.deepEqual(camposProibidosNoCadastro(admin, "u1", { crf: "CRF-2", cargo: "RT" }, atual), []);
+});
