@@ -190,11 +190,19 @@ export const subscribeCollection = (colName, cb, onErr) =>
 export const verifyCurrentUserPassword = (password) =>
   api("/api/auth/verify-password", { method: "POST", body: { password } });
 
-export const changePassword = (senhaAtual, senhaNova) =>
-  api("/api/auth/change-password", { method: "POST", body: { senhaAtual, senhaNova } });
+export const changePassword = async (senhaAtual, senhaNova) => {
+  // Trocar a senha encerra as outras sessões; esta segue com o token novo.
+  const r = await api("/api/auth/change-password", { method: "POST", body: { senhaAtual, senhaNova } });
+  if (r?.token) setToken(r.token);
+  return r;
+};
 
 export const adminResetPassword = (uid) =>
   api("/api/auth/admin-reset-password", { method: "POST", body: { uid } });
+
+/** Desativar / reativar / desbloquear / encerrar sessões (só admin). Devolve o cadastro atualizado. */
+export const administrarConta = async (uid, acao, motivo = "") =>
+  normalizeUser(await api("/api/auth/admin-conta", { method: "POST", body: { uid, acao, motivo } }));
 
 export const createElectronicSignature = ({ password, contexto = "", papel = "", docId = null }) =>
   api("/api/auth/signature", { method: "POST", body: { password, contexto, papel, docId } });

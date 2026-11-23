@@ -1,4 +1,4 @@
-import { PERMS_GRUPOS, PERMS_PADRAO, PERMS_SEM_EFEITO, gruposVisiveis } from "./permissions";
+import { PERMS_GRUPOS, PERMS_PADRAO, PERMS_SEM_EFEITO, gruposVisiveis, userHasPerm } from "./permissions";
 
 const todasChaves = PERMS_GRUPOS.flatMap(g => g.items.map(i => i.key));
 
@@ -17,4 +17,9 @@ test("esconder não apaga: as chaves seguem nos padrões de cada papel", () => {
   for (const papel of Object.keys(PERMS_PADRAO)) {
     for (const k of PERMS_SEM_EFEITO) expect(k in PERMS_PADRAO[papel]).toBe(true);
   }
+});
+
+test("conta desativada não tem permissão para designação", () => {
+  expect(userHasPerm({ role: "admin" }, "assinarRevisorAprovador")).toBe(true);
+  expect(userHasPerm({ role: "admin", ativo: false }, "assinarRevisorAprovador")).toBe(false);
 });

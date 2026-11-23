@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { query } = require("./db");
+const { bloqueadaAte, aposSenhaErrada, tokenValidoParaConta, horaBrasilia } = require("./contas");
 
 if (!process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET nao definido — defina a variavel de ambiente antes de iniciar");
@@ -26,11 +27,14 @@ function publicUser(row) {
     online: row.online,
     ultimoAcesso: row.ultimo_acesso,
     senhaTemporaria: row.senha_temporaria || false,
+    ativo: row.ativo !== false,
+    bloqueadoAte: bloqueadaAte(row)?.toISOString() || null,
+    desativacao: row.desativacao || null,
   };
 }
 
 function signToken(user) {
-  return jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: TOKEN_MAX_AGE_SECONDS });
+  return jwt.sign({ sub: user.id, email: user.email, role: user.role, sv: user.sessaoVersao || 0 }, JWT_SECRET, { expiresIn: TOKEN_MAX_AGE_SECONDS });
 }
 
 function cookieOptions(token) {
@@ -55,6 +59,8 @@ async function getCurrentUser(req) {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     const result = await query("SELECT * FROM users WHERE id = $1", [payload.sub]);
+    // Conta desativada ou sessões encerradas pelo admin: o token deixa de valer na hora.
+    if (!tokenValidoParaConta(payload, result.rows[0])) return null;
     return publicUser(result.rows[0]);
   } catch {
     return null;
@@ -84,16 +90,31 @@ async function requireAdmin(req) {
 async function login(email, password) {
   const result = await query("SELECT * FROM users WHERE lower(email) = lower($1)", [email]);
   const row = result.rows[0];
+  const falha = (status, mensagem, extra = {}) => Object.assign(new Error(mensagem), { status, ...extra });
+
+  // Bloqueada vale antes de conferir a senha: senão o bloqueio não segura tentativa nenhuma.
+  const ate = row && bloqueadaAte(row);
+  if (ate) {
+    throw falha(423, `Conta bloqueada por senhas erradas repetidas. Tente de novo depois das ${horaBrasilia(ate)} ou peça ao administrador para desbloquear.`);
+  }
   if (!row || !(await bcrypt.compare(password, row.password_hash))) {
-    const error = new Error("Credenciais invalidas");
-    error.status = 401;
-    throw error;
+    if (row) {
+      const r = aposSenhaErrada(row);
+      await query("UPDATE users SET tentativas_falhas = $2, bloqueado_ate = COALESCE($3, bloqueado_ate) WHERE id = $1",
+        [row.id, r.tentativas, r.bloquearAte]);
+      if (r.bloquearAte) throw falha(401, "Credenciais invalidas", { bloqueou: { row, ate: r.bloquearAte } });
+    }
+    throw falha(401, "Credenciais invalidas");
+  }
+  // Senha certa em conta desativada: diz o motivo (quem acertou a senha é o dono).
+  if (row.ativo === false) {
+    throw falha(403, "Conta desativada. Procure o administrador do sistema.");
   }
 
-  await query("UPDATE users SET online = true, ultimo_acesso = now(), updated_at = now() WHERE id = $1", [row.id]);
+  await query("UPDATE users SET online = true, ultimo_acesso = now(), tentativas_falhas = 0, bloqueado_ate = NULL, updated_at = now() WHERE id = $1", [row.id]);
   const fresh = await query("SELECT * FROM users WHERE id = $1", [row.id]);
   const user = publicUser(fresh.rows[0]);
-  return { user, token: signToken(user) };
+  return { user, token: signToken({ ...user, sessaoVersao: fresh.rows[0].sessao_versao }) };
 }
 
 async function verifyPassword(userId, password) {
@@ -103,6 +124,7 @@ async function verifyPassword(userId, password) {
 }
 
 module.exports = {
+  signToken,
   clearCookie,
   cookieOptions,
   getCurrentUser,

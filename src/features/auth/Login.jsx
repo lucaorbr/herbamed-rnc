@@ -29,7 +29,10 @@ export function Login({ onLogin }) {
       const userData = await getUser(cred.user.uid);
       if (userData) onLogin({ ...userData, uid: cred.user.uid });
       else setErr("Usuário não encontrado no sistema.");
-    } catch { setErr("Usuário/e-mail ou senha incorretos."); }
+    } catch (e) {
+      // Conta bloqueada ou desativada: o servidor diz o que fazer; senha errada segue genérica.
+      setErr(e?.status === 423 || e?.status === 403 ? e.message : "Usuário/e-mail ou senha incorretos.");
+    }
     setLoading(false);
   };
 

@@ -152,6 +152,7 @@ export function usuariosPorSetor(users = [], busca = "") {
   const termos = norm(busca).split(/\s+/).filter(Boolean);
   const grupos = new Map();
   for (const u of users || []) {
+    if (u.ativo === false) continue; // conta desativada não recebe documento
     const alvo = norm(`${u.name} ${u.email} ${u.setor} ${u.cargo}`);
     if (!termos.every((t) => alvo.includes(t))) continue;
     const setor = String(u.setor || "").trim() || "Sem setor informado";

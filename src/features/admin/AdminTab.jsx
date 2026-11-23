@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword } from "../../firebase";
+import { saveUser, createAuthUser, deleteUser as fbDeleteUser, updateUser, saveCollection, adminResetPassword, administrarConta } from "../../firebase";
 import { useTheme } from "../../core/theme";
 import { gruposVisiveis, PERMS_PADRAO } from "../permissions/permissions";
 import { useS } from "../../shared/styles";
@@ -139,7 +139,10 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   };
 
   const [showNovo, setShowNovo] = useState(false);
-  const [nu, setNu] = useState({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
+  const [nu, setNu] = useState({ name:"", email:"", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
+  // Senha temporária sorteada pelo servidor: aparece uma vez, para o admin repassar.
+  const [senhaMostrada, setSenhaMostrada] = useState(null);
+  const [copiou, setCopiou] = useState(false);
   const [nuPermissoes, setNuPermissoes] = useState({ ...PERMS_PADRAO["user"] });
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
@@ -150,18 +153,19 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
   const toggleEditPerm = (key) => setEditPerms(p => ({ ...p, [key]: !p[key] }));
 
   const addUser = async () => {
-    if(!nu.name||!nu.email||!nu.pw) { alert("Nome, e-mail e senha são obrigatórios."); return; }
+    if(!nu.name||!nu.email) { alert("Nome e e-mail são obrigatórios."); return; }
     if(users.find(u=>u.email===nu.email)) { alert("E-mail já cadastrado."); return; }
     try {
-      const cred = await createAuthUser(nu.email, nu.pw);
+      const cred = await createAuthUser(nu.email, undefined);
       const userData = { name:nu.name, email:nu.email, role:nu.role, setor:nu.setor, crf:nu.crf||"", cargo:nu.cargo||"", cargoId:nu.cargoId||"", permissoes:nuPermissoes };
-      const savedUser = await saveUser(cred.user.uid, userData);
+      const { senhaTemporariaGerada, ...savedUser } = await saveUser(cred.user.uid, userData);
       await auditLog("Criou Usuário", "usuarios", cred.user.uid, `${userData.name} (${userData.email})`, null, { name: userData.name, email: userData.email, role: userData.role, setor: userData.setor });
       setUsers([...users, savedUser]);
-      setNu({ name:"", email:"", pw:"Herbamed@2025", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
+      setNu({ name:"", email:"", role:"user", setor:"", crf:"", cargo:"", cargoId:"" });
       setNuPermissoes({ ...PERMS_PADRAO["user"] });
       setShowNovo(false);
-      toast_("Usuário criado com sucesso!", "green");
+      setCopiou(false);
+      setSenhaMostrada({ nome: userData.name, email: userData.email, senha: senhaTemporariaGerada, motivo: "Usuário criado" });
     } catch(e) { toast_("Erro: "+e.message, "red"); }
   };
 
@@ -189,24 +193,48 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
 
   const delUser = async (uid) => {
     if(uid===currentUser.uid) { alert("Você não pode excluir seu próprio usuário."); return; }
-    if(!confirm("Remover este usuário do sistema?")) return;
+    if(!confirm("Excluir este usuário? Ele nunca acessou o sistema, então não deixou registro.")) return;
     const antesD = users.find(u => u.id === uid);
-    await auditLog("Excluiu Usuário", "usuarios", uid, antesD ? `${antesD.name} (${antesD.email})` : uid, antesD, null);
-    await fbDeleteUser(uid);
-    setUsers(users.filter(u=>u.id!==uid));
-    toast_("Usuário removido.", "red");
+    try {
+      await fbDeleteUser(uid);
+      await auditLog("Excluiu Usuário", "usuarios", uid, antesD ? `${antesD.name} (${antesD.email})` : uid, antesD, null);
+      setUsers(users.filter(u=>u.id!==uid));
+      toast_("Usuário excluído.", "red");
+    } catch(e) { toast_(e.message, "red"); }
+  };
+
+  // Desativar / reativar / desbloquear / encerrar sessões — tudo registrado pelo servidor.
+  const conta = async (u, acao) => {
+    const nome = u.name || u.email;
+    let motivo = "";
+    if (acao === "desativar") {
+      motivo = prompt(`Desativar a conta de "${nome}"?\n\nA pessoa perde o acesso na hora e as sessões abertas caem. O cadastro e tudo o que ela registrou continuam.\n\nMotivo (obrigatório):`) || "";
+      if (!motivo.trim()) return;
+    } else if (acao === "encerrar-sessoes") {
+      if (!confirm(`Encerrar todas as sessões abertas de "${nome}"?\nA pessoa terá de entrar de novo (a senha não muda).`)) return;
+    } else if (acao === "reativar") {
+      if (!confirm(`Reativar a conta de "${nome}"?`)) return;
+    }
+    try {
+      const atualizado = await administrarConta(u.id, acao, motivo);
+      setUsers(users.map(x => x.id === u.id ? { ...x, ...atualizado } : x));
+      const msg = { desativar: "Conta desativada.", reativar: "Conta reativada.", desbloquear: "Conta desbloqueada.", "encerrar-sessoes": "Sessões encerradas." }[acao];
+      toast_(`${msg} ${nome}`, acao === "desativar" ? "red" : "green");
+    } catch(e) { toast_(e.message, "red"); }
   };
 
   const resetSenha = async (uid, nome) => {
-    if(!confirm(`Resetar senha de "${nome}" para Herba@123?\nO usuário precisará trocar no próximo login.`)) return;
+    if(!confirm(`Gerar uma senha temporária nova para "${nome}"?\nAs sessões abertas caem e a pessoa troca a senha no próximo acesso.`)) return;
     try {
-      await adminResetPassword(uid);
-      await auditLog("Reset de Senha", "usuarios", uid, nome, null, { senhaTemporaria: true });
-      toast_(`Senha de ${nome} resetada para Herba@123.`, "green");
+      const r = await adminResetPassword(uid);
+      const u = users.find(x => x.id === uid);
+      setUsers(users.map(x => x.id === uid ? { ...x, senhaTemporaria: true, bloqueadoAte: null } : x));
+      setCopiou(false);
+      setSenhaMostrada({ nome, email: u?.email, senha: r.senhaTemporaria, motivo: "Senha redefinida" });
     } catch(e) { toast_("Erro ao resetar senha: " + e.message, "red"); }
   };
 
-  const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU} = usePagination(users||[], 20);
+  const {paginated:_usrs,page:_pgU,total:_totU,setPage:_setPgU} = usePagination([...(users||[])].sort((a,b) => (a.ativo===false) - (b.ativo===false)), 20);
   return (
     <div>
       {/* ── Abas principais ── */}
@@ -227,7 +255,7 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <button style={s.btnA} onClick={()=>setShowNovo(true)}>+ Novo usuário</button>
         </div>
         {_usrs.map(u=>(
-          <div key={u.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, marginBottom:10, overflow:"hidden" }}>
+          <div key={u.id} style={{ background:T.surf, border:`1px solid ${T.border}`, borderRadius:10, marginBottom:10, overflow:"hidden", opacity:u.ativo===false?0.6:1 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px" }}>
                 <div style={{ display:"flex", gap:14, alignItems:"center" }}>
                   <div style={{ width:40, height:40, borderRadius:"50%", background:u.role==="admin"?`linear-gradient(135deg,${T.accent},${T.accent2})`:T.border, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, fontWeight:700, color:u.role==="admin"?"#fff":T.text2, flexShrink:0 }}>{(u.name||u.email)?.[0]?.toUpperCase()||"?"}</div>
@@ -235,8 +263,14 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:T.text }}>{u.name||u.email||"(sem nome)"}</div>
                       {u.assinatura && <span style={{ fontSize:10, color:T.accent, background:T.accentDim, padding:"1px 8px", borderRadius:20 }}>✓ Assinatura</span>}
+                      {u.ativo===false && <span title={u.desativacao ? `Desativada por ${u.desativacao.por} em ${new Date(u.desativacao.em).toLocaleString("pt-BR")}: ${u.desativacao.motivo}` : "Conta desativada"}
+                        style={{ fontSize:10, fontWeight:700, color:T.red, background:`${T.red}18`, padding:"2px 8px", borderRadius:12 }}>⛔ Desativada</span>}
+                      {u.ativo!==false && u.bloqueadoAte && new Date(u.bloqueadoAte) > new Date() &&
+                        <span style={{ fontSize:10, fontWeight:700, color:T.orange, background:`${T.orange}18`, padding:"2px 8px", borderRadius:12 }}>🔒 Bloqueada até {new Date(u.bloqueadoAte).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</span>}
+                      {u.ativo!==false && u.senhaTemporaria &&
+                        <span title="Ainda não trocou a senha temporária" style={{ fontSize:10, color:T.text3, background:T.border, padding:"2px 8px", borderRadius:12 }}>senha temporária</span>}
 
-                      {(() => {
+                      {u.ativo!==false && (() => {
                         const agora = Date.now();
                         const ultimo = u.ultimoAcesso ? new Date(u.ultimoAcesso).getTime() : null;
                         const diffMin = ultimo ? Math.floor((agora - ultimo) / 60000) : null;
@@ -272,14 +306,38 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
                     {u.role==="admin"?"Admin":u.role==="viewer"?"👁️ Visualizador":u.role==="rt"?"🔬 RT":u.role==="keyuser"?"⭐ Key User":"Usuário"}
                   </span>
                   <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>startEdit(u)}><span className="btn-emoji">✏️ </span>Editar</button>
-                  {u.id!==currentUser.uid && <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>resetSenha(u.id, u.name||u.email)} title="Resetar senha para Herba@123">🔄 Resetar senha</button>}
-                  {u.id!==currentUser.uid && <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>delUser(u.id)}>🗑️ Remover</button>}
+                  {u.id!==currentUser.uid && u.ativo!==false && <>
+                    {u.bloqueadoAte && new Date(u.bloqueadoAte) > new Date() &&
+                      <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>conta(u,"desbloquear")}>🔓 Desbloquear</button>}
+                    <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>resetSenha(u.id, u.name||u.email)} title="Gera uma senha temporária nova, mostrada uma vez">🔄 Nova senha</button>
+                    <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>conta(u,"encerrar-sessoes")} title="Derruba as sessões abertas; a senha não muda">⏏️ Encerrar sessões</button>
+                    {u.ultimoAcesso
+                      ? <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>conta(u,"desativar")} title="Tira o acesso; o cadastro e os registros ficam">⛔ Desativar</button>
+                      : <button style={{ ...s.btnD, padding:"6px 12px", fontSize:11 }} onClick={()=>delUser(u.id)} title="Nunca acessou o sistema: pode ser excluído">🗑️ Excluir</button>}
+                  </>}
+                  {u.id!==currentUser.uid && u.ativo===false &&
+                    <button style={{ ...s.btn, padding:"6px 12px", fontSize:11 }} onClick={()=>conta(u,"reativar")}>↩️ Reativar</button>}
                 </div>
               </div>
           </div>
         ))}
         <Pagination page={_pgU} total={_totU} setPage={_setPgU}/>
       </div>
+
+      {senhaMostrada && (
+      <ModalShell maxWidth={480} onClose={()=>{}}>
+        <div style={{ fontSize:18, fontWeight:700, color:T.text, marginBottom:4 }}>🔑 Senha temporária</div>
+        <div style={{ fontSize:12, color:T.text2, marginBottom:16 }}>{senhaMostrada.motivo} · {senhaMostrada.nome}{senhaMostrada.email ? ` (${senhaMostrada.email})` : ""}</div>
+        <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }}>
+          <code style={{ flex:1, fontSize:22, fontWeight:700, letterSpacing:1, textAlign:"center", padding:"12px 8px", borderRadius:8, background:T.surf, border:`1px solid ${T.border2}`, color:T.text }}>{senhaMostrada.senha}</code>
+          <button style={s.btn} onClick={async()=>{ try { await navigator.clipboard.writeText(senhaMostrada.senha); setCopiou(true); } catch { setCopiou(false); } }}>{copiou ? "✓ Copiada" : "Copiar"}</button>
+        </div>
+        <div style={{ fontSize:12, color:T.text2, lineHeight:1.5, marginBottom:18 }}>
+          Repasse esta senha à pessoa. <b>Ela não aparece de novo</b> — se perder, gere outra em "Nova senha". No primeiro acesso o sistema obriga a trocar.
+        </div>
+        <div style={{ textAlign:"right" }}><button style={s.btnA} onClick={()=>setSenhaMostrada(null)}>Já anotei, fechar</button></div>
+      </ModalShell>
+      )}
 
       {showNovo && (
       <ModalShell onClose={()=>setShowNovo(false)}>
@@ -288,12 +346,11 @@ export function AdminTab({ users, setUsers, toast_, currentUser, auditLog, confi
           <button onClick={()=>setShowNovo(false)} style={{ background:"none", border:"none", color:T.text3, cursor:"pointer", fontSize:22, fontFamily:"inherit" }}>✕</button>
         </div>
         <div style={{ background:T.accentDim, border:`1px solid ${T.accent}25`, borderRadius:8, padding:"10px 14px", marginBottom:"1rem", fontSize:12, color:T.accent }}>
-          💡 O usuário receberá acesso ao sistema com e-mail e senha definidos abaixo. Recomende trocar a senha no primeiro acesso.
+          💡 O sistema gera uma senha temporária ao salvar e mostra uma única vez para você repassar. No primeiro acesso a pessoa é obrigada a trocá-la.
         </div>
         <G2 ch={<>
           <F lbl="Nome completo" ch={<Inp placeholder="Ex: Ana Lima" value={nu.name} onChange={e=>set("name",e.target.value)} />} />
           <F lbl="E-mail" ch={<Inp type="email" placeholder="ana@herbamed.com" value={nu.email} onChange={e=>set("email",e.target.value)} />} />
-          <F lbl="Senha inicial" ch={<Inp value={nu.pw} onChange={e=>set("pw",e.target.value)} />} />
           <F lbl="Setor" ch={<Inp placeholder="Ex: Produção" value={nu.setor} onChange={e=>set("setor",e.target.value)} />} />
           <F lbl="Registro profissional (CRF/CRQ/CREA...)" ch={<Inp placeholder="Ex: CRQ-IV 12345" value={nu.crf} onChange={e=>set("crf",e.target.value)} />} />
           <F lbl="Cargo" tip="Vem do catálogo de cargos (Admin → Catálogos → Cargos). O cargo define quais treinamentos a pessoa herda." ch={

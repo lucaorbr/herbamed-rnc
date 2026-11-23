@@ -82,6 +82,7 @@ export function gruposVisiveis(grupos = PERMS_GRUPOS) {
 // Mesma lógica do `perm` do App: usa overrides salvos no usuário, senão cai no papel.
 export function userHasPerm(u, key) {
   if (!u) return false;
+  if (u.ativo === false) return false; // conta desativada não entra em lista de designação
   if (u.permissoes && key in u.permissoes) return !!u.permissoes[key];
   const role = u.role;
   return PERMS_PADRAO[role] ? !!(PERMS_PADRAO[role][key]) : false;

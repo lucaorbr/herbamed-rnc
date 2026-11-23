@@ -263,6 +263,12 @@ async function migrate() {
   `);
 
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS senha_temporaria boolean NOT NULL DEFAULT false`);
+  // Contas (v3.36.0): desativar sem apagar, bloqueio por senha errada, encerrar sessões.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ativo boolean NOT NULL DEFAULT true`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tentativas_falhas integer NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bloqueado_ate timestamptz`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sessao_versao integer NOT NULL DEFAULT 0`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS desativacao jsonb`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS rnc_supplier_tokens (
