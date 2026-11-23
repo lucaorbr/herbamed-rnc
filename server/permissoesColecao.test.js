@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   validarGravacaoColecao, validarExclusaoColecao, validarGravacaoRNC, validarExclusaoRNC,
-  camposProibidosNoCadastro, precisaDoAnterior,
+  camposProibidosNoCadastro, precisaDoAnterior, validarLeituraColecao, filtrarLeituraColecao,
 } = require("./permissoesColecao");
 
 const u = (role, permissoes = {}, id = "u1") => ({ id, role, permissoes });
@@ -94,4 +94,30 @@ test("cadastro: nome, e-mail, setor, CRF e cargo só o admin altera", () => {
   // reenviar o que já está gravado (coluna ou JSON) não é alteração
   assert.deepEqual(camposProibidosNoCadastro(user, "u1", { crf: "CRF-1", cargo: "Analista", ultimoAcesso: "2026-11-23", online: true }, atual), []);
   assert.deepEqual(camposProibidosNoCadastro(admin, "u1", { crf: "CRF-2", cargo: "RT" }, atual), []);
+});
+
+test("leitura: permissão 'Visualizar' desmarcada barra a coleção", () => {
+  const semDesvios = u("user", { verDesvios: false });
+  assert.throws(() => validarLeituraColecao(semDesvios, "desvios"), { status: 403 });
+  assert.doesNotThrow(() => validarLeituraColecao(user, "desvios"));
+  assert.doesNotThrow(() => validarLeituraColecao(u("user", { verDesvios: false, triarDesvio: true }), "desvios"));
+  assert.throws(() => validarLeituraColecao(u("user", { verRevalidacao: false, criarRevalidacao: false }), "revalidacoes"), { status: 403 });
+  assert.throws(() => validarLeituraColecao(u("user", { verDocumentos: false }), "gestao_docs"), { status: 403 });
+  // o painel do Executivo conta documentos, mesmo sem a área de documentos
+  assert.doesNotThrow(() => validarLeituraColecao(exec, "gestao_docs"));
+  // coleção fora do mapa segue aberta a quem está logado
+  assert.doesNotThrow(() => validarLeituraColecao(viewer, "fornecedores"));
+});
+
+test("leitura: trilha antiga só para o admin", () => {
+  assert.throws(() => validarLeituraColecao(rt, "audit_log"), { status: 403 });
+  assert.doesNotThrow(() => validarLeituraColecao(admin, "audit_log"));
+});
+
+test("leitura: acesso restrito a vigentes só recebe documento Vigente", () => {
+  const docs = [{ id: "a", status: "Vigente" }, { id: "b", status: "Rascunho" }, { id: "c", status: "Obsoleto" }];
+  assert.deepEqual(filtrarLeituraColecao(viewer, "gestao_docs", docs).map(d => d.id), ["a"]);
+  assert.equal(filtrarLeituraColecao(user, "gestao_docs", docs).length, 3);
+  assert.equal(filtrarLeituraColecao(u("admin", { acessoRestritoVigente: true }), "gestao_docs", docs).length, 3);
+  assert.equal(filtrarLeituraColecao(viewer, "desvios", docs).length, 3);
 });

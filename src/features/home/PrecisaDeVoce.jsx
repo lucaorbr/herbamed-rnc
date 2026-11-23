@@ -90,7 +90,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
   const podeDistribuir = user?.role === "admin" || perm("iniciarRevisao");
 
   useEffect(() => {
-    const u1 = subscribeCollection("laudos", list => setLaudos(list || []));
+    const u1 = (user?.role === "admin" || perm("verLaudos")) ? subscribeCollection("laudos", list => setLaudos(list || [])) : null;
     const u2 = subscribeCollection("ipc_registros", list => setIpc(list || []));
     return () => { u1 && u1(); u2 && u2(); };
   }, []);

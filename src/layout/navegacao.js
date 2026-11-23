@@ -65,8 +65,22 @@ export function montarGrupos({ rncs = [], desvios = [], isViewer = false, isAdmi
       ...(isAdmin?[{ id:"admin",     icon:"⚙️", label:"Administração" }]:[]),
     ]},
   ];
-  // Laudos depende de permissão própria — a barra lateral já filtrava assim.
-  return grupos.map(g => ({ ...g, items: g.items.filter(i => i.id !== "laudos" || perm("verLaudos")) }));
+  // Telas de consulta com permissão "Visualizar…" própria. Sem ela o servidor
+  // recusa a leitura (v3.37.0), então o menu também some com a tela.
+  const pode = (...keys) => keys.some(k => perm(k));
+  const exige = {
+    laudos: () => pode("verLaudos"),
+    desvios: () => pode("verDesvios"),
+    "indicadores-desvios": () => pode("verDesvios"),
+    revalidacao: () => pode("verRevalidacao"),
+    "gestao-docs": () => pode("verDocumentos"),
+  };
+  const visivel = i => !exige[i.id] || exige[i.id]();
+  return grupos
+    .map(g => ({ ...g, items: g.items
+      .map(i => i.subItems ? { ...i, subItems: i.subItems.filter(visivel) } : i)
+      .filter(i => visivel(i) && (!i.subItems || i.subItems.length)) }))
+    .filter(g => g.items.length);
 }
 
 /**

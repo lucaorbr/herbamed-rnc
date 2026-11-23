@@ -43,6 +43,20 @@ describe("montarGrupos", () => {
     expect(comPerm.items.map(i => i.id)).toContain("laudos");
   });
 
+  it("desvios, revalidações e documentos somem sem a permissão de visualizar", () => {
+    const perm = k => !["verDesvios", "verRevalidacao", "verDocumentos"].includes(k);
+    const grupos = montarGrupos({ ...viewer, perm });
+    const ids = grupos.flatMap(g => telasDoGrupo(g).map(t => t.id));
+    expect(ids).not.toEqual(expect.arrayContaining(["desvios"]));
+    expect(ids).not.toContain("indicadores-desvios");
+    expect(ids).not.toContain("revalidacao");
+    expect(ids).not.toContain("gestao-docs");
+    // grupo que ficou vazio sai do menu
+    expect(grupos.map(g => g.id)).not.toContain("desvios-grupo");
+    const tudo = montarGrupos({ ...viewer, perm: () => true }).flatMap(g => telasDoGrupo(g).map(t => t.id));
+    expect(tudo).toEqual(expect.arrayContaining(["desvios", "indicadores-desvios", "revalidacao", "gestao-docs"]));
+  });
+
   it("homologações respeita a permissão própria", () => {
     const semPerm = montarGrupos({ ...admin, perm: key => key !== "verHomologacoes" }).find(g => g.id === "cadastros");
     expect(semPerm.items.map(i => i.id)).not.toContain("homologacoes");
