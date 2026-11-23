@@ -35,6 +35,7 @@ const {
   validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro,
 } = require("./permissoesColecao");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
+const { registrarAuditoria, rotularAuditoria, linhaParaTela } = require("./auditoria");
 const { mesclarPatchRNC, validarSubstituicaoRNC } = require("./rncGravacao");
 const { podeResponder, complementoAberto, rncComResposta } = require("./respostaFornecedor");
 const {
@@ -191,7 +192,23 @@ async function handleClaude(req, res) {
 async function handleAuth(req, res, pathname) {
   if (pathname === "/api/auth/login" && req.method === "POST") {
     const { email, password } = await readBody(req);
-    const result = await login(email, password);
+    let result;
+    try {
+      result = await login(email, password);
+    } catch (error) {
+      if (error.status === 401) {
+        // Quem tentou não está autenticado: registra o e-mail digitado.
+        const tentado = String(email || "").slice(0, 200) || "—";
+        await registrarAuditoria({
+          user: { name: "—", email: tentado, id: null },
+          acao: "Falha de login", colecao: "usuarios", docId: null, docNome: tentado,
+        });
+      }
+      throw error;
+    }
+    await registrarAuditoria({
+      user: result.user, acao: "Login", colecao: "usuarios", docId: result.user.id, docNome: result.user.name,
+    });
     return sendJson(res, 200, { user: result.user, token: result.token }, { "Set-Cookie": cookieOptions(result.token) });
   }
 
@@ -222,13 +239,18 @@ async function handleAuth(req, res, pathname) {
     if (!ok) return sendJson(res, 401, { error: "Senha atual incorreta" });
     const hash = await bcrypt.hash(senhaNova, 12);
     await query("UPDATE users SET password_hash = $1, senha_temporaria = false, updated_at = now() WHERE id = $2", [hash, user.id]);
+    await registrarAuditoria({ user, acao: "Trocou a própria senha", colecao: "usuarios", docId: user.id, docNome: user.name });
     return sendJson(res, 200, { ok: true });
   }
 
   if (pathname === "/api/auth/admin-reset-password" && req.method === "POST") {
-    await requireAdmin(req);
+    const admin = await requireAdmin(req);
     const { uid } = await readBody(req);
     if (!uid) return sendJson(res, 400, { error: "uid obrigatorio" });
+    const alvo = await query("SELECT name FROM users WHERE id = $1", [uid]);
+    await registrarAuditoria({
+      user: admin, acao: "Redefiniu senha de usuário", colecao: "usuarios", docId: uid, docNome: alvo.rows[0]?.name || String(uid),
+    });
     const hash = await bcrypt.hash("Herba@123", 12);
     await query("UPDATE users SET password_hash = $1, senha_temporaria = true, updated_at = now() WHERE id = $2", [hash, uid]);
     return sendJson(res, 200, { ok: true });
@@ -238,7 +260,13 @@ async function handleAuth(req, res, pathname) {
     const user = await requireUser(req);
     const { password, contexto = "", papel = "", docId = null } = await readBody(req);
     const ok = await verifyPassword(user.id, password);
-    if (!ok) return sendJson(res, 401, { error: "Senha incorreta" });
+    if (!ok) {
+      await registrarAuditoria({
+        user, acao: "Assinatura recusada (senha incorreta)", colecao: "assinaturas", docId: docId || contexto || null,
+        docNome: contexto || String(docId || "—"), detalhe: [{ campo: "papel", antes: null, depois: papel || null }],
+      });
+      return sendJson(res, 401, { error: "Senha incorreta" });
+    }
 
     // Rota de assinatura (Gestao de Documentos): so o designado assina como
     // Revisor/Aprovador (sem excecao para admin), na ordem, e com segregacao de
@@ -301,6 +329,14 @@ async function handleAuth(req, res, pathname) {
     } catch (error) {
       console.error("Falha ao registrar assinatura em document_signatures:", error);
     }
+    await registrarAuditoria({
+      user, acao: "Assinatura eletrônica", colecao: "assinaturas", docId: docId || contexto || null,
+      docNome: contexto || String(docId || "—"),
+      detalhe: [
+        { campo: "papel", antes: null, depois: papel || null },
+        { campo: "codigoVerificacao", antes: null, depois: codigoVerificacao },
+      ],
+    });
 
     return sendJson(res, 200, {
       ...payload,
@@ -318,6 +354,34 @@ async function handleAuth(req, res, pathname) {
       codigoVerificacao,
       versaoAssinatura: "SGQ-HERBAMED-ELETRONICA-1",
     });
+  }
+
+  return false;
+}
+
+// ── Trilha de auditoria (server/auditoria.js) ──
+async function handleAuditoria(req, res, pathname) {
+  if (pathname !== "/api/auditoria") return false;
+
+  // A tela manda o NOME da ação; quem fez e quando vêm da sessão e do servidor.
+  if (req.method === "POST") {
+    const user = await requireUser(req);
+    const { acao, colecao, docId, docNome } = await readBody(req);
+    if (!acao) return sendJson(res, 400, { error: "acao obrigatoria" });
+    await rotularAuditoria(user, { acao, colecao, docId, docNome });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (req.method === "GET") {
+    await requireAdmin(req);
+    const novas = await query("SELECT * FROM audit_log ORDER BY data DESC");
+    // Trilha antiga, gravada pelo navegador até a v3.34 — mostrada, não migrada.
+    const antigas = await query("SELECT data FROM generic_documents WHERE collection = 'audit_log'");
+    const lista = [
+      ...novas.rows.map(linhaParaTela),
+      ...antigas.rows.map(r => ({ ...r.data, id: `n${r.data.id}`, origem: "navegador" })),
+    ].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return sendJson(res, 200, lista);
   }
 
   return false;
@@ -400,7 +464,7 @@ async function handleUsers(req, res, pathname) {
   }
 
   if (pathname === "/api/users" && req.method === "POST") {
-    await requireAdmin(req);
+    const admin = await requireAdmin(req);
     const data = sanitize(await readBody(req));
     const password = data.pw || data.password || "Herbamed@2025";
     const passwordHash = await bcrypt.hash(password, 12);
@@ -420,7 +484,9 @@ async function handleUsers(req, res, pathname) {
       JSON.stringify(data.permissoes || {}),
       JSON.stringify(payload),
     ]);
-    return sendJson(res, 201, publicUser(result.rows[0]));
+    const criado = publicUser(result.rows[0]);
+    await registrarAuditoria({ user: admin, colecao: "usuarios", docId: criado.id, antes: null, depois: criado });
+    return sendJson(res, 201, criado);
   }
 
   const match = pathname.match(/^\/api\/users\/([^/]+)$/);
@@ -436,7 +502,7 @@ async function handleUsers(req, res, pathname) {
   if (req.method === "PATCH" || req.method === "PUT") {
     const currentUser = await requireUser(req);
     const data = sanitize(await readBody(req));
-    const existing = await query("SELECT data, role, permissoes FROM users WHERE id = $1", [id]);
+    const existing = await query("SELECT * FROM users WHERE id = $1", [id]);
     if (!existing.rowCount) return sendJson(res, 404, { error: "Usuario nao encontrado" });
 
     // Usuario comum so edita o proprio cadastro, e nunca o papel nem as permissoes
@@ -474,12 +540,18 @@ async function handleUsers(req, res, pathname) {
       data.ultimoAcesso || data.ultimo_acesso || null,
       JSON.stringify(merged),
     ]);
-    return sendJson(res, 200, publicUser(result.rows[0]));
+    const atualizado = publicUser(result.rows[0]);
+    await registrarAuditoria({ user: currentUser, colecao: "usuarios", docId: id, antes: publicUser(existing.rows[0]), depois: atualizado });
+    return sendJson(res, 200, atualizado);
   }
 
   if (req.method === "DELETE") {
-    await requireAdmin(req);
+    const admin = await requireAdmin(req);
+    const anterior = await query("SELECT * FROM users WHERE id = $1", [id]);
     await query("DELETE FROM users WHERE id = $1", [id]);
+    if (anterior.rowCount) {
+      await registrarAuditoria({ user: admin, colecao: "usuarios", docId: id, antes: publicUser(anterior.rows[0]), depois: null });
+    }
     return sendJson(res, 200, { ok: true });
   }
 
@@ -532,12 +604,15 @@ async function handleRncs(req, res, pathname) {
   }
 
   if (pathname === "/api/rncs" && req.method === "POST") {
-    validarGravacaoRNC(await requireUser(req));
+    const criador = await requireUser(req);
+    validarGravacaoRNC(criador);
     const body = sanitize(await readBody(req));
+    let nova = false;
     const created = await transaction(async client => {
       const id = String(body.id || crypto.randomUUID());
       const existing = await client.query("SELECT data FROM rncs WHERE id = $1", [id]);
       if (existing.rowCount) return existing.rows[0].data;
+      nova = true;
 
       const num = await reserveRncNumber(client);
       const data = { ...body, id, num };
@@ -548,6 +623,7 @@ async function handleRncs(req, res, pathname) {
         data.prazoAC || null, JSON.stringify(data)]);
       return data;
     });
+    if (nova) await registrarAuditoria({ user: criador, colecao: "rncs", docId: created.id, antes: null, depois: created });
     return sendJson(res, 201, created);
   }
 
@@ -562,8 +638,10 @@ async function handleRncs(req, res, pathname) {
   if (req.method === "PUT" || req.method === "POST") {
     const body = sanitize(await readBody(req));
     const data = { ...body, id };
+    let antesRnc = null;
     await transaction(async client => {
       const existing = await client.query("SELECT data FROM rncs WHERE id = $1 FOR UPDATE", [id]);
+      antesRnc = existing.rows[0]?.data || null;
       validarSubstituicaoRNC(existing.rows[0]?.data, data);
       await ensureRncNumberAvailable(client, data.num, id);
       await client.query(`
@@ -580,11 +658,14 @@ async function handleRncs(req, res, pathname) {
       `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null,
         data.prazoAC || null, JSON.stringify(data)]);
     });
+    await registrarAuditoria({ user: rncUser, colecao: "rncs", docId: id, antes: antesRnc, depois: data });
     return sendJson(res, 200, { ok: true });
   }
 
   if (req.method === "PATCH") {
     const patch = sanitize(await readBody(req));
+    let antesRnc = null;
+    let depoisRnc = null;
     await transaction(async client => {
       const existing = await client.query("SELECT data FROM rncs WHERE id = $1 FOR UPDATE", [id]);
       if (!existing.rowCount) {
@@ -593,6 +674,8 @@ async function handleRncs(req, res, pathname) {
         throw error;
       }
       const data = mesclarPatchRNC(existing.rows[0].data, patch, id);
+      antesRnc = existing.rows[0].data;
+      depoisRnc = data;
       await ensureRncNumberAvailable(client, data.num, id);
       await client.query(`
         UPDATE rncs SET num=$2,status=$3,sev=$4,resp=$5,prazo_ac=$6,data=$7::jsonb,updated_at=now()
@@ -600,11 +683,16 @@ async function handleRncs(req, res, pathname) {
       `, [id, data.num || null, data.status || null, data.sev || null, data.resp || null,
         data.prazoAC || null, JSON.stringify(data)]);
     });
+    await registrarAuditoria({ user: rncUser, colecao: "rncs", docId: id, antes: antesRnc, depois: depoisRnc });
     return sendJson(res, 200, { ok: true });
   }
 
   if (req.method === "DELETE") {
+    const anterior = await query("SELECT data FROM rncs WHERE id = $1", [id]);
     await query("DELETE FROM rncs WHERE id = $1", [id]);
+    if (anterior.rowCount) {
+      await registrarAuditoria({ user: rncUser, colecao: "rncs", docId: id, antes: anterior.rows[0].data, depois: null });
+    }
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1053,7 +1141,9 @@ async function handleCollections(req, res, pathname) {
     const data = sanitize(await readBody(req));
 
     let oldData = null;
-    if (collection === "gestao_docs" || collection === "laudos" || collection === "homologacoes" || precisaDoAnterior(collection)) {
+    {
+      // Sempre lê o registro anterior: as regras de algumas coleções e a trilha de
+      // auditoria (diferença antes × depois) precisam dele.
       const prev = await query(
         "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
         [collection, id]
@@ -1079,6 +1169,8 @@ async function handleCollections(req, res, pathname) {
     if (collection === "gestao_docs") {
       await notifyDocumentSignatureRoute(id, oldData, data);
     }
+
+    await registrarAuditoria({ user, colecao: collection, docId: id, antes: oldData, depois: { ...data, id } });
 
     return sendJson(res, 200, { ok: true });
   }
@@ -1113,7 +1205,14 @@ async function handleCollections(req, res, pathname) {
         throw error;
       }
     }
+    const anterior = await query(
+      "SELECT data FROM generic_documents WHERE collection = $1 AND id = $2",
+      [collection, id]
+    );
     await query("DELETE FROM generic_documents WHERE collection = $1 AND id = $2", [collection, id]);
+    if (anterior.rowCount) {
+      await registrarAuditoria({ user, colecao: collection, docId: id, antes: anterior.rows[0].data, depois: null });
+    }
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1949,7 +2048,7 @@ async function route(req, res) {
   const integrationHandled = await handleRncIntegration(req, res, pathname, url);
   if (integrationHandled !== false) return integrationHandled;
 
-  const handlers = [handleAuth, handleSignatures, handleEmail, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentSummary, handleDocumentRender, handleCollections];
+  const handlers = [handleAuth, handleAuditoria, handleSignatures, handleEmail, handleNotifications, handleUsers, handleRncs, handleCounters, handleFiles, handleDistributionLog, handleDocumentSummary, handleDocumentRender, handleCollections];
   for (const handler of handlers) {
     const handled = await handler(req, res, pathname, url);
     if (handled !== false) return handled;

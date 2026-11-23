@@ -51,9 +51,10 @@ test("Li e entendi: sem gerir treinamento, só o próprio registro de leitura", 
   assert.equal(precisaDoAnterior("treinamentos"), true);
 });
 
-test("auditoria só acrescenta: não altera nem exclui, nem o admin", () => {
-  assert.doesNotThrow(() => validarGravacaoColecao(viewer, "audit_log", { acao: "x" }, null));
-  assert.throws(() => validarGravacaoColecao(admin, "audit_log", { acao: "x" }, { acao: "y" }), { status: 409 });
+test("trilha antiga não recebe gravação pela rota genérica, nem do admin", () => {
+  assert.throws(() => validarGravacaoColecao(viewer, "audit_log", { acao: "x" }, null), { status: 403 });
+  assert.throws(() => validarGravacaoColecao(admin, "audit_log", { acao: "x" }, null), { status: 403 });
+  assert.throws(() => validarGravacaoColecao(admin, "audit_log", { acao: "x" }, { acao: "y" }), { status: 403 });
   assert.throws(() => validarExclusaoColecao(admin, "audit_log"), { status: 403 });
 });
 

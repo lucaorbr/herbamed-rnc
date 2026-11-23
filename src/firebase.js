@@ -170,6 +170,14 @@ export const peekDailyCounter = async () => {
 export const saveCollection = (colName, id, data) =>
   api(`/api/collections/${encodeURIComponent(colName)}/${encodeURIComponent(id)}`, { method: "PUT", body: data });
 
+// Trilha de auditoria: a tela só manda o NOME da ação; quem fez e quando o servidor
+// tira da sessão (server/auditoria.js).
+export const rotularAuditoria = ({ acao, colecao, docId, docNome }) =>
+  // keepalive: o rótulo chega mesmo se a pessoa sair da tela logo após salvar.
+  api("/api/auditoria", { method: "POST", keepalive: true, body: { acao, colecao, docId, docNome } });
+
+export const listarAuditoria = () => api("/api/auditoria");
+
 export const deleteFromCollection = (colName, id) =>
   api(`/api/collections/${encodeURIComponent(colName)}/${encodeURIComponent(id)}`, { method: "DELETE" });
 

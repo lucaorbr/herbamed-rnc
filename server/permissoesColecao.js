@@ -17,7 +17,9 @@
 // Casos especiais:
 //   - treinamentos / leitura_aberturas: quem não gere treinamento só grava o PRÓPRIO
 //     registro ("Li e entendi" e abertura do documento distribuído);
-//   - audit_log: só acrescenta — não se sobrescreve nem se exclui entrada.
+//   - audit_log (coleção genérica antiga): ninguém grava mais por aqui. Desde a
+//     v3.35.0 a trilha é gerada pelo servidor (server/auditoria.js), em tabela
+//     própria; a coleção antiga fica só para leitura do que já foi gravado.
 //
 // A leitura (GET) segue aberta a quem está logado: o sistema carrega várias coleções
 // na abertura para a tela inicial e os painéis.
@@ -102,8 +104,7 @@ function validarGravacaoColecao(user, collection, data, anterior = null) {
   if (!user) throw erro(401, "Nao autenticado");
 
   if (collection === "audit_log") {
-    if (anterior) throw erro(409, "Registro de auditoria nao pode ser alterado.");
-    return;
+    throw erro(403, "A trilha de auditoria e gravada pelo servidor.");
   }
 
   if (COLECOES_DO_PROPRIO.has(collection)) {
