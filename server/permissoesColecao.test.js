@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  validarGravacaoColecao, validarExclusaoColecao, validarGravacaoRNC, validarExclusaoRNC,
+  validarGravacaoColecao, validarExclusaoColecao, validarExclusaoRNC,
   camposProibidosNoCadastro, precisaDoAnterior, validarLeituraColecao, filtrarLeituraColecao,
 } = require("./permissoesColecao");
 
@@ -65,10 +65,7 @@ test("exclusão de documento exige excluirDocumento; evidência só o admin", ()
   assert.throws(() => validarExclusaoColecao(viewer, "desvios"), { status: 403 });
 });
 
-test("RNC: visualizador não grava; exclusão exige excluirRNC", () => {
-  assert.throws(() => validarGravacaoRNC(viewer), { status: 403 });
-  assert.throws(() => validarGravacaoRNC(exec), { status: 403 });
-  assert.doesNotThrow(() => validarGravacaoRNC(user));
+test("RNC: exclusão exige excluirRNC (gravação em regrasRNC.test.js)", () => {
   assert.throws(() => validarExclusaoRNC(user), { status: 403 });
   assert.doesNotThrow(() => validarExclusaoRNC(rt));
 });

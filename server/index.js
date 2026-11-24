@@ -34,9 +34,10 @@ const {
 const { linhasHistoricoCapa } = require("./historicoCapa");
 const {
   precisaDoAnterior, validarGravacaoColecao, validarExclusaoColecao,
-  validarGravacaoRNC, validarExclusaoRNC, camposProibidosNoCadastro, validarLeituraColecao, filtrarLeituraColecao,
+  validarExclusaoRNC, camposProibidosNoCadastro, validarLeituraColecao, filtrarLeituraColecao,
 } = require("./permissoesColecao");
 const { validarGravacaoCQ, validarExclusaoCQ, ehColecaoCQ } = require("./regrasCQ");
+const { validarAlteracaoRNC, validarCriacaoRNC, comAutoria } = require("./regrasRNC");
 const { temPermissao } = require("./permissoes");
 const { notificacoesDeRecusa } = require("./recusaDocumento");
 const { registrarAuditoria, rotularAuditoria, linhaParaTela } = require("./auditoria");
@@ -672,8 +673,8 @@ async function handleRncs(req, res, pathname) {
 
   if (pathname === "/api/rncs" && req.method === "POST") {
     const criador = await requireUser(req);
-    validarGravacaoRNC(criador);
     const body = sanitize(await readBody(req));
+    validarCriacaoRNC(criador, body);
     let nova = false;
     const created = await transaction(async client => {
       const id = String(body.id || crypto.randomUUID());
@@ -682,7 +683,7 @@ async function handleRncs(req, res, pathname) {
       nova = true;
 
       const num = await reserveRncNumber(client);
-      const data = { ...body, id, num };
+      const data = comAutoria({ ...body, id, num }, criador);
       await client.query(`
         INSERT INTO rncs (id, num, status, sev, resp, prazo_ac, data, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,now())
@@ -698,8 +699,8 @@ async function handleRncs(req, res, pathname) {
   if (!match) return false;
   const rncUser = await requireUser(req);
   const id = decodeURIComponent(match[1]);
+  // Gravação: a regra por campo (regrasRNC.js) roda dentro da transação, com a RNC gravada.
   if (req.method === "DELETE") validarExclusaoRNC(rncUser);
-  else if (req.method !== "GET") validarGravacaoRNC(rncUser);
 
   // PATCH NÃO entra aqui: este bloco substitui o registro inteiro (ver rncGravacao.js).
   if (req.method === "PUT" || req.method === "POST") {
@@ -709,6 +710,8 @@ async function handleRncs(req, res, pathname) {
     await transaction(async client => {
       const existing = await client.query("SELECT data FROM rncs WHERE id = $1 FOR UPDATE", [id]);
       antesRnc = existing.rows[0]?.data || null;
+      if (antesRnc) validarAlteracaoRNC(rncUser, antesRnc, data);
+      else validarCriacaoRNC(rncUser, data);
       validarSubstituicaoRNC(existing.rows[0]?.data, data);
       await ensureRncNumberAvailable(client, data.num, id);
       await client.query(`
@@ -741,6 +744,7 @@ async function handleRncs(req, res, pathname) {
         throw error;
       }
       const data = mesclarPatchRNC(existing.rows[0].data, patch, id);
+      validarAlteracaoRNC(rncUser, existing.rows[0].data, data);
       antesRnc = existing.rows[0].data;
       depoisRnc = data;
       await ensureRncNumberAvailable(client, data.num, id);

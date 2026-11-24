@@ -22,6 +22,7 @@ import { AvaliacaoExternaEtapa, RespostaFornecedorEtapa } from "./EtapasExterna"
 import { EvidenciasRnc, ReunioesInternas } from "./ReunioesInternas";
 import { IshikawaEspinha, SeletorVistaIshikawa, useVistaIshikawa } from "./IshikawaEspinha";
 import { podeAbrirVinculada, prefillDaIneficaz } from "./rncVinculadaLogic";
+import { acoesNaRnc, rncPropria } from "./rncPermissoesLogic";
 
 // Ficha da RNC — página própria com as etapas em abas (onda 2 da ficha única).
 // Substitui o modal da lista: a lógica (edição append-only, disposição com assinatura
@@ -69,12 +70,15 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
   const gravar = async (patch) => { await doUpdateRNC(r.id, patch); setR(p => ({ ...p, ...patch })); };
   const agoraHora = () => new Date().toLocaleTimeString("pt-BR");
 
-  const canEdit = !isViewer && (isAdmin || r.criadoPor === user.name || r.detector === user.name);
-  const canDispor = !isViewer && (isAdmin || (perm && perm("analisarRNC")));
+  // Registro (própria × qualquer) e tratamento — o servidor confere o mesmo (regrasRNC.js).
+  const acoes = acoesNaRnc(r, user, { perm, isAdmin, isViewer });
+  const canEdit = acoes.registro;
+  const podeTratar = acoes.tratamento;
+  const canDispor = podeTratar;
   const emTratamento = rncEditavelNasFerramentas(r);
   const etapas = etapasDaRnc(r);
   const externa = rncExterna(r);
-  const podeAgir = !isViewer && emTratamento;
+  const podeAgir = podeTratar && emTratamento;
 
   const updStatus = async (status) => {
     const h = { data: tod(), hora: agoraHora(), acao: `Status alterado -> ${status}`, resp: user.name, tipo: "status" };
@@ -353,7 +357,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {rf.causaRaiz && <div style={{ fontSize: 12, marginBottom: 8 }}><b>Causa raiz:</b> {rf.causaRaiz}</div>}
         {linhasPlano.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "90px 1fr", gap: 4, fontSize: 12, marginBottom: 8 }}>{linhasPlano.map(([k, v]) => <React.Fragment key={k}><div style={{ fontWeight: 600 }}>{k}</div><div>{v}</div></React.Fragment>)}</div>}
         {rf.observacoes && <div style={{ fontSize: 12 }}><b>Observações:</b> {rf.observacoes}</div>}
-        {emTratamento && !isViewer && !externa && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>O botão "Usar resposta do fornecedor", nos 5 Porquês acima, copia esta análise para os campos ainda vazios.</div>}
+        {emTratamento && podeTratar && !externa && <div style={{ fontSize: 11, color: T.text3, marginTop: 8 }}>O botão "Usar resposta do fornecedor", nos 5 Porquês acima, copia esta análise para os campos ainda vazios.</div>}
       </div>
     );
   };
@@ -474,7 +478,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {disposicaoBloco(!isViewer)}
       </div>
     ),
-    causa: (!isViewer && emTratamento) ? (
+    causa: (podeTratar && emTratamento) ? (
       <div>
         <Investigacao r={r} user={user} toast_={toast_} gravar={gravar} podeRegistrar />
         <AnaliseCausaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
@@ -487,10 +491,10 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
         {respostaFornecedorBloco()}
       </div>
     ),
-    capa: (!isViewer && emTratamento && etapas.find(e => e.id === "capa")?.estado !== "bloqueada")
+    capa: (podeTratar && emTratamento && etapas.find(e => e.id === "capa")?.estado !== "bloqueada")
       ? <PlanoCapaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
       : capaBloco(),
-    eficacia: (!isViewer && emTratamento)
+    eficacia: (podeTratar && emTratamento)
       ? <EficaciaEditor key={r.id} r={r} user={user} toast_={toast_} openEmail={openEmail} gravar={gravar} />
       : eficaciaBloco(),
     resposta: <RespostaFornecedorEtapa key={r.id} r={r} user={user} toast_={toast_} gravar={gravar} podeAgir={podeAgir} openEmail={openEmail} formularioFornecedor={formularioFornecedor} />,
@@ -596,7 +600,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             ) : null}
           </div>
 
-          {!isViewer && emTratamento && (
+          {(podeTratar || canEdit) && emTratamento && (
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
               <div style={rot}>Status</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -611,8 +615,8 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
           <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
             <button style={s.btn} onClick={() => exportRNCPDF(r)}>📄 Exportar/Imprimir PDF</button>
             {!isViewer && <button style={s.btn} onClick={() => openEmail(r, "manual")}>✉️ Notificar</button>}
-            {!isViewer && r.fornecedor && <button style={s.btn} onClick={formularioFornecedor}>📋 Formulário p/ fornecedor</button>}
-            {!r.assinaturaElaborador && (isAdmin || r.criadoPor === user.name) && <button style={s.btn} onClick={() => setAssinaturaModal(true)}>✍️ Assinar como elaborador</button>}
+            {(podeTratar || canEdit) && r.fornecedor && <button style={s.btn} onClick={formularioFornecedor}>📋 Formulário p/ fornecedor</button>}
+            {!r.assinaturaElaborador && !isViewer && (isAdmin || rncPropria(r, user)) && <button style={s.btn} onClick={() => setAssinaturaModal(true)}>✍️ Assinar como elaborador</button>}
             {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={excluir}>🗑️ Excluir</button>}
           </div>
         </aside>

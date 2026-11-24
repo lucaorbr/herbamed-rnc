@@ -49,12 +49,7 @@ const PERMS_DOCUMENTO = [
 const PERMS_ANALISE_CQ = ["lancarAnalise", "aprovarAnalise", "editarAnalise"];
 const PERMS_TREINAMENTO = ["registrarTreinamento", "gerenciarTreinamento"];
 
-// Permissões que dão direito a gravar RNC (usado em /api/rncs, fora da rota genérica).
-// triarDesvio entra porque a conversão de desvio cria a RNC.
-const PERMS_RNC = [
-  "criarRNC", "editarRNCpropria", "editarRNCtodas", "analisarRNC", "aprovarRNC",
-  "gerenciarReunioesRNC", "triarDesvio",
-];
+// Gravação de RNC (/api/rncs) é conferida campo a campo em regrasRNC.js.
 
 const REGRAS_GRAVACAO = {
   desvios: algum("criarDesvio", "triarDesvio"),
@@ -130,11 +125,6 @@ function validarExclusaoColecao(user, collection) {
   if (collection === "audit_log") throw erro(403, "Registro de auditoria nao pode ser excluido.");
   const regra = REGRAS_EXCLUSAO[collection] || REGRAS_GRAVACAO[collection] || papelDeTrabalho;
   if (!regra(user)) throw erro(403, "Sem permissao para esta operacao.");
-}
-
-/** Gravação em /api/rncs (criar, substituir, mesclar). */
-function validarGravacaoRNC(user) {
-  if (!algum(...PERMS_RNC)(user)) throw erro(403, "Sem permissao para alterar RNC.");
 }
 
 /** Exclusão em /api/rncs/:id. */
@@ -226,7 +216,6 @@ module.exports = {
   precisaDoAnterior,
   validarGravacaoColecao,
   validarExclusaoColecao,
-  validarGravacaoRNC,
   validarExclusaoRNC,
   camposProibidosNoCadastro,
 };
