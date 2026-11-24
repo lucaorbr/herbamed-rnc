@@ -15,22 +15,12 @@
 //     para quem administra documentos. Rascunho segue aberto: o elaborador precisa
 //     conferir o próprio arquivo, e ainda não é cópia de nada.
 
-// Mesmos padrões de `PERMS_PADRAO` (src/features/permissions/permissions.js) para
-// as chaves que o servidor confere. Permissão gravada no usuário prevalece.
-const DOC_ROLE_PERMISSIONS = {
-  viewer:  { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: false, acessoRestritoVigente: true,  iniciarRevisao: false },
-  user:    { verDocumentos: true,  baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false, iniciarRevisao: false },
-  rt:      { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
-  keyuser: { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
-  admin:   { verDocumentos: true,  baixarCopiaNaoControlada: true,  configurarDocumentos: true,  acessoRestritoVigente: false, iniciarRevisao: true },
-  exec:    { verDocumentos: false, baixarCopiaNaoControlada: false, configurarDocumentos: false, acessoRestritoVigente: false, iniciarRevisao: false },
-};
+// Permissões por papel vêm da tabela única (server/permissoes.js); havia cópia aqui.
+// Permissão gravada no usuário prevalece.
+const { temPermissao } = require("./permissoes");
 
 function temPermissaoDoc(user, key) {
-  if (user?.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, key)) {
-    return user.permissoes[key] === true;
-  }
-  return DOC_ROLE_PERMISSIONS[user?.role]?.[key] === true;
+  return temPermissao(user, key);
 }
 
 function erro(status, message) {
