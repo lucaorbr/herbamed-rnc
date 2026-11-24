@@ -7,13 +7,14 @@ import { usePagination } from "../../shared/ui";
 import { F, G2, Inp, MaskedInp, Pagination, SecTitle } from "../../shared/ui";
 import { fbErr } from "../../shared/erroGravacao";
 
-export function ClientesTab({ user, toast_ }) {
+export function ClientesTab({ user, toast_, perm }) {
   const T = useTheme(); const s = useS();
   const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState({ nome:"", cnpj:"", contato:"", email:"", tel:"", cep:"", endereco:"", obs:"" });
   const [sel, setSel] = useState(null);
   const [busca, setBusca] = useState("");
-  const isAdmin = user?.role === "admin" || user?.role === "keyuser";
+  const isAdmin = user?.role === "admin";
+  const podeEditar = isAdmin || !!perm?.("editarClientes");
   const setF = (k,v) => setForm(p=>({...p,[k]:v}));
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function ClientesTab({ user, toast_ }) {
 
   return (
     <div>
-      {isAdmin && (
+      {podeEditar && (
         <div style={s.card}>
           <SecTitle icon="🏢" ch={sel ? "Editar Cliente" : "Novo Cliente"} />
           <G2 ch={<>
@@ -96,10 +97,10 @@ export function ClientesTab({ user, toast_ }) {
             <div style={{ fontSize:13, fontWeight:700, color:T.text }}>{c.nome}</div>
             <div style={{ fontSize:11, color:T.text2, marginTop:2 }}>{c.cnpj && `CNPJ: ${c.cnpj}`}{c.contato && ` · ${c.contato}`}{c.email && ` · ${c.email}`}</div>
           </div>
-          {isAdmin && (
+          {podeEditar && (
             <div style={{ display:"flex", gap:6 }}>
               <button onClick={()=>editar(c)} style={{ ...s.btn, fontSize:11, padding:"4px 10px" }}>✏️</button>
-              <button onClick={()=>deletar(c.id)} style={{ ...s.btnD, fontSize:11, padding:"4px 10px" }}>🗑️</button>
+              {isAdmin && <button onClick={()=>deletar(c.id)} style={{ ...s.btnD, fontSize:11, padding:"4px 10px" }}>🗑️</button>}
             </div>
           )}
         </div>

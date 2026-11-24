@@ -50,8 +50,8 @@ export const PERMS_GRUPOS = [
   ]},
   { grupo: "Outras áreas", items: [
     { key: "editarFornecedores",  label: "Cadastrar / editar fornecedores (excluir é só do admin)" },
-    { key: "criarAuditorias",     label: "Criar / editar Auditorias" },
-    { key: "editarClientes",      label: "Criar / editar Clientes terceiros" },
+    { key: "criarAuditorias",     label: "Criar / editar auditorias (excluir é só do admin)" },
+    { key: "editarClientes",      label: "Cadastrar / editar clientes terceiros (excluir é só do admin)" },
     { key: "editarIPC",           label: "Lançar, editar e excluir análise de mistura (IPC)" },
     { key: "editarIPCProdutos",   label: "Gerenciar catálogo de produtos do IPC" },
   ]},
@@ -63,7 +63,6 @@ export const PERMS_GRUPOS = [
 // editando). As chaves continuam em PERMS_PADRAO e no cadastro de cada usuário —
 // nada é apagado. Ao ligar uma delas de verdade (na tela E no servidor), tire-a daqui.
 export const PERMS_SEM_EFEITO = new Set([
-  "criarAuditorias", "editarClientes",
   // Só tem efeito na Matriz de Treinamento, que está desligada.
   ...(MATRIZ_TREINAMENTO_ATIVA ? [] : ["registrarTreinamento"]),
 ]);
