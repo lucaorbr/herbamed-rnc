@@ -104,10 +104,10 @@ export function pendenciasDeLaudo({ laudos = [], podeAssinar = false }) {
 }
 
 /** Liberação de IPC pendente. */
-// Sem gate de permissão de propósito: a aba de IPC também não tem um no App.jsx
-// (`tab==="ipc" && <IPCTab/>`), então esta pendência nunca leva a uma tela vazia.
-// Se um dia o IPC ganhar permissão própria, ela tem de chegar aqui junto.
-export function pendenciasDeIPC({ ipc = [] }) {
+// Só para quem lança IPC (`editarIPC`, v3.40.0): quem não pode concluir a análise
+// não tem o que fazer com a pendência — a tela abre só para leitura.
+export function pendenciasDeIPC({ ipc = [], podeLancarIPC = true }) {
+  if (!podeLancarIPC) return [];
   const pendentes = (ipc || []).filter(r => r?.status === "Pendente");
   if (!pendentes.length) return [];
   return [item({

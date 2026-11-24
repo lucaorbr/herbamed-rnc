@@ -9,8 +9,8 @@
 // Agora cada coleção tem a regra da tela que a grava:
 //   - coleção cuja tela usa uma permissão → exige a mesma permissão;
 //   - coleção de tela só do admin (configurações, catálogos, colaboradores) → admin;
-//   - coleção cuja tela ainda não usa permissão própria (fornecedores, auditorias,
-//     CQ, IPC, produção, FMEA…) → qualquer papel de trabalho, ou seja, barra só os
+//   - coleção cuja tela ainda não usa permissão própria (auditorias,
+//     clientes, produção, FMEA…) → qualquer papel de trabalho, ou seja, barra só os
 //     papéis de leitura (viewer, exec). Não muda nada para quem já usa essas telas;
 //   - coleção que não está no mapa → mesma regra de papel de trabalho.
 //
@@ -60,23 +60,26 @@ const REGRAS_GRAVACAO = {
   treinamento_sessoes: algum(...PERMS_TREINAMENTO),
   configuracoes: soAdmin,
   colaboradores: soAdmin,
-  // Telas que ainda não usam permissão própria: barra só os papéis de leitura.
+  fornecedores: algum("editarFornecedores"),
+  ipc_registros: algum("editarIPC"),
+  ipc_produtos: algum("editarIPCProdutos"),
+  // CQ: o papel de trabalho é a 1ª barreira; a regra por ação está em regrasCQ.js.
   cq_fichas: papelDeTrabalho,
   cq_analises: papelDeTrabalho,
   cq_materiais: papelDeTrabalho,
   cq_templates: papelDeTrabalho,
-  fornecedores: papelDeTrabalho,
+  // Telas que ainda não usam permissão própria: barra só os papéis de leitura.
   clientes_terceiros: papelDeTrabalho,
   auditorias: papelDeTrabalho,
   fmea: papelDeTrabalho,
-  ipc_registros: papelDeTrabalho,
-  ipc_produtos: papelDeTrabalho,
   producao_processos: papelDeTrabalho,
   producao_config_refugo: papelDeTrabalho,
 };
 
 const REGRAS_EXCLUSAO = {
   gestao_docs: algum("excluirDocumento"),
+  // Fornecedor tem RNCs e homologações penduradas no nome: excluir segue só o admin.
+  fornecedores: soAdmin,
   treinamentos: soAdmin,
   leitura_aberturas: soAdmin,
   treinamento_sessoes: soAdmin,

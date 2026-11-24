@@ -8,6 +8,7 @@ import { deleteUser } from "../../firebase";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
 import { cargosAtivos, cargoDoUsuario, cargosParaImportar, novoCargoId, pendentesDeMigracao, acharCargoPorNome, usuariosParaVincular } from "./cargos";
 import { ColaboradoresTab } from "../colaboradores/ColaboradoresTab";
+import { fbErr } from "../../shared/erroGravacao";
 
 // Criar e editar usuário viraram modal (antes: formulário sempre aberto no fim
 // da lista, e edição expandindo dentro da própria linha) — em uma lista de

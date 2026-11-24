@@ -9,8 +9,10 @@ test("toda permissão sem efeito existe no catálogo", () => {
 test("o Admin não mostra permissão sem efeito, e grupo vazio some", () => {
   const visiveis = gruposVisiveis().flatMap(g => g.items.map(i => i.key));
   for (const k of PERMS_SEM_EFEITO) expect(visiveis).not.toContain(k);
-  expect(gruposVisiveis().map(g => g.grupo)).not.toContain("Outras áreas");
   expect(visiveis).toContain("criarRNC");
+  // Ligadas na v3.40.0: voltam ao Admin; Auditorias e Clientes seguem escondidas.
+  const outras = gruposVisiveis().find(g => g.grupo === "Outras áreas").items.map(i => i.key);
+  expect(outras).toEqual(["editarFornecedores", "editarIPC", "editarIPCProdutos"]);
 });
 
 test("esconder não apaga: as chaves seguem nos padrões de cada papel", () => {

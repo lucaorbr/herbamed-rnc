@@ -32,9 +32,27 @@ test("configurações, catálogos e colaboradores só o admin grava", () => {
 });
 
 test("telas sem permissão própria seguem abertas a quem trabalha", () => {
-  for (const col of ["cq_fichas", "fornecedores", "auditorias", "ipc_registros", "producao_processos", "colecao_nova"]) {
+  for (const col of ["cq_fichas", "auditorias", "producao_processos", "colecao_nova"]) {
     assert.doesNotThrow(() => validarGravacaoColecao(user, col, {}), col);
   }
+});
+
+test("fornecedores e IPC: cada um com a própria permissão; excluir fornecedor só o admin", () => {
+  // Usuário: padrão sem editarFornecedores e sem catálogo IPC, mas lança IPC.
+  assert.throws(() => validarGravacaoColecao(user, "fornecedores", {}), { status: 403 });
+  assert.doesNotThrow(() => validarGravacaoColecao(rt, "fornecedores", {}));
+  assert.doesNotThrow(() => validarGravacaoColecao(u("user", { editarFornecedores: true }), "fornecedores", {}));
+  assert.throws(() => validarExclusaoColecao(rt, "fornecedores"), { status: 403 });
+  assert.doesNotThrow(() => validarExclusaoColecao(admin, "fornecedores"));
+
+  assert.doesNotThrow(() => validarGravacaoColecao(user, "ipc_registros", {}));
+  assert.doesNotThrow(() => validarExclusaoColecao(user, "ipc_registros"));
+  assert.throws(() => validarGravacaoColecao(u("user", { editarIPC: false }), "ipc_registros", {}), { status: 403 });
+
+  assert.throws(() => validarGravacaoColecao(user, "ipc_produtos", {}), { status: 403 });
+  assert.throws(() => validarGravacaoColecao(rt, "ipc_produtos", {}), { status: 403 });
+  assert.doesNotThrow(() => validarGravacaoColecao(u("keyuser"), "ipc_produtos", {}));
+  assert.throws(() => validarExclusaoColecao(user, "ipc_produtos"), { status: 403 });
 });
 
 test("Li e entendi: sem gerir treinamento, só o próprio registro de leitura", () => {

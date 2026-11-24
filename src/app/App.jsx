@@ -917,7 +917,7 @@ export default function App() {
               {tab==="dashboard"  && <DashTab rncs={rncs} />}
               {tab==="relatorios" && <RelatoriosTab rncs={rncs} desvios={desvios} users={users} user={user} toast_={toast_} />}
               {tab==="cep"        && <CEPTab rncs={rncs} />}
-              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} homologacoes={homologacoes} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} auditLog={auditLog} />}
+              {tab==="fornecedores"  && <FornecedoresTab rncs={rncs} fornecedores={fornecedores} homologacoes={homologacoes} setFornecedores={setFornecedores} user={user} toast_={toast_} isAdmin={isAdmin} perm={perm} auditLog={auditLog} />}
               {tab==="homologacoes" && perm("verHomologacoes") && <HomologacoesTab user={user} users={users} fornecedores={fornecedores} homologacoes={homologacoes} toast_={toast_} auditLog={auditLog} perm={perm} />}
               {tab==="nqa"          && <NQATab user={user} toast_={toast_} />}
               {tab==="cq"           && <CQTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} doSaveRNC={doSaveRNC} setTab={setTab} rncs={rncs} setRncPrefill={setRncPrefill} config={config} perm={perm} />}
@@ -929,8 +929,8 @@ export default function App() {
               {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
               {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
               {tab==="gestao-docs"  && telaPermitida(tab, perm) && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} docAberto={ficha.doc} onDocAberto={setDocAberto} />}
-              {tab==="ipc"          && <IPCTab user={user} toast_={toast_} />}
-              {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} />}
+              {tab==="ipc"          && <IPCTab user={user} toast_={toast_} perm={perm} />}
+              {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} perm={perm} />}
               {tab==="producao-processos" && <ProcessosProducaoTab user={user} toast_={toast_} />}
               {tab==="audit-log"    && isAdmin && <AuditLogTab user={user} />}
               {tab==="admin"        && isAdmin && <AdminTab users={users} setUsers={setUsers} toast_={toast_} currentUser={user} auditLog={auditLog} config={config} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} />}

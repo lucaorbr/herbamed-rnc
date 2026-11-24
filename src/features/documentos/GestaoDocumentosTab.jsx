@@ -1,3 +1,4 @@
+import { fbErr } from "../../shared/erroGravacao";
 import React, { useState, useEffect } from "react";
 import ExcelJS from 'exceljs';
 import { saveCollection, deleteFromCollection, subscribeCollection, getDocumentSummary, getToken } from "../../firebase";
