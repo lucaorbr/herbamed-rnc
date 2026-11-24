@@ -5,6 +5,7 @@ import { exportFMEAPDF } from "../pdf/pdfExports";
 import { askClaude } from "../../services/aiClient";
 import { useS } from "../../shared/styles";
 import { Inp, Tooltip } from "../../shared/ui";
+import { fbErr } from "../../shared/erroGravacao";
 
 export function FMEATab({ user, toast_, auditLog }) {
   const T = useTheme(); const s = useS();

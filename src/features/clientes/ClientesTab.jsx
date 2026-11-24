@@ -5,6 +5,7 @@ import { tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, Inp, MaskedInp, Pagination, SecTitle } from "../../shared/ui";
+import { fbErr } from "../../shared/erroGravacao";
 
 export function ClientesTab({ user, toast_ }) {
   const T = useTheme(); const s = useS();

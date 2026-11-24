@@ -5,9 +5,12 @@ import { useTheme } from "../../core/theme";
 import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { Badge, F, Inp, MaskedInp, SecTitle, Sel, SevB, TA } from "../../shared/ui";
+import { fbErr } from "../../shared/erroGravacao";
 
-export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setFornecedores, user, toast_, isAdmin, auditLog }) {
+export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setFornecedores, user, toast_, isAdmin, perm, auditLog }) {
   const T = useTheme(); const s = useS();
+  // Criar e editar: "Editar fornecedores" (conferido também no servidor). Excluir: só o admin.
+  const podeEditar = isAdmin || !!perm?.("editarFornecedores");
   const [sel, setSel] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [q, setQ] = useState("");
@@ -92,7 +95,7 @@ export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setForn
           <option value="">Todas as categorias</option>
           {CATS.map(c=><option key={c}>{c}</option>)}
         </Sel>
-        {isAdmin && <button style={s.btnA} onClick={()=>setShowNovo(o=>!o)}>+ Novo Fornecedor</button>}
+        {podeEditar && <button style={s.btnA} onClick={()=>setShowNovo(o=>!o)}>+ Novo Fornecedor</button>}
       </div>
 
       {/* Form novo fornecedor */}
@@ -137,7 +140,7 @@ export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setForn
         <div style={{ ...s.card, textAlign:"center", padding:"3rem" }}>
           <div style={{ fontSize:40, marginBottom:"1rem", opacity:.3 }}>🏭</div>
           <div style={{ fontSize:14, color:T.text2, marginBottom:6 }}>Nenhum fornecedor cadastrado</div>
-          <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Novo Fornecedor" para começar</div>
+          {podeEditar && <div style={{ fontSize:12, color:T.text3 }}>Clique em "+ Novo Fornecedor" para começar</div>}
         </div>
       ) : (
         <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, overflowX:"auto" }}>
@@ -202,7 +205,7 @@ export function FornecedoresTab({ rncs, fornecedores, homologacoes = [], setForn
               </div>
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
                 <span style={{ fontSize:11, fontWeight:600, color:STATUS_FORN[sel.status], background:`${STATUS_FORN[sel.status]}18`, padding:"4px 12px", borderRadius:20 }}>{sel.status}</span>
-                {isAdmin && !editMode && <button onClick={()=>{setEditData({...sel});setEditMode(true);}} style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>}
+                {podeEditar && !editMode && <button onClick={()=>{setEditData({...sel});setEditMode(true);}} style={{ ...s.btn, fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }}><span className="btn-emoji">✏️ </span>Editar</button>}
                 <button onClick={()=>{setSel(null);setEditMode(false);}} style={{ background:T.border, border:"none", color:T.text2, cursor:"pointer", borderRadius:8, padding:"6px 10px", fontSize:16, fontFamily:"inherit" }}>✕</button>
               </div>
             </div>

@@ -139,6 +139,10 @@ describe("pendenciasDeIPC", () => {
   it("sem pendência, sem linha", () => {
     expect(pendenciasDeIPC({ ipc: [{ status: "Liberado" }] })).toEqual([]);
   });
+
+  it("só aparece para quem lança IPC", () => {
+    expect(pendenciasDeIPC({ ipc: [{ status: "Pendente" }], podeLancarIPC: false })).toEqual([]);
+  });
 });
 
 describe("pendenciasDeTreinamento", () => {

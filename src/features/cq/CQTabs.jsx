@@ -16,6 +16,7 @@ import { openPDFWindow, buildPDFShell } from "../pdf/pdfExports";
 import { BuscaFornecedor } from "./BuscaFornecedor";
 import { sugestoesDoMaterial } from "./fornecedorBuscaLogic";
 import { conformidadeDaTecla, proximaParada, resumoResultados } from "./lancamentoLogic";
+import { fbErr } from "../../shared/erroGravacao";
 
 // ── Relatório de Análise (RA) em PDF — fonte única usada tanto pelo recebimento
 // (fichas) quanto pelas análises. Só o miolo muda entre os dois; o "rosto" (faixa

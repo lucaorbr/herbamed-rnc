@@ -31,6 +31,7 @@ import { ofertaNotificar } from "../email/ofertaNotificar";
 import { montarApresentacao } from "../apresentacao/apresentacaoLogic";
 import { gerarApresentacaoPptx } from "../apresentacao/gerarPptx";
 import { userHasPerm } from "../permissions/permissions";
+import { fbErr } from "../../shared/erroGravacao";
 
 // Regra única do fluxo: a RNC sai de "Aberta" -> "Em andamento" automaticamente no
 // primeiro ato de tratamento (encaminhar ao fornecedor, registrar contenção ou iniciar

@@ -5,8 +5,9 @@ import { fmt, tod } from "../../core/utils";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, G2, G3, Inp, Pagination, SecTitle, Sel } from "../../shared/ui";
+import { fbErr } from "../../shared/erroGravacao";
 
-export function IPCTab({ user, toast_ }) {
+export function IPCTab({ user, toast_, perm }) {
   const T = useTheme(); const s = useS();
   const [registros, setRegistros] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +64,10 @@ export function IPCTab({ user, toast_ }) {
 
   const LINHAS = [...new Set(produtos.map(p => p.linha).filter(Boolean))];
   const isAdmin = user?.role === "admin";
+  // Lançar/editar/excluir análise: "Lançar IPC"; catálogo de produtos: "Gerenciar catálogo IPC Produtos".
+  // O servidor confere o mesmo (permissoesColecao.js).
+  const podeLancar = isAdmin || !!perm?.("editarIPC");
+  const podeProdutos = isAdmin || !!perm?.("editarIPCProdutos");
 
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -134,8 +139,8 @@ export function IPCTab({ user, toast_ }) {
       ...form,
       resultados,
       status,
-      criadoPor: user.name,
-      criadoEm: tod(),
+      criadoPor: sel ? (sel.criadoPor || user.name) : user.name,
+      criadoEm: sel ? (sel.criadoEm || tod()) : tod(),
       criadoTs: sel ? sel.criadoTs : Date.now(),
       atualizadoEm: tod(),
     };
@@ -368,8 +373,8 @@ export function IPCTab({ user, toast_ }) {
           </div>
         </div>
         <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-          <button style={{ ...s.btnD, fontSize:12 }} onClick={() => deletar(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>
-          <button style={{ ...s.btn, fontSize:12 }} onClick={() => editar(sel)}><span className="btn-emoji">✏️ </span>Editar</button>
+          {podeLancar && <button style={{ ...s.btnD, fontSize:12 }} onClick={() => deletar(sel.id)}><span className="btn-emoji">🗑️ </span>Excluir</button>}
+          {podeLancar && <button style={{ ...s.btn, fontSize:12 }} onClick={() => editar(sel)}><span className="btn-emoji">✏️ </span>Editar</button>}
         </div>
       </div>
     );
@@ -406,14 +411,14 @@ export function IPCTab({ user, toast_ }) {
           </Sel>
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <button style={s.btnA} onClick={() => { setSel(null); setForm({ ...FORM_VAZIO, data:tod() }); setResultados([]); setView("novo"); }}>
+          {podeLancar && <button style={s.btnA} onClick={() => { setSel(null); setForm({ ...FORM_VAZIO, data:tod() }); setResultados([]); setView("novo"); }}>
             + Nova Análise de Mistura
-          </button>
+          </button>}
         </div>
       </div>
 
       {/* Painel de cadastro de produtos (admin) */}
-      {showCadastroProd && isAdmin && (
+      {showCadastroProd && podeProdutos && (
         <div style={{ ...s.card, marginBottom:16 }}>
           <SecTitle icon="📦" ch="Cadastro de Produtos" />
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
@@ -481,13 +486,14 @@ export function IPCTab({ user, toast_ }) {
   );
 }
 
-export function IPCProdutosTab({ user, toast_ }) {
+export function IPCProdutosTab({ user, toast_, perm }) {
   const T = useTheme(); const s = useS();
   const [produtos, setProdutos] = useState([]);
   const [formProd, setFormProd] = useState({ nome: "", linha: "", forma: "" });
   const [busca, setBusca] = useState("");
   const [filtroLinha, setFiltroLinha] = useState("todas");
-  const isAdmin = user?.role === "admin" || user?.role === "keyuser";
+  // Antes: admin ou keyuser fixo no código. Agora a permissão (padrão: keyuser e admin).
+  const isAdmin = user?.role === "admin" || !!perm?.("editarIPCProdutos");
 
   useEffect(() => {
     const unsub = subscribeCollection("ipc_produtos", list => {

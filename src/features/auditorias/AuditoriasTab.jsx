@@ -6,6 +6,7 @@ import { exportAuditoriaPDF } from "../pdf/pdfExports";
 import { useS } from "../../shared/styles";
 import { usePagination } from "../../shared/ui";
 import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
+import { fbErr } from "../../shared/erroGravacao";
 
 export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
   const T = useTheme(); const s = useS();

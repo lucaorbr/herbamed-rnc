@@ -127,6 +127,7 @@ export function PrecisaDeVoce({ rncs = [], desvios = [], user, setTab, abrirRnc,
     // Sem `verDesvios` a aba não renderiza (App.jsx), então a pendência levaria a
     // uma tela em branco sem explicação.
     podeVerDesvios: perm("verDesvios"),
+    podeLancarIPC: perm("editarIPC"),
     hoje,
   }), [rncs, desvios, laudos, ipc, docNotifs, pendentesTreino, leiturasPendentes, docsSemDistribuicao, user?.name, user?.role, perm, hoje]);
 
