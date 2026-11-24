@@ -94,8 +94,13 @@ function validarAlteracaoRNC(user, anterior, novo) {
 
   // Imutáveis para todos, admin inclusive: quem registrou e a assinatura já gravada.
   if (alterados.some(c => CAMPOS_AUTORIA.has(c))) throw erro(409, "A autoria da RNC nao pode ser alterada.");
-  if (alterados.includes("assinaturaElaborador") && anterior.assinaturaElaborador) {
-    throw erro(409, "Assinatura do elaborador ja registrada nao pode ser alterada.");
+  if (alterados.includes("assinaturaElaborador")) {
+    if (anterior.assinaturaElaborador) throw erro(409, "Assinatura do elaborador ja registrada nao pode ser alterada.");
+    // Só quem registrou a RNC assina como elaborador, em nome próprio — admin inclusive.
+    if (!rncPropria(anterior, user)) throw erro(403, "Sem permissao para alterar: assinatura do elaborador (so o autor da RNC assina).");
+    const ass = novo.assinaturaElaborador;
+    const dono = ass?.userId || ass?.uid;
+    if (dono != null && !mesmo(dono, user.id)) throw erro(403, "A assinatura deve pertencer ao usuario autenticado.");
   }
   if (ehAdmin(user)) return;
 
@@ -108,14 +113,7 @@ function validarAlteracaoRNC(user, anterior, novo) {
   for (const campo of alterados) {
     if (CAMPOS_AUTORIA.has(campo)) throw erro(409, "A autoria da RNC nao pode ser alterada.");
 
-    if (campo === "assinaturaElaborador") {
-      if (anterior.assinaturaElaborador) throw erro(409, "Assinatura do elaborador ja registrada nao pode ser alterada.");
-      if (!propria) { negados.push("assinatura do elaborador (so o autor da RNC assina)"); continue; }
-      const ass = novo.assinaturaElaborador;
-      const dono = ass?.userId || ass?.uid;
-      if (dono != null && !mesmo(dono, user.id)) throw erro(403, "A assinatura deve pertencer ao usuario autenticado.");
-      continue;
-    }
+    if (campo === "assinaturaElaborador") continue; // conferida acima, para todos
 
     if (campo === "status") {
       const st = novo.status;

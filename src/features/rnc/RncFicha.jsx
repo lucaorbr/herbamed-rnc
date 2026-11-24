@@ -616,7 +616,7 @@ export function RncFicha({ rncId, etapa = "resumo", setEtapa, rncs, user, toast_
             <button style={s.btn} onClick={() => exportRNCPDF(r)}>📄 Exportar/Imprimir PDF</button>
             {!isViewer && <button style={s.btn} onClick={() => openEmail(r, "manual")}>✉️ Notificar</button>}
             {(podeTratar || canEdit) && r.fornecedor && <button style={s.btn} onClick={formularioFornecedor}>📋 Formulário p/ fornecedor</button>}
-            {!r.assinaturaElaborador && !isViewer && (isAdmin || rncPropria(r, user)) && <button style={s.btn} onClick={() => setAssinaturaModal(true)}>✍️ Assinar como elaborador</button>}
+            {!r.assinaturaElaborador && !isViewer && rncPropria(r, user) &&<button style={s.btn} onClick={() => setAssinaturaModal(true)}>✍️ Assinar como elaborador</button>}
             {(isAdmin || (perm && perm("excluirRNC"))) && <button style={s.btnD} onClick={excluir}>🗑️ Excluir</button>}
           </div>
         </aside>

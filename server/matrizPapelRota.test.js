@@ -54,9 +54,11 @@ function ler(colecao) {
 
 const RNC_ALHEIA = { id: "r1", num: "NC-1", desc: "Original", status: "Em andamento", criadoPor: "Outra pessoa", criadoPorId: "id-outra" };
 const rncPropria = user => ({ ...RNC_ALHEIA, criadoPor: user.name, criadoPorId: user.id });
-const alterarRNC = (anterior, mudanca) => user => {
+// `assinaEmNomeProprio`: a assinatura da mudança leva o id de quem está logado.
+const alterarRNC = (anterior, mudanca, assinaEmNomeProprio = false) => user => {
   const ant = valor(anterior, user);
-  validarAlteracaoRNC(user, ant, { ...ant, ...mudanca });
+  const m = assinaEmNomeProprio ? { ...mudanca, assinaturaElaborador: { userId: user.id, nome: user.name } } : mudanca;
+  validarAlteracaoRNC(user, ant, { ...ant, ...m });
 };
 
 const aprovacao = user => ({ nome: user.name, data: "2026-11-24" });
@@ -130,6 +132,8 @@ const MATRIZ = [
   ["encerrar RNC como Eficaz", "URKA", alterarRNC(RNC_ALHEIA, { status: "Eficaz", eficacia: { resultado: "Eficaz" } })],
   ["deliberar a RNC na RAC", "RKA", alterarRNC(RNC_ALHEIA, { ultimaReuniao: { id: "rac-1" } })],
   ["trocar a autoria da RNC", "", alterarRNC(rncPropria, { criadoPor: "Outra pessoa", criadoPorId: "id-outra" })],
+  ["assinar como elaborador a própria RNC", "URKA", alterarRNC(rncPropria, { assinaturaElaborador: { userId: "?" } }, true)],
+  ["assinar como elaborador RNC de outra pessoa", "", alterarRNC(RNC_ALHEIA, { assinaturaElaborador: { userId: "?" } }, true)],
   ["trocar a assinatura do elaborador já gravada", "", alterarRNC(
     user => ({ ...rncPropria(user), assinaturaElaborador: { userId: user.id, nome: user.name } }),
     { assinaturaElaborador: { userId: "id-outra", nome: "Outra pessoa" } })],
