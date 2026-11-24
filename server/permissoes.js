@@ -10,7 +10,7 @@
 
 const PERMS_PADRAO = {
   viewer: {
-    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:false,
     verHomologacoes:true, criarHomologacao:false, avaliarHomologacao:false, aprovarHomologacao:false,
@@ -20,7 +20,7 @@ const PERMS_PADRAO = {
     editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:false, editarIPCProdutos:false,
   },
   user: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:false, analisarRNC:true, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:true, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:false, aprovarHomologacao:false,
@@ -30,7 +30,7 @@ const PERMS_PADRAO = {
     editarFornecedores:false, criarAuditorias:false, editarClientes:false, editarIPC:true, editarIPCProdutos:false,
   },
   rt: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
@@ -40,7 +40,7 @@ const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:false,
   },
   keyuser: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
@@ -50,7 +50,7 @@ const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
   },
   admin: {
-    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, aprovarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
+    criarRNC:true, editarRNCpropria:true, editarRNCtodas:true, analisarRNC:true, excluirRNC:true, gerenciarReunioesRNC:true,
     verDesvios:true, criarDesvio:true, triarDesvio:true,
     verRevalidacao:true, criarRevalidacao:true,
     verHomologacoes:true, criarHomologacao:true, avaliarHomologacao:true, aprovarHomologacao:true,
@@ -60,7 +60,7 @@ const PERMS_PADRAO = {
     editarFornecedores:true, criarAuditorias:true, editarClientes:true, editarIPC:true, editarIPCProdutos:true,
   },
   exec: {
-    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, aprovarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
+    criarRNC:false, editarRNCpropria:false, editarRNCtodas:false, analisarRNC:false, excluirRNC:false, gerenciarReunioesRNC:false,
     verDesvios:true, criarDesvio:false, triarDesvio:false,
     verRevalidacao:true, criarRevalidacao:false,
     verHomologacoes:false, criarHomologacao:false, avaliarHomologacao:false, aprovarHomologacao:false,
