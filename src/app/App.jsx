@@ -925,9 +925,9 @@ export default function App() {
               {tab==="cq-materiais" && telaPermitida(tab, perm) && <CQMateriaisTab user={user} toast_={toast_} fornecedores={fornecedores} perm={perm} auditLog={auditLog} />}
               {tab==="cq-analises"  && <CQAnalisesTab user={user} users={users} toast_={toast_} fornecedores={fornecedores} setTab={setTab} perm={perm} auditLog={auditLog} rncs={rncs} setRncPrefill={setRncPrefill} config={config} />}
               {tab==="cq-dashboard" && <CQDashboardTab />}
-              {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} />}
+              {tab==="auditorias"   && <AuditoriasTab user={user} toast_={toast_} users={users} rncs={rncs} auditLog={auditLog} perm={perm} />}
               {tab==="laudos"       && perm("verLaudos") && <LaudosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} />}
-              {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} />}
+              {tab==="clientes"     && <ClientesTab user={user} toast_={toast_} perm={perm} />}
               {tab==="gestao-docs"  && telaPermitida(tab, perm) && <GestaoDocumentosTab user={user} toast_={toast_} users={users} auditLog={auditLog} perm={perm} tiposRevisao={tiposRevisao} catalogoDeptos={catalogoDeptos} catalogoTipos={catalogoTipos} catalogoAreasSetoresDistribuicao={catalogoAreasSetoresDistribuicao} catalogoCargos={catalogoCargos} colaboradores={colaboradores} doSaveRNC={doSaveRNC} docAberto={ficha.doc} onDocAberto={setDocAberto} />}
               {tab==="ipc"          && <IPCTab user={user} toast_={toast_} perm={perm} />}
               {tab==="ipc-produtos"  && <IPCProdutosTab user={user} toast_={toast_} perm={perm} />}

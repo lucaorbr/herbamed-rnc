@@ -32,7 +32,7 @@ test("configurações, catálogos e colaboradores só o admin grava", () => {
 });
 
 test("telas sem permissão própria seguem abertas a quem trabalha", () => {
-  for (const col of ["cq_fichas", "auditorias", "producao_processos", "colecao_nova"]) {
+  for (const col of ["cq_fichas", "fmea", "producao_processos", "colecao_nova"]) {
     assert.doesNotThrow(() => validarGravacaoColecao(user, col, {}), col);
   }
 });
@@ -53,6 +53,18 @@ test("fornecedores e IPC: cada um com a própria permissão; excluir fornecedor 
   assert.throws(() => validarGravacaoColecao(rt, "ipc_produtos", {}), { status: 403 });
   assert.doesNotThrow(() => validarGravacaoColecao(u("keyuser"), "ipc_produtos", {}));
   assert.throws(() => validarExclusaoColecao(user, "ipc_produtos"), { status: 403 });
+});
+
+test("auditorias e clientes: cada um com a própria permissão; excluir só o admin", () => {
+  // Usuário: padrão sem criarAuditorias e sem editarClientes.
+  for (const [col, perm] of [["auditorias", "criarAuditorias"], ["clientes_terceiros", "editarClientes"]]) {
+    assert.throws(() => validarGravacaoColecao(user, col, {}), { status: 403 }, col);
+    assert.doesNotThrow(() => validarGravacaoColecao(rt, col, {}), col);
+    assert.doesNotThrow(() => validarGravacaoColecao(u("user", { [perm]: true }), col, {}), col);
+    assert.throws(() => validarGravacaoColecao(u("rt", { [perm]: false }), col, {}), { status: 403 }, col);
+    assert.throws(() => validarExclusaoColecao(u("keyuser"), col), { status: 403 }, col);
+    assert.doesNotThrow(() => validarExclusaoColecao(admin, col), col);
+  }
 });
 
 test("Li e entendi: sem gerir treinamento, só o próprio registro de leitura", () => {

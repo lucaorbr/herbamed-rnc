@@ -8,8 +8,10 @@ import { usePagination } from "../../shared/ui";
 import { F, Inp, Pagination, SecTitle, Sel, TA } from "../../shared/ui";
 import { fbErr } from "../../shared/erroGravacao";
 
-export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
+export function AuditoriasTab({ user, toast_, users, rncs, auditLog, perm }) {
   const T = useTheme(); const s = useS();
+  const isAdmin = user?.role === "admin";
+  const podeEditar = isAdmin || !!perm?.("criarAuditorias");
   const [auditorias, setAuditorias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("lista");
@@ -35,7 +37,9 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
     try {
     if(!form.titulo.trim()) { alert("Informe o título da auditoria."); return; }
     const id = sel ? String(sel.id) : String(Date.now());
-    const aud = { id, ...form, achados, criadoPor:user.name, criadoEm:tod(), criadoTs:Date.now() };
+    // Editar não troca o autor nem a data de criação.
+    const aud = { id, ...form, achados,
+      criadoPor: sel?.criadoPor || user.name, criadoEm: sel?.criadoEm || tod(), criadoTs: sel?.criadoTs || Date.now() };
     await saveCollection("auditorias", id, aud);
     await auditLog(sel ? "Editou Auditoria" : "Criou Auditoria", "auditorias", id, aud.titulo, sel || null, { titulo: aud.titulo, tipo: aud.tipo, status: aud.status, area: aud.area });
     toast_(sel?"Auditoria atualizada!":"Auditoria criada!", "green");
@@ -137,7 +141,7 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
     <div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1rem" }}>
         <div style={{ fontSize:13, color:T.text2 }}>{auditorias.length} auditoria(s) registrada(s)</div>
-        <button style={s.btnA} onClick={()=>{ setSel(null); setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" }); setAchados([]); setView("nova"); }}>+ Nova Auditoria</button>
+        {podeEditar && <button style={s.btnA} onClick={()=>{ setSel(null); setForm({ titulo:"", tipo:"Interna", area:"", auditores:"", dataPlano:tod(), dataPrev:"", status:"Planejada", objetivo:"", escopo:"" }); setAchados([]); setView("nova"); }}>+ Nova Auditoria</button>}
       </div>
 
       {/* Stats */}
@@ -179,8 +183,8 @@ export function AuditoriasTab({ user, toast_, users, rncs, auditLog }) {
             <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
               <span style={{ fontSize:11, fontWeight:600, color:STATUS_AUD[a.status], background:`${STATUS_AUD[a.status]}18`, padding:"3px 10px", borderRadius:20 }}>{a.status}</span>
               <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:"#ff8c42", borderColor:"#ff8c4233", background:"#ff8c4212" }} onClick={()=>exportAuditoriaPDF(a)}><span className="btn-emoji">📄 </span>PDF</button>
-              <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}><span className="btn-emoji">✏️ </span>Editar</button>
-              <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={()=>del(a.id)}>🗑️</button>
+              {podeEditar && <button style={{ ...s.btn, padding:"4px 10px", fontSize:11, color:T.accent, borderColor:T.accent+"33", background:T.accentDim }} onClick={()=>editAuditoria(a)}><span className="btn-emoji">✏️ </span>Editar</button>}
+              {isAdmin && <button style={{ ...s.btnD, padding:"4px 8px", fontSize:11 }} onClick={()=>del(a.id)}>🗑️</button>}
             </div>
           </div>
         </div>
