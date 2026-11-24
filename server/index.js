@@ -1120,24 +1120,9 @@ async function reconcileArecoRecebimentoForAnalise(analiseId, data = {}) {
   return matched.rows[0] || null;
 }
 
-const LAUDO_ROLE_PERMISSIONS = {
-  viewer: { verLaudos: true, criarLaudos: false },
-  user: { verLaudos: false, criarLaudos: false },
-  rt: { verLaudos: true, criarLaudos: true },
-  keyuser: { verLaudos: true, criarLaudos: true },
-  admin: { verLaudos: true, criarLaudos: true },
-  exec: { verLaudos: false, criarLaudos: false },
-};
-
-function hasLaudoPermission(user, key) {
-  if (user?.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, key)) {
-    return user.permissoes[key] === true;
-  }
-  return LAUDO_ROLE_PERMISSIONS[user?.role]?.[key] === true;
-}
-
+// Permissões de laudo vêm da tabela única (server/permissoes.js); havia cópia aqui.
 function requireLaudoPermission(user, key) {
-  if (hasLaudoPermission(user, key)) return;
+  if (temPermissao(user, key)) return;
   const error = new Error("Sem permissao para esta operacao");
   error.status = 403;
   throw error;

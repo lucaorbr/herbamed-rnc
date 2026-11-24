@@ -88,10 +88,16 @@ const TERMINAIS_EFICACIA = new Set(["Eficaz", "Ineficaz"]);
 function validarAlteracaoRNC(user, anterior, novo) {
   if (!user) throw erro(401, "Nao autenticado");
   if (!pode(user, ...PERMS_ALTERAR_RNC)) throw erro(403, "Sem permissao para alterar RNC.");
-  if (ehAdmin(user)) return;
 
   const alterados = camposAlterados(anterior, novo);
   if (!alterados.length) return;
+
+  // Imutáveis para todos, admin inclusive: quem registrou e a assinatura já gravada.
+  if (alterados.some(c => CAMPOS_AUTORIA.has(c))) throw erro(409, "A autoria da RNC nao pode ser alterada.");
+  if (alterados.includes("assinaturaElaborador") && anterior.assinaturaElaborador) {
+    throw erro(409, "Assinatura do elaborador ja registrada nao pode ser alterada.");
+  }
+  if (ehAdmin(user)) return;
 
   const propria = rncPropria(anterior, user);
   const podeRegistro = pode(user, "editarRNCtodas") || (propria && pode(user, "editarRNCpropria"));

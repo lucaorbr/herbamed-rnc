@@ -1,19 +1,11 @@
-const HOMOLOGACAO_ROLE_PERMISSIONS = {
-  viewer: { verHomologacoes: true, criarHomologacao: false, avaliarHomologacao: false, aprovarHomologacao: false },
-  user: { verHomologacoes: true, criarHomologacao: true, avaliarHomologacao: false, aprovarHomologacao: false },
-  rt: { verHomologacoes: true, criarHomologacao: true, avaliarHomologacao: true, aprovarHomologacao: true },
-  keyuser: { verHomologacoes: true, criarHomologacao: true, avaliarHomologacao: true, aprovarHomologacao: true },
-  admin: { verHomologacoes: true, criarHomologacao: true, avaliarHomologacao: true, aprovarHomologacao: true },
-  exec: { verHomologacoes: false, criarHomologacao: false, avaliarHomologacao: false, aprovarHomologacao: false },
-};
+// Permissões por papel vêm da tabela única (server/permissoes.js). Havia uma cópia
+// própria aqui, que podia divergir sem ninguém ver.
+const { temPermissao } = require("./permissoes");
 
 const STATUS_FINAIS = new Set(["Homologada", "Condicional", "Reprovada"]);
 
 function hasHomologacaoPermission(user, key) {
-  if (user?.permissoes && Object.prototype.hasOwnProperty.call(user.permissoes, key)) {
-    return user.permissoes[key] === true;
-  }
-  return HOMOLOGACAO_ROLE_PERMISSIONS[user?.role]?.[key] === true;
+  return temPermissao(user, key);
 }
 
 function forbidden(message = "Sem permissao para esta operacao") {
@@ -99,7 +91,6 @@ function validateHomologacaoUpdate(user, oldData, newData) {
 }
 
 module.exports = {
-  HOMOLOGACAO_ROLE_PERMISSIONS,
   STATUS_FINAIS,
   hasHomologacaoPermission,
   requireHomologacaoPermission,
